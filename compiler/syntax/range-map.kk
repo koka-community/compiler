@@ -124,13 +124,13 @@ fun append(rm1: range-map, rm2: range-map)
   rm1 ++ rm2
 
 fun sort(rm: range-map)
-  rm.sort-by(?cmp = fn((r1, _), (r2, _)) r1.cmp(r2))
+  rm.sort(?cmp = fn((r1, _), (r2, _)) r1.cmp(r2))
 
 // select the best matching range infos from a selection
 fun prioritize(rm: range-map)
   fun this-cmp((_, ri1: rangeInfo), (_, ri2: rangeInfo)) ri1.int.cmp(ri2.int)
   fun eq((_, ri1: rangeInfo), (_, ri2: rangeInfo)) ri1.int / 10 == ri2.int / 10
-  val sorted = rm.filter(fn((_, ri)) !ri.is-rIimplicits).sort-by(?cmp=this-cmp)
+  val sorted = rm.filter(fn((_, ri)) !ri.is-rIimplicits).sort(?cmp=this-cmp)
   // Merge implicit documentation into identifiers
   val idocs = 
         rm.map fn((_, rinfo))
@@ -143,7 +143,7 @@ fun prioritize(rm: range-map)
     match ri
       RIId(name, info, docs, isDef) -> (rng, RIId(name, info, docs ++ idocsrev, isDef))
       _ -> (rng, ri)
-  sorted.group-by(eq).map(fn(rs) rs.last.unjust.merge-docs())
+  sorted.group(?(==)=eq).map(fn(rs) rs.last.unjust.merge-docs())
 
 fun merge-implicits(rm: range-map, for-inlay: bool)
   val idocs = 

@@ -12,7 +12,8 @@ pub import std/data/json
 pub import std/pretty/pprint
 
 fun test()
-  val s = r#"{"hello":"world" // a comment here \n}"#
+  val s = r#"{"hello":"world" // a comment here
+    }"#
   s.parse.pretty.show.println
 
 // The direct translation from Koka's Haskell compiler is below
@@ -20,7 +21,6 @@ fun test()
 // import std/data/linearmap
 // import std/text/regex
 // import std/num/float64
-
 
 // type jsValue
 //   JsNull

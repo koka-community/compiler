@@ -34,7 +34,3 @@ fun ctrace(c: color, message: string, a: a, ?kk-file-line: string): a
   print-colored(?kk-file-line ++ ": ", Blue)
   println-colored(message, c)
   a
-
-fun example-trace()
-  ctrace(Red, "Hello, world!", 0)
-  trace("Hi", 0)

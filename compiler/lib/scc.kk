@@ -122,14 +122,3 @@ fun reachable(g: graph<v>, v: v, ?(==): (v,v) -> bool): list<v>
 
 fun path(g: graph<v>, v: v, w: v, ?(==): (v,v) -> bool): bool
   g.reachable(v).find(fn(e) e == w).is-just
-
-fun test()
-  scc([(0,[1]),(1,[1,2,3]),(2,[1]),(3,[]),(4,[])], (==)).show-list(fn(l) l.show-list(show)).println
-  scc([('a',"jg".list)
-    ,  ('b',"ia".list)
-    ,  ('c',"he".list)
-    ,  ('d',"".list)
-    ,  ('e',"jhd".list)
-    ,  ('f',"i".list)
-    ,  ('g',"fb".list)
-    ,  ('h',"".list)], (==)).show-list(fn(l) l.show-list(show)).println
