@@ -31,7 +31,8 @@ value struct formatting-options
 
 fun file/format(f: path): <format-opts,io> ()
   val file = read-text-file(f)
-  val l = lex-source(Source(f.string, file), 0, True, True, id, keep-comments=True)
+  // Keeping comments causes issues with layout algorithm, so we need better comment integration into keywords, or better layout
+  val l = lex-source(Source(f.string, file), 0, True, True, id)
   l.show.println
   write-text-file(f, format(l).pprint/show)
 
@@ -67,6 +68,10 @@ effect format-eff
 
 fun list/pretty(l: list<lexeme>)
   match l
+    Cons(lexeme as Lexeme(_, LexKeyword("import")), Cons(modid, rest)) -> // TODO: Handle `import x = y`
+      lexeme.pretty |+| modid.pretty(is-import=True) |.| list/pretty(rest)
+    Cons(comment, rest) | comment.lex.is-lexComment ->
+      comment.pretty |.| next-line(rest) |.| list/pretty(rest)
     Cons(lexeme, rest) | lexeme.lex.is-open-brace ->
       increase-indentation()
       lexeme.pretty |.| next-line(rest) |.| list/pretty(rest)
@@ -80,28 +85,27 @@ fun list/pretty(l: list<lexeme>)
       if lex.range.end.line < next.range.start.line then
         lex.pretty |.| next-line(rest) |.| list/pretty(Cons(next, rest))
       elif lex.range.end.col != next.range.start.col then
-        lex.pretty |+| list/pretty(Cons(next, rest))
+        lex.pretty |+| list/pretty(Cons(next, rest)) // TODO: Strings have bad ranges
       else
         lex.pretty |.| list/pretty(Cons(next, rest))
     Cons(lex, Nil) -> lex.pretty
     Nil -> pprint/empty
 
-fun lex/pretty(lexeme: lexeme): div doc
+fun lex/pretty(lexeme: lexeme, is-import: bool=False): div doc
   match lexeme.lex
     LexInt(_, s) -> s.text
     LexFloat(_, s) -> s.text
     LexChar(c) -> c.show.text // TODO Better character showing?
     LexString(s) -> s.show.text
-    LexId(n) -> n.pretty-local-name
+    LexId(n) -> if is-import then n.pretty-full-name else n.pretty-local-name
     LexOp(n) -> n.pretty-local-name
     LexPrefix(n) -> n.pretty-local-name
     LexIdOp(n) -> n.pretty-local-name
     LexWildCard(n) -> n.pretty-local-name
     LexModule(_, full) -> full.pretty-full-name
-    LexKeyword(k, d) -> if d.is-empty then k.text else d.text |--| k.text
+    LexKeyword(k, d) -> if d.is-empty then k.text else format-comment(d) |--| k.text // TODO: Use integrated comments, and use the keyword doc
     LexSpecial(s) -> s.text
-    LexComment(s) ->
-      s.split("//").drop-while(is-empty).map(fn(l) "//".text |+| l.trim.text).vcat
+    LexComment(s) -> format-comment(s)
     LexWhite -> empty
     LexInsLCurly -> empty
     LexInsRCurly -> empty
@@ -109,6 +113,9 @@ fun lex/pretty(lexeme: lexeme): div doc
     LexError -> empty
     LexCons(n) -> n.pretty-local-name
     LexTypedId(n) -> n.pretty-local-name
+
+fun format-comment(s: string): doc
+  s.split("//").drop-while(is-empty).map(fn(l) "//".text |+| l.trim.text).vcat
 
 fun main()
   with val format-opts = Formatting-options()
