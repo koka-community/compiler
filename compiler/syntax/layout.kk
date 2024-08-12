@@ -28,10 +28,11 @@ fun lex-source(source: source, line: int, allow-at: bool, semi-insert: bool, pre
 
 fun layout(lexemes: list<lexeme>, allow-at: bool, semi-insert: bool): list<lexeme>
   fun semi(v: list<lexeme>, f: (list<lexeme>) -> list<lexeme>) if semi-insert then f(v) else v
-  val adjustwhite = lexemes.semi(check-comments)
-      .combine-line-comments.remove-whitespace.associate-comments.remove-white
-  val at = if allow-at then adjustwhite else adjustwhite.check-ids
-  at.semi(indent-layout)
+  val (comments, lexemes') = lexemes.semi(check-comments)
+      .combine-line-comments.remove-whitespace.associate-comments(ctx _, ctx _)
+  val nowhite = lexemes'.remove-white
+  val at = if allow-at then nowhite else nowhite.check-ids
+  at.semi(indent-layout).integrate-comments(comments)
 
 fun is-lex-error(x)
   match x
@@ -96,20 +97,36 @@ fun scan-doc-keyword(doc: string, dline: int, acc: ctx<list<lexeme>>, ls: list<l
         scan-doc-keyword(doc, dline, acc ++ ctx Cons(l, _), rst)
       else Nothing
 
+fun integrate-comments(lexs: list<lexeme>, comments: list<lexeme>): list<lexeme>
+  match (lexs, comments)
+    (Cons(lex, ls), Cons(comment, cs)) -> 
+      if lex.range < comment.range then 
+        Cons(lex, integrate-comments(ls.pretend-decreasing, Cons(comment, cs)))
+      else
+        Cons(comment, integrate-comments(Cons(lex, ls).pretend-decreasing, cs))
+    (Nil, ls) -> ls
+    (ls, Nil) -> ls
+    _ -> lexs
+
+fun ctx/(++)(ct: ctx<list<a>>, ctxs: list<a>): ctx<list<a>>
+  match ctxs
+    Nil -> ct
+    Cons(x, xs) -> (ct ++ ctx Cons(x, _)) ++ xs
+
 // Associate comments that precede a declaration
 // to the corresponding keyword
-fun associate-comments(lexs: list<lexeme>): list<lexeme>
+fun associate-comments(lexs: list<lexeme>, unassociated: ctx<list<lexeme>>, acc: ctx<list<lexeme>>): (list<lexeme>, list<lexeme>)
   match lexs
     // Special comments
     Cons(Lexeme(r1, LexComment(c1)), ls) | (c1.starts-with("//.").bool  && !(c1.slice.subslice(3, c1.count).string.trim-right.list.any(is-space))) -> 
-        Cons(Lexeme(r1, LexSpecial(c1.trim-right)), ls.associate-comments)
+        ls.pretend-decreasing.associate-comments(unassociated, acc ++ ctx Cons(Lexeme(r1, LexSpecial(c1.trim-right)), _))
     // Comment association
     Cons(l1 as Lexeme(r1, LexComment(comment)), ls) ->
       match scan-doc-keyword(comment, comment-line(r1, comment), ctx _, ls)
-        Just((pre, rest)) -> pre ++ rest.pretend-decreasing.associate-comments
-        Nothing -> Cons(l1, ls.associate-comments)
-    Cons(l,ls) -> Cons(l, ls.associate-comments)
-    Nil -> Nil
+        Just((pre, rest)) -> rest.pretend-decreasing.associate-comments(unassociated, acc ++ pre)
+        Nothing -> ls.pretend-decreasing.associate-comments(unassociated ++ ctx Cons(l1, _), acc)
+    Cons(l,ls) -> ls.pretend-decreasing.associate-comments(unassociated, acc ++ ctx Cons(l, _))
+    Nil -> (unassociated ++. Nil, acc ++. Nil)
 
 // Combine adjacent line comments into one block comment (for html output)
 fun combine-line-comments(lexs: list<lexeme>): list<lexeme>
