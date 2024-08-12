@@ -171,7 +171,6 @@ fun pretty-name-ex(Name(m, _, l, _, n, _): name, lsep: string, cs: colorScheme):
   else 
    (m.text |.| (if ln.is-empty then pprint/empty elif l.is-empty then "/".text else lsep.text)).color(cs.colorModule)
            |.| ln.text
-  
 
 fun pretty-name(nm: name, cs: colorScheme): <exn> doc // not explicit /#
   if nm.is-implicit-param-name then "?".text |.| nm.from-implicit-param-name.requalify-locally.pretty-name-ex("/", cs)
@@ -179,6 +178,12 @@ fun pretty-name(nm: name, cs: colorScheme): <exn> doc // not explicit /#
 
 fun pretty-core-name(nm: name, cs: colorScheme): doc // explicit /# if needed
   nm.pretty-name-ex("/#", cs)
+
+fun pretty-local-name(Name(_, _, l, _, n, _): name): doc
+  join(l, n.wrap-id).text
+
+fun pretty-full-name(Name(m, _, l, _, n, _): name): doc
+  join(m, join(l, n.wrap-id)).text
 
 fun show-tupled(Name(m, _, l, _, n, _): name): string
   "(" ++ m ++ "," ++ l ++ "," ++ n ++ ")"
