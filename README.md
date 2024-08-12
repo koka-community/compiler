@@ -54,3 +54,10 @@ For example, all usages of type-classes will either be translated into:
 
 Files that are translated will have a copyright that matches the Koka compiler's copyright acknowledging the original authors, as well as the translation author. 
 The files will also have a comment with a hash indicating the commit of Koka's Haskell compiler that the source was last updated from, and comments explaining the differences, and the missing or incomplete features.
+
+## Other Considerations
+
+We have moved the pretty printer / json and console printer libraries to std, since they are generally useful. (They used to be in `compiler/lib`)
+
+I don't know how much Koka wants to be a batteries included language, or a community library language, 
+but we could separate out the pretty printer and the rest of the `compiler/lib` utilities into their own small packages potentially, or integrate more small things into `std`.
