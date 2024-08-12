@@ -8,7 +8,7 @@ import std/core/undiv
 import std/data/word-set
 
 effect koka-lex
-  fun start-chunked(): ()
+  fun start-chunked(s: string): ()
   fun end-chunked(): string
   fun add-chunk(s: sslice): ()
   fun get-rawdelim(): int
@@ -108,9 +108,9 @@ program :-
 -- white space
 <0> $space+               { fn() { emit(LexWhite(get-string()))} }
 <0> @newline              { fn() { emit(LexWhite("\n")) } }
-<0> "/*" $symbol*         { fn() { push-state(comment); start-chunked(); } }
-<0> "//" $symbol*         { fn() { push-state(linecom); start-chunked(); } }
-<0> @newline\# $symbol*   { fn() { push-state(linedir); start-chunked(); } }
+<0> "/*" $symbol*         { fn() { push-state(comment); start-chunked("/*"); } }
+<0> "//" $symbol*         { fn() { push-state(linecom); start-chunked("//"); } }
+<0> @newline\# $symbol*   { fn() { push-state(linedir); start-chunked("\n#"); } }
 
 
 -- qualified identifiers
@@ -152,8 +152,8 @@ program :-
 
 
 -- characters
-<0> \"                    { fn() { push-state(stringlit); start-chunked(); } } -- "
-<0> r\#*\"                { fn() { push-state(stringraw); start-chunked(); push-rawdelim(); } } -- "
+<0> \"                    { fn() { push-state(stringlit); start-chunked(""); } } -- "
+<0> r\#*\"                { fn() { push-state(stringraw); start-chunked(""); push-rawdelim(); } } -- "
 
 <0> \'\\$charesc\'        { fn() { emit(LexChar(get-slice().sslice/drop(2).next.expect.tuple2/fst.char/from-char-esc)) }}
 <0> \'\\@hexesc\'         { fn() { emit(LexChar(get-slice().sslice/drop(3).extend(-1).char/from-hex-esc)) }}
@@ -211,7 +211,7 @@ program :-
     pop-state()
     ()
 }}
-<comment> "/*"            { fn() { push-state(comment); start-chunked(); } }
+<comment> "/*"            { fn() { push-state(comment); start-chunked("/*"); } }
 <comment> @utf8unsafe     { fn() { unsafe-char("comment") } }
 <comment> @commentchar    { fn() { extend-slice(id) } }
 <comment> [\/\*]          { fn() { extend-slice(id) } }

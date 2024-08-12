@@ -32,6 +32,7 @@ value struct formatting-options
 fun file/format(f: path): <format-opts,io> ()
   val file = read-text-file(f)
   val l = lex-source(Source(f.string, file), 0, True, True, id, keep-comments=True)
+  l.show.println
   write-text-file(f, format(l).pprint/show)
 
 fun lexemes/format(l: list<lexeme>): <format-opts,pure> doc
@@ -47,7 +48,7 @@ fun lexemes/format(l: list<lexeme>): <format-opts,pure> doc
           "\n".text |.| spaces(current-indent).text
         _ -> 
           if current-indent == 0 then // All other top level declarations should be separated by two newlines
-            "\n".text |.| spaces(current-indent).text
+            "\n\n".text |.| spaces(current-indent).text
           else
             // Otherwise just one newline
             "\n".text |.| spaces(current-indent).text
@@ -69,13 +70,16 @@ fun list/pretty(l: list<lexeme>)
     Cons(lexeme, rest) | lexeme.lex.is-open-brace ->
       increase-indentation()
       lexeme.pretty |.| next-line(rest) |.| list/pretty(rest)
-    Cons(lexeme, rest) | lexeme.lex.is-close-brace -> 
+    Cons(lexeme, Cons(next, rest)) | lexeme.lex.is-close-brace -> 
       decrease-indentation()
-      lexeme.pretty |.| next-line(rest) |.| list/pretty(rest)
+      if lexeme.range.end != next.range.start then
+        lexeme.pretty |+| list/pretty(Cons(next, rest))
+      else
+        lexeme.pretty |.| list/pretty(Cons(next, rest))
     Cons(lex, Cons(next, rest)) ->
       if lex.range.end.line < next.range.start.line then
         lex.pretty |.| next-line(rest) |.| list/pretty(Cons(next, rest))
-      elif lex.range.end != next.range.start then
+      elif lex.range.end.col != next.range.start.col then
         lex.pretty |+| list/pretty(Cons(next, rest))
       else
         lex.pretty |.| list/pretty(Cons(next, rest))
@@ -96,8 +100,8 @@ fun lex/pretty(lexeme: lexeme): div doc
     LexModule(_, full) -> full.pretty-full-name
     LexKeyword(k, d) -> if d.is-empty then k.text else d.text |--| k.text
     LexSpecial(s) -> s.text
-    LexComment(s) -> 
-      s.split("\n").map(fn(l) "//".text |+| l.trim.text |+| "\n".text).vcat
+    LexComment(s) ->
+      s.split("//").drop-while(is-empty).map(fn(l) "//".text |+| l.trim.text).vcat
     LexWhite -> empty
     LexInsLCurly -> empty
     LexInsRCurly -> empty

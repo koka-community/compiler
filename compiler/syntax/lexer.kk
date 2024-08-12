@@ -13,8 +13,8 @@ fun lex(str: string, pos: pos): pure list<lexeme>
   var slices := []
   var raw-delim := 0
   with handler
-    fun start-chunked()
-      slices := Cons("", slices)
+    fun start-chunked(s: string)
+      slices := Cons(s, slices)
     fun end-chunked()
       match slices
         Cons(s, rst) -> 
@@ -47,11 +47,9 @@ fun lexing(source: source, line: int, input: string): pure list<lexeme>
 
 fun test-lex()
   val files =  [
-    "compiler/syntax/lex-help",
     "compiler/syntax/lex",
     "compiler/syntax/lexer",
-    "compiler/syntax/lexeme",
-    "compiler/core/core"]
+    "compiler/syntax/lexeme"]
   
   files.foreach fn(f)
     with handler

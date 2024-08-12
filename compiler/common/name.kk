@@ -180,7 +180,7 @@ fun pretty-core-name(nm: name, cs: colorScheme): doc // explicit /# if needed
   nm.pretty-name-ex("/#", cs)
 
 fun pretty-local-name(Name(_, _, l, _, n, _): name): doc
-  join(l, n.wrap-id).text
+  if l.is-empty then n.text else join(l, n.wrap-id).text
 
 fun pretty-full-name(Name(m, _, l, _, n, _): name): doc
   join(m, join(l, n.wrap-id)).text

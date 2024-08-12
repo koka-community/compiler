@@ -1,4 +1,4 @@
-/// LINE 1 "../../koka-code/compiler/syntax/koka-eff.x"
+/// LINE 1 "../../koka-community/compiler/compiler/syntax/koka.x"
 import compiler/common/name
 import compiler/common/range
 import compiler/syntax/lexeme
@@ -8,7 +8,7 @@ import std/core/undiv
 import std/data/word-set
 
 effect koka-lex
-  fun start-chunked(): ()
+  fun start-chunked(s: string): ()
   fun end-chunked(): string
   fun add-chunk(s: sslice): ()
   fun get-rawdelim(): int
@@ -45,9 +45,9 @@ val stringlit = 4
 val stringraw = 5
 val alex_action_0: action = fn() { emit(LexWhite(get-string()))}
 val alex_action_1: action = fn() { emit(LexWhite("\n")) }
-val alex_action_2: action = fn() { push-state(comment); start-chunked(); }
-val alex_action_3: action = fn() { push-state(linecom); start-chunked(); }
-val alex_action_4: action = fn() { push-state(linedir); start-chunked(); }
+val alex_action_2: action = fn() { push-state(comment); start-chunked("/*"); }
+val alex_action_3: action = fn() { push-state(linecom); start-chunked("//"); }
+val alex_action_4: action = fn() { push-state(linedir); start-chunked("\n#"); }
 val alex_action_5: action = fn() { emit(LexCons(get-qname())) }
 val alex_action_6: action = fn() { emit(LexId(get-qname())) }
 val alex_action_7: action = fn() { emit(LexIdOp(get-slice().strip-parens.newQName)) }
@@ -71,8 +71,8 @@ val alex_action_17: action = fn() {
     elif s.is-prefix-op then emit(LexPrefix(s.new-name))
     else emit(LexOp(s.new-name))
    }
-val alex_action_18: action = fn() { push-state(stringlit); start-chunked(); }
-val alex_action_19: action = fn() { push-state(stringraw); start-chunked(); push-rawdelim(); }
+val alex_action_18: action = fn() { push-state(stringlit); start-chunked(""); }
+val alex_action_19: action = fn() { push-state(stringraw); start-chunked(""); push-rawdelim(); }
 val alex_action_20: action = fn() { emit(LexChar(get-slice().sslice/drop(2).next.expect.tuple2/fst.char/from-char-esc)) }
 val alex_action_21: action = fn() { emit(LexChar(get-slice().sslice/drop(3).extend(-1).char/from-hex-esc)) }
 val alex_action_22: action = fn() { emit(LexChar(get-slice().sslice/drop(1).next.expect.tuple2/fst)) }
@@ -117,7 +117,7 @@ val alex_action_37: action = fn() {
     pop-state()
     ()
 }
-val alex_action_38: action = fn() { push-state(comment); start-chunked(); }
+val alex_action_38: action = fn() { push-state(comment); start-chunked("/*"); }
 val alex_action_39: action = fn() { unsafe-char("comment") }
 val alex_action_40: action = fn() { extend-slice(id) }
 val alex_action_41: action = fn() { extend-slice(id) }
@@ -342,7 +342,7 @@ fun alex-scan-tokens(s: int): alex-eff ()
               _ ->
                 consume-char()
                 alex-scan-tokens(new_s)
-/// LINE 236 "../../koka-code/compiler/syntax/koka-eff.x"
+/// LINE 236 "../../koka-community/compiler/compiler/syntax/koka.x"
 fun extend-slice(f: sslice -> sslice)
   add-chunk(f(get-slice()))
 
