@@ -10,7 +10,7 @@ import std/os/path
 // The idea is to first do tokenization, and then layout to get implicitly added braces etc.
 // Then based on some user parameters we can format the code in different ways as a transformation on the lexemes. 
 // These transformations have to uphold the following properties:
-//  - Only add / remove whitespace (spaces, tabs, newlines)
+//  - Only add / remove whitespace (spaces, tabs, newlines), braces, and semicolons.
 //  - Only affect whitespace that will not change the layout of the code. Some whitespace is significant and should not be removed.
 //  - TODO: Allow transforming comments in the future (for changing comments to doc comments if immediately prior to a declaration, and nested in markdown comments).
 // Finally we print out the lexemes.
@@ -22,14 +22,16 @@ effect val format-opts: formatting-options
 
 value struct formatting-options
   indent-size: int = 2
-  use-tabs: bool = False
-  use-braces: bool = False
-  use-semicolons: bool = False
-  show-full-names: bool = False
+  use-tabs: bool = False // TODO: Implement this
+  add-braces: bool = False // TODO: Implement this
+  remove-braces: bool = False // TODO: Implement this -- might be tricky?
+  add-semicolons: bool = False // TODO: Implement this
+  remove-semicolons: bool = False // TODO: Implement this -- might be tricky?
+  show-full-names: bool = False // TODO: Implement this
 
 fun file/format(f: path): <format-opts,io> ()
   val file = read-text-file(f)
-  val l = lex-source(Source(f.string, file), 0, True, True, id)
+  val l = lex-source(Source(f.string, file), 0, True, True, id, keep-comments=True)
   write-text-file(f, format(l).pprint/show)
 
 fun lexemes/format(l: list<lexeme>): <format-opts,pure> doc
@@ -39,8 +41,16 @@ fun lexemes/format(l: list<lexeme>): <format-opts,pure> doc
       current-indent := current-indent + format-opts.indent-size
     fun decrease-indentation()
       current-indent := current-indent - format-opts.indent-size
-    fun current-indentation()
-      spaces(current-indent).text
+    fun next-line(next)
+      match next
+        Cons(Lexeme(_, LexKeyword("import"))) -> // Put imports on the next line 
+          "\n".text |.| spaces(current-indent).text
+        _ -> 
+          if current-indent == 0 then // All other top level declarations should be separated by two newlines
+            "\n".text |.| spaces(current-indent).text
+          else
+            // Otherwise just one newline
+            "\n".text |.| spaces(current-indent).text
     fun remove-range(r: range)
       ()
     fun insert-range(r: range, text: string)
@@ -50,22 +60,21 @@ fun lexemes/format(l: list<lexeme>): <format-opts,pure> doc
 effect format-eff
   fun increase-indentation(): ()
   fun decrease-indentation(): ()
-  fun current-indentation(): doc
+  fun next-line(l: list<lexeme>): doc
   fun remove-range(r: range): () // For language server reporting
   fun insert-range(r: range, text: string): () // For language server reporting
 
 fun list/pretty(l: list<lexeme>)
   match l
+    Cons(lexeme, rest) | lexeme.lex.is-open-brace ->
+      increase-indentation()
+      lexeme.pretty |.| next-line(rest) |.| list/pretty(rest)
+    Cons(lexeme, rest) | lexeme.lex.is-close-brace -> 
+      decrease-indentation()
+      lexeme.pretty |.| next-line(rest) |.| list/pretty(rest)
     Cons(lex, Cons(next, rest)) ->
       if lex.range.end.line < next.range.start.line then
-        if lex.range.start.col < next.range.start.col then
-          increase-indentation()
-          lex.pretty |--| current-indentation() |.| list/pretty(Cons(next, rest))
-        elif lex.range.end.col > next.range.start.col then
-          decrease-indentation()
-          lex.pretty |--| current-indentation() |.| list/pretty(Cons(next, rest))
-        else
-          lex.pretty |--| current-indentation() |.| list/pretty(Cons(next, rest))
+        lex.pretty |.| next-line(rest) |.| list/pretty(Cons(next, rest))
       elif lex.range.end != next.range.start then
         lex.pretty |+| list/pretty(Cons(next, rest))
       else
@@ -77,7 +86,7 @@ fun lex/pretty(lexeme: lexeme): div doc
   match lexeme.lex
     LexInt(_, s) -> s.text
     LexFloat(_, s) -> s.text
-    LexChar(c) -> c.show.text // TODO Better character showing
+    LexChar(c) -> c.show.text // TODO Better character showing?
     LexString(s) -> s.show.text
     LexId(n) -> n.pretty-local-name
     LexOp(n) -> n.pretty-local-name
@@ -85,9 +94,10 @@ fun lex/pretty(lexeme: lexeme): div doc
     LexIdOp(n) -> n.pretty-local-name
     LexWildCard(n) -> n.pretty-local-name
     LexModule(_, full) -> full.pretty-full-name
-    LexKeyword(k, d) -> d.text |.| k.text
+    LexKeyword(k, d) -> if d.is-empty then k.text else d.text |--| k.text
     LexSpecial(s) -> s.text
-    LexComment(s) -> s.text
+    LexComment(s) -> 
+      s.split("\n").map(fn(l) "//".text |+| l.trim.text |+| "\n".text).vcat
     LexWhite -> empty
     LexInsLCurly -> empty
     LexInsRCurly -> empty
@@ -98,4 +108,4 @@ fun lex/pretty(lexeme: lexeme): div doc
 
 fun main()
   with val format-opts = Formatting-options()
-  file/format("/Users/timwhiting/koka-community/compiler/compiler/syntax/layout.kk".path)
+  file/format("/Users/timwhiting/koka-community/compiler/compiler/common/failure.kk".path)

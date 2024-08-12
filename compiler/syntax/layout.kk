@@ -21,15 +21,16 @@ import std/core/unsafe
 import std/core-extras
 
 // Lex a source
-fun lex-source(source: source, line: int, allow-at: bool, semi-insert: bool, preprocess: list<lexeme> -> <pure|e> list<lexeme>): <pure|e> list<lexeme>
+fun lex-source(source: source, line: int, allow-at: bool, semi-insert: bool, preprocess: list<lexeme> -> <pure|e> list<lexeme>, keep-comments: bool = False): <pure|e> list<lexeme>
   // val input = if source.name.is-literal-doc then rawinput.extract-literate else rawinput
   val rawinput = source.contents
-  lexing(source, line, rawinput).layout(allow-at, semi-insert).preprocess
+  lexing(source, line, rawinput).layout(allow-at, semi-insert, keep-comments).preprocess
 
-fun layout(lexemes: list<lexeme>, allow-at: bool, semi-insert: bool): list<lexeme>
+fun layout(lexemes: list<lexeme>, allow-at: bool, semi-insert: bool, keep-comments=False): list<lexeme>
   fun semi(v: list<lexeme>, f: (list<lexeme>) -> list<lexeme>) if semi-insert then f(v) else v
   val adjustwhite = lexemes.semi(check-comments)
-      .combine-line-comments.remove-whitespace.associate-comments.remove-white
+      .combine-line-comments.remove-whitespace.associate-comments
+  val comments = if keep-comments then adjustwhite else adjustwhite.remove-white
   val at = if allow-at then adjustwhite else adjustwhite.check-ids
   at.semi(indent-layout)
 
