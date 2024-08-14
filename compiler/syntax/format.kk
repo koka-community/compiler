@@ -103,13 +103,15 @@ fun pretty(l: list<lexeme>)
       lexeme.pretty |.| next-line(rest) |.| pretty(rest)
     Cons(lexeme, Cons(next, rest)) | lexeme.lex.is-close-brace ->
       decrease-indentation()
-      if lexeme.range.end != next.range.start then
-        lexeme.pretty |+| pretty(Cons(next, rest)) 
+      if lexeme.range.end.line < next.range.start.line then
+        lexeme.pretty |.| next-line(Cons(next, rest)) |.| pretty(Cons(next, rest))
+      elif lexeme.range.end.col != next.range.start.col then
+        lexeme.pretty |+| pretty(Cons(next, rest))
       else
         lexeme.pretty |.| pretty(Cons(next, rest))
     Cons(lex, Cons(next, rest)) ->
       if lex.range.end.line < next.range.start.line then
-        lex.pretty |.| next-line(rest) |.| pretty(Cons(next, rest)) 
+        lex.pretty |.| next-line(rest) |.| pretty(Cons(next, rest))
       elif lex.range.end.col != next.range.start.col then
         lex.pretty |+| pretty(Cons(next, rest)) // TODO: Strings have bad ranges
       else
@@ -122,7 +124,7 @@ fun lex/pretty(lexeme: lexeme): div doc
     LexInt(_, s) -> s.text
     LexFloat(_, s) -> s.text
     LexChar(c) -> c.show.text // TODO Better character showing?
-    LexString(s) -> s.show.text
+    LexString(s) -> ("\"" ++ s ++ "\"").text // Show has the problem of double escaping
     LexId(n) -> n.pretty-full-name
     LexOp(n) -> n.pretty-local-name
     LexPrefix(n) -> n.pretty-local-name

@@ -360,7 +360,7 @@ fun char/from-char-esc(c)
     _ -> c
 
 fun sslice/from-char-esc(s: sslice)
-  s.drop(2).truncate().extend(1)
+  s.subslice(0, 2)
 
 fun char/from-hex-esc(s: sslice)
   '\n' // TODO: Implement from-hex-esc
