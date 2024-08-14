@@ -125,7 +125,7 @@ struct userCon<t, u, k>
   vis: visibility
   doc: string  
 
-fun con/show(u: userCon<t,u,k>, ?t/show: (t) -> <div|e1> string, ?u/show: (u) -> <div|e1> string, ?k/show: (k) -> <div|e1> string): <div|e1> string
+fun con/show(u: userCon<t,u,k>, ?t/show: (t) -> <div|e> string, ?u/show: (u) -> <div|e> string, ?k/show: (k) -> <div|e> string): <div|e> string
   u.name.show ++ " " ++ u.existentials.list/show ++ " " ++ u.params.list/show ++ " " ++ u.result.show ++ " " ++ u.name-range.show ++ " " ++ u.range.show ++ " " ++ u.vis.show ++ " " ++ u.doc.show
 
 alias defGroups<t> = list<defGroup<t>>;
@@ -134,7 +134,7 @@ type defGroup<t>
   DefRec(defs: list<def<t>>)
   DefNonRec(d: def<t>)
 
-fun dg/show(d: defGroup<t>, ?show: (t) -> <div|e1> string): <div|e1> string
+fun dg/show(d: defGroup<t>, ?show: (t) -> <div|e> string): <div|e> string
   match d
     DefRec(defs) -> "DefRec " ++ defs.list/show
     DefNonRec(d) -> "DefNonRec " ++ d.show
@@ -150,7 +150,7 @@ struct valueBinder<t,e>
   name-range: range
   range: range; // full range
 
-fun vb/show(v: valueBinder<t,e>, ?t/show: (t) -> <div|e1> string, ?e/show: (e) -> <div|e1> string): <div|e1> string
+fun vb/show(v: valueBinder<t,v>, ?t/show: (t) -> <div|e> string, ?e/show: (v) -> <div|e> string): <div|e> string
   v.name.show ++ " " ++ v.binderType.t/show ++ " " ++ v.expr.e/show ++ " " ++ v.name-range.show ++ " " ++ v.range.show
 
 struct def<t>
@@ -197,7 +197,7 @@ type expr<t>
 // fun expr/show(expr: expr<t>): string
 //   ""
 
-fun expr/show(expr: expr<t>, ?show: (t) -> <div|e1> string): <div|e1> string
+fun expr/show(expr: expr<t>, ?show: (t) -> <div|e> string): <div|e> string
   match expr
     // Lam(binder, e, rng) -> "Lam " ++ binder.list/show ++ " " ++ e.show ++ " " ++ rng.show
     // Let(d, e, rng) -> "Let " ++ d.dg/show ++  " " ++ e.expr/show ++ " " ++ rng.show 

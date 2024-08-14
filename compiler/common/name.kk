@@ -556,12 +556,12 @@ fun is-value-operation-name(n: name): bool
   n.hidden/starts-with("val")
 
 // Create an operation name from a value operation name
-fun from-value-operations-name(n: name): <exn> name
+fun from-value-operation-name(n: name): <exn> name
   n.unmake-hidden("val")
 
 // Create an operation name from either a value operation name or regular operations name
-fun to-basic-operations-name(n: name): <exn> name
-  if n.is-value-operation-name then n.from-value-operations-name else n
+fun to-basic-operation-name(n: name): <exn> name
+  if n.is-value-operation-name then n.from-value-operation-name else n
 
 // Implicits
 
