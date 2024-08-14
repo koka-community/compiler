@@ -1,14 +1,15 @@
 // ---------------------------------------------------------------------------
 // Copyright 2024, Microsoft Research, Daan Leijen. Tim Whiting.
-//
+// 
 // This is free software; you can redistribute it and/or modify it under the
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 // ---------------------------------------------------------------------------
-// Updated as of 7/23/24: Commit 48b9d26 
-module compiler/common/failure
+// Updated as of 7/23/24: Commit 48b9d26
 
+module compiler/common/failure
 pub import compiler/platform/config
+
 import std/core-extras
 
 // ------------------------------------------

@@ -8,8 +8,8 @@ import std/core/undiv
 import std/data/word-set
 
 effect koka-lex
-  fun start-chunked(s: string): ()
-  fun end-chunked(): string
+  fun do-start-chunked(s: string, start: alex-pos): ()
+  fun end-chunked(): (string, alex-pos)
   fun add-chunk(s: sslice): ()
   fun get-rawdelim(): int
   fun set-rawdelim(i: int): ()
@@ -17,6 +17,13 @@ effect koka-lex
 
 fun emit(l: lex): <alex,koka-lex> ()
   do-emit(l, get-start(), get-end())
+
+fun start-chunked(s: string): <alex,koka-lex> ()
+  do-start-chunked(s, get-start())
+
+fun end-chunk(f: (string) -> lex): <alex,koka-lex> ()
+  val (s, start) = end-chunked()
+  do-emit(f(s), start, get-end())
 val alex_tab_size:int = 8
 val alex-base = alex-base_create()
 extern alex-base_create(): vector<int>
@@ -83,16 +90,16 @@ val alex_action_26: action = fn() { unsafe-char("string") }
 val alex_action_27: action = fn() { extend-slice(id) }
 val alex_action_28: action = fn() { extend-slice(sslice/from-char-esc) }
 val alex_action_29: action = fn() { extend-slice(sslice/from-hex-esc) }
-val alex_action_30: action = fn() { pop-state(); val s = end-chunked(); emit(LexString(s)) }
-val alex_action_31: action = fn() { pop-state(); end-chunked(); emit(LexError("string literal ended by a new line")) }
-val alex_action_32: action = fn() { pop-state(); val s = end-chunked(); emit(LexError("illegal character in string: " ++ s.show)) }
+val alex_action_30: action = fn() { pop-state(); end-chunk(fn(s) LexString(s)) }
+val alex_action_31: action = fn() { pop-state(); end-chunk(fn(s) LexError("string literal ended by a new line")) }
+val alex_action_32: action = fn() { pop-state(); end-chunk(fn(s) LexError("illegal character in string: " ++ s.show)) }
 val alex_action_33: action = fn() { unsafe-char("raw string") }
 val alex_action_34: action = fn() { extend-slice(id) }
 val alex_action_35: action = fn() {
                             val delim = get-slice().count
                             val curdelim = get-rawdelim()
                             if delim == curdelim then
-                              emit(LexString(end-chunked()))
+                              end-chunk(fn(s) LexString(s))
                               pop-state()
                               pop-rawdelim()
                             elif delim > curdelim then // too many terminating hashes
@@ -104,7 +111,7 @@ val alex_action_35: action = fn() {
                               extend-slice(id)
                           }
 val alex_action_36: action = fn() {
-  emit(LexError("illegal character in raw string: " ++ end-chunked().show))
+  end-chunk(fn(s) LexError("illegal character in raw string: " ++ s.show))
   pop-state()
   pop-rawdelim()
  }
@@ -113,7 +120,7 @@ val alex_action_37: action = fn() {
   // TODO? end-chunked()
   if st == comment then extend-slice(id)
   else 
-    emit(LexComment(end-chunked().list.filter(fn(c) c != '\r').string))
+    end-chunk(fn(s) LexComment(s.list.filter(fn(c) c != '\r').string))
     pop-state()
     ()
 }
@@ -121,15 +128,15 @@ val alex_action_38: action = fn() { push-state(comment); start-chunked("/*"); }
 val alex_action_39: action = fn() { unsafe-char("comment") }
 val alex_action_40: action = fn() { extend-slice(id) }
 val alex_action_41: action = fn() { extend-slice(id) }
-val alex_action_42: action = fn() { pop-state(); emit(LexError("illegal character in comment: " ++ end-chunked().show)) }
+val alex_action_42: action = fn() { pop-state(); end-chunk(fn(s) LexError("illegal character in comment: " ++ s.show)) }
 val alex_action_43: action = fn() { unsafe-char("line comment") }
 val alex_action_44: action = fn() { extend-slice(id) }
-val alex_action_45: action = fn() { pop-state(); emit(LexComment(end-chunked().list.filter(fn(c) c !='\r').string)) }
-val alex_action_46: action = fn() { pop-state(); emit(LexError("illegal character in line comment: " ++ end-chunked().show)) }
+val alex_action_45: action = fn() { pop-state(); end-chunk(fn(s) LexComment(s.list.filter(fn(c) c !='\r').string)) }
+val alex_action_46: action = fn() { pop-state(); end-chunk(fn(s) LexError("illegal character in line comment: " ++ s.show)) }
 val alex_action_47: action = fn() { unsafe-char("line directive") }
 val alex_action_48: action = fn() { extend-slice(id) }
-val alex_action_49: action = fn() { pop-state(); emit(LexComment(end-chunked().list.filter(fn(c) c !='\r').string)) }
-val alex_action_50: action = fn() { pop-state(); emit(LexError("illegal character in line directive: " ++ end-chunked().show)) }
+val alex_action_49: action = fn() { pop-state(); end-chunk(fn(s) LexComment(s.list.filter(fn(c) c !='\r').string)) }
+val alex_action_50: action = fn() { pop-state(); end-chunk(fn(s) LexError("illegal character in line directive: " ++ s.show)) }
 
 // -----------------------------------------------------------------------------
 // ALEX TEMPLATE
@@ -342,7 +349,7 @@ fun alex-scan-tokens(s: int): alex-eff ()
               _ ->
                 consume-char()
                 alex-scan-tokens(new_s)
-/// LINE 236 "../../koka-community/compiler/compiler/syntax/koka.x"
+/// LINE 242 "../../koka-community/compiler/compiler/syntax/koka.x"
 fun extend-slice(f: sslice -> sslice)
   add-chunk(f(get-slice()))
 

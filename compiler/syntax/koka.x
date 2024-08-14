@@ -8,8 +8,8 @@ import std/core/undiv
 import std/data/word-set
 
 effect koka-lex
-  fun start-chunked(s: string): ()
-  fun end-chunked(): string
+  fun do-start-chunked(s: string, start: alex-pos): ()
+  fun end-chunked(): (string, alex-pos)
   fun add-chunk(s: sslice): ()
   fun get-rawdelim(): int
   fun set-rawdelim(i: int): ()
@@ -18,6 +18,12 @@ effect koka-lex
 fun emit(l: lex): <alex,koka-lex> ()
   do-emit(l, get-start(), get-end())
 
+fun start-chunked(s: string): <alex,koka-lex> ()
+  do-start-chunked(s, get-start())
+
+fun end-chunk(f: (string) -> lex): <alex,koka-lex> ()
+  val (s, start) = end-chunked()
+  do-emit(f(s), start, get-end())
 }
 
 
@@ -171,9 +177,9 @@ program :-
 <stringlit> @stringchar+  { fn() { extend-slice(id) } }
 <stringlit> \\$charesc    { fn() { extend-slice(sslice/from-char-esc) } }
 <stringlit> \\@hexesc     { fn() { extend-slice(sslice/from-hex-esc) } }
-<stringlit> \"            { fn() { pop-state(); val s = end-chunked(); emit(LexString(s)) } } -- " 
-<stringlit> @newline      { fn() { pop-state(); end-chunked(); emit(LexError("string literal ended by a new line")) } }
-<stringlit> .             { fn() { pop-state(); val s = end-chunked(); emit(LexError("illegal character in string: " ++ s.show)) } }
+<stringlit> \"            { fn() { pop-state(); end-chunk(fn(s) LexString(s)) } } -- " 
+<stringlit> @newline      { fn() { pop-state(); end-chunk(fn(s) LexError("string literal ended by a new line")) } }
+<stringlit> .             { fn() { pop-state(); end-chunk(fn(s) LexError("illegal character in string: " ++ s.show)) } }
 
 <stringraw> @utf8unsafe   { fn() { unsafe-char("raw string") } }
 <stringraw> @stringraw    { fn() { extend-slice(id) } }
@@ -181,7 +187,7 @@ program :-
                             val delim = get-slice().count
                             val curdelim = get-rawdelim()
                             if delim == curdelim then
-                              emit(LexString(end-chunked()))
+                              end-chunk(fn(s) LexString(s))
                               pop-state()
                               pop-rawdelim()
                             elif delim > curdelim then // too many terminating hashes
@@ -193,7 +199,7 @@ program :-
                               extend-slice(id)
                           }}
 <stringraw> .             { fn() {
-  emit(LexError("illegal character in raw string: " ++ end-chunked().show))
+  end-chunk(fn(s) LexError("illegal character in raw string: " ++ s.show))
   pop-state()
   pop-rawdelim()
  }}
@@ -207,7 +213,7 @@ program :-
   // TODO? end-chunked()
   if st == comment then extend-slice(id)
   else 
-    emit(LexComment(end-chunked().list.filter(fn(c) c != '\r').string))
+    end-chunk(fn(s) LexComment(s.list.filter(fn(c) c != '\r').string))
     pop-state()
     ()
 }}
@@ -215,23 +221,23 @@ program :-
 <comment> @utf8unsafe     { fn() { unsafe-char("comment") } }
 <comment> @commentchar    { fn() { extend-slice(id) } }
 <comment> [\/\*]          { fn() { extend-slice(id) } }
-<comment> .               { fn() { pop-state(); emit(LexError("illegal character in comment: " ++ end-chunked().show)) } }
+<comment> .               { fn() { pop-state(); end-chunk(fn(s) LexError("illegal character in comment: " ++ s.show)) } }
 
 --------------------------
 -- line comments
 
 <linecom> @utf8unsafe     { fn() { unsafe-char("line comment") } }
 <linecom> @linechar       { fn() { extend-slice(id) } }
-<linecom> @newline        { fn() { pop-state(); emit(LexComment(end-chunked().list.filter(fn(c) c !='\r').string)) } }
-<linecom> .               { fn() { pop-state(); emit(LexError("illegal character in line comment: " ++ end-chunked().show)) } }
+<linecom> @newline        { fn() { pop-state(); end-chunk(fn(s) LexComment(s.list.filter(fn(c) c !='\r').string)) } }
+<linecom> .               { fn() { pop-state(); end-chunk(fn(s) LexError("illegal character in line comment: " ++ s.show)) } }
 
 --------------------------
 -- line directives (ignored for now)
 
 <linedir> @utf8unsafe     { fn() { unsafe-char("line directive") } }
 <linedir> @linechar       { fn() { extend-slice(id) } }
-<linedir> @newline        { fn() { pop-state(); emit(LexComment(end-chunked().list.filter(fn(c) c !='\r').string)) } }
-<linedir> .               { fn() { pop-state(); emit(LexError("illegal character in line directive: " ++ end-chunked().show)) } }
+<linedir> @newline        { fn() { pop-state(); end-chunk(fn(s) LexComment(s.list.filter(fn(c) c !='\r').string)) } }
+<linedir> .               { fn() { pop-state(); end-chunk(fn(s) LexError("illegal character in line directive: " ++ s.show)) } }
 
 {
 

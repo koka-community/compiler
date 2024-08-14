@@ -2,7 +2,7 @@ import std/os/env
 
 pub effect val comp-flags: compilerFlags;
 
-fun @default-comp-flags(f){
+fun @default-comp-flags(f)
   with handler val comp-flags = CompilerFlags(
     programName = "koka",
     version = "0.9.0",
@@ -10,7 +10,6 @@ fun @default-comp-flags(f){
     buildVariant = "release"
   )
   f()
-}
 
 struct compilerFlags
   programName: string

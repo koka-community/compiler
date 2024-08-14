@@ -69,7 +69,7 @@ fun cs/(==)(c1: colorScheme, c2: colorScheme): bool
   && c1.colorTypeSpecial == c2.colorTypeSpecial && c1.colorTypeParam == c2.colorTypeParam 
   && c1.colorNameQual == c2.colorNameQual && c1.colorImplicitParameter == c2.colorImplicitParameter && c1.colorImplicitExpr == c2.colorImplicitExpr
 
-val lightColorScheme = ColorScheme(
+val light-color-scheme = ColorScheme(
   colorNumber = DarkGray,
   colorSource = DarkGray,
   colorCommand = Black,

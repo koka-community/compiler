@@ -250,7 +250,7 @@ fun insert-rcurly(Layout(Lexeme(layout-rng, layout-lex), layout-col), Lexeme(pre
   start ++ Cons(Lexeme(prev-rng.after, LexInsRCurly), Nil)
 
 fun insert-semi(Lexeme(prev-rng, prev-lex))
-  if prev-lex.isSemi then [] else [Lexeme(prev-rng.after, LexInsSemi)]
+  if prev-lex.is-semi then [] else [Lexeme(prev-rng.after, LexInsSemi)]
 
 fun is-expr-continuation(prev-lex, lex)
   lex.is-start-continuation-token || prev-lex.is-end-continuation-token
@@ -284,7 +284,7 @@ inline fun is-open-brace(lex)
     LexInsLCurly -> True
     _ -> False
 
-inline fun isSemi(lex)
+inline fun is-semi(lex)
   match lex
     LexSpecial(";") -> True
     LexInsSemi -> True

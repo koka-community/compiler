@@ -16,10 +16,10 @@ import compiler/common/name
 import compiler/common/range
 import compiler/common/syntax
 
-val typeVarRegex = "^[a-z][0-9]*$".regex();
+val type-var-regex = "^[a-z][0-9]*$".regex();
 
 pub fun is-type-var(n: name): bool
-  !typeVarRegex.exec(n.nameStem).is-empty
+  !type-var-regex.exec(n.nameStem).is-empty
 
 // Lexer tokens
 // A lexical token with an associated range.

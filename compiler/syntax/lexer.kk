@@ -1,10 +1,7 @@
 import compiler/syntax/lexeme
 import compiler/syntax/lex
 import compiler/common/range
-import std/os/file
-import std/os/path
 import std/core-extras
-import std/os/task
 import std/core/unsafe
 
 fun lex(str: string, pos: pos): pure list<lexeme>
@@ -13,18 +10,18 @@ fun lex(str: string, pos: pos): pure list<lexeme>
   var slices := []
   var raw-delim := 0
   with handler
-    fun start-chunked(s: string)
-      slices := Cons(s, slices)
+    fun do-start-chunked(s: string, start: alex-pos)
+      slices := Cons((s, start), slices)
     fun end-chunked()
       match slices
-        Cons(s, rst) -> 
+        Cons((s, start), rst) -> 
           slices := rst
-          s
+          (s, start)
         Nil -> throw("end-chunked when no chunked input")
     fun add-chunk(f)
       match slices
-        Cons(s, rst) -> 
-          slices := Cons(s ++ f.string, rst)
+        Cons((s, st), rst) -> 
+          slices := Cons((s ++ f.string, st), rst)
         Nil -> 
           throw("add-chunk when no chunked input")
     fun get-rawdelim()
@@ -45,17 +42,3 @@ fun lexing(source: source, line: int, input: string): pure list<lexeme>
   val init-pos = Pos(source, 0, 0, 1)
   lex(input, init-pos)
 
-fun test-lex()
-  val files =  [
-    "compiler/syntax/lex",
-    "compiler/syntax/lexer",
-    "compiler/syntax/lexeme"]
-  
-  files.foreach fn(f)
-    with handler
-      final ctl throw-exn(e)
-        ()
-    val s = read-text-file((f ++ ".kk").path)
-    val source = Source(f ++ ".kk", s)
-    lexing(source, 1, s)
-    ()
