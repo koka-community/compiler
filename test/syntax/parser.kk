@@ -3,4 +3,4 @@ import compiler/syntax/syntax
 import std/os/path
 
 fun main()
-  parseProgramFromFile("compiler/syntax/parse.kk".path, True, True).show
+  parseProgramFromFile("test/syntax/parser.kk".path, True, True).show

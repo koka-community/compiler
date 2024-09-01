@@ -70,8 +70,8 @@ fun qname-map/lookup(m: qname-map<a>, c: name, name: name): lookup<a>
     _ -> NotFound
 
 fun qname-map/filter-names(m: qname-map<a>, p: (name) -> e bool): e qname-map<a>
-  m.map fn(k, xs) 
-    (k, xs.filter(fn((n, _)) p(n)))
+  m.map fn(k, xs)
+    xs.filter(fn((n, _)) p(n))
 
 fun qname-map/insert(m: qname-map<a>, n: name, a: a): <comp-flags,exn> qname-map<a>
   m.update(n.unqualify, Cons((n, a), Nil)) fn(xs, ys)

@@ -95,13 +95,13 @@ fun parseLexemes(src: source, lexemes0: list<lexeme>, p: () -> <console,ast|e> a
       match history
         Cons((h, str, _), rst) -> 
           if str != msg then
-            trace("Resetting " ++ str ++ " but expected " ++ msg)
+            // trace("Resetting " ++ str ++ " but expected " ++ msg)
             throw("Reset error")
           else
             lexemes := h ++. lexemes
             history := rst
-            if debug then
-              trace("Resetting " ++ str ++ "\n" ++ history.map(fn(x) "\tWhen parsing " ++ x.snd).join("\n") ++ " at " ++ lexemes.head.map(show).default("eof") ++ "\nputting back:\n\t" ++ (h ++. Nil).map(show).join("\n\t"))
+            // if debug then
+            //   trace("Resetting " ++ str ++ "\n" ++ history.map(fn(x) "\tWhen parsing " ++ x.snd).join("\n") ++ " at " ++ lexemes.head.map(show).default("eof") ++ "\nputting back:\n\t" ++ (h ++. Nil).map(show).join("\n\t"))
         Nil ->
           astError("mismatched reset", null)
     fun delimit(msg)
@@ -121,8 +121,8 @@ fun parseLexemes(src: source, lexemes0: list<lexeme>, p: () -> <console,ast|e> a
         Cons(l, _) -> Just(l)
         Nil -> Nothing
     fun peof()
-      if debug then
-        trace("Parsing eof\n" ++ history.map(fn(x) "\tWhen parsing " ++ x.snd).join("\n") ++ "\n\nHad leftovers: " ++ lexemes.map(fn(x) x.show).join("\n"))
+      // if debug then
+      //   trace("Parsing eof\n" ++ history.map(fn(x) "\tWhen parsing " ++ x.snd).join("\n") ++ "\n\nHad leftovers: " ++ lexemes.map(fn(x) x.show).join("\n"))
       match lexemes
         Cons(l, _) ->
           astError("peof expected end of file", l.range)
@@ -173,7 +173,7 @@ fun token(msg: string, f: (lexeme) -> <ast|e> maybe<a>): <ast|e> a
   match f(t) 
     Just(a) -> 
       next() 
-      ptrace("Consuming " ++ t.show)
+      // ptrace("Consuming " ++ t.show)
       a
     Nothing ->
       astError("expecting " ++ msg, peek().range)
@@ -482,6 +482,7 @@ fun pQOp()
     match a
       Lexeme(rng, LexOp(id)) -> 
         Just((id, rng))
+      _ -> Nothing
 
 fun pPrefixOp()
   token("prefix operator") fn(a)

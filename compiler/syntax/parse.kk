@@ -2,6 +2,7 @@ import std/os/path
 import std/os/file
 import std/data/sort
 import compiler/syntax/lexeme
+import compiler/syntax/layout
 import compiler/syntax/syntax
 import compiler/syntax/promote
 import compiler/common/syntax
@@ -9,7 +10,6 @@ import compiler/common/name
 import compiler/common/name-prim
 import compiler/common/range
 import compiler/common/parse
-
 
 fun parseProgramFromFile(fname: path, allowAt: bool, semiInsert: bool = True): io userProgram
   val r = read-text-file(fname)
@@ -19,7 +19,7 @@ fun parseProgramFromString(input: string, fname: path, allowAt: bool, semiInsert
   with handler
     final ctl astError(e: string, r: range)
       throw("Parse error: " ++ e ++ " at " ++ r.show)
-  lexParse(allowAt, semiInsert, fn(x) x, parseProgram, fname.string, input)
+  lexParse(allowAt, semiInsert, fn(x) x.remove-white, parseProgram, fname.string, input)
 
 fun interactive(f: () -> ast a): ast a
   val x = f()
