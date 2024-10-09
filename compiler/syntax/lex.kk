@@ -216,7 +216,7 @@ type alexAccRes
   AlexAccRes(action: int, input: sslice, acc: sslice, end: alex-pos)
   AlexAccResSkip(input: sslice, acc: sslice)
 
-ref struct alexScanState
+reference struct alexScanState
   states: list<int> 
   seek: sslice // The seeked position in the input
   // on an error, we want to keep the input *before* the
