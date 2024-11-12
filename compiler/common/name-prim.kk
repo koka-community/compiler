@@ -5,13 +5,12 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
-// Updated as of 7/23/24 
 
 import compiler/common/name
 import compiler/common/syntax
 import compiler/common/failure
 import std/core/unsafe
-// Updated as of 7/23/24: Commit #0013124
+// Updated as of 11/11/24: Commit #5222887
 
 //---------------------------------
 // Special
@@ -26,7 +25,7 @@ val nameCopy        = "@copy".new-name
 val nameOpExpr      = "@opexpr".new-name
 
 fun copy-name-of(typename: name): <comp-flags,exn> name
-  qualify(typename.qualifier, typename.unqualify.name-as-module-name.qualify-locally(nameCopy))
+  type-qualified-name-of(typename, nameCopy)
 
 //---------------------------------
 // Primitive operations
@@ -74,9 +73,24 @@ val nameCoreFileLine = nameCoreDebug.qualify(new-locally-qualified("", "file", "
 val nameCoreFileModule = nameCoreDebug.qualify(new-locally-qualified("", "file", "kk-module"))
 
 //---------------------------------
+// std/core/lazy
+//---------------------------------
+
+val nameLazyTarget = "whnf-target".core-lazy-name
+val nameLazyUpdate = "whnf-update".core-lazy-name
+val nameLazyEnter  = "atomic-enter".core-lazy-name
+val nameLazyLeave  = "atomic-leave".core-lazy-name
+val nameLazyIsWhnf = "datatype-is-whnf".core-lazy-name
+val nameLazyPtrIsWhnf = "datatype-ptr-is-whnf".core-lazy-name
+val nameDataTypePtrIsUnique = "datatype-ptr-is-unique".core-lazy-name
+val nameDataTypePtrIsThreadShared = "datatype-ptr-is-thread-shared".core-lazy-name
+
+//---------------------------------
 // std/core/vector
 //---------------------------------
 val nameVector      = "unvlist".core-vector-name
+val nameVectorFromList = new-locally-qualified("std/core/vector", "list", "vector")
+val nameVectorUnsafeCreate = "@unsafe-vector".core-vector-name
 
 //---------------------------------
 // std/core/int
@@ -135,44 +149,44 @@ val nameFieldAddrOf       = "@field-addr-of".cfield-name
 // std/core/hnd
 //---------------------------------
 
-val nameTpMarker    = "marker".core-hnd-name
-val nameTpHTag      = "htag".core-hnd-name
+val nameTpMarker     = "marker".core-hnd-name
+val nameTpHTag       = "htag".core-hnd-name
 fun name-tp-clause(i:int): name
   ("clause" ++ i.show).core-hnd-name
-val nameTpEv        = "ev".core-hnd-name
-val nameTpEvv       = "evv".core-hnd-name
-val nameTpEvIndex   = "ev-index".core-hnd-name
+val nameTpEv         = "ev".core-hnd-name
+val nameTpEvv        = "evv".core-hnd-name
+val nameTpEvIndex    = "ev-index".core-hnd-name
 fun name-clause(sort, i: int): name
   ("clause-" ++ sort ++ i.show).core-hnd-name
 val nameTpResumeContext = "resume-context".core-hnd-name
 
-val nameHTag        = "@new-htag".core-hnd-name
+val nameHTag         = "@new-htag".core-hnd-name
 fun name-perform(i: int)
   ("@perform" ++ i.show).core-hnd-name
-val nameEvvAt       = "@evv-at".core-hnd-name
-val nameEvvLookup   = "@evv-lookup".core-hnd-name
-val nameEvvIndex    = "@evv-index".core-hnd-name
-val nameMaskAt      = "@mask-at".core-hnd-name
-val nameMaskBuiltin = "@mask-builtin".core-hnd-name
+val nameEvvAt        = "@evv-at".core-hnd-name
+val nameEvvIndex     = "@evv-index".core-hnd-name
+val nameEvvIndexMask = "@evv-index-mask".core-hnd-name
+val nameMaskAt       = "@mask-at".core-hnd-name
+val nameMaskBuiltin  = "@mask-builtin".core-hnd-name
 fun name-open-at(i: int)
   ("@open-at" ++ i.show).core-hnd-name
 fun name-open-none(i: int)
   ("@open-none" ++ i.show).core-hnd-name
 fun name-open(i: int)
   ("@open" ++ i.show).core-hnd-name
-val nameEvvIsAffine = ("@evv-is-affine").core-hnd-name
+val nameEvvIsAffine  = ("@evv-is-affine").core-hnd-name
 
-val nameHandle      = "@hhandle".core-hnd-name
-val nameNamedHandle = "@named-handle".core-hnd-name
+val nameHandle       = "@hhandle".core-hnd-name
+val nameNamedHandle  = "@named-handle".core-hnd-name
 
-val nameYielding    = "yielding".core-hnd-name
-val nameYieldExtend = "yield-extend".core-hnd-name
-val nameBind        = "yield-bind".core-hnd-name // prelude-name  "bind"
-val nameBind2       = "yield-bind2".core-hnd-name
-val nameEffectOpen  =  "@open".core-types-name // prelude-name "@open"
+val nameYielding     = "yielding".core-hnd-name
+val nameYieldExtend  = "yield-extend".core-hnd-name
+val nameBind         = "yield-bind".core-hnd-name // prelude-name  "bind"
+val nameBind2        = "yield-bind2".core-hnd-name
+val nameEffectOpen   =  "@open".core-types-name // prelude-name "@open"
 
-val nameInitially   = "initially".core-hnd-name
-val nameFinally     = "finally".core-hnd-name
+val nameInitially    = "initially".core-hnd-name
+val nameFinally      = "finally".core-hnd-name
 fun name-clause-tail-no-op(n: int): e name
   core-hnd-name("clause-tail-noop" ++ show(n))
 
@@ -291,6 +305,7 @@ val nameReuse       = "@reuse".core-types-name
 val nameReuseIsValid= "@reuse-is-valid".core-types-name
 val nameConFieldsAssign = "@con-fields-assign".core-types-name
 val nameConTagFieldsAssign = "@con-tag-fields-assign".core-types-name
+val nameConTagScanFieldsAssign = "@con-tag-scan-fields-assign".core-types-name
 val nameSetTag      = "@set-tag".core-types-name
 val nameKeep        = "keep".core-types-name
 
@@ -342,6 +357,8 @@ fun core-vector-name(s: string): name
   new-qualified("std/core/vector", s)
 fun core-string-name(s: string): name
   new-qualified("std/core/string", s)
+fun core-lazy-name(s: string): name
+  new-qualified("std/core/lazy", s)
 
 val nameSystemCore  = "std/core".new-module-name
 val nameCoreHnd     = "std/core/hnd".new-module-name

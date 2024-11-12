@@ -2,9 +2,9 @@
 Work on Syntax, Parsing, and Formatter
 
 ## Fully up to date
-// compiler/lib/* 07/23/24 updated
-// compiler/common/* 07/23/24 updated - other than parse, and some missing functions in range and file
-// compiler/syntax/lexeme & layout 08/05/24, range-map 08/06/24, partial highlight 08/08/24
+// compiler/lib/* 11/11/24 updated
+// compiler/common/* 11/11/24 updated - other than parse, and some missing functions in range and file
+// compiler/syntax/lexeme & layout 11/11/24, range-map 11/11/24, partial highlight 11/11/24
 
 ## Syntax errors
 

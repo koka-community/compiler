@@ -5,7 +5,7 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
-// Updated as of 7/23/24: Commit bc34c8e
+// Updated as of 11/11/24: Commit a22ccc2
 
 type jsTarget
   JsDefault
@@ -192,42 +192,37 @@ type dataKind
 fun datakind/show(k: dataKind): string
   match k
     Inductive -> "type"
-    CoInductive -> "cotype"
-    Retractive -> "rectype"
+    CoInductive -> "co type"
+    Retractive -> "div type"
 
 type dataDef
   DataDefValue(repr: valueRepr) // value type
   DataDefNormal // reference type
-  DataDefEffect(is-linear: bool, is-named: bool) // effect types
-  DataDefRec
-  DataDefOpen
-  DataDefAuto // value or normal; determined by kind inference
+  DataDefLazy(fipT: fipT) // Lazy reference type
+  DataDefOpen(isExtend: bool)
+  DataDefAuto(declaredAsStruct: bool) // value or reference type; determined by kind inference (in kind/repr.kk:create-data-def)
 
 fun datadef/(==)(d1: dataDef, d2: dataDef): bool
   match (d1, d2)
     (DataDefValue(r1), DataDefValue(r2)) -> r1 == r2
     (DataDefNormal, DataDefNormal) -> True
-    (DataDefEffect(l1, n1), DataDefEffect(l2, n2)) -> l1 == l2 && n1 == n2
-    (DataDefRec, DataDefRec) -> True
+    (DataDefLazy(f1), DataDefLazy(f2)) -> f1.cmp(f2) == Eq
     (DataDefOpen, DataDefOpen) -> True
     (DataDefAuto, DataDefAuto) -> True
     _ -> False
 
 fun datadef/show(d: dataDef): string
   match d
-    DataDefValue(r) -> "val" ++ r.show
-    DataDefNormal -> "normal"
-    DataDefEffect(l, n) -> (if l then "linear " else "") ++ (if n then "named " else "") ++ "effect"
-    DataDefRec -> "rec"
-    DataDefOpen -> "open"
-    DataDefAuto -> "auto"
+    DataDefValue(r) -> "value" ++ r.show
+    DataDefNormal -> "reference"
+    DataDefLazy(f) -> sep-by-space(["lazy", f.show])
+    DataDefOpen(isExtend) -> if isExtend then "extend" else "open"
+    DataDefAuto(isStruct) -> "auto" ++ (if isStruct then " struct" else "")
 
-fun datadef/is-rec(d: dataDef): bool
+fun datadef/is-extend(d: dataDef): bool
   match d
-    DataDefValue -> False
-    DataDefNormal -> False
-    DataDefAuto -> False
-    _ -> True
+    DataDefOpen(isExtend) -> isExtend
+    _ -> False
   
 fun datadef/is-open(d: dataDef): bool
   d.is-dataDefOpen
@@ -236,6 +231,9 @@ fun datadef/is-value(d: dataDef): bool
   d.is-dataDefValue
 
 fun datadef/is-normal(d: dataDef): bool
+  d.is-dataDefNormal
+
+fun datadef/is-lazy(d: dataDef): bool
   d.is-dataDefNormal
 
 fun datadef/size(d: dataDef, p: platform): int
@@ -297,7 +295,7 @@ fun defsort/show(s: defSort): string
 
 fun show-full(s: defSort): string
   match s
-    DefFun(_, f) -> f.show ++ " fun"
+    DefFun(_, f) -> [f.show, "fun"].sep-by-space
     DefVal -> "val"
     DefVar -> "var"
 
@@ -373,7 +371,7 @@ fun assoc/show(a: assoc): string
 type fipT
   Fip(alloc: fipAlloc)
   Fbip(alloc: fipAlloc, tail: bool)
-  NoFip(tail: bool)
+  NoFip(tail: bool) // Ordering seems wrong as `NoFip False` should be top but now NoFip True is the top
 
 fun fipt/show(f: fipT): string
   match f
@@ -381,12 +379,26 @@ fun fipt/show(f: fipT): string
     Fbip(a, t) -> "fbip(" ++ a.show ++ ", " ++ t.show ++ ")"
     NoFip(t) -> "NoFip(" ++ t.show ++ ")"
 
+fun fipt/cmp(f1: fipT, f2: fipT): order
+  match (f1, f2)
+    (Fip(a1), Fip(a2)) -> fipa/cmp(a1, a2)
+    (Fbip(a1, True), Fbip(a2, True)) -> fipa/cmp(a1, a2)
+    (Fbip(a1, False), Fbip(a2, False)) -> fipa/cmp(a1, a2)
+    (Fbip(_, True), Fbip(_, _)) -> Gt
+    (Fbip(_, False), Fbip(_, _)) -> Lt
+    (NoFip(t1), NoFip(t2)) -> t1.cmp(t2)
+    (Fip(_), _) -> Lt
+    (_, Fip(_)) -> Gt
+    (Fbip(_, _), _) -> Lt
+    (_, Fbip(_, _)) -> Gt
+    _ -> Lt
+
 value type fipAlloc
   AllocAtMost(i: int)
   AllocFinitely
   AllocUnlimited
 
-fun fipa/cmp(f1: fipAlloc, f2: fipAlloc)
+fun fipa/cmp(f1: fipAlloc, f2: fipAlloc): order
   match (f1, f2)
     (AllocAtMost(n1), AllocAtMost(n2)) -> n1.cmp(n2)
     (_, AllocAtMost) -> Gt
@@ -395,6 +407,7 @@ fun fipa/cmp(f1: fipAlloc, f2: fipAlloc)
     (AllocUnlimited, AllocFinitely) -> Gt
     (AllocUnlimited, AllocUnlimited) -> Eq
     (_, AllocUnlimited) -> Lt
+    _ -> Lt
 
 fun combine(f1: fipAlloc, f2: fipAlloc)
   match (f1, f2)
@@ -410,7 +423,15 @@ fun fipalloc/show(a: fipAlloc): string
     AllocFinitely -> "AllocFinitely"
     AllocUnlimited -> "AllocUnlimited"
 
-pub val no-fip = NoFip(False)
+pub val fipBot = Fip(AllocAtMost(0))
+pub val fipTop = NoFip(False)
+pub val fip-no-alloc = fipBot
+pub val no-fip = fipTop
+
+pub fun is-top(f: fipT): bool
+  match f
+    NoFip(False) -> True
+    _ -> False
 
 fun fipt/is-tail(f: fipT): bool
   match f
@@ -426,7 +447,7 @@ fun fipt/alloc(f: fipT): fipAlloc
 
 fun show-fip(f: fipT)
   fun show-tail(b: bool): string
-    if b then "tail" else " "
+    if b then "tail" else ""
   fun show-n(n: fipAlloc): string
     match n
       AllocAtMost(0) -> ""
@@ -435,5 +456,30 @@ fun show-fip(f: fipT)
       AllocUnlimited -> "" 
   match f
     Fip(n) -> "fip" ++ show-n(n)
-    Fbip(n, t) -> t.show-tail ++ "fbip" ++ show-n(n)
+    Fbip(n, t) -> [t.show-tail, "fbip" ++ show-n(n)].sep-by-space
     NoFip(t) -> t.show-tail
+
+fun sep-by-space(xs: list<string>)
+  xs.filter(fn(x) x != "").join(" ")
+
+fun fipt/max(fip1: fipT, fip2: fipT)
+  match (fip1, fip2)
+    (NoFip(isTail1), NoFip(isTail2)) -> NoFip(isTail1 && isTail2)
+    (NoFip(t1), _) -> NoFip(t1 && fip2.is-tail)
+    (_, NoFip(t2)) -> NoFip(t2 && fip1.is-tail)
+    (Fbip(a1, t1), Fbip(a2, t2)) -> Fbip(max(a1, a2), t1 && t2)
+    (Fbip(a1, t1), Fip(a2)) -> Fbip(max(a1, a2), t1)
+    (Fip(a1), Fbip(a2, t2)) -> Fbip(max(a1, a2), t2)
+    (Fip(a1), Fip(a2)) -> Fip(max(a1, a2))
+
+fun fipa/max(a1: fipAlloc, a2: fipAlloc)
+  match (a1, a2)
+    (AllocUnlimited, _) -> AllocUnlimited
+    (_, AllocUnlimited) -> AllocUnlimited
+    (AllocFinitely, _) -> AllocFinitely
+    (_, AllocFinitely) -> AllocFinitely
+    (AllocAtMost(n1), AllocAtMost(n2)) -> AllocAtMost(max(n1, n2))
+
+fun member-doc(doc: string, header: string, members: list<string>): string
+  val mdoc = "// " ++ header ++ ":\n// ```koka\n" ++ members.map(fn(m) "// " ++ m).join("\n") ++ "// ```\n"
+  if doc == "" then mdoc else doc ++ "\n// * * *\n" ++ mdoc

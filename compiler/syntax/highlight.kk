@@ -5,7 +5,7 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
-// Updated as of 8/6/24: Commit f31585c
+// Updated as of 11/11/24: Commit 08af0fb
 
 import compiler/common/color-scheme
 import compiler/common/range
@@ -74,7 +74,7 @@ fun highlight/show(Lexeme(_, lex): lexeme): exn string
     LexOp(id) -> id.show-plain
     LexPrefix(id) -> id.show-plain
     LexWildCard(id) -> id.show
-    LexModule(id) -> id.show
+    LexModule(id) -> id.show-plain
     LexCons(id) -> id.show
     LexTypedId(id) -> id.show-plain
     LexKeyword(kw) -> kw.normalize
@@ -171,28 +171,56 @@ fun nesting(n: highlight-ctx): int
 
 fun fmt/highlight(transform: list<lexeme> -> pure list<lexeme>, c: highlight-ctx, lineNo: int, str: string): highlight list<token<lexeme>>
   val xs = lexer(source-file, lineNo, str)
-  highlight-lexemes(transform, c, [], xs.combine-line-comments.transform)
+  highlight-lexemes(transform, c, xs.combine-line-comments.transform)
 
-fun highlight-lexemes(transform: list<lexeme> -> pure list<lexeme>, c: highlight-ctx, acc: list<token<lexeme>>, lexes: list<lexeme>): highlight list<token<lexeme>>
-  match lexes
-    Cons(l, lexes') ->
-      val (ctx', content) = highlight-lexeme(transform, c, l, lexes')
-      highlight-lexemes(transform, ctx', Cons(content, acc), lexes')
-    Nil -> acc.reverse
+fun highlight-lexemes(transform: list<lexeme> -> pure list<lexeme>, c: highlight-ctx, lexes: list<lexeme>): highlight list<token<lexeme>>
+  fun highlight-acc(ctx', acc, lexemes)
+    match lexemes
+      Nil -> acc.reverse
+      Cons(l, ls) -> 
+        val (ctx2', content) = highlight-lexeme(transform, c, l, ls)
+        highlight-acc(ctx2', Cons(content, acc), ls)
+  highlight-acc(c, [], lexes.special-to-keywords.transform)
+
+fun special-to-keywords(lexemes: list<lexeme>): list<lexeme>
+  match lexemes
+    Cons(l0 as Lexeme(_, LexKeyword("import", _)), Cons(l1 as Lexeme(_, LexWhite), Cons(Lexeme(r2, LexId(id)), lexes))) ->
+      Cons(l0, Cons(l1, Cons(Lexeme(r2, LexModule(id, id)), lexes.special-to-keywords)))
+    
+    Cons(Lexeme(r0, LexId(id)), Cons(l1 as Lexeme(_, LexWhite), Cons(l2 as Lexeme(_, LexKeyword("type")), lexes))) | ["co", "div", "open", "extend", "value", "reference"].any(fn(i) i == id.show) ->
+      Cons(Lexeme(r0, LexKeyword(id.show, "")), Cons(l1, Cons(l2, lexes.special-to-keywords)))
+    Cons(Lexeme(r0, LexId(id)), Cons(l1 as Lexeme(_, LexWhite), Cons(l2 as Lexeme(_, LexKeyword("struct")), lexes))) | ["value", "reference"].any(fn(i) i == id.show) ->
+      Cons(Lexeme(r0, LexKeyword(id.show, "")), Cons(l1, Cons(l2, lexes.special-to-keywords)))
+    
+    Cons(Lexeme(r0, LexId(id)), Cons(l1 as Lexeme(_, LexWhite), Cons(l2 as Lexeme(_, LexKeyword("effect")), lexes))) | ["linear", "div", "named"].any(fn(i) i == id.show) ->
+      Cons(Lexeme(r0, LexKeyword(id.show, "")), Cons(l1, Cons(l2, lexes.special-to-keywords)))
+    Cons(Lexeme(r0, LexId(id)), Cons(l1 as Lexeme(_, LexWhite), Cons(l2 as Lexeme(r2, LexId(id2)), Cons(l3 as Lexeme(_, LexWhite), Cons(l4 as Lexeme(_, LexKeyword("effect")), lexes))))) | "named" == id.show && ["linear", "div"].any(fn(i) i == id2.show) ->
+      Cons(Lexeme(r0, LexKeyword(id.show, "")), Cons(l1, Cons(l2, Cons(Lexeme(r2, LexKeyword(id2.show, "")), Cons(l3, Cons(l4, lexes.special-to-keywords))))))
+    Cons(Lexeme(r0, LexId(id)), Cons(l1 as Lexeme(_, LexWhite), Cons(l2 as Lexeme(r2, LexId(id2)), Cons(l3 as Lexeme(_, LexWhite), Cons(l4 as Lexeme(_, LexKeyword("effect")), lexes))))) | "linear" == id.show && "div" == id2.show ->
+      Cons(Lexeme(r0, LexKeyword(id.show, "")), Cons(l1, Cons(l2, Cons(Lexeme(r2, LexKeyword(id2.show, "")), Cons(l3, Cons(l4, lexes.special-to-keywords))))))
+    
+    Cons(Lexeme(r0, LexId(id)), Cons(l1 as Lexeme(_, LexWhite), Cons(l2 as Lexeme(_, LexKeyword("fun")), lexes))) | ["inline", "noinline", "fip", "fbip", "tail"].any(fn(i) i == id.show) ->
+      Cons(Lexeme(r0, LexKeyword(id.show, "")), Cons(l1, Cons(l2, lexes.special-to-keywords)))
+    Cons(Lexeme(r0, LexId(id)), Cons(l1 as Lexeme(_, LexWhite), Cons(l2 as Lexeme(r2, LexId(id2)), Cons(l3 as Lexeme(_, LexWhite), Cons(l4 as Lexeme(_, LexKeyword("fun")), lexes))))) | ["inline", "noinline"].any(fn(i) i == id.show) && ["fip", "fbip", "tail"].any(fn(i) i == id2.show) ->
+      Cons(Lexeme(r0, LexKeyword(id.show, "")), Cons(l1, Cons(l2, Cons(Lexeme(r2, LexKeyword(id2.show, "")), Cons(l3, Cons(l4, lexes.special-to-keywords))))))
+    
+
+    Cons(l, lexes) -> Cons(l, lexes.special-to-keywords)
+    Nil -> Nil
 
 fun highlight-lexeme(transform: list<lexeme> -> pure list<lexeme>, ctx0: highlight-ctx, lexeme: lexeme, lexs: list<lexeme>): highlight (highlight-ctx, token<lexeme>)
   val Lexeme(rng, lex) = lexeme
   fun show-id(n: name): string
-    if n.nameStem == "!" || n.nameLocalQual == "~" then n.show-plain else n.show
+    if n.nameStem == "!" || n.nameLocalQual == "~" || n.nameStem == "()" then n.show-plain else n.show
   fun show-op(n: name): string
     match n.nameStem.slice.next
       Just((c, _)) | c.is-alpha-num -> "`" ++ n.show ++ "`"
       _ -> n.show-plain
   fun highlight-comment(com: token-comment<lexeme>): <pure,fmt> token-comment<token<lexeme>>
     match com
-      ComCode(lexs', s) -> ComCode(highlight-lexemes(transform, CtxNormal, [], lexs'.transform), s)
-      ComCodeBlock(cls, lexs', s) -> ComCodeBlock(cls, highlight-lexemes(transform, CtxNormal, [], lexs'.transform), s)
-      ComCodeLit(cls, lexs', s) -> ComCodeLit(cls, highlight-lexemes(transform, CtxNormal, [], lexs'.transform), s)
+      ComCode(lexs', s) -> ComCode(highlight-lexemes(transform, CtxNormal, lexs'.transform), s)
+      ComCodeBlock(cls, lexs', s) -> ComCodeBlock(cls, highlight-lexemes(transform, CtxNormal, lexs'.transform), s)
+      ComCodeLit(cls, lexs', s) -> ComCodeLit(cls, highlight-lexemes(transform, CtxNormal, lexs'.transform), s)
       ComText(s) -> ComText(s)
       ComEmph(s) -> ComEmph(s)
       ComUrl(s) -> ComUrl(s)
@@ -227,7 +255,7 @@ fun highlight-lexeme(transform: list<lexeme> -> pure list<lexeme>, ctx0: highlig
       LexFloat -> fmt(TokNumber, lexeme, lex.show)
       LexString(s) -> fmt(TokString, lexeme, s.show)
       LexChar(c) -> fmt(TokString, lexeme, c.show)
-      LexModule(id, mid) -> fmt(TokModule(mid), lexeme, id.show)
+      LexModule(id, mid) -> fmt(TokModule(mid), lexeme, id.show-plain)
       LexCons(id) -> fmt(if ctx1.is-ctxType then TokTypeId(id) else TokCons(id), lexeme, id.unqualify.show-id)
       LexTypedId(id, tp) -> fmt(TokId(id, tp), lexeme, id.unqualify.show-id)
       LexKeyword(":") -> fmt(TokTypeKeyword, lexeme, ":")

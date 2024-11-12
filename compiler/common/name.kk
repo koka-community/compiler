@@ -5,7 +5,7 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
-// Updated as of 7/23/24 Commit: e25043b
+// Updated as of 11/11/24 Commit: 0d430f5
 
 import compiler/common/color-scheme
 import compiler/common/range
@@ -46,6 +46,9 @@ fun join(m: string, n: string): string
   if m == "" then n
   elif n == "" then m
   else m ++ "/" ++ n
+
+fun joins(ms : list<string>): string
+  ms.foldr("", join)
 
 fun name/local(n: name): string
   join(n.nameLocalQual, n.nameStem)
@@ -101,9 +104,10 @@ pub fun (!=)(n1: name, n2: name): bool
   !(n1 == n2)
 
 pub fun name/cmp(n1: name, n2: name): order
+  // Compare module, stem name, and then local name for dependencies
   match n1.hashModule.cmp(n2.hashModule)
-    Eq -> match n1.hashLocalQual.cmp(n2.hashLocalQual)
-      Eq -> match n1.hashStem.cmp(n2.hashStem)
+    Eq -> match n1.hashStem.cmp(n2.hashStem)
+      Eq -> match n1.hashLocalQual.cmp(n2.hashLocalQual)
         Eq -> n1.lower/cmp(n2)
         lg -> lg
       lg -> lg
@@ -122,6 +126,9 @@ fun label-name/cmp(n1: name, n2: name): order
         lg -> lg
       lg -> lg
     lg -> lg
+
+fun stem-is-equal(n1 : name, n2 : name): bool
+  n1.hashStem == n2.hashStem && n1.nameStem == n2.nameStem
 
 fun is-id-char(c: char): bool
   c.is-alpha || c.is-digit || c == '_' || c == '-' || c == '@'
@@ -409,6 +416,17 @@ fun postpend(n: name, post: string): name
     val (xs, ys) = stem.list.reverse.span(fn(c) c == '?' || c == '\'')
     ys.reverse.string ++ post ++ xs.reverse.string
 
+fun type-qualified-name(typeName : name, stem : string): exn name
+  typeName.qualifier.qualify(typeName.unqualify.name-as-module-name.qualify-locally(stem.new-name))
+
+fun type-qualified-name-of(typeName : name, stem: name): exn name
+  typeName.type-qualified-name(stem.nameStem)
+
+fun type-qualified-get-type-name(nm : name)
+  match nm.split-local-qual-name.reverse
+    Cons(m, ms) -> nm.nameModule.new-locally-qualified(ms.reverse.joins,m)
+    [] -> fail("common/name type-qualified-get-type-name: no locally qualified type: " ++ nm.show)
+
 // Hidden names
 fun make-hidden(n: name): name
   prepend("@", n)
@@ -478,59 +496,67 @@ fun is-hidden-external-name(n: name): bool
 // Create a constructor creator name from the constructor name.
 // Used if special creation functions are used for the constructor.
 // in particular for the case of optional arguments.
+// Note: we cannot use `typeQualifiedName` as we need to use it in expressions for
+// depedency analysis before we know its type.
 fun new-creator-name(n: name): name
   make-hidden-name("create", n)
 
 fun is-creator-name(n: name): bool
   n.hidden/starts-with("create")
 
+val hndName = "hnd".new-hidden-name
+val handleName = "handle".new-hidden-name
+val effectTagName = "tag".new-hidden-name
+val effectOpsName = "ops".new-hidden-name
+val opsSelectName = "select".new-hidden-name
+
 fun is-early-bind-name(n: name): bool
   n.is-handle-name || n.is-creator-name
 
 // Create a handler type name from an effect type name.
-fun to-handler-name(n: name): name
-  make-hidden-name("hnd", n)
+fun to-handler-name(typeName: name): exn name
+  typeName.type-qualified-name-of(hndName)
 
 fun is-handler-name(n: name): bool
-  n.hidden/starts-with("hnd")
+  n.stem-is-equal(hndName)
 
 // Create an effect type name from an operations type name.
 fun from-handler-name(n: name): <exn> name
-  n.unmake-hidden("hnd")
+  n.type-qualified-get-type-name
 
 // Create a handle function name from an effect type name.
-fun to-handle-name(n: name): name
-  make-hidden-name("handle", n)
+fun to-handle-name(typeName: name): exn name
+  typeName.type-qualified-name-of(handleName)
 
 fun is-handle-name(n: name): bool
-  n.hidden/starts-with("handle")
+  n.stem-is-equal(handleName)
 
 // Create an operations type name from an effect type name.
-fun to-operations-name(n: name): name
-  make-hidden-name("ops", n)
+fun to-operations-name(typeName: name): exn name
+  typeName.type-qualified-name-of(effectOpsName)
 
 // Is this an operations name?
 fun is-operations-name(n: name): bool
-  n.hidden/starts-with("ops")
+  n.stem-is-equal(effectOpsName)
 
 // Create an effect type name from an operations type name.
 fun from-operations-name(n: name): <exn> name
-  n.unmake-hidden("ops")
+  n.type-qualified-get-type-name
 
-fun to-op-selector-name(n: name): name
-  make-hidden-name("select", n)
+fun to-op-selector-name(typeName: name): exn name
+  typeName.type-qualified-name-of(opsSelectName)
 
 // Is this an operations name?
 fun is-op-selector-name(n: name): bool
-  n.hidden/starts-with("select")
+  n.stem-is-equal(opsSelectName)
 
 //  Create an effect type name from an operations type name.
 fun from-op-selector-name(n: name): <exn> name
-  n.unmake-hidden("select")
+  n.type-qualified-get-type-name
 
 // Create an effect tag name from an effect type name.
-fun to-effect-tag-name(n: name): name
-  make-hidden-name("tag", n)
+fun to-effect-tag-name(typeName: name): exn name
+  typeName.type-qualified-name-of(effectTagName)
 
 // Create an operation type name from an operation name.
 fun to-op-type-name(n: name): name
@@ -539,6 +565,15 @@ fun to-op-type-name(n: name): name
 // Create an operation constructor name from an operation name.
 fun to-op-con-name(n: name): name
   make-hidden-name("Op", n)
+
+val indirectName = "Indirect".new-name
+
+// Create a lazy indirect constructor name from a type name.
+fun to-lazy-indirect-con-name(typeName: name): exn name
+  typeName.type-qualified-name-of(indirectName)
+
+fun is-lazy-indirect-con-name(n: name): bool
+  n.stem-is-equal(indirectName)
 
 // Create an open tag name from a constructor name in an open type
 fun to-open-tag-name(n: name): name
