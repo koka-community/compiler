@@ -100,7 +100,7 @@ fun createDataDef(emitError: (doc) -> e (), emitWarning: (doc) -> e (), lookupDa
           val size = platform.size(vr) + (if wouldGetTagField then platform.fieldSize else 0)
           if (size <= 2*platform.ptrSize && (maxMembers < 3 && canbeValue)) then
             emitWarning("may be better declared as a value type for efficiency (e.g. 'value type/struct'),".text |-|
-              "or declared as a reference type to suppress this warning (e.g. 'ref type/struct')".text)
+              "or declared as a reference type to suppress this warning (e.g. 'reference type/struct')".text)
           DataDefNormal
         _ -> DataDefNormal
     DataDefValue | isRec ->
