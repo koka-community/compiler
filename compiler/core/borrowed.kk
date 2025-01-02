@@ -16,13 +16,13 @@ alias borrowDef = (name, list<paramInfo>)
 // The initial borrowed
 val empty:borrowed = LinearMap([])
 
-fun borrowedNew(xs: list<borrowDef>): borrowed
+fun new(xs: list<borrowDef>): borrowed
   borrowed/empty.extend(xs)
 
 fun list/extend(b: borrowed, xs: list<borrowDef>): borrowed
   xs.foldl(b, extend)
 
-fun borrowed/extend(b: borrowed, b1: borrowDef): borrowed
+fun extend(b: borrowed, b1: borrowDef): borrowed
   b.add(b1.fst, b1.snd)
 
 fun core/extend(c: core, b0: borrowed): borrowed

@@ -83,7 +83,7 @@ fun fipT(info: nameInfo)
   match info
     InfoFun(fipt=fipt) -> fipt
     assumption/InfoExternal(fipt=fipt) -> fipt
-    _ -> no-fip
+    _ -> noFip
 
 fun element(info: nameInfo)
   match info
@@ -118,6 +118,9 @@ fun schemes(g: gamma): list<scheme>
 
 fun single(name: name, ni: nameInfo)
   assumption/empty.set(name, [(name, ni)])
+
+fun gamma/new(xs: list<(name, nameInfo)>): gamma
+  gamma-extends(empty, xs)
 
 fun gamma-extends(g: gamma, ls: list<(name,nameInfo)>): gamma
   ls.foldl(g, fn(m, (name,tp)) m.gamma-extend(name, tp))
@@ -187,10 +190,10 @@ fun gamma-lookup-prefix(g: gamma, name: name): list<(name, nameInfo)>
   g.filter(fn(n, ni) n.is-prefix).values.concat.filter(fn((_, ni)) ni.is-visible)
 
 fun gamma-map(g: gamma, f: (nameInfo -> nameInfo)): gamma
-  g.map(fn(k, xs) (k, xs.map(fn((n, ni)) (n, f(ni)))))
+  g.map(fn(k, xs) xs.map(fn((n, ni)) (n, f(ni))))
 
 fun gamma-list(g: gamma): list<(name, nameInfo)>
-  g.list.map(snd).concat.sort(?cmp=fn((n, _), (n2, _)) n.name/name/cmp(n2))
+  g.list.map(snd).concat.sort(?(<)=fn((n, _), (n2, _)) n.name/name/cmp(n2).is-lt)
 
 fun gamma-remove(g: gamma, name: name)
   g.remove(name.unqualify)
@@ -238,7 +241,7 @@ fun extract-type-def(isValue: (dataInfo -> bool), update-vis, td: typeDef)
   fun extract-con-info((info, repr): (conInfo, conRepr))
     qname-map/single(info.name, InfoCon(update-vis(info.vis), info.typeScheme, repr, info, info.range, info.doc))
   match td
-    Data(dataInfo, _) -> zip(dataInfo.constrs, dataInfo.dataRepr(isValue).snd).map(extract-con-info).gamma-unions
+    Data(dataInfo) -> zip(dataInfo.constrs, dataInfo.data-repr(isValue).snd).map(extract-con-info).gamma-unions
     _ -> assumption/empty
 
 fun extract-def-group(d: defGroup, update-vis)
@@ -261,9 +264,9 @@ fun create-name-infoX(vis, name, sort, rng, tp, doc)
     _ -> InfoVal(vis, name, tp, rng, False, doc)
 
 fun arity(tp: ktype): <comp-flags, exn> (int, int)
-  match tp.expandSyn
+  match tp.expand-syn
     TForAll(tvars, _, t) ->
-      match t.expandSyn
+      match t.expand-syn
         TFun(pars) -> (tvars.length, pars.length)
         _ -> (tvars.length, -1)
     TFun(pars) -> (0, pars.length)
@@ -278,7 +281,7 @@ fun extract-external(external: external, update-vis)
 // Instances
 
 fun gamma/(|->)(sub: sub, g: gamma): pure gamma
-  g.map(fn(n, nis) (n, nis.map(fn((n1, ni)) (n1, sub |-> ni))))
+  g.map(fn(n, nis) nis.map(fn((n1, ni)) (n1, sub |-> ni)))
 
 fun gamma/free-type-vars(g: gamma): pure tvs
   g.schemes.map(free-type-vars).unions
@@ -304,12 +307,12 @@ fun map-type(ni: nameInfo, f: (ktype) -> e ktype): e nameInfo
     InfoImport(vis, typ, nameAlias, fullName, range) -> InfoImport(vis, f(typ), nameAlias, fullName, range)
 
 fun pp-gamma-internal(g: gamma, showHidden: bool)
-  val nameSchemes = g.list.map(fn((n, i)) (n, i.typ))
+  val nameSchemes = g.gamma-list.filter(fn((_, i)) !i.is-infoImport).map(fn((n, i)) (n, i.typ))
   val maxWidth = nameSchemes.map(fn((n, _)) n.show.count).maximum(0).min(12)
   fun nice(scheme: ktype)
-    align(niceTypes([scheme]).head.unjust)
+    align(nice-types([scheme]).head.unjust)
   vcat(nameSchemes.filter(fn((n, _)) showHidden || !n.is-hidden-name).map(fn((n, s))
-    fill(n.show-plain.text |.| typeColon().color(colors.colorSep) |+| align(nice(s)), maxWidth)
+    fill(n.show-plain.text |.| type-colon().color(colors.colorSep) |+| align(nice(s)), maxWidth)
   ))
 
 fun pp-gamma(g: gamma)
@@ -318,8 +321,8 @@ fun pp-gamma(g: gamma)
 fun pp-gamma-hidden(g: gamma)
   pp-gamma-internal(g, True)
 
-fun pretty(g: gamma): <ppTypeEff> doc
+fun pretty(g: gamma): <pp-typeEff> doc
   pp-gamma(g)
 
-fun show-gamma(g: gamma): ppTypeEff string
+fun show-gamma(g: gamma): pp-typeEff string
   pretty(g).show

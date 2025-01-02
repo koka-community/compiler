@@ -37,14 +37,14 @@ fun successors(g: graph<v>, v: v, ?(==): (v, v) -> e bool): e list<v>
 fun transpose(g: graph<v>, ?a/(==): (v,v) -> e bool): e graph<v>
   fun add(e: edge<v>, m:graph<v>, ?b/(==): (v,v) -> e bool): e graph<v>
     m.update(e.snd, [], fn(o, r) Cons(e.fst, r))
-  g.edges.foldr(g.map(fn (k, v) (k, [])), fn(a, b) a.add(b))
+  g.edges.foldr(g.map(fn (k, v) []), fn(a, b) a.add(b))
 
-rec type tree<v>
+div type tree<v>
   Tree
     head: v
     fs: forest<v>
 
-rec type forest<v>
+div type forest<v>
   Forest
     list: list<tree<v>>
 

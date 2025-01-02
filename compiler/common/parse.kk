@@ -5,6 +5,7 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
+// Updated to commit #a22ccc2 (of Parse.hs) + extras for Koka parsing framework
 
 import compiler/syntax/layout
 import compiler/syntax/lexer
@@ -15,70 +16,72 @@ import compiler/common/name
 import compiler/common/name-prim
 import compiler/common/range
 
-effect astError
-  final ctl astError(e: string, r: range): a
+effect parse-error
+  final ctl parse-error(e: string, r: range): a
 
-effect astParse
-  val sourceInfo: source
-  fun addWarning(w: string, r: range): ()
+effect token-parse
+  val source-info: source
+  fun add-warning(w: string, r: range): ()
   fun ppeek(): maybe<lexeme>
   fun undelimit(msg: string): ()
   fun reset(msg: string): ()
   fun delimit(msg: string): ()
   fun pnext(): maybe<lexeme>
   fun peof(): ()
-  fun tookInput(msg: string): bool
+  fun took-input(msg: string): bool
   fun ptrace(s: string): ()
-  fun takeAll(): list<lexeme>
-  fun putAll(lexemes: list<lexeme>): ()
+  fun take-all(): list<lexeme>
+  fun put-all(lexemes: list<lexeme>): ()
 
-fun pdelimit(msg: string, f: () -> <astParse,astError|e> a): <astParse,astError|e> a
+alias parse = <token-parse, parse-error, pure>
+
+fun parse-delimited(msg: string, f: () -> <token-parse,parse-error|e> a): <token-parse,parse-error|e> a
   delimit(msg)
   with override
-    final ctl astError(e, r) 
+    final ctl parse-error(e, r) 
       undelimit(msg)
-      astError("\nWhen parsing " ++ msg ++ " " ++ e, r)
+      parse-error("\nWhen parsing " ++ msg ++ " " ++ e, r)
   val x = f()
   undelimit(msg)
   x
 
-fun peek(): ast lexeme
+fun peek(): <parse> lexeme
   val p = ppeek()
   match p
     Just(l) -> l
-    Nothing -> astError("unexpected end of file", null)
+    Nothing -> parse-error("unexpected end of file", null)
 
-fun next(): ast lexeme
+fun next(): <parse> lexeme
   val p = pnext()
   match p
     Just(l) -> l
-    Nothing -> astError("unexpected end of file", null)
+    Nothing -> parse-error("unexpected end of file", null)
 
-alias ast = <astParse, astError, pure>
-fun lexParse(allowAt: bool, insSemi: bool, preprocess: list<lexeme> -> pure list<lexeme>, p: () -> <console,ast|e> a, sourceName: string, input: string): <console,astError,pure|e> a
+fun lex-parse(allow-at: bool, insert-semis: bool, preprocess: list<lexeme> -> pure list<lexeme>, p: () -> <console,parse|e> a, sourceName: string, input: string): <console,parse-error,pure|e> a
   val src = Source(sourceName, input)
   val lexes = lexing(src, 1, input)
-  with parseLexemes(src, preprocess(layout(lexes, allowAt, insSemi)))
+  with parse-lexemes(src, preprocess(layout(lexes, allow-at, insert-semis)))
   p()
   
-fun parseLexemes(src: source, lexemes0: list<lexeme>, p: () -> <console,ast|e> a): <console,astError,pure|e> a
+fun parse-lexemes(src: source, lexemes0: list<lexeme>, p: () -> <console,parse|e> a): <console,parse-error,pure|e> a
   var lexemes := lexemes0
+  // trace(lexemes0.show)
   var history := Cons((ctx _, "top", 0), Nil)
   val debug = True
   with override
-    final ctl astError(e: string, r: range)
-      astError("Got error: " ++ e ++ "\n" ++ " when parsing:\n\t" ++ lexemes.take(2).map(show).join("\n\t"), r)
+    final ctl parse-error(e: string, r: range)
+      parse-error("Got error: " ++ e ++ "\n" ++ " when parsing:\n\t" ++ lexemes.take(2).map(show).join("\n\t"), r)
   with handler
-    val sourceInfo = src
-    fun takeAll()
+    val source-info = src
+    fun take-all()
       val l = lexemes
       lexemes := Nil // TODO: This ruins the history -- especially with delimiting
       // history := Cons((ctx _, "top", 0), Nil)
       l
-    fun putAll(lexemes': list<lexeme>)
+    fun put-all(lexemes': list<lexeme>)
       lexemes := lexemes' // TODO: This ruins the history -- especially with delimiting
       // history := Cons((ctx _, "top", 0), Nil)
-    fun addWarning(w: string, r: range)
+    fun add-warning(w: string, r: range)
       ()
     fun pnext()
       match lexemes
@@ -88,7 +91,7 @@ fun parseLexemes(src: source, lexemes0: list<lexeme>, p: () -> <console,ast|e> a
             Cons((h, msg, i), tl) ->
               history := Cons((h ++ ctx Cons(l, _), msg, i + 1), tl)
             Nil -> 
-              astError("unexpected top of context", null)
+              parse-error("unexpected top of context", null)
           Just(l)
         Nil -> Nothing
     fun reset(msg)
@@ -103,7 +106,7 @@ fun parseLexemes(src: source, lexemes0: list<lexeme>, p: () -> <console,ast|e> a
             // if debug then
             //   trace("Resetting " ++ str ++ "\n" ++ history.map(fn(x) "\tWhen parsing " ++ x.snd).join("\n") ++ " at " ++ lexemes.head.map(show).default("eof") ++ "\nputting back:\n\t" ++ (h ++. Nil).map(show).join("\n\t"))
         Nil ->
-          astError("mismatched reset", null)
+          parse-error("mismatched reset", null)
     fun delimit(msg)
       history := Cons((ctx _, msg, 0), history)
     fun undelimit(msg)
@@ -125,10 +128,10 @@ fun parseLexemes(src: source, lexemes0: list<lexeme>, p: () -> <console,ast|e> a
       //   trace("Parsing eof\n" ++ history.map(fn(x) "\tWhen parsing " ++ x.snd).join("\n") ++ "\n\nHad leftovers: " ++ lexemes.map(fn(x) x.show).join("\n"))
       match lexemes
         Cons(l, _) ->
-          astError("peof expected end of file", l.range)
+          parse-error("peof expected end of file", l.range)
         Nil ->
           ()
-    fun tookInput(str)
+    fun took-input(str)
       match history
         Cons((_, msg, i), _) ->
           if str != msg then
@@ -140,35 +143,34 @@ fun parseLexemes(src: source, lexemes0: list<lexeme>, p: () -> <console,ast|e> a
           False
     fun ptrace(s: string)
       if debug then
-        trace(s ++ "\n  " ++ history.map(fn(x) "When parsing " ++ x.snd).join("\n\t") ++ " next token: " ++ lexemes.take(1).map(show).join(","))
+        trace(s ++ "\n  " ++ history.map(fn(x) "When parsing " ++ x.snd).join("\n\t") ++ " next parse-token: " ++ lexemes.take(1).map(show).join(","))
   mask<local>{p()}
 
-
-fun pmany(kind: string, l: () -> <ast|e> a): <ast|e> list<a>
-  match optionMaybe("many " ++ kind, l)
-    Just(r) -> Cons(r, pmany(kind, l))
+fun parse-many(kind: string, l: () -> <parse|e> a): <parse|e> list<a>
+  match parse-option-maybe("many " ++ kind, l)
+    Just(r) -> Cons(r, parse-many(kind, l))
     Nothing -> Nil
 
-fun pmany1(kind: string, l: () -> <ast|e> a): <ast|e> list<a>
-  match optionMaybe("many " ++ kind, l)
-    Just(r) -> Cons(r, pmany(kind, l))
-    Nothing -> astError("at least 1 of " ++ kind, peek().range)
+fun parse-many1(kind: string, l: () -> <parse|e> a): <parse|e> list<a>
+  match parse-option-maybe("many " ++ kind, l)
+    Just(r) -> Cons(r, parse-many(kind, l))
+    Nothing -> parse-error("at least 1 of " ++ kind, peek().range)
 
-fun pmanyend(kind: string, l: () -> <ast|e> a, p: () -> <ast|e> b): <ast|e> list<a>
-  match optionMaybe("many " ++ kind, l)
+fun parse-many-end(kind: string, l: () -> <parse|e> a, p: () -> <parse|e> b): <parse|e> list<a>
+  match parse-option-maybe("many " ++ kind, l)
     Just(r) -> 
-      match optionMaybe("sep " ++ kind, p)
-        Just(_) -> Cons(r, pmanyend(kind, l, p))
+      match parse-option-maybe("sep " ++ kind, p)
+        Just(_) -> Cons(r, parse-many-end(kind, l, p))
         Nothing -> Cons(r, Nil)
     Nothing -> Nil
 
-fun pmanyend1(kind: string, l: () -> <ast|e> a, p: () -> <ast|e> b): <ast|e> list<a>
-  match optionMaybe("many " ++ kind, l)
+fun parse-many-end1(kind: string, l: () -> <parse|e> a, p: () -> <parse|e> b): <parse|e> list<a>
+  match parse-option-maybe("many " ++ kind, l)
     Just(r) -> 
-      match optionMaybe("sep " ++ kind, p)
-        Just(_) -> Cons(r, pmanyend(kind, l, p))
+      match parse-option-maybe("sep " ++ kind, p)
+        Just(_) -> Cons(r, parse-many-end(kind, l, p))
 
-fun token(msg: string, f: (lexeme) -> <ast|e> maybe<a>): <ast|e> a
+fun parse-token(msg: string, f: (lexeme) -> <parse|e> maybe<a>): <parse|e> a
   val t = peek()
   match f(t) 
     Just(a) -> 
@@ -176,455 +178,473 @@ fun token(msg: string, f: (lexeme) -> <ast|e> maybe<a>): <ast|e> a
       // ptrace("Consuming " ++ t.show)
       a
     Nothing ->
-      astError("expecting " ++ msg, peek().range)
+      parse-error("expecting " ++ msg, peek().range)
 
 // Version of maybe that does backtrack
-fun maybe<e>(str: string, p: () -> <ast|e> a): <ast|e> maybe<a>
+fun parse-maybe<e>(str: string, p: () -> <parse|e> a): <parse|e> maybe<a>
   delimit(str)
   with override
     return(r)
       undelimit(str)
       Just(r)
-    final ctl astError(e, r) 
+    final ctl parse-error(e, r) 
       reset(str)
       Nothing
   p()
 
-fun maybeList(p: () -> <ast|e> list<a>): <ast|e> list<a>
-  match maybe("list", p)
+fun parse-maybe-list(p: () -> <parse|e> list<a>): <parse|e> list<a>
+  match parse-maybe("list", p)
     Just(r) -> r
     Nothing -> []
 
-fun try(str: string, p: () -> <ast|e> a): <ast|e> a
-  delimit(str)
+fun parse-try(p: () -> <parse|e> a, ?kk-file-line: string): <parse|e> a
+  delimit(kk-file-line)
   with override
     return(r) 
-      undelimit(str)
+      undelimit(kk-file-line)
       r
-    final ctl astError(e, r) 
-      reset(str)
-      astError(e,r)
+    final ctl parse-error(e, r) 
+      reset(kk-file-line)
+      parse-error(e,r)
   p()
   
 
 // Version of maybe that doesn't backtrack
-fun optionMaybe(str: string, p: () -> <ast|e> a): <ast|e> maybe<a>
-  with pdelimit(str)
+fun parse-option-maybe(str: string, p: () -> <parse|e> a): <parse|e> maybe<a>
+  with parse-delimited(str)
   with override
     return(r)
       Just(r)
-    final ctl astError(e, r)
-      if tookInput(str) then
-        astError(e, r)
+    final ctl parse-error(e, r)
+      if took-input(str) then
+        parse-error(e, r)
       else
         Nothing 
   p()
   
 
-fun choicesnb(str: string, ps: list<() -> <ast|e> a>): <ast|e> a
-  with pdelimit(str)
-  fun find(ps': list<() -> <ast|e> a>): <ast|e> a
+// Parse parse-choices without backtracking. 
+// Make sure that all parse-choices start differently or is the last choice.
+fun parse-choices-nb(str: string, ps: list<() -> <parse|e> a>): <parse|e> a
+  with parse-delimited(str)
+  fun find(ps': list<() -> <parse|e> a>): <parse|e> a
     match ps'
       Cons(p, rst) -> 
-        match optionMaybe(str, p)
+        match parse-option-maybe(str, p)
           Just(r) -> r
           Nothing -> find(rst)
-      Nil -> astError("expected " ++ str, peek().range)
+      Nil -> parse-error("expected " ++ str, peek().range)
   find(ps)
 
-fun choices(str: string, ps: list<() -> <ast|e> a>): <ast|e> a
-  fun find(ps': list<() -> <ast|e> a>): <ast|e> a
+// Parse parse-choices with backtracking
+fun parse-choices(str: string, ps: list<() -> <parse|e> a>): <parse|e> a
+  fun find(ps': list<() -> <parse|e> a>): <parse|e> a
     match ps'
       Cons(p, rst) -> 
-        match maybe(str, p)
+        match parse-maybe(str, p)
           Just(r) -> r
           Nothing -> find(rst)
-      Nil -> astError("expected " ++ str, peek().range)
+      Nil -> parse-error("expected " ++ str, peek().range)
   find(ps)
 
-fun makeParseError(r: range, e: string)
-  astError("invalid syntax" ++ e.list.drop-while(fn(x) x != ':').string, r)
+val parse-sep-by = parse-many-end
+val parse-sep-by1 = parse-many-end1
 
-fun braced(p)
-  val v = optionMaybe("braced") 
-    pLcurly()
-    pmany("semicolons", pSemicolon)
-    val x = p()
-    pmany("semicolons", pSemicolon)
-    pRcurly()
-    x
-  match v
-    Just(v') -> v'
-    Nothing -> p()
+fun make-parse-error(r: range, e: string): <parse-error> a
+  parse-error("invalid syntax" ++ e.list.drop-while(fn(x) x != ':').string, r)
 
-fun semiBraces(kind, p)
-  val rng1 = pLcurly()
-  val xs = semis(kind, p)
-  val rng2 = pRcurly()
+fun bracketed(open: () -> <parse|e> range, close: () -> <parse|e> range, f: (a, range) -> <parse|e> b, p: () -> <parse|e> a): <parse|e> b
+  val rng1 = open()
+  val x = p()
+  val rng2 = close()
+  f(x, rng1.range/combine(rng2))
+
+fun braced(p: () -> <parse|e> a): <parse|e> a
+  parse-choices-nb("braced", [{
+      parse-left-curly() // TODO: Make sure right is same as left? (inserted versus actual)
+      parse-many("semicolons", parse-semicolon)
+      val x = p()
+      parse-many("semicolons", parse-semicolon)
+      parse-right-curly()
+      x
+    }, p])
+
+fun parse-semi-braces(kind: string, p: () -> <parse|e> a): <parse|e> list<a>
+  parse-semi-braces-ranged(kind, p).fst
+
+fun parse-semi-braces-ranged(kind: string, p: () -> <parse|e> a): <parse|e> (list<a>, range)
+  val rng1 = parse-left-curly()
+  parse-many("semicolons", parse-semicolon)
+  val xs = parse-many-end(kind, p, parse-semi1)
+  val rng2 = parse-right-curly()
   (xs, rng1.combine(rng2))
 
-fun semis(kind, p)
-  pmanyend(kind, p, pSemi1)
+fun parse-semi-braces-ranged1(kind: string, p: () -> <parse|e> a): <parse|e> (list<a>, range)
+  val rng1 = parse-left-curly()
+  parse-many("semicolons", parse-semicolon)
+  val xs = parse-many-end1(kind, p, parse-semi1)
+  val rng2 = parse-right-curly()
+  (xs, rng1.combine(rng2))
 
-val pSepBy = pmanyend
-val pSepBy1 = pmanyend1
-
-fun pSemi1()
-  pmany1("semicolons", pSemicolon)
-
-fun parens(p)
-  val l = pLparen()
+fun parse-semi-braced(kind: string, p: () -> <parse|e> a): <parse|e> a
+  parse-left-curly()
+  parse-many("semicolons", parse-semicolon)
   val x = p()
-  val r = pRparen()
-  (x, combine(l, r))
+  parse-many("semicolons", parse-semicolon)
+  parse-right-curly()
+  x
 
-fun angles(p)
-  val l = pLangle()
-  val x = p()
-  val r = pRangle()
-  (x, combine(l, r))
+fun semis(kind: string, p: () -> <parse|e> a): <parse|e> list<a>
+  parse-many-end(kind, p, parse-semi1)
 
-fun parensCommas(p)
-  parens
-    pSepBy("comma", p, pComma)
+fun semis1(kind: string): <parse|e> list<range>
+  parse-many1("semicolons", parse-semicolon)
 
-fun parseRange(msg: string, f: (lexeme) -> <ast|e> bool): <ast|e> range
-  token(msg, fn(x) if f(x) then Just(x) else Nothing).range
+fun parse-semi1(): <parse> list<range>
+  parse-many1("semicolons", parse-semicolon)
 
-inline fun pLapp()
-  pLparen()
+fun angles-ranged(p: () -> <parse|e> a): <parse|e> (a, range)
+  bracketed(parse-left-angle, parse-right-angle, fn(x, r) (x,r), p)
 
-inline fun pLidX()
-  pLbracket()
+fun angles(p: () -> <parse|e> a): <parse|e> a
+  bracketed(parse-left-angle, parse-right-angle, fn(x, r) x, p)
 
-inline fun pBar()
-  pKeyword("|")
+fun parse-parens-commas(p: () -> <parse|e> a): <parse|e> list<a>
+  parensx(parse-left-paren, fn(a, r) a)
+    parse-sep-by("comma", p, parse-comma)
 
-inline fun pComma()
-  pSpecial(",")
+fun parens-ranged(p: () -> <parse|e> a): <parse|e> (a, range)
+  parensx(parse-left-paren, fn(a, b) (a, b), p) 
 
-inline fun pSemicolon(): <ast> lexeme
-  token("semicolon") fn(x) 
-    if x.is-semicolon then Just(x) else Nothing
+fun parens(p: () -> <parse|e> a): <parse|e> a
+  parensx(parse-left-paren, fn(a, b) a, p) 
 
-fun pLbracket()
-  parseRange("(", fn(x) x.lex.is-lbracket)
+fun parse-parens-commas-ranged(p: () -> <parse|e> a): <parse|e> (list<a>, range)
+  parensx(parse-left-paren, fn(a, r) (a, r))
+    parse-sep-by("comma", p, parse-comma)
 
-fun pRbracket()
-  parseRange(")", fn(x) x.lex.is-rbracket)
+fun parensx(l: () -> <parse|e> range, f: (a, range) -> <parse|e> b, p: () -> <parse|e> a): <parse|e> b
+  bracketed(l, parse-right-paren, f, p)
 
-fun pLparen()
-  parseRange("(", fn(x) x.lex.is-lparen)
+fun parse-range(msg: string, f: (lexeme) -> <parse|e> bool): <parse|e> range
+  parse-token(msg, fn(x) if f(x) then Just(x) else Nothing).range
 
-fun pRparen()
-  parseRange(")", fn(x) x.lex.is-rparen)
+inline fun parse-vertical-bar(): <parse> range
+  parse-keyword("|")
 
-fun pLangle()
-  parseRange("<", fn(x) x.lex.is-langle)
+inline fun parse-comma(): <parse> range
+  parse-special(",")
 
-fun pRangle()
-  parseRange(">", fn(x) x.lex.is-rangle)
+inline fun parse-semicolon(): <parse> range
+  parse-range("semicolon") fn(x) x.is-semicolon
 
-fun pLcurly()
-  parseRange("{", fn(x) x.lex.is-lcurly)
+fun parse-left-curly(): <parse> range
+  parse-range("{") fn(x) x.lex.is-lcurly
 
-fun pRcurly()
-  parseRange("}", fn(x) x.lex.is-rcurly)
+fun parse-right-curly(): <parse> range
+  parse-range("}") fn(x) x.lex.is-rcurly
 
-fun pTBinderId()
-  choicesnb("tBinderId", [pTypeId, pTList, pTTuple, pTEmptyOrExtend])
+fun parse-left-bracket(): <parse> range
+  parse-range("[") fn(x) x.lex.is-lbracket
 
-fun pTEmptyOrExtend()
-  val rng1 = pLangle()
-  choicesnb("empty or extend effect", [
-    {
-      pBar()
-      val rng2 = pRangle()
-      (nameEffectEmpty, rng1.combine(rng2))
-    },{
-      val rng2 = pRangle()
-      (nameEffectEmpty, rng1.combine(rng2))
-    }
-  ])
+fun parse-right-bracket(): <parse> range
+  parse-range("]") fn(x) x.lex.is-rbracket
 
-fun pConstructorId()
-  choices("constructor", [pTTuple, pTList, pConId])
+fun parse-left-paren(): <parse> range
+  parse-range("(") fn(x) x.lex.is-lparen
 
-fun pTList(): <ast> (name, range)
-  val rng1 = pSpecial("[")
-  val rng2 = pSpecial("]")
-  (nameTpList.unqualify, rng1.combine(rng2))
+fun parse-right-paren(): <parse> range
+  parse-range(")") fn(x) x.lex.is-rparen
 
-fun pTTuple(): <ast> (name, range)
-  val rng1 = pLparen()
-  val cs = pmany("comma", pComma)
-  val rng2 = pRparen()
-  (name-tuple(cs.length + 1).unqualify, rng1.combine(rng2))
+fun parse-left-angle(): <parse> range
+  parse-range("<") fn(x) x.lex.is-langle
 
-fun pImportAlias()
-  val (name1, rng1) = pModulePath()
-  val r = maybe("import alias")
-    pKeyword("=")
-    pModulePath()
+fun parse-right-angle(): <parse> range
+  parse-range(">") fn(x) x.lex.is-rangle
+
+fun parse-type-binder-id(): <parse> (name, range)
+  parse-choices-nb("tBinderId", [parse-type-ident])
+
+fun parse-import-alias(): <parse> (name, name, range, range)
+  val (name1, rng1) = parse-module-path()
+  val r = parse-maybe("import alias")
+    parse-keyword("=")
+    parse-module-path()
   match r
-    Just((name2, rng2)) -> (name1, name2, rng2)
-    Nothing -> (name1, name1, rng1)
+    Just((name2, rng2)) -> (name1, name2, rng1, rng2)
+    Nothing -> (name1, name1, rng1, rng1)
 
-fun pParamId()
-  choices("param id", [pIdentifier, pWildcard])
+fun parse-param-id(): <parse> (name, range)
+  parse-choices("param id", [parse-identifier, parse-wildcard])
 
-fun pParamInfo()
-  choices("param info", [{
-    pSpecialOp("^")
+fun parse-param-info(): <parse> paramInfo
+  parse-choices("param info", [{
+    parse-special-op("^")
     Borrow
   }, {Own}])
 
-fun pIdentifier()
-  ensureUnqualified("identifier", pQIdentifier)
+fun parse-identifier(): <parse> (name, range)
+  ensure-unqualified("identifier", parse-qualified-identifier)
 
-fun pFipAlloc()
-  parens
-    choices("alloc", [
-      { val (i, _) = pInteger(); AllocAtMost(i) },
-      { val _ = pSpecialId("n"); AllocFinitely },
-      { AllocAtMost(0) }
-    ])
-
-fun pFip()
-  val isTail = choices("tail", [{pSpecialId("tail"); True}, {False}])
-  choices("fip", [{
-    val rng = pSpecialId("fip")
-    val (alloc, _) = pFipAlloc()
-    if isTail then
-      addWarning("fip function already implies 'tail'", rng)
-    Fip(alloc)
-    }, 
+fun parse-fip-alloc(): <parse> (fipAlloc, range)
+  parse-choices("alloc", [
     {
-    pSpecialId("fbip")
-    val (alloc, _) = pFipAlloc()
-    Fbip(alloc, isTail)
-    }, 
-    {NoFip(isTail)}])
-
-fun pInline()
-  choicesnb("inline", [{
-    pSpecialId("inline")
-    InlineAlways
-  }, {
-    pSpecialId("noinline")
-    InlineNever
-  }, {InlineAuto}])
-
-inline fun pQIdentifier()
-  choices("qidentifier", [pQVarId, pQIdOp])
-
-inline fun pQConstructor()
-  pQConId()
-
-inline fun pQOperator()
-  pQOp()
-
-fun pFunId()
-  choicesnb("function id", [
-    {pIdentifier()},
-    {
-      val rng1 = pSpecialId("[")
-      val rng2 = pSpecialId("]")
-      (nameIndex, combine(rng1, rng2))
-    },
-    {
-      val (s, rng) = pStringLit()
-      (new-name(s), rng)
-    }
-    ])
-
-fun pVarId()
-  ensureUnqualified("variable id", pQVarId)
-
-fun pIdOp()
-  ensureUnqualified("operator", pQIdOp)
-
-fun pConId()
-  choices("Constructor", [
-    { ensureUnqualified("constructor", pQConId) },
-    { val (s, rng) = pStringLit(); (new-name(s), rng)}
+      parens
+        parse-choices("alloc", [
+          { val (i, lex) = parse-integer(); (AllocAtMost(i), lex.range) },
+          { val rng = parse-special-id("n"); (AllocFinitely, rng) },
+        ])
+      },
+   { (AllocAtMost(0), null) }
   ])
 
-fun pOp()
-  ensureUnqualified("operator", pQOp)
+fun parse-tail-fip(): <parse> (fipT, range)
+  val (isTail, rng) = parse-choices("tail", [{(True, parse-special-id("tail"))}, {(False, null)}])
+  parse-fip-ex(rng, isTail)
 
-fun pTypeId()
-  val (name, rng) = pQTypeId()
+fun parse-fip-ex(rng0: range, isTail: bool): <parse> (fipT, range)
+  parse-choices("fip", [{
+      val rng1 = parse-special-id("fip")
+      val (alloc, rng2) = parse-fip-alloc()
+      if isTail then
+        add-warning("fip function already implies 'tail'", rng1)
+      (Fip(alloc), combine([rng0, rng1, rng2]))
+    }, 
+    {
+      val rng1 = parse-special-id("fbip")
+      val (alloc, rng2) = parse-fip-alloc()
+      (Fbip(alloc, isTail), combine([rng0, rng1, rng2]))
+    }, 
+    { (NoFip(isTail), null) }
+  ])
+
+fun parse-inline(): <parse> defInline
+  parse-choices-nb("inline", [{
+      parse-special-id("inline")
+      InlineAlways
+    }, {
+      parse-special-id("noinline")
+      InlineNever
+    }, 
+    { InlineAuto }
+  ])
+
+fun parse-idcon(): <parse> userExpr
+  val (name, rng) = parse-choices("", [parse-qualified-identifier, parse-qualified-constructor])
+  Var(name, False, rng)
+
+inline fun parse-qualified-identifier(): <parse> (name, range)
+  parse-choices("qidentifier", [parse-qualified-var-id, parse-qualified-op-id])
+
+inline fun parse-qualified-constructor(): <parse> (name, range)
+  parse-qualified-constructor-id()
+
+inline fun parse-qualified-operator(): <parse> (name, range)
+  parse-qualified-op()
+
+fun parse-fun-id(toplevel: bool): <parse> (name, range)
+  parse-locally-qualified-identifier(toplevel) // [] doesn't work with local qualification
+
+fun parse-locally-qualified-identifier(toplevel: bool): parse (name, range)
+  if toplevel then
+    val (name, rng) = parse-qualified-identifier()
+    (name.requalify-locally, rng)
+  else parse-identifier()
+
+fun parse-var-id(): <parse> (name, range)
+  ensure-unqualified("variable id", parse-qualified-var-id)
+
+fun parse-op-id(): <parse> (name, range)
+  ensure-unqualified("operator", parse-qualified-op-id)
+
+fun parse-constructor-id(): <parse> (name, range)
+  ensure-unqualified("constructor", parse-qualified-constructor-id)
+    // { val (s, rng) = parse-string-literal(); (new-name(s), rng)}
+
+fun parse-op(): <parse> (name, range)
+  ensure-unqualified("operator", parse-qualified-op)
+
+fun parse-type-ident(): <parse> (name, range)
+  val (name, rng) = parse-qualified-type-id()
   if name.is-qualified then
-    astError("expected unqualified type name", rng)
+    parse-error("expected unqualified type name", rng)
   else
     (name, rng)
 
-fun ensureUnqualified(str, p)
+fun ensure-unqualified(str: string, p: () -> <parse|e> (name, range)): <parse|e> (name, range)
   val (n, r) = p()
   if n.is-qualified then 
-    astError("expected unqualified " ++ str, r)
+    parse-error("expected unqualified " ++ str, r)
   else
     (n, r)
 
-fun pQTypeId()
-  with try("qualified typeId")
-  val (name, range) = choicesnb("qTypeId", [pQVarId, pTypeIdCtx])
+fun parse-qualified-type-id(): <parse> (name, range)
+  with parse-try()
+  val (name, range) = parse-choices-nb("qTypeId", [parse-qualified-var-id, parse-type-id-context])
   if !name.is-type-var then 
     (name, range)
-  else astError("type name (and not type variable)", range)
+  else // TODO: This isn't quite the right hack.
+    parse-error("type name (and not type variable)", range)
 
-fun pTypeIdCtx()
-  ("ctx".new-name, pKeyword("ctx"))
+fun parse-type-id-context(): <parse> (name, range)
+  ("ctx".new-name, parse-keyword("ctx"))
 
-fun pQOp()
-  token("operator") fn(a)
+fun parse-qualified-op(): <parse> (name, range)
+  parse-token("operator") fn(a)
     match a
-      Lexeme(rng, LexOp(id)) -> 
-        Just((id, rng))
+      Lexeme(rng, LexOp(id)) -> Just((id, rng))
       _ -> Nothing
 
-fun pPrefixOp()
-  token("prefix operator") fn(a)
+fun parse-prefix-op(): <parse> expr<a>
+  parse-token("prefix operator") fn(a)
     match a
-      Lexeme(rng, LexPrefix(id)) -> 
-        Just(Var(id, True, rng))
+      Lexeme(rng, LexPrefix(id)) -> Just(Var(id, True, rng))
       _ -> Nothing
 
-fun pQVarId()
-  token("variable id") fn(a)
+// is really qvarid, varid, from the spec
+fun parse-qualified-var-id(): <parse> (name, range)
+  parse-token("variable id") fn(a)
     match a
-      Lexeme(rng, LexId(id)) -> 
-        Just((id.show-plain.new-name, rng))
+      Lexeme(rng, LexId(id)) -> Just((id.show-plain.new-name, rng))
       _ -> Nothing
 
-fun pQIdOp()
-  token("operator id") fn(a)
+// is really qidop and idop from the spec
+fun parse-qualified-op-id(): <parse> (name, range)
+  parse-token("operator id") fn(a)
     match a
-      Lexeme(rng, LexIdOp(id)) -> 
-        Just((id, rng))
+      Lexeme(rng, LexIdOp(id)) -> Just((id, rng))
       _ -> Nothing
 
-fun pQConId()
-  token("constructor id") fn(a)
+// is really qconid and conid in the spec
+fun parse-qualified-constructor-id(): <parse> (name, range)
+  parse-token("constructor id") fn(a)
     match a
-      Lexeme(rng, LexCons(id)) -> 
-        Just((id, rng))
+      Lexeme(rng, LexCons(id)) -> Just((id, rng))
       _ -> Nothing
 
-fun pModulePath(): <ast> (name, range)
-  token("module path") fn(x)
+fun parse-module-path(): <parse> (name, range)
+  parse-token("module path") fn(x)
     match x 
-      Lexeme(rng, LexId(id)) -> 
-        Just((id.show-plain.new-name, rng))
+      Lexeme(rng, LexId(id)) -> Just((id.name-as-module-name, rng)) // return the entire module path as one identifier
       _ -> Nothing
 
-fun pWildcard()
-  token("wildcard") fn(a)
+fun parse-wildcard(): <parse> (name, range)
+  parse-token("wildcard") fn(a)
     match a
       Lexeme(rng, LexWildCard(id)) -> 
-        Just((if id.show-plain == "_" then uniqueRangeName(rng, "_w") else id, rng))
+        if id.show-plain == "_" then 
+          Just((unique-range-name(rng, "_w"), rng))
+        else Just((id, rng))
       _ -> Nothing
 
-fun pInteger()
-  token("integer") fn(l)
+fun parse-integer(): <parse> (int, lexeme)
+  parse-token("integer") fn(l)
     match l
       Lexeme(_, LexInt(i)) -> Just((i, l))
       _ -> Nothing
 
-fun pFloat()
-  token("float") fn(l)
+fun parse-float(): <parse> (float64, lexeme)
+  parse-token("float") fn(l)
     match l
       Lexeme(_, LexFloat(d)) -> Just((d, l))
       _ -> Nothing
 
-fun pCharLit()
-  token("char literal") fn(x) 
+fun parse-char-literal(): <parse> (char, range)
+  parse-token("char literal") fn(x) 
     match x
-      Lexeme(rng, LexChar(s)) -> Just((s, rng))
+      Lexeme(rng, LexChar(c)) -> Just((c, rng))
       _ -> Nothing
 
-fun pStringLit()
-  token("string literal") fn(x) 
+fun parse-string-literal(): <parse> (string, range)
+  parse-token("string literal") fn(x) 
     match x
       Lexeme(rng, LexString(s)) -> Just((s, rng))
       _ -> Nothing
 
-fun default/pSpecialId(s: string)
-  token(s) fn(x)
-    match x.lex
-      LexId(id) | id.show-plain == s -> Just(x.range)
-      _ -> Nothing
-
-fun pSpecialId(s: string, alternates: list<string>)
-  token(s) fn(x)
-    match x.lex
-      LexId(id) | id.show-plain == s -> Just(x.range)
-      LexId(id) | alternates.any(fn(v) v == id.show-plain) -> 
-        addWarning("using deprecated keyword " ++ id.show-plain ++ ", use " ++ s ++ " instead", x.range)
-        Just(x.range)
-      _ -> Nothing
-
-inline fun default/pSpecial(s: string): <ast> range
-  pSpecial(s, [])
-
-fun pSpecial(s: string, alternates: list<string>): <ast> range
-  token(s) fn(x)
-    match x.lex
-      LexSpecial(s') | s == s' -> Just(x.range)
-      LexSpecial(s') | alternates.any(fn(v) v == s') -> 
-        addWarning("using deprecated keyword " ++ s' ++ ", use " ++ s ++ " instead", x.range)
-        Just(x.range)
-      _ -> Nothing
-
-fun pSpecialOp(s)
-  token(s) fn(x)
+fun parse-special-op(s: string): <parse> range
+  parse-token(s) fn(x)
     match x.lex
       LexOp(s') | s == s'.show-plain -> Just(x.range)
       _ -> Nothing
 
-fun pSpecialConId(s)
-  token(s) fn(x)
+fun default/parse-special-id(s: string): <parse> range
+  parse-token(s) fn(x)
+    match x.lex
+      LexId(id) | id.show-plain == s -> Just(x.range)
+      _ -> Nothing
+
+fun parse-special-id(s: string, alternates: list<string>): <parse> range
+  parse-token(s) fn(x)
+    match x.lex
+      LexId(id) | id.show-plain == s -> Just(x.range)
+      LexId(id) | alternates.any(fn(v) v == id.show-plain) -> 
+        add-warning("using deprecated keyword " ++ id.show-plain ++ ", use " ++ s ++ " instead", x.range)
+        Just(x.range)
+      _ -> Nothing
+
+fun parse-special-con-id(s: string): <parse> range
+  parse-token(s) fn(x)
     match x.lex
       LexCons(s') | s == s'.show-plain -> Just(x.range)
       _ -> Nothing
 
-inline fun default/pKeyword(s: string): <ast> range
-  pKeywordBase(s, []).range
+inline fun default/parse-special(s: string): <parse> range
+  parse-special(s, [])
 
-inline fun pKeyword(s: string, alts: list<string>): <ast> range
-  pKeywordBase(s, alts).range
+fun parse-special(s: string, alternates: list<string>): <parse> range
+  parse-token(s) fn(x)
+    match x.lex
+      LexSpecial(s') | s == s' -> Just(x.range)
+      LexSpecial(s') | alternates.any(fn(v) v == s') -> 
+        add-warning("using deprecated keyword " ++ s' ++ ", use " ++ s ++ " instead", x.range)
+        Just(x.range)
+      _ -> Nothing
 
-fun pKeywordBase(s: string, alternates: list<string>): <ast> lexeme
-  token("keyword " ++ s) fn(x)
+inline fun default/parse-keyword(s: string): <parse> range
+  parse-keyword_(s, []).range
+
+inline fun range/parse-keyword(s: string, alts: list<string>): <parse> range
+  parse-keyword_(s, alts).range
+
+fun parse-keyword_(s: string, alternates: list<string>): <parse> lexeme
+  parse-token("keyword " ++ s) fn(x)
     match x.lex
       LexKeyword(s', _) | s == s' -> Just(x)
       LexKeyword(s', _) | alternates.any(fn(v) v == s') -> 
-        addWarning("using deprecated keyword " ++ s' ++ ", use " ++ s ++ " instead", x.range)
+        add-warning("using deprecated keyword " ++ s' ++ ", use " ++ s ++ " instead", x.range)
         Just(x)
       _ -> Nothing
 
-fun default/pDocKeyword(s: string): <ast> (range, string)
-  pDocKeyword(s, [])
+fun default/parse-doc-keyword(s: string): <parse> (range, string)
+  parse-doc-keyword(s, [])
 
-fun pDocKeyword(s: string, alternates: list<string>): <ast> (range, string)
-  match pKeywordBase(s, alternates)
+fun parse-doc-keyword(s: string, alternates: list<string>): <parse> (range, string)
+  match parse-keyword_(s, alternates)
     Lexeme(rng, LexKeyword(_, doc)) -> (rng, doc)
-    _ -> astError("expected " ++ s, null)
+    _ -> parse-error("expected " ++ s, null)
 
-fun uniqueRangeHiddenName(pre: string, rng: range): name
+fun parse-doccon-id(): <parse> (name, (range, string))
+  parse-token("constructor") fn(x)
+    match x.lex
+      LexCons(id, doc) -> Just((id.requalify-locally, (x.range, doc)))
+      _ -> Nothing 
+
+fun unique-range-hidden-name(pre: string, rng: range): name
   val pos = rng.start
-  new-hidden-name(pre ++ "_" ++ pos.line.show ++ "_" ++ pos.col.show)
+  new-hidden-name-ex(pre, pos.line.show ++ "_" ++ pos.col.show)
 
-fun uniqueRangeName(rng: range, pre: string): name
+fun unique-range-name(rng: range, pre: string): name
   val pos = rng.start
   new-name(pre ++ "-l" ++ pos.line.show ++ "-c" ++ pos.col.show)
 
-fun adjustRange(ue: userExpr, r: range): userExpr
+fun expr/adjust-range(ue: userExpr, r: range): userExpr
   Parens(ue, nil, "", r)
 
-fun adjustTpRange(r: range, ut: userType): userType
+fun tp/adjust-range(ut: userType, r: range): userType
   TpParens(ut, r)
 
-fun unimplemented()
-  astError("unimplemented", peek().range)
+fun unimplemented(): <parse> a
+  parse-error("unimplemented", peek().range)
+
+fun main()
+  "Compiles".println

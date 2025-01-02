@@ -17,7 +17,7 @@
 //   (Or should that be: /
 //   Change unbound unparenthesized variables that only occur in label positions to
 //   label constants./)
-// Updated as of 8/6/24: Commit 284d301, not including extend / makeEffectExtends / extract which are not used nor exported
+// Updated as of 1/6/25: Commit 284d301, not including extend / makeEffectExtends / extract which are not used nor exported
 
 import compiler/common/name
 import compiler/common/range

@@ -16,45 +16,45 @@ import compiler/lib/pprint
 alias openEff = <openEffect, comp-flags, uniquePhase, pure, documentation>
 
 effect openEffect
-  fun getGamma(): gamma
+  fun get-gamma(): gamma
 
-fun openResolve()
-  setCoreDefs(resDefGroups(getCoreDefs()))
+fun open-resolve()
+  set-core-defs(resolve(get-core-defs()))
 
 // transform definition groups
-fun resDefGroups(dgs: defGroups): openEff defGroups
-  dgs.map(resDefGroup)
+fun dgs/resolve(dgs: defGroups): openEff defGroups
+  dgs.map(resolve)
 
-fun resDefGroup(dg: defGroup): openEff defGroup
+fun dg/resolve(dg: defGroup): openEff defGroup
   match dg
-    DefRec(dfs) -> DefRec(dfs.map(resDef))
-    DefNonRec(df) -> DefNonRec(resDef(df))
+    DefRec(dfs) -> DefRec(dfs.map(resolve))
+    DefNonRec(df) -> DefNonRec(resolve(df))
 
 // Transform a definition
-fun resDef(d: def)
-  d(defExpr=d.defExpr.resExpr)
+fun def/resolve(d: def)
+  d(defExpr=d.defExpr.resolve)
 
-fun resExpr(ex: expr)
+fun expr/resolve(ex: expr)
   match ex
-    App(eopen as TypeApp(Var(open), [effFrom, effTo, tpFrom, tpTo]), [f]) | open.getName == nameEffectOpen ->
-      resOpen(eopen, effFrom, effTo, tpFrom, tpTo, resExpr(f))
+    App(eopen as TypeApp(Var(open), [effFrom, effTo, tpFrom, tpTo]), [f]) | open.get-name == nameEffectOpen ->
+      resolve-open(eopen, effFrom, effTo, tpFrom, tpTo, resolve(f))
     // regular cases
-    Lam(args, eff, body) -> Lam(args, eff, body.resExpr)
-    App(f, args) -> App(f.resExpr, args.map(resExpr))
-    Let(dfgs, body) -> Let(dfgs.resDefGroups, body.resExpr)
-    Case(exprs, bs) -> Case(exprs.map(resExpr), bs.map(resBranch))
-    TypeLam(tvars, body) -> TypeLam(tvars, body.resExpr)
-    TypeApp(f, tps) -> TypeApp(f.resExpr, tps)
+    Lam(args, eff, body) -> Lam(args, eff, body.resolve)
+    App(f, args) -> App(f.resolve, args.map(resolve))
+    Let(dfgs, body) -> Let(dfgs.resolve, body.resolve)
+    Case(exprs, bs) -> Case(exprs.map(resolve), bs.map(resolve))
+    TypeLam(tvars, body) -> TypeLam(tvars, body.resolve)
+    TypeApp(f, tps) -> TypeApp(f.resolve, tps)
     _ -> ex // var,lit
 
-fun resBranch(Branch(pat, guards): branch)
-  Branch(pat, guards.map(resGuard))
+fun branch/resolve(Branch(pat, guards): branch)
+  Branch(pat, guards.map(resolve))
 
-fun resGuard(Guard(test, body): guard)
-  Guard(test.resExpr, body.resExpr)
+fun guard/resolve(Guard(test, body): guard)
+  Guard(test.resolve, body.resolve)
 
 // Insert open call
-fun resOpen(eopen: expr, effFrom: ktype, effTo: ktype, tpFrom: ktype, tpTo: ktype, expr: expr)
+fun resolve-open(eopen: expr, effFrom: ktype, effTo: ktype, tpFrom: ktype, tpTo: ktype, expr: expr)
   match tpTo
     TFun(targs, _, tres) ->
       val n = targs.length
@@ -64,76 +64,76 @@ fun resOpen(eopen: expr, effFrom: ktype, effTo: ktype, tpFrom: ktype, tpTo: ktyp
         // exact match just use expr
         expr
       elif !effFrom.isEffectFixed then
-        fail("core/open-resolve resOpen: todo: masking handled effect " ++ effFrom.pretty.show)
-      elif tlFrom.matchType(tlTo) && lsFrom.length == lsTo.length && lsFrom.zip(lsTo).all(fn((t1, t2)) t1 == t2) then
+        fail("core/open-resolve resolve-open: todo: masking handled effect " ++ effFrom.pretty.show)
+      elif tlFrom.match-type(tlTo) && lsFrom.length == lsTo.length && lsFrom.zip(lsTo).all(fn((t1, t2)) t1 == t2) then
         // same handled effects, just use expr
         expr
       else
         // not equal in handled effects, insert open
         fun resolve(nm: name)
-          match getGamma().gammaLookup(nm)
-            [(qname, info)] -> info.coreExpr(qname)
-            _ -> fail("core/open-resolve resOpen: unknown name: " ++ nm.show)
+          match get-gamma().gamma-lookup(nm)
+            [(qname, info)] -> info.core-expr(qname)
+            _ -> fail("core/open-resolve resolve-open: unknown name: " ++ nm.show)
         val params = list(1, targs.length).zip(targs).map(fn((i, t)) TName(new-hidden-name("x" ++ i.show), t.snd))
         val exprName = TName(new-hidden-name("x0"), tpFrom)
         val exprVar = Var(exprName, InfoNone)
-        fun exprApp(lam: expr)
+        fun expr-app(lam: expr)
           App(Lam([exprName], typeTotal, lam), [expr])
-        fun wrapperThunk(openExpr: expr, evExprs: list<expr>)
-          exprApp(Lam(params, effTo, 
+        fun wrapper-thunk(openExpr: expr, evExprs: list<expr>)
+          expr-app(Lam(params, effTo, 
             App(TypeApp(openExpr, [tres, effFrom, effTo]), 
               evExprs ++ [Lam([], effTo, App(exprVar, params.map(fn(p) Var(p, InfoNone))))])))
         fun wrapper(openExpr: expr, evExprs: list<expr>)
-          exprApp(Lam(params, effTo, 
+          expr-app(Lam(params, effTo, 
             App(TypeApp(openExpr, targs.map(snd) ++ [tres, effFrom, effTo]), 
               evExprs ++ [exprVar] ++ params.map(fn(p) Var(p, InfoNone)))))
-        fun evIndexOf(l: ktype)
+        fun ev-index-of(l: ktype)
           val (htagTp, hndTp) = 
-            val (name, _, tpArgs) = l.labelNameEx
-            val hndCon = TCon(TypeCon(name.toHandlerName, kindFunN(tpArgs.map(kind) ++ [kindEffect, kindStar], kindStar)))
-            (makeTypeApp(resolve(name.toEffectTagName), tpArgs), TApp(hndCon, tpArgs))
+            val (name, _, tpArgs) = l.label-name-ex
+            val hndCon = TCon(TypeCon(name.to-handler-name, kind-fun-n(tpArgs.map(kind) ++ [kindEffect, kindStar], kindStar)))
+            (make-type-app(resolve(name.to-effect-tag-name), tpArgs), TApp(hndCon, tpArgs))
           App(TypeApp(resolve(nameEvvIndex), [effTo, hndTp]), [htagTp])
         match lsFrom
           Nil -> // no handled effect, use cast
             match lsTo
               Nil -> expr
               _ -> 
-                if expr.isHandlerFree then expr // fully total with using any operations that need evidence; just leave it as is
-                elif n <= 4 then wrapper(resolve(n.nameOpenNone), []) // fails in perf1c with exceeded stack size if --optmaxdup < 500 (since it prevents a tailcall)
+                if expr.is-handler-free then expr // fully total with using any operations that need evidence; just leave it as is
+                elif n <= 4 then wrapper(resolve(n.name-open-none), []) // fails in perf1c with exceeded stack size if --optmaxdup < 500 (since it prevents a tailcall)
                 else 
                   // expr -- fails in nim as it's evidence is not cleared
-                  wrapperThunk(resolve(0.nameOpenNone), []) 
+                  wrapper-thunk(resolve(0.name-open-none), []) 
           [l] -> // just one: use open-atN for efficiency
-            if n <= 4 then wrapper(resolve(nameOpenAt(n)), [l.evIndexOf])
-            else wrapperThunk(resolve(nameOpenAt(0)), [l.evIndexOf])
+            if n <= 4 then wrapper(resolve(name-open-at(n)), [l.ev-index-of])
+            else wrapper-thunk(resolve(name-open-at(0)), [l.ev-index-of])
           _ ->
-            val indices = makeVector(typeEvIndex, lsFrom.map(evIndexOf))
+            val indices = make-vector(typeEvIndex, lsFrom.map(ev-index-of))
             if n <= 3 then
-              wrapper(resolve(n.nameOpen), [indices])
+              wrapper(resolve(n.name-open), [indices])
             else
-              wrapperThunk(resolve(0.nameOpen), [indices])
-    _ -> fail("core/open-resolve resOpen: open applied to a non-function? " ++ effTo.pretty.show)
+              wrapper-thunk(resolve(0.name-open), [indices])
+    _ -> fail("core/open-resolve resolve-open: open applied to a non-function? " ++ effTo.pretty.show)
 
 // is a function expression handler free?: meaning if invoked it will never need evidence (invoke an operation) or change the eveidence (use a handler)
-fun isHandlerFree(ex: expr)
+fun is-handler-free(ex: expr)
   match ex
-    TypeLam(_, body) -> isHandlerFree(body)
-    TypeApp(f, _) -> isHandlerFree(f)
-    Lam(_, eff, body) -> !containsHandledEffect([], eff) && isHandlerFree(body)
-    App(f, args) -> isHandlerFree(f) && args.all(isHandlerFree)
+    TypeLam(_, body) -> is-handler-free(body)
+    TypeApp(f, _) -> is-handler-free(f)
+    Lam(_, eff, body) -> !contains-handled-evidence([], eff) && is-handler-free(body)
+    App(f, args) -> is-handler-free(f) && args.all(is-handler-free)
     Var(vname, core/InfoExternal) -> 
-      match vname.typeOf.handlerFreeFunType
+      match vname.type-of.handler-free-fun-type
         Nothing -> True
         Just(ok) -> ok
     Var(vname) ->
-      match vname.typeOf.handlerFreeFunType
+      match vname.type-of.handler-free-fun-type
         Nothing -> True
-        Just(ok) -> ok && vname.getName.isSystemCoreName
+        Just(ok) -> ok && vname.get-name.is-system-core-name
     Con -> True
     ELit -> True
     _ -> False
 
-fun handlerFreeFunType(tp: ktype)
-  match tp.splitFunScheme
-    Just((_, _, _, eff, _)) -> Just(!containsHandledEffect([], eff))
+fun handler-free-fun-type(tp: ktype)
+  match tp.split-fun-scheme
+    Just((_, _, _, eff, _)) -> Just(!contains-handled-evidence([], eff))
     _ -> Nothing

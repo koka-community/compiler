@@ -17,6 +17,7 @@ import compiler/common/file
 import compiler/lib/printer
 import compiler/common/color-scheme
 import std/os/path
+import std/num/float64
 import std/core/undiv
 
 alias asmEff = <pure,asm,comp-flags,uniquePhase,colorSchemeEffect,newtypesEff,printer,subst,documentation,niceEff<typeVar>,ppEnvEff,precEff,prettyTypeEff>
@@ -28,8 +29,8 @@ effect subst
   val cdefToHeader: bool // emit current def to header?
 
 effect asm
-  fun emitToH(d: doc): ()
-  fun emitToC(d: doc): ()
+  fun emit-to-h(d: doc): ()
+  fun emit-to-c(d: doc): ()
   fun emitToInit(d: doc): ()
   fun emitToTop(d: doc): ()
   fun emitToDone(d: doc): ()
@@ -58,87 +59,87 @@ value struct canonicalLambda
   canonicalName : name
   fieldNames: list<(name, bool)>
 
-fun (==)(fn1: list<(name, bool)>, fn2: list<(name, bool)>): bool
+fun list/(==)(fn1: list<(name, bool)>, fn2: list<(name, bool)>): bool
   match (fn1, fn2)
     (Cons((n1, b1), r1), Cons((n2, b2), r2)) -> n1 == n2 && b1 == b2 && r1.pretend-decreasing == r2 
     _ -> False
 
-fun (==)(c1: canonicalLambda, c2: canonicalLambda): pure bool
+fun can/(==)(c1: canonicalLambda, c2: canonicalLambda): pure bool
   c1.canonicalName == c2.canonicalName && c1.fieldNames == c2.fieldNames
 
-fun show(c: canonicalLambda): string
+fun can/show(c: canonicalLambda): string
   c.canonicalName.show ++ "(" ++ c.fieldNames.map(fn(n) n.fst.show ++ " " ++ n.snd.show).join(", ") ++ ")"
 
 // Effect helpers
-fun emitToCurrentDef(d: doc)
-  if cdefToHeader then emitToH(d)
-  else emitToC(d)
+fun emit-to-current-def(d: doc)
+  if cdefToHeader then emit-to-h(d)
+  else emit-to-c(d)
 
-fun setNameSubstitutions(subs, f)
+fun set-name-substitutions(subs, f)
   with override
     val substEnv = subs
     val cdef-name = cdef-name
     val cdefToHeader = cdefToHeader
   f()
 
-fun setDef(d: name, toHeader: bool, f)
+fun set-def(d: name, toHeader: bool, f)
   with override
     val substEnv = substEnv
     val cdef-name = d
     val cdefToHeader = toHeader
   f()
 
-fun localUnique(f)
-  val u = updateUnique(id)
+fun local-unique(f)
+  val u = update-unique(id)
   val x = f()
-  setUnique(u)
+  set-unique(u)
   x
 
-fun newVarName(s: string): asmEff name
-  newName("." ++ s ++ new-unique().show)
+fun new-var-name(s: string): asmEff name
+  new-name("." ++ s ++ new-unique().show)
 
-fun newVarNames(i: int): asmEff list<name>
-  Cons(newVarName("x"), newVarNames(i - 1))
+fun new-var-names(i: int): asmEff list<name>
+  Cons(new-var-name("x"), new-var-names(i - 1))
 
 fun newDefVarName(s: string)
-  postpend("-" ++ s ++ new-unique().show, cdef-name)
+  cdef-name.postpend("-" ++ s ++ new-unique().show)
 
-fun newCanonicalVarName(s: string)
-  postpend("-" ++ s, modName)
+fun new-canonical-var-name(s: string)
+  modName.postpend("-" ++ s)
 
-fun conName(e: expr)
-  unsafe-no-div
+fun con-name(e: expr)
+  pretend-no-div
     try({match e {Con(tn) -> tn}}) fn(_)
       trace("Failed in top level extracting con name of " ++ e.show)
-      TName("error".newName, typeAny)
+      TName("error".new-name, typeAny)
 
-fun getFormat(tname: tName, formats: list<(target, string)>)
+fun get-format(tname: tName, formats: list<(target, string)>)
   match formats.find(fn((t, _)) t == C(cTarget))
     Nothing -> 
       trace("warning: C backend does not support external in " ++ tname.show)
       "kk_unsuported_external(\"" ++ tname.show ++ "\")"
     Just(x) -> x.snd
 
-fun genDefName(tname: tName)
-  tname.getName.unqualify.cppName
+fun gen-def-name(tname: tName)
+  tname.get-name.unqualify.cpp-name
 
-fun genVarName(s: string)
-  newVarName(s).cppName
+fun gen-var-name(s: string)
+  new-var-name(s).cpp-name
 
-fun genVarNames(i: int)
-  newVarNames(i).map(cppName)
+fun gen-var-names(i: int)
+  new-var-names(i).map(cpp-name)
 
-fun genCommentTName(tname: tName)
-  tname.getName.cppName |+| comment(tname.tNameType.ppType)
+fun gen-comment-tname(tname: tName)
+  tname.get-name.cpp-name |+| comment(tname.tNameType.pp-type)
 
 // Classification
-fun maxScanCountOf(l: list<(conInfo, conRepr, list<(name,ktype)>, int)>): int
+fun max-scan-count(l: list<(conInfo, conRepr, list<(name,ktype)>, int)>): int
   l.foldl(0, fn(m, (_, _, _, sc)) if sc > m then sc else m)
 
-fun minScanCountOf(l: list<(conInfo, conRepr, list<(name,ktype)>, int)>): int
-  l.foldl(l.maxScanCountOf, fn(m, (_, _, _, sc)) if sc < m then sc else m)
+fun max-scan-count-of(l: list<(conInfo, conRepr, list<(name,ktype)>, int)>): int
+  l.foldl(l.max-scan-count, fn(m, (_, _, _, sc)) if sc < m then sc else m)
 
-fun dataReprMayHaveSingletons(d: dataRepr): bool
+fun data-repr-may-have-singletons(d: dataRepr): bool
   match d
     DataAsMaybe -> True
     DataAsList -> True
@@ -147,19 +148,19 @@ fun dataReprMayHaveSingletons(d: dataRepr): bool
     DataNormal(hasSingletons) -> hasSingletons
     _ -> False
 
-fun patternVarFree(p)
+fun pattern-var-free(p)
   p.is-patWild
 
-fun isPat(q: pattern, b: bool): bool
+fun is-pat(q: pattern, b: bool): bool
   match q
     PatWild -> False
     PatLit -> False
-    PatVar(_, q') -> q'.isPat(b)
-    PatCon(tn) -> tn.getName == (if b then nameTrue else nameFalse)
+    PatVar(_, q') -> q'.is-pat(b)
+    PatCon(tn) -> tn.get-name == (if b then nameTrue else nameFalse)
 
-fun extractExternal(e: expr): asmEff maybe<(tName, string, list<expr>)>
+fun extract-external(e: expr): asmEff maybe<(tName, string, list<expr>)>
   fun format(tn:tName, fs:list<(target,string)>)
-    match lookupTarget(C(cTarget), fs)
+    match lookup-target(C(cTarget), fs)
       Nothing -> fail("backend does not support external in " ++ tn.show ++ fs.show-list(fn((t,s)) t.show ++ ":" ++ s))
       Just(f) -> f
   match e
@@ -169,71 +170,71 @@ fun extractExternal(e: expr): asmEff maybe<(tName, string, list<expr>)>
       Just((tname, tname.format(formats), args))
     _ -> Nothing
 
-fun isFunExpr(e: expr): bool
+fun is-fun-expr(e: expr): bool
   match e
-    TypeApp(e) -> isFunExpr(e)
-    TypeLam(_, e) -> isFunExpr(e)
+    TypeApp(e) -> e.is-fun-expr
+    TypeLam(_, e) -> e.is-fun-expr
     Lam -> True
     _ -> False
 
-fun isReuseNull(e: expr)
+fun is-reuse-null(e: expr)
   match e
-    App(Var(v, InfoExternal), []) -> v.getName == nameReuseNull
+    App(Var(v, InfoExternal), []) -> v.get-name == nameReuseNull
     _ -> False
 
-fun isInlineableExpr(ex: expr): pure bool
+fun is-inlineable-expr(ex: expr): pure bool
   match ex
-    TypeApp(e) -> e.isInlineableExpr
-    TypeLam(_, e) -> e.isInlineableExpr
+    TypeApp(e) -> e.is-inlineable-expr
+    TypeLam(_, e) -> e.is-inlineable-expr
     ELit(LitString) -> False
     // C has no guarantee on argument evaluation so we only allow a select few operations to be inlined
     App(Var(v, InfoExternal), []) -> 
-      val n = v.getName
+      val n = v.get-name
       [nameYielding,nameReuseNull,nameCCtxHoleCreate].any(fn(n') n == n')
-    // App (Var v (InfoExternal _)) [arg] | getName v `elem` [nameBox,nameDup,nameInt32] -> isInlineableExpr arg
-    App(Var(v), [arg]) | [nameBox,nameInt32,nameReuse,nameReuseIsValid,nameIsUnique].any(fn(n') n' == v.getName) ->
-      arg.isInlineableExpr
-    // App (Var v (InfoExternal _)) args -> hasTotalEffect (typeOf v) &&  all isPureExpr args  -- yielding() etc.
+    // App (Var v (InfoExternal _)) [arg] | get-name v `elem` [nameBox,nameDup,nameInt32] -> is-inlineable-expr arg
+    App(Var(v), [arg]) | [nameBox,nameInt32,nameReuse,nameReuseIsValid,nameIsUnique].any(fn(n') n' == v.get-name) ->
+      arg.is-inlineable-expr
+    // App (Var v (InfoExternal _)) args -> hasTotalEffect (typeOf v) &&  all is-pure-expr args  -- yielding() etc.
 
-    // App (Var v _) [arg] | getName v `elem` [nameBox,nameUnbox] -> isInlineableExpr arg
+    // App (Var v _) [arg] | get-name v `elem` [nameBox,nameUnbox] -> is-inlineable-expr arg
     //
     // TODO: comment out for now as it may prevent a tailcall if inlined
-    // App f args       -> -- trace ("isInlineable f: " ++ show f) $
-    //                      isPureExpr f && all isPureExpr args
-    //                      -- all isInlineableExpr (f:args)
-    //                      && not (isFunExpr f) -- avoid `fun() {}(a,b,c)` !
+    // App f args       -> -- trace ("is-inlineable f: " ++ show f) $
+    //                      is-pure-expr f && all is-pure-expr args
+    //                      -- all is-inlineable-expr (f:args)
+    //                      && not (is-fun-expr f) -- avoid `fun() {}(a,b,c)` !
     //                      -- && getParamArityExpr f == length args
-    _ -> ex.isPureExpr
+    _ -> ex.is-pure-expr
 
-fun isPureExpr(ex: expr): pure bool
+fun is-pure-expr(ex: expr): pure bool
   match ex
-    TypeApp(e) -> e.isPureExpr
-    TypeLam(_, e) -> e.isPureExpr
+    TypeApp(e) -> e.is-pure-expr
+    TypeLam(_, e) -> e.is-pure-expr
     Var(_, InfoExternal) -> False
     Var -> True
-    Con -> ex.typeOf.splitFunScheme.is-nothing
+    Con -> ex.type-of.split-funScheme.is-nothing
     ELit(LitString) -> False // for our purposes, it's not pure (as it needs a declaration)
     ELit -> True
     Lam -> True
     _ -> False   
 
-fun isTailCalling(ex: expr, n: name): bool
+fun is-tail-calling(ex: expr, n: name): bool
   fun f2(g: guard)
-    g.body.pretend-decreasing.isTailCalling(n) // does the guarded expression tailcall?
+    g.body.pretend-decreasing.is-tail-calling(n) // does the guarded expression tailcall?
   fun f1(b: branch)
     b.guards.any(f2) // does any of the guards tailcall?
   match ex
-    TypeApp(e) -> isTailCalling(e.pretend-decreasing, n) // trivial
-    TypeLam(_, e) -> isTailCalling(e.pretend-decreasing, n) // trivial
+    TypeApp(e) -> is-tail-calling(e.pretend-decreasing, n) // trivial
+    TypeLam(_, e) -> is-tail-calling(e.pretend-decreasing, n) // trivial
     Lam -> False // lambda body is a new context, can't tailcall
     Var -> False // variable is not a call
     Con -> False // constructor is not a call
     ELit -> False // literal is not a call
-    App(Var(tn, info), args) | tn.getName == n -> info.arity == args.length // direct application can be a tail call
-    App(TypeApp(Var(tn, info)), args) | tn.getName == n -> info.arity == args.length // polymorphic direct application can be a tail call
-    App(Var(tn), [e]) | tn.getName == nameReturn -> e.isTailCalling(n) // return is transparent in terms of tail calling
+    App(Var(tn, info), args) | tn.get-name == n -> info.arity == args.length // direct application can be a tail call
+    App(TypeApp(Var(tn, info)), args) | tn.get-name == n -> info.arity == args.length // polymorphic direct application can be a tail call
+    App(Var(tn), [e]) | tn.get-name == nameReturn -> e.is-tail-calling(n) // return is transparent in terms of tail calling
     App -> False
-    Let(_, e) -> e.pretend-decreasing.isTailCalling(n) // tail calls can only happen in the actual body
+    Let(_, e) -> e.pretend-decreasing.is-tail-calling(n) // tail calls can only happen in the actual body
     Case(_, bs) -> bs.any(f1)
 
 type result
@@ -248,16 +249,16 @@ type cType
   CData(nm: name)
   CPrim(prim: string)
 
-fun cType(tp: ktype): cType
+fun c-type(tp: ktype): cType
   match tp
-    TForAll(_, _, t) -> t.cType
-    TFun(pars, _, res) -> CFun(pars.map(fn(p) p.snd.pretend-decreasing.cType), res.cType)
-    TApp(t) -> t.cType
-    TCon(c) -> c.cTypeCon
+    TForAll(_, _, t) -> t.c-type
+    TFun(pars, _, res) -> CFun(pars.map(fn(p) p.snd.pretend-decreasing.c-type), res.c-type)
+    TApp(t) -> t.c-type
+    TCon(c) -> c.c-type-con
     TVar -> CBox
-    TSyn(_, _, t) -> t.cType
+    TSyn(_, _, t) -> t.c-type
 
-fun cTypeCon(tp: typeCon): cType
+fun c-type-con(tp: typeCon): cType
   val nm = tp.name
   if nm == nameTpInt then CPrim("kk_integer_t")
   elif nm == nameTpString then CPrim("kk_string_t")
@@ -279,32 +280,32 @@ fun cTypeCon(tp: typeCon): cType
   elif nm == nameTpBox || nm == nameTpAny then CPrim("kk_box_t")
   elif nm == nameTpReuse then CPrim("kk_reuse_t")
   elif nm == nameTpFieldAddr then CPrim("kk_field_addr_t")
-  else CData(nm.typeClassName)
+  else CData(nm.type-class-name)
 
-fun typeClassName(n: name)
+fun type-class-name(n: name)
   prepend(".", n)
 
-fun cppVis(v: visibility): doc
+fun cpp-vis(v: visibility): doc
   empty
 
-fun typeConClassName(n: name)
+fun type-con-class-name(n: name)
   n
 
-fun cPrimCanBeBoxed(s: string): bool
+fun cprim-can-be-boxed(s: string): bool
   ["kk_char_t", "int64_t", "int16_t", "int32_t", "float", "double", "intptr_t", "kk_ssize_t"].any(fn(x) x == s)
 
-fun cppType(tp: ktype): doc
-  match tp.cType
+fun cpp-type(tp: ktype): doc
+  match tp.c-type
     CBox -> "kk_box_t".text
     CFun -> "kk_function_t".text
-    CData(nm) -> cppName(nm)
+    CData(nm) -> cpp-name(nm)
     CPrim(prim) -> prim.text
 
 fun ppVarDecl(TName(nm, tp): tName): doc
-  tp.cppType |+| nm.cppName
+  tp.cpp-type |+| nm.cpp-name
 
 fun ppDefName(n: name)
-  cppName(n.unqualify)
+  cpp-name(n.unqualify)
 
 val contextDoc = "_ctx".text
 val contextParam = "kk_context_t* _ctx".text
@@ -321,8 +322,8 @@ fun arguments(args: list<doc>): doc
 fun ppLit(l: lit): <exn,comp-flags> doc
   match l
     LitInt(i) ->
-      if i.isSmallInt then text("kk_integer_from_small") |.| parens(i.pretty)
-      elif i.isSmallInt32 then text("kk_integer_from_int") |.| arguments([i.pretty])
+      if i.is-small-int then text("kk_integer_from_small") |.| parens(i.pretty)
+      elif i.is-small-int32 then text("kk_integer_from_int") |.| arguments([i.pretty])
       else "kk_integer_from_string".text |.| arguments([dquotes(i.pretty)])
     LitChar(c) ->
       val c' = c.head-char.unjust
@@ -370,56 +371,56 @@ fun genLitIntPtrT(i: int)
 
 fun isSmallLitInt(e)
   match e
-    ELit(LitInt(i)) -> isSmallInt(i)
+    ELit(LitInt(i)) -> is-small-int(i)
     _ -> False
 
-fun isSmallInt(i)
+fun is-small-int(i)
   i >= minSmallInt && i < maxSmallInt
 val maxSmallInt = 8191 // 2^13 -1 (conservative 14 bits on 32-bits platform)
 val minSmallInt = -8192
 
-fun isSmallInt32(i)
+fun is-small-int32(i)
   i >= minSmallInt32 && i < maxSmallInt32
 val minSmallInt32 = -2147483648
 val maxSmallInt32 = 2147483647
 
-fun isSmallInt64(i)
+fun is-small-int64(i)
   i >= minSmallInt64 && i < maxSmallInt64
 val minSmallInt64 = -9223372036854775808
 val maxSmallInt64 = 9223372036854775807
 
-fun isSmallUInt8(i)
+fun is-small-uint8(i)
   i >= 0 && i < 255
 
-fun isSmallSSizeT(i)
+fun is-small-ssizet(i)
   match targetPlatform.ptrSize
     4 -> i > minSmallInt32 && i < maxSmallInt32
     8 -> i > minSmallInt64 && i < maxSmallInt64
-    _ -> fail("backend/c/from-core: isSmallSSizeT: unknown platform ssize_t: " ++ targetPlatform.show)
+    _ -> fail("backend/c/from-core: is-small-ssizet: unknown platform ssize_t: " ++ targetPlatform.show)
 
-fun isSmallIntPtrT(i)
+fun is-small-int-ptr(i)
   match targetPlatform.ptrSize
     4 -> i > minSmallInt32 && i < maxSmallInt32
     8 -> i > minSmallInt64 && i < maxSmallInt64
-    _ -> fail("backend/c/from-core: isSmallIntPtrT: unknown platform intptr_t: " ++ targetPlatform.show)
+    _ -> fail("backend/c/from-core: is-small-int-ptr: unknown platform intptr_t: " ++ targetPlatform.show)
 
-fun cppName(n: name): doc
-  if n.isQualified then ppModName(n.qualifier) |.| "_".text |.| n.unqualify.show.asciiEncode(False).text
+fun cpp-name(n: name): doc
+  if n.is-qualified then pp-mod-name(n.qualifier) |.| "_".text |.| n.unqualify.show.ascii-encode(False).text
   else n.encode(False)
 
-fun ppQName(modName: name, name: name): doc
-  if modName == name.qualifier then cppName(name.unqualify)
-  else cppName(name)
+fun pp-qname(modName: name, name: name): doc
+  if modName == name.qualifier then cpp-name(name.unqualify)
+  else cpp-name(name)
 
-fun ppModName(n: name): doc
+fun pp-mod-name(n: name): doc
   "kk_".text |.| n.encode(True)
 
 fun encode(n: name, isModule: bool)
-  val s = n.show.asciiEncode(isModule)
-  if s.isReserved || s == "" || s.head-char.map(is-digit).default(False) then ("kkloc_" ++ s).text
+  val s = n.show.ascii-encode(isModule)
+  if s.is-reserved || s == "" || s.head-char.map(is-digit).default(False) then ("kkloc_" ++ s).text
   else s.text
 
-fun isReserved(s: string): bool
+fun is-reserved(s: string): bool
   if s.starts-with("kk_").is-just then True
   else reserved.any(fn(r) r == s)
 
@@ -440,70 +441,70 @@ val reserved = [
   "errno", "exception_info"
 ]
 
-fun ppConField(n: name, t: ktype): doc
-  t.cppType |+| n.unqualify.cppName |.| semi
+fun pp-con-field(n: name, t: ktype): doc
+  t.cpp-type |+| n.unqualify.cpp-name |.| semi
 
-fun conTestName(c: conInfo): doc
-  cppName(makeHiddenName("is", c.name))
+fun con-test-name(c: conInfo): doc
+  cpp-name(make-hidden-name("is", c.name))
 
-fun conTestNameX(nm: name): doc
-  cppName(makeHiddenName("is", nm))
+fun con-test-nameX(nm: name): doc
+  cpp-name(make-hidden-name("is", nm))
 
-fun conTagName(c: conInfo): doc
-  cppName(makeHiddenName("tag", c.name))
+fun con-tag-name(c: conInfo): doc
+  cpp-name(make-hidden-name("tag", c.name))
 
-fun primName(prim: string, d: doc)
+fun prim-name(prim: string, d: doc)
   if prim == "" then d else
     d |.| "_".text |.| prim.text
 
-fun primNameType(prim: string, s: string)
+fun prim-name-type(prim: string, s: string)
   val start = if s.starts-with("kk_").is-just then "" else "kk_"
   val end = match s.ends-with("_t") { Just(x) -> x.string; _ -> s}  
-  primName(prim, (start ++ end).text)
+  prim-name(prim, (start ++ end).text)
 
-fun conBaseCastName(c: conInfo): doc
-  cppName(makeHiddenName("base", c.name))
+fun con-base-case-name(c: conInfo): doc
+  cpp-name(make-hidden-name("base", c.name))
 
-fun conBaseCastNameX(c: name): doc
-  cppName(makeHiddenName("base", c))
+fun con-base-case-nameX(c: name): doc
+  cpp-name(make-hidden-name("base", c))
 
-fun conCreateName(c: conInfo): doc
-  makeHiddenName("new", c.name).cppName
+fun con-create-name(c: conInfo): doc
+  make-hidden-name("new", c.name).cpp-name
 
-fun conCreateNameX(c: name): doc
-  makeHiddenName("new", c).cppName
+fun con-create-nameX(c: name): doc
+  make-hidden-name("new", c).cpp-name
 
-fun conSingletonName(c: conInfo): doc
-  makeHiddenName("singleton", c.name).cppName
+fun con-singleton-name(c: conInfo): doc
+  make-hidden-name("singleton", c.name).cpp-name
 
-fun conAsName(c: conInfo): doc
-  cppName(makeHiddenName("as", c.name))
+fun con-as-name(c: conInfo): doc
+  cpp-name(make-hidden-name("as", c.name))
 
-fun conAsNameX(c: name): doc
-  cppName(makeHiddenName("as", c))
+fun con-as-nameX(c: name): doc
+  cpp-name(make-hidden-name("as", c))
 
-fun openTagName(n: name): doc
-  cppName(makeHiddenName("tag", n))
+fun open-tag-name(n: name): doc
+  cpp-name(make-hidden-name("tag", n))
 
-fun ntParameters(pars: list<(name, ktype)>): doc
-  parameters(pars.map(fn((n, t)) t.cppType |+| n.unqualify.cppName))
+fun nt-parameters(pars: list<(name, ktype)>): doc
+  parameters(pars.map(fn((n, t)) t.cpp-type |+| n.unqualify.cpp-name))
 
-fun closFnParameters(pars: list<(name, ktype)>): doc
-  parameters(Cons("void* fnPtr".text, pars.map(fn((n, t)) t.cppType |+| n.unqualify.cppName)))
+fun clos-fn-parameters(pars: list<(name, ktype)>): doc
+  parameters(Cons("void* fnPtr".text, pars.map(fn((n, t)) t.cpp-type |+| n.unqualify.cpp-name)))
 
-fun vcatBreak(l: list<doc>): doc
+fun vcat-break(l: list<doc>): doc
   linebreak |.| l.vcat
 
-fun parensIf(d: doc) // avoid parens if already parenthesized
-  if d.dStartsWith("(") && d.dEndsWith(")") || d.dStartsWith("kk_likely") then d
+fun parens-if(d: doc) // avoid parens if already parenthesized
+  if d.doc-starts-with("(") && d.doc-ends-with(")") || d.doc-starts-with("kk_likely") then d
   else parens(d)
 
 fun inlineblock(d: doc)
-  if d.dStartsWith("{") then d
+  if d.doc-starts-with("{") then d
   else hang("{".text |+| d, 2) |--| "}".text
 
 fun block(d: doc)
-  if d.dStartsWith("{") then d
+  if d.doc-starts-with("{") then d
   else "{".text |--| tab(d) |--| "}".text
 
 fun block1(l: list<doc>)
@@ -514,7 +515,7 @@ fun block1(l: list<doc>)
 fun tblock(tp: doc, d: doc)
   "{".text |+| tp |--| tab(d) |--| "}".text
 
-fun tcoBlock(tp: doc, d: doc)
+fun tco-block(tp: doc, d: doc)
   tblock(tp, "kk__tailcall: ;".text |--| d)
 
 val tailcall = "goto kk__tailcall;".text
@@ -533,36 +534,36 @@ fun comment(d: doc)
 fun linecomment(d: doc)
   "//".text |+| d
 
-fun isWhitespace(c: char)
+fun is-whitespace(c: char)
   c == ' ' || c == '\t' || c == '\n' || c == '\r'
 
-fun trimComment(comm: string)
-  fun trimRest(xs: list<char>)
-    xs.drop-while(fn(x) x.isWhitespace).reverse.string
-  fun trimLine(s: string)
+fun trim-comment(comm: string)
+  fun trim-rest(xs: list<char>)
+    xs.drop-while(fn(x) x.is-whitespace).reverse.string
+  fun trim-line(s: string)
     match s.list.reverse
-      Cons('\\', xs) -> xs.trimRest
-      xs -> xs.trimRest
-  comm.lines.map(trimLine).unlines
+      Cons('\\', xs) -> xs.trim-rest
+      xs -> xs.trim-rest
+  comm.lines.map(trim-line).unlines
 
-fun unitSemi(tp: ktype): doc
+fun unit-semi(tp: ktype): doc
   if tp.isTypeUnit then " = kk_Unit;".text else semi
 
-fun debugComment(s: string)
+fun debug-comment(s: string)
   if debug then comment(s.text)
   else pprint/Empty
 
-fun debugWrap(d: doc, s: string)
-  if debug then debugComment("<" ++ s ++ ">") |--| tab(d) |--| debugComment("</" ++ s ++ ">")
+fun debug-wrap(d: doc, s: string)
+  if debug then debug-comment("<" ++ s ++ ">") |--| tab(d) |--| debug-comment("</" ++ s ++ ">")
   else d
 
 val tagField = "_tag".text
 val constdecl = "const".text
 
-fun tParameters(tns: list<tName>): doc
-  ntParameters(tns.map(fn(tn) (tn.getName, tn.tNameType)))
+fun t-parameters(tns: list<tName>): doc
+  nt-parameters(tns.map(fn(tn) (tn.get-name, tn.tNameType)))
 
-fun resultType(tp: ktype): <pure,comp-flags> ktype
-  match tp.splitFunScheme
+fun result-type(tp: ktype): <pure,comp-flags> ktype
+  match tp.split-funScheme
     Just((_, _, _, _, res)) -> res
-    _ -> fail("backend/c/from-core resultType: not a function type: " ++ tp.show) // TODO: Pretty type
+    _ -> fail("backend/c/from-core result-type: not a function type: " ++ tp.show) // TODO: Pretty type

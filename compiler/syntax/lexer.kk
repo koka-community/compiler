@@ -9,6 +9,9 @@ fun lex(str: string, pos: pos): pure list<lexeme>
   var lexemes := []
   var slices := []
   var raw-delim := 0
+  var col-off-line := pos.line
+  var line-off := pos.line
+  var col-off := pos.col
   with handler
     fun do-start-chunked(s: string, start: alex-pos)
       slices := Cons((s, start), slices)
@@ -28,12 +31,39 @@ fun lex(str: string, pos: pos): pure list<lexeme>
       raw-delim
     fun set-rawdelim(i)
       raw-delim := i
+    fun check-linedir(l, start: alex-pos, end: alex-pos)
+      match l
+        LexComment(s) -> 
+          if s.starts-with("#line").bool then
+            val lineadj = s.list.drop(6).drop-while(is-white)
+            match lineadj
+              Cons('(', rst) -> 
+                val linecol = rst.take-while(fn(c) c != ')').string.split(",")
+                match linecol
+                  Cons(ln, Cons(col)) -> 
+                    line-off := ln.list.get-int - start.line
+                    col-off-line := start.column
+                    col-off := col.list.get-int - start.column
+                  _ -> ()
+              _ -> line-off := lineadj.get-int - start.line
+          else
+            ()
+        _ -> ()
+      l
     fun do-emit(l, lstart, lend)
-      val Alex-pos(off, line, col) = lstart
-      val Alex-pos(eoff, eline, ecol) = lend
-      lexemes := Cons(Lexeme(make-range(Pos(src, off, line, col), Pos(src, eoff, eline, ecol)), l), lexemes)
+      val Alex-pos(soff, sline, scol) = lstart.adjust(line-off, if col-off-line == lstart.line then col-off else 0)
+      val Alex-pos(eoff, eline, ecol) = lend.adjust(line-off, if col-off-line == lend.line then col-off else 0)
+      lexemes := Cons(Lexeme(make-range(Pos(src, soff, sline, scol), Pos(src, eoff, eline, ecol)), l), lexemes)
   alex-scan(str.slice, 0)
   lexemes.reverse
+
+fun adjust(pos: alex-pos, l: int, c: int): alex-pos
+  match pos
+    Alex-pos(off, line, col) ->
+      Alex-pos(off, line + l, col + c)
+
+fun get-int(l: list<char>): int
+  l.drop-while(is-white).take-while(is-digit).string.parse-int.default(0)
 
 fun lexer(path: string, line: int, input: string): pure list<lexeme>
   lexing(Source(path, input), line, input)

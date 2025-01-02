@@ -10,57 +10,57 @@ import compiler/kind/kind
 import std/data/linearset
 import compiler/common/name-collections
 
-fun isUnit(e: expr): bool
+fun is-unit(e: expr): bool
   match e
     Con(tn) | tn.get-name == name-tuple(0) -> True
     _ -> False
 
-fun isTrue(e: expr): bool
+fun is-true(e: expr): bool
   match e
     Con(tn) | tn.get-name == nameTrue -> True
     _ -> False
 
-fun isFalse(e: expr): bool
+fun is-false(e: expr): bool
   match e
     Con(tn) | tn.get-name == nameFalse -> True
     _ -> False
 
 val exprUnit = Con(TName(nameUnit, typeUnit), ConEnum(nameTpUnit, DataEnum, zero, 0))
 
-val pEFalse = patExprBool(nameFalse, 0)
+val pEFalse = pat-expr-bool(nameFalse, 0)
 val patFalse = pEFalse.fst
 val exprFalse = pEFalse.snd
 
-val pETrue = patExprBool(nameTrue, 1)
+val pETrue = pat-expr-bool(nameTrue, 1)
 val patTrue = pETrue.fst
 val exprTrue = pETrue.snd
 
-fun patExprBool(n: name, t: int): (pattern, expr)
+fun pat-expr-bool(n: name, tag: int): (pattern, expr)
   val tn = TName(n, typeBool)
-  val conEnum = ConEnum(nameTpBool, DataEnum, zero, t)
-  val conInfo = ConInfo(n, nameTpBool, [], [], [], TFun([], typeTotal, typeBool), Inductive, null, [], [], False, [], zero, Public, "")
+  val conEnum = ConEnum(nameTpBool, DataEnum, zero, tag)
+  val conInfo = ConInfo(n, nameTpBool, [], [], [], TFun([], typeTotal, typeBool), Inductive, null, [], [], False, [], zero, Nothing, tag, Public, "")
   val pat = PatCon(tn, [], conEnum, [], [], typeBool, conInfo, False)
   val expr = Con(tn, conEnum)
   (pat, expr)
 
-fun makeIfExpr(p: expr, t: expr, f: expr): expr
+fun make-if-expr(p: expr, t: expr, f: expr): expr
   Case([p], [Branch([patTrue], [Guard(exprTrue, t)]), Branch([patFalse], [Guard(exprFalse, f)])])
 
-fun makeVector(tp: ktype, exprs: list<expr>): expr
+fun make-vector(tp: ktype, exprs: list<expr>): expr
   val a = TypeVar(0, kindStar, Bound)
   val vectorFromList = Var(TName(nameVector, TForAll([a], [], TFun([(name/nil, TApp(typeList, [TVar(a)]))], typeTotal, TApp(typeVector, [TVar(a)])))), InfoArity(1, 1))
-  App(TypeApp(vectorFromList, [tp]), [makeList(tp, exprs)])
+  App(TypeApp(vectorFromList, [tp]), [make-list(tp, exprs)])
 
-fun wrapOptional(tp: ktype, ex: expr): expr
+fun wrap-optional(tp: ktype, ex: expr): expr
   val a = TypeVar(0, kindStar, Bound)
-  val tpOptional = TForAll([a], [], TFun([(name/nil, TVar(a))], typeTotal, makeOptionalType(TVar(a))))
+  val tpOptional = TForAll([a], [], TFun([(name/nil, TVar(a))], typeTotal, make-optional(TVar(a))))
   val conInfo = ConAsJust(nameTpOptional, DataAsMaybe, value-repr-scan(1), nameOptionalNone, 0)
   App(TypeApp(Con(TName(nameOptional, tpOptional), conInfo), [tp]), [ex])
 
-fun makeList(tp: ktype, exprs: list<expr>): expr
+fun make-list(tp: ktype, exprs: list<expr>): expr
   val a = TypeVar(0, kindStar, Bound)
   val nilTp = TForAll([a], [], TApp(typeList, [TVar(a)]))
-  val nilCon = Con(TName(nameNull, nilTp), ConSingleton(nameTpList, DataAsList, zero, 0))
+  val nilCon = Con(TName(nil, nilTp), ConSingleton(nameTpList, DataAsList, zero, 0))
   val nil = TypeApp(nilCon, [tp])
   val consTp = TForAll([a], [], TFun([(name/nil, TVar(a)), (name/nil, TApp(typeList, [TVar(a)]))], typeTotal, TApp(typeList, [TVar(a)])))
   val consCon = Con(TName(nameCons, consTp), ConAsCons(nameTpList, DataAsList, value-repr-scan(2), name/nil, CtxNone, 2))
@@ -68,27 +68,27 @@ fun makeList(tp: ktype, exprs: list<expr>): expr
     App(TypeApp(consCon, [tp]), [e, xs])
   exprs.foldr(nil, cons)
 
-fun makeDef(nm: name, e: expr): pure def
+fun make-def(nm: name, e: expr): pure def
   Def(nm, type-of(e), e, Private, DefVal, InlineNever, null, "")
 
-fun makeTDef(TName(nm, tp): tName, e: expr): pure def
+fun make-tdef(TName(nm, tp): tName, e: expr): pure def
   Def(nm, tp, e, Private, DefVal, InlineNever, null, "")
 
-fun makeDefExpr(expr: expr)
-  makeDef(name/nil, expr)
+fun make-def-expr(expr: expr)
+  make-def(name/nil, expr)
 
-fun makeStats(l: list<expr>): pure expr
+fun make-stats(l: list<expr>): pure expr
   match l
-    Nil -> throw("core/core makeStats: no expression")
+    Nil -> throw("core/core make-stats: no expression")
     Cons(e, Nil) -> e
-    _ -> makeLet(l.init.map(fn(expr) DefNonRec(makeDef(name/nil, expr))), l.last.unjust)
+    _ -> make-let(l.init.map(fn(expr) DefNonRec(make-def(name/nil, expr))), l.last.unjust)
 
-fun makeDefsLet(defs0: list<def>, expr0: expr)
+fun make-defs-let(defs0: list<def>, expr0: expr)
   fun make(defs, e)
     match defs
       Nil -> e
-      Cons(d, rdefs) | e.isUnit && def-name(d:def) == name/nil && defExpr(d:def).isUnit -> make(rdefs, d.defExpr)
-      _ -> makeLet(defs.reverse.map(DefNonRec), e)
+      Cons(d, rdefs) | e.is-unit && def-name(d:def) == name/nil && defExpr(d:def).is-unit -> make(rdefs, d.defExpr)
+      _ -> make-let(defs.reverse.map(DefNonRec), e)
   make(defs0.reverse, expr0)
 
 //   This signifies that either a block
@@ -97,7 +97,7 @@ fun makeDefsLet(defs0: list<def>, expr0: expr)
 // let ru = if (is-unique(y)) { xUnique; &y } { xShared; xDecRef; NULL }
 // should be generated by reuse analysis after Parc.
 // If this remains in the source after Reuse Analyis an error will be thrown!
-fun makeDropSpecial(y: tName, xUnique: expr, xShared: expr, xDecRef: expr)
+fun make-drop-special(y: tName, xUnique: expr, xShared: expr, xDecRef: expr)
   val tp = TFun([y.type-of, xUnique.type-of, xShared.type-of, xDecRef.type-of].map(fn(t) (name/nil, t)), typeTotal, typeUnit)
   App(Var(TName(nameDropSpecial, tp), InfoExternal([])), [Var(y, InfoNone), xUnique, xShared, xDecRef])
 
@@ -160,16 +160,16 @@ fun external/vis(e: external)
     External(visibility=v) -> v
     _ -> Private
 
-pub fun externalImportLookup(t: target, b: buildType, key: string, e: external): maybe<string>
+pub fun external-import-lookup(t: target, b: buildType, key: string, e: external): maybe<string>
   match e
     ExternalImport(imports, _) ->
       val keys = match imports.find(fn(i) -> i.fst == t)
         Just(kv) -> kv.snd
         Nothing -> Nil
-      b.eimportLookup(key, keys)
+      b.eimport-lookup(key, keys)
     _ -> Nothing
 
-pub fun eimportLookup(b: buildType, s: string, ls: list<(string, string)>): maybe<string>
+pub fun eimport-lookup(b: buildType, s: string, ls: list<(string, string)>): maybe<string>
   val l = ls.find(fn(i) -> i.fst == s ++ "-" ++ b.show)
   match l
     Just(i) -> Just(i.snd)
@@ -178,7 +178,7 @@ pub fun eimportLookup(b: buildType, s: string, ls: list<(string, string)>): mayb
         Just(i) -> Just(i.snd)
         Nothing -> Nothing
 
-pub fun lookupTarget(t: target, ims: list<(target, a)>): maybe<a>
+pub fun lookup-target(t: target, ims: list<(target, a)>): maybe<a>
   val tgs = match t
     C(WasmJs) -> [t, C(Wasm), C(CDefault) ,DefaultTarget]
     C(WasmWeb) -> [t, C(Wasm), C(CDefault), DefaultTarget]
@@ -192,12 +192,12 @@ pub fun lookupTarget(t: target, ims: list<(target, a)>): maybe<a>
 
 type typeDef
   Synonym(i: synInfo) // name, synonym info, and the visibility
-  Data(info: dataInfo, isExtend: bool) //  name, info, visibility, and the visibilities of the constructors, the isExtend is true if this is an extension of the datatype.
+  Data(info: dataInfo) //  name, info, visibility, and the visibilities of the constructors, the isExtend is true if this is an extension of the datatype.
 
 fun td/show(t: typeDef): string
   match t
     Synonym(i) -> "Synonym(" ++ i.show ++ ")"
-    Data(i, b) -> "Data(" ++ i.show ++ "," ++ b.show ++ ")"
+    Data(i) -> "Data(" ++ i.show ++ ")"
 
 alias typeDefGroups = list<typeDefGroup>
 alias typeDefGroup = typeDefs
@@ -206,17 +206,17 @@ alias typeDefs = list<typeDef>
 pub fun td/name(t: typeDef): name
   match t
     Synonym(info) -> info.name
-    Data(info, _) -> info.name
+    Data(info) -> info.name
 
-pub fun td/isExtension(t: typeDef): bool
+pub fun td/is-extension(t: typeDef): bool
   match t
-    Data(_, True) -> True
+    Data(d) -> d.is-extend
     _ -> False
 
 pub fun td/vis(t: typeDef): visibility
   match t
     Synonym(info) -> vis(info)
-    Data(info, _) -> vis(info)
+    Data(info) -> vis(info)
 
 fun tdgs/flatten(tdgs:list<typeDefGroup>): list<typeDef>
   tdgs.concat()
@@ -282,13 +282,13 @@ fun tag(c: conRepr): exn int
     ConOpen(_) -> throw("core/core: tag: open constructor")
     ConNormal(tag=tag) -> tag
 
-fun updateCtxPath(c: conRepr, cp: ctxPath)
+fun update-ctx-path(c: conRepr, cp: ctxPath)
   match c
     ConSingle(n, r, v, _, t) -> ConSingle(n, r, v, cp, t)
     ConAsCons(n, r, v, a, _, t) -> ConAsCons(n, r, v, a, cp, t)
     ConOpen(n, r, v, _) -> ConOpen(n, r, v, cp)
     ConNormal(n, r, v, _, t) -> ConNormal(n, r, v, cp, t)
-    _ -> throw("core/core: updateCtxPath: not a constructor with a path")
+    _ -> throw("core/core: update-ctx-path: not a constructor with a path")
 
 fun conRepr/show(r: conRepr): string
   match r
@@ -312,10 +312,10 @@ fun ctxPath/show(p: ctxPath): string
     CtxField(name) -> "CtxField(" ++ name.show ++ ")"
 
 // Value data is not heap allocated and needs no header
-fun hasCtxPath(repr: conRepr): bool
-  repr.ctxPath.is-just
+fun has-ctx-path(repr: conRepr): bool
+  repr.ctx-path.is-just
 
-fun ctxPath(repr: conRepr): maybe<ctxPath>
+fun ctx-path(repr: conRepr): maybe<ctxPath>
   if repr.is-value then Nothing 
   else match repr
     ConSingle(ctxPath=cpath) -> Just(cpath)
@@ -324,13 +324,13 @@ fun ctxPath(repr: conRepr): maybe<ctxPath>
     ConOpen(ctxPath=cpath) -> Just(cpath)
     _ -> Nothing
 
-fun scanCount(repr: conRepr)
-  syntax/scanCount(repr.vrepr)
+fun scan-count(repr: conRepr)
+  scan-count(repr.vrepr)
 
-fun allocSize(c: conRepr, p: platform)
-  c.allocSizeScan(p).fst
+fun alloc-size(c: conRepr, p: platform)
+  c.alloc-size-scan(p).fst
 
-fun allocSizeScan(c: conRepr, p: platform): (int, int)
+fun alloc-size-scan(c: conRepr, p: platform): (int, int)
   val (sz, sc) = p.scan-size(c.vrepr)
   if c.is-value then (0, sc) else (sz, sc)
 
@@ -355,13 +355,13 @@ fun con/is-value(c: conRepr): bool
 fun data/is-value(d: dataInfo): bool
   d.def.is-value
 
-fun conRepr(d: dataInfo, c: conInfo)
-  val (_, creprs) = d.dataRepr(fn(d') d'.is-value)
+fun con-repr(d: dataInfo, c: conInfo)
+  val (_, creprs) = d.data-repr(is-value)
   match d.constrs.zip(creprs).filter(fn((a, _)) a.name == c.name).map(snd)
     [crepr] -> crepr
     _ -> throw("core/core: conRepr: constructor not in the datatype")
 
-fun dataRepr(i: dataInfo, is-val: (dataInfo) -> bool): exn (dataRepr, list<conRepr>)
+fun data-repr(i: dataInfo, is-val: (dataInfo) -> bool): exn (dataRepr, list<conRepr>)
   val typeName = i.name
   val conInfos = i.constrs
   val tags = list(0, conInfos.length - 1)
@@ -485,8 +485,8 @@ fun run-unique(start: int, f: () -> <uniquePhase|e> a): e a
   f() 
 
 effect corePhase
-  fun getCoreDefs(): defGroups
-  fun setCoreDefs(dgs: defGroups): ()
+  fun get-core-defs(): defGroups
+  fun set-core-defs(dgs: defGroups): ()
   fun phaseError(s: string): a
 
 fun new-unique(): <uniquePhase> int 
@@ -692,22 +692,22 @@ fun def/is-total(d: def): div bool
   d.defExpr.is-total
 
 fun has-total-effect(tp: ktype): bool
-  match tp.splitFunScheme
+  match tp.split-fun-scheme
     Nothing -> False
-    Just((_, _, _, eff, _)) -> eff.isTypeTotal
+    Just((_, _, _, eff, _)) -> eff.is-type-total
 
 fun isMonType(tp: ktype): pure bool
-  if tp.kind == kindEffect then tp.isMonEffect
-  else match tp.expandSyn
+  if tp.kind == kindEffect then tp.is-mon-effect
+  else match tp.expand-syn
     TForAll(_, _, t) -> t.isMonType
-    TFun(_, eff, _) -> eff.isMonEffect
+    TFun(_, eff, _) -> eff.is-mon-effect
     _ -> False
 
-fun isMonEffect(eff: ktype): pure bool
-  val (ls, tl) = eff.extractEffectExtend
-  !tl.isEffectEmpty || ls.any(fn(l) match l.getHandledEffect([]) {Just((ResumeMany, _)) -> True; _ -> False})
+fun is-mon-effect(eff: ktype): pure bool
+  val (ls, tl) = eff.extract-effect-extend
+  !tl.is-effect-empty || ls.any(fn(l) match l.get-handled-effect([]) {Just((ResumeMany, _)) -> True; _ -> False})
 
-fun isInlineable(d: def, max: int): div bool
+fun is-inlineable(d: def, max: int): div bool
   match d.kinline
     InlineAlways -> True
     InlineNever -> False
@@ -716,10 +716,10 @@ fun isInlineable(d: def, max: int): div bool
 val costInf = 1000
 
 fun def/cost(d: def): div int
-  val n = d.costLocal
+  val n = d.cost-local
   if d.is-val then if n == 0 then 0 else costInf else n
 
-fun costLocal(d: def): div int
+fun cost-local(d: def): div int
   d.defExpr.cost
 
 fun dg/cost(dg: defGroup): div int
@@ -795,56 +795,56 @@ fun tnames(l: list<tName>): linearSet<tName>
 fun cmp(t1: tName, t2: tName): order
   name/name/cmp(t1.get-name, t2.get-name)
 
-fun makeLet(defs: list<defGroup>, expr: expr): expr
+fun make-let(defs: list<defGroup>, expr: expr): expr
   match defs
     Nil -> expr
     _ -> match expr
       Let(defs', body) -> Let(defs ++ defs', body)
       _ -> Let(defs, expr)
 
-fun makeTypeApp(e: expr, l: list<ktype>): expr
+fun make-type-app(e: expr, l: list<ktype>): expr
   match l
     Nil -> e
     _ -> match e
       TypeApp(e1, l') -> TypeApp(e1, l ++ l')
       _ -> TypeApp(e, l)
 
-fun addApps(l: list<expr>, e: expr)
+fun add-apps(l: list<expr>, e: expr)
   match l
     Nil -> e
     _ -> match e
       App(e1, l') -> App(e1, l ++ l')
       _ -> App(e, l)
 
-fun addTypeApps(l: list<typeVar>, e: expr)
+fun add-type-apps(l: list<typeVar>, e: expr)
   match l
     Nil -> e
     _ -> match e
       TypeApp(e', l') -> TypeApp(e', l' ++ l.map(TVar))
       _ -> TypeApp(e, l.map(TVar))
 
-fun addTypeLambdas(l: list<typeVar>, e: expr)
+fun add-type-lambdas(l: list<typeVar>, e: expr)
   match l
     Nil -> e
     _ -> match e
       TypeLam(l', e') -> TypeLam(l ++ l', e')
       _ -> TypeLam(l, e)
 
-fun list2/addLambdas(l: list<(name, ktype)>, effT: ktype, e: expr)
+fun list2/add-lambdas(l: list<(name, ktype)>, effT: ktype, e: expr)
   match l
     Nil -> e
     _ -> match e
       Lam(l', _, e') -> Lam(l.map(fn((n, t)) TName(n, t)) ++ l', effT, e')
       _ -> Lam(l.map(fn((n, t)) TName(n, t)), effT, e)
 
-fun list/addLambdas(l: list<tName>, effT: ktype, e: expr)
+fun list/add-lambdas(l: list<tName>, effT: ktype, e: expr)
   match l
     Nil -> e
     _ -> match e
       Lam(l', _, e') -> Lam(l ++ l', effT, e')
       _ -> Lam(l, effT, e)
 
-fun addNonRec(x: name, tp: ktype, e: expr, e': expr)
+fun add-non-rec(x: name, tp: ktype, e: expr, e': expr)
   Let([DefNonRec(Def(x, tp, e, Private, if e.is-value then DefVal else DefFun([]), InlineAuto, null, ""))], e')
 
 fun is-value(e: expr): bool
@@ -853,24 +853,24 @@ fun is-value(e: expr): bool
     Lam -> False
     _ -> True
 
-fun addCoreDef(c: core, d: def): core
+fun add-core-def(c: core, d: def): core
   c(defs = c.defs ++ [DefNonRec(d)])
 
-fun coreNull(n: name)
+fun core/null(n: name)
   Core(n)
 
-fun freshName(pfx: string)
+fun fresh-name(pfx: string)
   new-name(pfx ++ "." ++ get-unique().int/show)
 
-fun hasNoEffect(e: expr)
+fun has-no-effect(e: expr)
   match e
-    TypeApp(e) -> e.hasNoEffect
+    TypeApp(e) -> e.has-no-effect
     ELit -> True
     Con -> True
     _ -> False
 
-fun openEffect(effFrom: keffect, effTo: keffect, tpFrom: ktype, tpTo: ktype, expr: expr)
-  if expr.hasNoEffect then expr
+fun open-effect(effFrom: keffect, effTo: keffect, tpFrom: ktype, tpTo: ktype, expr: expr)
+  if expr.has-no-effect then expr
   else
     val a = TypeVar(-1, kindStar, Bound)
     val b = TypeVar(-2, kindStar, Bound)
@@ -880,17 +880,17 @@ fun openEffect(effFrom: keffect, effTo: keffect, tpFrom: ktype, tpTo: ktype, exp
     val varOpen = Var(TName(nameEffectOpen, tpOpen), InfoExternal([(DefaultTarget, "#1")]))
     App(TypeApp(varOpen, [effFrom, effTo, tpFrom, tpTo]), [expr])
 
-fun makeInt32(i: int): expr
+fun make-int32(i: int): expr
   val int32 = Var(TName(nameInt32, TFun([(nil, typeInt)], typeTotal, typeInt32)), InfoArity(1, 0))
   App(int32, [ELit(LitInt(i))])
 
-fun makeEvIndex(i: int)
-  if i < 0 then throw("core/core makeEvIndex: size_t < 0 " ++ i.int/show)
+fun make-ev-index(i: int)
+  if i < 0 then throw("core/core make-ev-index: size_t < 0 " ++ i.int/show)
   val sizet = Var(TName(nameSSizeT, TFun([(nil, typeInt)], typeTotal, typeEvIndex)), InfoArity(1, 0))
   App(sizet, [ELit(LitInt(i))])
 
-fun makeSizeT(i: int)
-  if i < 0 then throw("core/core makeSizeT: size_t < 0 " ++ i.int/show)
+fun make-sizet(i: int)
+  if i < 0 then throw("core/core make-sizet: size_t < 0 " ++ i.int/show)
   val sizet = Var(TName(nameSSizeT, TFun([(nil, typeInt)], typeTotal, typeSSizeT)), InfoArity(1, 0))
   App(sizet, [ELit(LitInt(i))])
 
@@ -905,7 +905,7 @@ fun expr/type-of(expr: expr): pure ktype
     Lam(pars, eff, expr) -> TFun(pars.map(fn((TName(name, tp))) (name, tp)), eff, expr.type-of)
     Var(tn) -> type-of(tn)
     Con(tn) -> type-of(tn)
-    App(f, args) -> match f.type-of.splitFunScheme
+    App(f, args) -> match f.type-of.split-fun-scheme
       Just((_, _, targs, eff, tres)) 
         | args.length == targs.length || targs.length == 0 -> tres
         | args.length > targs.length -> type-of(App(Var(TName("tmp".new-name, tres), InfoNone), args.drop(targs.length)))
@@ -914,7 +914,7 @@ fun expr/type-of(expr: expr): pure ktype
     TypeLam(xs, e) -> TForAll(xs, [], e.type-of)
     TypeApp(e, []) -> e.type-of
     // TypeApp(expr, tps) ->
-    //   val (tvs, tp1) = expr.type-of.splitTForall
+    //   val (tvs, tp1) = expr.type-of.split-tforall
     //   tvs.zip(tps).subNew(tp1)
     ELit(l) -> l.type-of
     Let(_, e) -> e.type-of
@@ -935,30 +935,30 @@ fun lit/type-of(l: lit): ktype
     LitChar(_) -> typeChar
     LitString(_) -> typeString
 
-fun externals/extractSignatures(es: externals): list<ktype>
+fun externals/extract-signatures(es: externals): list<ktype>
   match es
-    Cons(External(visibility=Public, typeScheme=t), rst) -> Cons(t, extractSignatures(rst))
-    Cons(_, rst) -> extractSignatures(rst)
+    Cons(External(visibility=Public, typeScheme=t), rst) -> Cons(t, extract-signatures(rst))
+    Cons(_, rst) -> extract-signatures(rst)
     Nil -> Nil
 
-fun dgs/extractSignatures(d: defGroups): list<ktype>
+fun dgs/extract-signatures(d: defGroups): list<ktype>
   d.flatten.map(fn(d') d'.ktype)
 
-fun core/extractSignatures(c: core): list<ktype>
-  extractSignatures(c.externals) ++ extractSignatures(c.defs)
+fun core/extract-signatures(c: core): list<ktype>
+  extract-signatures(c.externals) ++ extract-signatures(c.defs)
 
-fun splitFun(tp: ktype): <exn> (list<(name, ktype)>, ktype)
-  match tp.expandSyn
+fun split-fun(tp: ktype): <exn> (list<(name, ktype)>, ktype)
+  match tp.expand-syn
     TFun(args, _, res) -> (args, res)
-    _ -> throw("core/core splitFun: expected function type")
+    _ -> throw("core/core split-fun: expected function type")
 
-fun splitTForAll(tp: ktype): <exn> (list<typeVar>, ktype)
-  match tp.expandSyn
+fun split-tforall(tp: ktype): <exn> (list<typeVar>, ktype)
+  match tp.expand-syn
     TForAll(tvs, _, t) -> (tvs, t)
-    _ -> throw("core/core splitTForAll: expected forall type")
+    _ -> throw("core/core split-tforall: expected forall type")
 
 alias deps = linearSet<name>
-fun depsUnions(l: list<deps>): deps
+fun deps/unions(l: list<deps>): deps
   l.foldl(LinearSet([]), fn(s: deps, a: deps) s + a)
 fun tname/dep(t: tName): deps
   dep(t.get-name)
@@ -966,53 +966,53 @@ fun name/dep(n: name): deps
   if n.is-qualified then LinearSet([n.qualifier]) else LinearSet([])
 
 fun idefscore/deps(l: list<inlineDef>, c: core): div deps
-  depsUnions(l.map(fn(i) i.expr.dep)) + c.deps
+  unions(l.map(fn(i) i.expr.dep)) + c.deps
 
 fun idefs/deps(l: list<inlineDef>): div deps
-  depsUnions(l.map(fn(i) i.expr.dep))
+  unions(l.map(fn(i) i.expr.dep))
 
 fun core/deps(c: core): div deps
-  val x0 : deps = depsUnions(c.defs.flatten.map(dep)) + depsUnions(c.typeDefs.flatten.map(dep))
+  val x0 : deps = unions(c.defs.flatten.map(dep)) + unions(c.typeDefs.flatten.map(dep))
   val x1 : deps = LinearSet(c.imports.filter(fn(i) i.visibility.is-public).map(importName))
   x0 + x1 - c.coreName
 
 fun td/dep(td: typeDef): div deps
   match td
     Synonym(info) -> info.t.dep
-    Data(info) -> depsUnions(info.constrs.map(fn(c) c.typeScheme.dep))
+    Data(info) -> unions(info.constrs.map(fn(c) c.typeScheme.dep))
 
 fun ktype/dep(t: ktype): div deps
   match t
     TForAll(_, _, rho) -> rho.dep
-    TFun(args, eff, res) -> depsUnions(Cons(eff.dep, args.map(fn((_, t')) t'.dep))) + res.dep
+    TFun(args, eff, res) -> unions(Cons(eff.dep, args.map(fn((_, t')) t'.dep))) + res.dep
     TCon(tc) -> tc.name.dep
     TVar -> LinearSet([])
-    TApp(tp, tps) -> tp.dep + depsUnions(tps.map(dep))
-    TSyn(_, args, tp) -> tp.dep + depsUnions(args.map(dep))
+    TApp(tp, tps) -> tp.dep + unions(tps.map(dep))
+    TSyn(_, args, tp) -> tp.dep + unions(args.map(dep))
 
 fun def/dep(d: def): div deps
-  depsUnions([d.ktype.dep, d.defExpr.dep])
+  unions([d.ktype.dep, d.defExpr.dep])
 
 fun expr/dep(e: expr): div deps
   match e
     Var(tn) -> tn.dep
     Lam(_, eff, body) -> eff.dep + body.dep
-    App(e, args) -> depsUnions(Cons(e.dep, args.map(dep)))
+    App(e, args) -> unions(Cons(e.dep, args.map(dep)))
     TypeLam(_, body) -> body.dep
-    TypeApp(e, tps) -> e.dep + depsUnions(tps.map(dep))
+    TypeApp(e, tps) -> e.dep + unions(tps.map(dep))
     Con(tn) -> tn.dep
     ELit(_) -> LinearSet([])
-    Let(defs, body) -> depsUnions(Cons(body.dep, defs.flatten.map(dep)))
-    Case(exprs, branches) -> depsUnions(exprs.map(dep) ++ branches.map(dep))
+    Let(defs, body) -> unions(Cons(body.dep, defs.flatten.map(dep)))
+    Case(exprs, branches) -> unions(exprs.map(dep) ++ branches.map(dep))
 
 fun branch/dep(b: branch): div deps
-  depsUnions(b.patterns.map(dep)) + depsUnions(b.guards.map(dep))
+  unions(b.patterns.map(dep)) + unions(b.guards.map(dep))
 
 fun guard/dep(g: guard): div deps
   g.body.dep
 
 fun pattern/dep(p: pattern): div deps
   match p
-    PatCon(tn, pats) -> tn.dep + depsUnions(pats.map(dep))
+    PatCon(tn, pats) -> tn.dep + unions(pats.map(dep))
     PatVar(_, p) -> p.dep
     _ -> LinearSet([])

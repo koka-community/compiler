@@ -9,19 +9,19 @@ import std/core/undiv
 
 alias prettyKindEff = <pure, comp-flags, colorSchemeEffect>
 
-fun kindColon()
+fun kind-colon()
   ":".text.color(colors.colorSep)
 
 // Generate nice quantifier names
-fun niceKinds(kinds: list<kind>): prettyKindEff list<doc>
-  kinds.map(fn(k) k.ppKind(precTop))
+fun nice-kinds(kinds: list<kind>): prettyKindEff list<doc>
+  kinds.map(fn(k) k.pp-kind(precTop))
 
-fun prettyKind(k: kind): prettyKindEff doc
-  k.ppKind(precTop)
+fun pretty-kind(k: kind): prettyKindEff doc
+  k.pp-kind(precTop)
 
 // Show
 fun pretty(k: kind)
-  k.ppKind(precTop)
+  k.pp-kind(precTop)
 
 // precedence
 alias prec = int
@@ -35,32 +35,32 @@ fun pparens(d: doc, contextPrec: prec, prec: prec)
   if contextPrec > prec then d.parens
   else d
 
-fun commaParens(xs, f)
+fun comma-parens(xs, f)
   xs.map(f).tupled
 
-fun collectFunArgs(k: kind)
+fun collect-funargs(k: kind)
   match k
     KApp(KApp(KCon(name), k1), k2) | name == "->".new-name ->
-      Cons(k1, k2.pretend-decreasing.collectFunArgs)
+      Cons(k1, k2.pretend-decreasing.collect-funargs)
     _ -> [k]
 
-fun ppKind(k: kind, prec: prec)
+fun pp-kind(k: kind, prec: prec)
   val nm = match k
     KCon(n) -> name/pretty(n)
     KApp(KApp(KCon(name), k1), k2) | name == "->".new-name ->
-      val x = match k2.collectFunArgs
+      val x = match k2.collect-funargs
         [res] -> 
-          k1.ppKind(precArrow) |+| 
-          res.ppKind(precArrow - 1)
+          k1.pp-kind(precArrow) |+| 
+          res.pp-kind(precArrow - 1)
         args -> 
-          Cons(k1, args.init).commaParens(fn(k') k'.ppKind(precTop)) |+| 
-          "->".text |+| args.last.unjust.ppKind(precArrow - 1)
+          Cons(k1, args.init).comma-parens(fn(k') k'.pp-kind(precTop)) |+| 
+          "->".text |+| args.last.unjust.pp-kind(precArrow - 1)
       x.pparens(prec, precArrow)
     KApp ->
-      val x = match k.collectFunArgs
+      val x = match k.collect-funargs
         Cons(k', ks) -> 
-          k'.ppKind(precApp - 1) |.| 
-          ks.commaParens(fn(x) x.ppKind(precTop))
-        _ -> fail("kind/pretty ppKind.KApp: match failure")
+          k'.pp-kind(precApp - 1) |.| 
+          ks.comma-parens(fn(x) x.pp-kind(precTop))
+        _ -> fail("kind/pretty pp-kind.KApp: match failure")
       x.pparens(prec, precApp)
   nm.color(colors.colorKind)

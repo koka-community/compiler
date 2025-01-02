@@ -16,7 +16,7 @@ value type kexpr
 fun unreturn()
   with handler
     val currentEff = Nothing
-  setCoreDefs(urTopDefGroups(getCoreDefs()))
+  set-core-defs(urTopDefGroups(get-core-defs()))
 
 fun urTopDefGroups(defGroups: list<defGroup>): ureff list<defGroup>
   defGroups.map(urTopDefGroup)
@@ -27,10 +27,10 @@ fun urTopDefGroup(dg: defGroup)
     DefNonRec(d) -> DefNonRec(urTopDef(d))
 
 fun urTopDef(d: def): ureff def
-  val (makeDef, kexpr) = d.urDef
+  val (make-def, kexpr) = d.urDef
   match kexpr
-    U(e) -> makeDef(e)
-    I(e) -> makeDef(e)
+    U(e) -> make-def(e)
+    I(e) -> make-def(e)
     _ -> fail("core/unreturn urTopDef: should not happen: return inside top level definition")
 
 effect ur
@@ -111,7 +111,7 @@ fun urLet(org: expr, defgroups: list<defGroup>, kbody: kexpr): ureff kexpr
         kdefgs.fold(Nothing.bind(combine, kdefexpr, kexpr))
   val kdefgs = defgroups.map(urLetDefGroup)
   if kdefgs.all(is-unchanged) then
-    Just(org).emapK(fn(e) makeLet(defgroups, e), kbody)
+    Just(org).emapK(fn(e) make-let(defgroups, e), kbody)
   else kdefgs.reverse.fold(kbody)
 
 fun urCase(org: expr, scruts: list<expr>, branches: list<branch>): <div,exn,uniquePhase,ur,comp-flags,corePhase> kexpr

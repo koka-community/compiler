@@ -4,14 +4,14 @@ import compiler/common/name
 import compiler/common/name-prim
 import std/core/undiv
 
-fun effectIsAffine(eff: keffect)
-  val (labs, tl) = eff.extractOrderedEffect
-  tl.isEffectEmpty && labs.all(labelIsAffine)
+fun effect-is-affine(eff: keffect)
+  val (labs, tl) = eff.extract-ordered-effect
+  tl.is-effect-empty && labs.all(label-is-affine)
 
-fun labelIsLinear(eff: keffect)
-  match eff.expandSyn
-    TApp(TCon(tc), [_]) | tc.name == nameTpHandled1 -> True
-    TApp(TCon(tc), [_]) | !(tc.name == nameTpHandled) ->
+fun label-is-linear(eff: keffect)
+  match eff.expand-syn
+    TApp(TCon(tc), [_]) | tc.name == nameTpHandled1 || tc.name == nameTpNHandled1 -> True
+    TApp(TCon(tc), [_]) | !(tc.name == nameTpHandled) && !(tc.name == nameTpNHandled) ->
       val k = eff.kind // Allow alloc<global> etc
       k == kindLabel || k == kindEffect
     TCon(tc as TypeCon(_)) -> 
@@ -19,50 +19,68 @@ fun labelIsLinear(eff: keffect)
       k == kindLabel || k == kindEffect
     _ -> False
 
-fun labelIsAffine(eff: keffect): exn bool
-  match eff.expandSyn
-    TApp(TCon(tc), [_]) | tc.name == nameTpHandled1 -> True
+fun label-is-affine(eff: keffect): exn bool
+  match eff.expand-syn
+    TApp(TCon(tc), [_]) | tc.name == nameTpHandled1 || tc.name == nameTpNHandled1 -> True
     // Allow exn
     TApp(TCon(tc), [TCon(tcx)]) | tc.name == nameTpHandled && tcx.name == nameTpPartial -> True
-    TApp(TCon(tc), [_]) | !(tc.name == nameTpHandled) ->
+    TApp(TCon(tc), [_]) | !(tc.name == nameTpHandled) && !(tc.name == nameTpNHandled) ->
       val k = eff.kind // Allow alloc<global> etc
       k == kindLabel || k == kindEffect
     TCon -> True // Builtin effects
     _ -> False
 
-fun extractHandledEffect(eff: ktype): pure (list<ktype>, tau)
-  val (ls, tl) = eff.extractOrderedEffect
-  (ls.filter(isHandledEffect), tl)
+// has effects that are reflected in the evidence vector
+fun contains-handled-effect(exclude: list<name>, eff: keffect): pure bool
+  // val (ls,_) = eff.extract-effect-extend
+  // ls.any(fn(e) e.get-handled-effect(exclude).is-just)
+  !eff.extract-handled-effect.fst.is-empty
 
-fun handledToLabel(e: ktype): exn ktype
+// Get the effects that are reflected in the evidence vector
+fun extract-handled-effect(eff: ktype): pure (list<ktype>, tau)
+  val (ls, tl) = eff.extract-ordered-effect
+  (ls.filter(is-handled-effect), tl)
+
+// Is an effect reflected in the evidence vector?
+fun is-handled-effect(tp: ktype)
+  match tp.expand-syn
+    // not named effects since these are not int he evidence vector
+    TApp(TCon(TypeCon(name)), [_]) -> name == nameTpHandled || name == nameTpHandled1
+    _ -> False
+
+fun handled-to-label(e: ktype): exn ktype
   if e.kind == kindHandled1 then TApp(tconHandled1, [e]) else TApp(tconHandled, [e])
-
-fun containsHandledEffect(exclude: list<name>, eff: keffect): pure bool
-  val (ls,_) = eff.extractEffectExtend
-  ls.any(fn(e) e.getHandledEffect(exclude).is-just)
 
 type handledSort
   ResumeOnce
   ResumeMany
 
-fun isHandledEffect(tp: ktype)
-  match tp.expandSyn
-    TApp(TCon(TypeCon(name)), [_]) -> name == nameTpHandled || name == nameTpHandled1
-    _ -> False
+// What effect does an operatoin have? Used for monadic translation.
+// Note: this includes named effects even though these are not in the evidence vector.
+fun get-operation-effect(tp: ktype): pure maybe<(handledSort, name)>
+  get-operation-effectx(tp, [])
 
-fun getHandledEffect(tp: ktype, exclude: list<name>): pure maybe<(handledSort, name)>
-  match tp.expandSyn
+fun get-operation-effectx(tp: ktype, exclude: list<name>): pure maybe<(handledSort, name)>
+  match tp.expand-syn
     TApp(TCon(TypeCon(name)), [t])
-      | name == nameTpHandled -> getHandledEffect(t, exclude)
-      | name == nameTpHandled1 -> getHandledEffect(t, exclude)
-    TApp(TCon(TypeCon(hxName)))
-      -> if tp.kind == kindHandled && exclude.find(fn(t) t == hxName).is-nothing then Just((ResumeMany, hxName))
-         elif tp.kind == kindHandled1 && exclude.find(fn(t) t == hxName).is-nothing then Just((ResumeOnce, hxName))
-         elif hxName == nameTpScope && exclude.find(fn(t) t == hxName).is-nothing then Just((ResumeMany, hxName))
-         else Nothing
-    TCon(TypeCon(hxName, kind))
-      | kind == kindHandled && exclude.find(fn(t) t == hxName).is-nothing -> Just((ResumeMany, hxName))
-      | kind == kindHandled1 && exclude.find(fn(t) t == hxName).is-nothing -> Just((ResumeOnce, hxName))
+      | name == nameTpHandled || name == nameTpNHandled -> get-operation-effect-of(ResumeMany, exclude, t)
+      | name == nameTpHandled1 || name == nameTpNHandled1 -> get-operation-effect-of(ResumeOnce, exclude, t)
+    // TApp(TCon(TypeCon(hxName)))
+    //   -> if tp.kind == kindHandled && exclude.find(fn(t) t == hxName).is-nothing then Just((ResumeMany, hxName))
+    //      elif tp.kind == kindHandled1 && exclude.find(fn(t) t == hxName).is-nothing then Just((ResumeOnce, hxName))
+    //      elif hxName == nameTpScope && exclude.find(fn(t) t == hxName).is-nothing then Just((ResumeMany, hxName))
+    //      else Nothing
+    // TCon(TypeCon(hxName, kind))
+    //   | kind == kindHandled && exclude.find(fn(t) t == hxName).is-nothing -> Just((ResumeMany, hxName))
+    //   | kind == kindHandled1 && exclude.find(fn(t) t == hxName).is-nothing -> Just((ResumeOnce, hxName))
+    _ -> Nothing
+
+fun get-operation-effect-of(hsort: handledSort, exclude: list<name>, tp: ktype)
+  match tp.expand-syn
+    TCon(TypeCon(hxName)) -> 
+      if !exclude.any(fn(h) h == hxName) then Just((hsort, hxName)) else Nothing
+    TApp(TCon(TypeCon(hxName))) ->
+      if !exclude.any(fn(h) h == hxName) then Just((hsort, hxName)) else Nothing
     _ -> Nothing
 
 fun kind(tp: ktype): exn kind
@@ -71,13 +89,13 @@ fun kind(tp: ktype): exn kind
     TFun -> kindStar
     TVar(v) -> v.kind
     TCon(c) -> c.kind
-    TSyn(syn, xs) -> kindApply(xs, syn.kind)
-    TApp(tp, args) -> kindApply(args, tp.kind)
+    TSyn(syn, xs) -> kind-apply(xs, syn.kind)
+    TApp(tp, args) -> kind-apply(args, tp.kind)
 
-fun kindApply(tps: list<ktype>, k: kind): exn kind
+fun kind-apply(tps: list<ktype>, k: kind): exn kind
   match (tps, k)
     ([], _) -> k
-    (Cons(_, rest), KApp(KApp, k2)) -> kindApply(rest.pretend-decreasing, k2)
-    _ -> throw("type/kind kindApply: illegal kind in application")
+    (Cons(_, rest), KApp(KApp, k2)) -> kind-apply(rest.pretend-decreasing, k2)
+    _ -> throw("type/kind kind-apply: illegal kind in application")
 
   

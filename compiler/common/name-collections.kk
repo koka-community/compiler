@@ -94,7 +94,8 @@ fun qname-map/safe-combine(s: string, xs: list<(name,a)>, ys: list<(name,a)>): <
   xs ++ ys
 
 fun test-name-collections()
-  basic/test("Qualified Name Map")
-    val qname1 = "hello/world".read-qualified-name
-    expect(Found((qname1, 0))) fn()
-      single(qname1, 0).lookup("".new-name, "world".new-name)
+  group("Name collections")
+    test("Qualified Name Map")
+      val qname1 = "hello/world".read-qualified-name
+      expect(Found((qname1, 0))) fn()
+        single(qname1, 0).lookup("".new-name, "world".new-name)

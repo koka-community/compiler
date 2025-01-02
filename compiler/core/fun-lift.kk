@@ -14,34 +14,34 @@ import compiler/core/corevar
 import compiler/platform/config
 import std/data/linearset
 
-fun liftFunctions()
-  with handleFunLift()
-  setCoreDefs(liftDefGroups(getCoreDefs(), True))
+fun lift-functions()
+  with handle-fun-lift()
+  set-core-defs(lift-def-groups(get-core-defs(), True))
 
 effect funLiftEffect
-  fun emitLifted(dg: defGroup): ()
-  fun emitLifteds(dgs: defGroups): ()
-  fun collectLifted(): defGroups
+  fun emit-lifted(dg: defGroup): ()
+  fun emit-lifteds(dgs: defGroups): ()
+  fun collect-lifted(): defGroups
 
 effect currentDefEffect
   val currentDef: list<def>
 
 alias liftDefEff = <funLiftEffect, currentDefEffect, pure, uniquePhase, comp-flags>
 
-fun currentDefNames()
+fun current-def-names()
   currentDef.map(fn(d) d.def-name)
 
-fun setCurrentDef(d: def, f)
+fun set-current-def(d: def, f)
   with override
     val currentDef = [d] ++ currentDef
   f()
 
-fun handleFunLift(f)
+fun handle-fun-lift(f)
   var lifted := []
   with handler
-    fun emitLifted(dg) lifted := Cons(dg, lifted)
-    fun emitLifteds(dgs) lifted := dgs ++ lifted
-    fun collectLifted() 
+    fun emit-lifted(dg) lifted := Cons(dg, lifted)
+    fun emit-lifteds(dgs) lifted := dgs ++ lifted
+    fun collect-lifted() 
       val l = lifted
       lifted := []
       l
@@ -50,14 +50,14 @@ fun handleFunLift(f)
   f()
 
 // Transform definition groups
-fun liftDefGroups(defgs: defGroups, topLevel: bool): liftDefEff defGroups
-  defgs.map(fn(x) liftDefGroup(x, topLevel)).concat
+fun lift-def-groups(defgs: defGroups, topLevel: bool): liftDefEff defGroups
+  defgs.map(fn(x) lift-defgroup(x, topLevel)).concat
 
-fun substWithLiftedExpr(d: def, subst)
+fun subst-with-lifted-expr(d: def, subst)
   val body = match d.defExpr
-    TypeLam(tpars, Lam(pars, eff, lbody)) -> TypeLam(tpars, Lam(pars, eff, subst |-> lbody))
+    TypeLam(tpars, Lam(pars, eff, lbody)) -> TypeLam(tpars, Lam(pars, eff, corevar/expr/(|->)(subst, lbody)))
     Lam(pars, eff, lbody) -> Lam(pars, eff, subst |-> lbody)
-    e -> fail("core/fun-lift liftDefGroup: expected lambda, got " ++ e.show)
+    e -> fail("core/fun-lift lift-defgroup: expected lambda, got " ++ e.show)
   // Note here we only want to skip the substitution for fvs and tvs,
   // but we have skipped more than necessary, i.e.,
   // the part of those tpars and pars that are not in fvs and tvs.
@@ -65,95 +65,95 @@ fun substWithLiftedExpr(d: def, subst)
   // and we have ensured that fvs/pars and tvs/tpars are always unique (see type/infer)
   d(defExpr = body)
 
-fun liftDefGroup(defg: defGroup, topLevel: bool)
+fun lift-defgroup(defg: defGroup, topLevel: bool)
   if topLevel then
     match defg
       DefNonRec(d) ->
-        val d' = d.liftDef(True)
+        val d' = d.lift-def(True)
         // all lifteddefinitions are put before the current definition
-        collectLifted() ++ [DefNonRec(d')] 
+        collect-lifted() ++ [DefNonRec(d')] 
       DefRec(defs) ->
-        val defs' = defs.map(fn(d) d.liftDef(True))
-        val lifted = collectLifted()
+        val defs' = defs.map(fn(d) d.lift-def(True))
+        val lifted = collect-lifted()
         // defs' depend on the lifted, but the lifted might depend on defs'
         // we could do a topological sort here (as in static/binding-groups) but for simplicity
         // we approximate here for now
         // Note that it can be important to have precise DefRec groups for other optimizations, like TMRC (compiler/core/ctail)
         val dnames = defs'.defsTNames
-        val (gnonrecs, grecs) = lifted.partition(fn(dg) dg.freeVars.intersection(tnamesEmpty + dnames).is-empty)
+        val (gnonrecs, grecs) = lifted.partition(fn(dg) dg.free-vars.intersection(tnames/empty + dnames).is-empty)
         (gnonrecs ++ [DefRec(grecs.flatten ++ defs')])
   else
     match defg
-      DefNonRec(d) -> [DefNonRec(d.liftDef(False))]
+      DefNonRec(d) -> [DefNonRec(d.lift-def(False))]
       DefRec(defs) ->
         val pinfoss = defs.map(paramInfos)
         val exprDocs = defs.map(fn(d) (d.defExpr, d.doc))
         val exprs = defs.map(fn(d) d.defExpr)
         val names = defs.map(defTName)
-        val fvs = exprs.map(freeLocals).unions - names
+        val fvs = exprs.map(free-locals).unions - names
         val tvs = exprs.map(free-type-vars).unions
-        val (callExprs, liftedDefs0) = pinfoss.zip(names.zip(exprDocs)).map(fn((infos, (name, doc))) makeDef(fvs.list, tvs.list, infos, name, doc)).unzip
+        val (callExprs, liftedDefs0) = pinfoss.zip(names.zip(exprDocs)).map(fn((infos, (name, doc))) make-def(fvs.list, tvs.list, infos, name, doc)).unzip
         val subst = names.zip(callExprs)
-        val liftedDefs = liftedDefs0.map(fn(d) d.substWithLiftedExpr(subst))
-        val groups = DefRec(liftedDefs).liftDefGroup(True) // lift all recs to top-level
-        emitLifteds(groups)
-        val defs' = defs.zipwith(callExprs, fn(d, c) d(defExpr = c, sort=d.sort.liftSort(False)))
+        val liftedDefs = liftedDefs0.map(fn(d) d.subst-with-lifted-expr(subst))
+        val groups = DefRec(liftedDefs).lift-defgroup(True) // lift all recs to top-level
+        emit-lifteds(groups)
+        val defs' = defs.zipwith(callExprs, fn(d, c) d(defExpr = c, sort=d.sort.lift-sort(False)))
         defs'.map(DefNonRec) // change a DefRec to all DefNonRecs
 
-fun liftDef(d: def, topLevel: bool)
-  with setCurrentDef(d)
-  val expr' = d.defExpr.liftExpr(topLevel)
-  d(defExpr=expr', sort=d.sort.liftSort(topLevel))
+fun lift-def(d: def, topLevel: bool)
+  with set-current-def(d)
+  val expr' = d.defExpr.lift-expr(topLevel)
+  d(defExpr=expr', sort=d.sort.lift-sort(topLevel))
 
-fun liftSort(s: defSort, b: bool)
+fun lift-sort(s: defSort, b: bool)
   match (s, b)
     (DefFun, False) -> DefVal
     _ -> s
 
-fun liftExpr(ex: expr, topLevel: bool)
+fun lift-expr(ex: expr, topLevel: bool)
   match ex
-    App(f, args) -> App(f.liftExpr(False), args.map(fn(a) a.liftExpr(False)))
+    App(f, args) -> App(f.lift-expr(False), args.map(fn(a) a.lift-expr(False)))
     Lam(args, eff, body) -> // don't lift anonymous functions
-      Lam(args, eff, body.liftExpr(False))
+      Lam(args, eff, body.lift-expr(False))
     Let(defgs, body) ->
-      Let(defgs.liftDefGroups(False), body.liftExpr(False))
-    Case(exprs, bs) -> Case(exprs.map(fn(e) e.liftExpr(False)), bs.map(liftBranch))
-    TypeLam(tvars, body) -> TypeLam(tvars, body.liftExpr(topLevel))
-    TypeApp(body, targs) -> TypeApp(body.liftExpr(topLevel), targs)
+      Let(defgs.lift-def-groups(False), body.lift-expr(False))
+    Case(exprs, bs) -> Case(exprs.map(fn(e) e.lift-expr(False)), bs.map(liftBranch))
+    TypeLam(tvars, body) -> TypeLam(tvars, body.lift-expr(topLevel))
+    TypeApp(body, targs) -> TypeApp(body.lift-expr(topLevel), targs)
     _ -> ex
 
 fun liftBranch(Branch(pat, guards): branch)
   Branch(pat, guards.map(liftGuard))
 
 fun liftGuard(Guard(test, expr): guard)
-  Guard(test.liftExpr(False), expr.liftExpr(False))
+  Guard(test.lift-expr(False), expr.lift-expr(False))
 
-fun makeDef(fvs: list<tName>, tvs: list<typeVar>, pinfos: list<paramInfo>, origName: tName, (expr, doc): (expr, string))
-  val dnames = currentDefNames()
-  val (name, inl) = uniqueNameCurrentDef()
+fun make-def(fvs: list<tName>, tvs: list<typeVar>, pinfos: list<paramInfo>, origName: tName, (expr, doc): (expr, string))
+  val dnames = current-def-names()
+  val (name, inl) = unique-name-current-def()
   fun unwild(TName(nm, tp): tName)
     TName(if nm.nameStem.head-char.unjust == '_' then prepend("wild", name) else name, tp) 
   val (tpars, pars, eff, body) = match expr
     TypeLam(tpars, Lam(pars, eff, lbody)) -> (tpars, pars.map(unwild), eff, lbody)
     Lam(pars, eff, lbody) -> ([], pars.map(unwild), eff, lbody)
-    _ -> fail("core/fun-lift makeDef: expected lambda, got " ++ expr.show)
+    _ -> fail("core/fun-lift make-def: expected lambda, got " ++ expr.show)
   val alltpars = tvs ++ tpars
   val allpars = fvs ++ pars
   val allargs = allpars.map(fn(t) Var(t, InfoNone))
   val allpinfos = fvs.map(fn(_) Own) ++ pinfos
-  val liftedFun = addTypeLambdas(alltpars, Lam(allpars, eff, body))
-  val liftedTp = liftedFun.typeOf
+  val liftedFun = add-type-lambdas(alltpars, Lam(allpars, eff, body))
+  val liftedTp = liftedFun.type-of
   val funExpr = Var(TName(name, liftedTp), InfoArity(alltpars.length, allargs.length))
   val etaExpr = match (tvs, fvs)
     (Nil, Nil) -> funExpr
-    _ -> addTypeLambdas(tpars, Lam(pars, eff, App(addTypeApps(alltpars, funExpr), allargs)))
-  val liftedDef = Def(name, liftedTp, liftedFun, Private, defFun(allpinfos), inl, rangeNull, "// lifted local: " ++ (dnames ++ [origName.getName]).map(fn(dn) dn.unqualify.show).join(", ") ++ "\n" ++ doc)
+    _ -> add-type-lambdas(tpars, Lam(pars, eff, App(add-type-apps(alltpars, funExpr), allargs)))
+  val liftedDef = Def(name, liftedTp, liftedFun, Private, def-fun(allpinfos), inl, null, "// lifted local: " ++ (dnames ++ [origName.get-name]).map(fn(dn) dn.unqualify.show).join(", ") ++ "\n" ++ doc)
   (etaExpr, liftedDef)
 
-fun uniqueNameCurrentDef()
+fun unique-name-current-def()
   val current = currentDef.last.unjust
   val i = new-unique()
-  val udef-name = toHiddenUniqueName(i,"lift",current.def-name)
+  val udef-name = to-hidden-unique-name(i,"lift",current.def-name)
   (udef-name, current.kinline)
 
 // Don't lift a simple function. A function is simple if it's body is simply an

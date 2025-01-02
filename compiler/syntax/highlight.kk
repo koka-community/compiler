@@ -276,8 +276,8 @@ fun adjust-context(c: highlight-ctx, l: lex, lexes: list<lexeme>): div highlight
         LexOp(o) | o.show-plain == "::" -> CtxType([], "::")
         LexKeyword(":") -> CtxType([], ":")
         LexKeyword("type") -> CtxType([], "type")
-        LexKeyword("cotype") -> CtxType([], "cotype")
-        LexKeyword("rectype") -> CtxType([], "rectype")
+        // LexKeyword("cotype") -> CtxType([], "cotype")
+        // LexKeyword("rectype") -> CtxType([], "rectype")
         LexKeyword("alias") -> CtxType([], "alias")
         LexKeyword("effect") -> CtxType([], "effect")
         LexKeyword("struct") -> 

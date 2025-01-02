@@ -11,33 +11,67 @@ import std/core/undiv
 
 pub infixr 5 (|->)
 
-alias tvs = linearSet<typeVar>
-alias sub = linearMap<typeVar, ktype>
-
-val tvs/empty:tvs = LinearSet([])
-
-val sub/empty:sub = LinearMap([])
-
-fun fuv(tvs: tvs): linearSet<typeVar>
+// The free unifiable (e.g. 'Meta') type variables
+fun fuv(tvs: tvs): tvs
   tvs.filter(fn(tv) tv.flavour.is-meta)
-fun fsv(tvs: tvs): linearSet<typeVar>
+// The free 'Skolem' type variables
+fun fsv(tvs: tvs): tvs
   tvs.filter(fn(tv) tv.flavour.is-skolem)
-fun fbv(tvs: tvs): linearSet<typeVar>
+// The free 'Bound' type variables
+fun fbv(tvs: tvs): tvs
   tvs.filter(fn(tv) tv.flavour.is-bound)
+// All type variables (including the bound ones)
+fun all-tv(a: a, ?bound-type-vars: (a) -> e tvs, ?free-type-vars: (a) -> e tvs): e tvs
+  a.bound-type-vars.union(a.free-type-vars)
 
-fun new/sub(l: list<(typeVar, ktype)>): exn sub
-  if l.all(fn((tv, t)) tv.kind == t.kind) then
-    empty + l
+//--------------------------------------------------------------------------
+//  Substitution
+//
+//  For a substitution it should hold that:
+//  (s1@@s2) |-> x  <==>  s1 |-> (s2 -> x)
+//
+//  We can implement this by:
+//  1) at composition we apply the first substitution to the other, and
+//     finding an identifier is a simple lookup.
+//  or,
+//  2) we compose by simple union and perform a fixpoint at lookup.
+//
+//  We have chosen (1) here, but it can be interesting to compare
+//  performance with strategy (2).
+//--------------------------------------------------------------------------}
+
+// A substitution from type variables to 'Tau's.
+value struct sub
+  map: linearMap<typeVar, ktype>
+  tvs: tvs
+
+fun sub/unsub(s: sub): linearMap<typeVar, ktype>
+  s.map
+
+fun sub/count(Sub(sub): sub): int
+  sub.list.length
+
+val sub/null = Sub(LinearMap([]), LinearSet([]))
+
+fun sub/is-null(Sub(sub): sub): bool
+  sub.list.is-empty
+
+fun new/sub(sub: list<(typeVar, ktype)>): pure sub
+  if sub.all(fn((tv, t)) tv.kind == t.kind) then
+    Sub(LinearMap([]) + sub, sub.map(fst).tvs.union(sub.map(snd).free-type-vars))
   else
     throw("type/typevar: subNew kind mismatch")
 
-fun sub/dom(s: sub): tvs
-  tvs/empty + s.list.map(fst)
+fun sub/dom(Sub(sub): sub): tvs
+  (sub.list.map(fst)).tvs
 
-fun range(s: sub): list<ktype>
+fun sub/range(s: sub): list<ktype>
   s.list.map(snd)
 
-fun common(s1: sub, s2: sub): list<(typeVar, (tau, tau))>
+fun sub/list(s: sub): list<(typeVar, ktype)>
+  s.map.list
+
+fun sub/common(s1: sub, s2: sub): exn list<(typeVar, (tau, tau))>
   s1.list.map(fn(s) s2.lookup(s.fst).map(fn(t) (s.fst, (s.snd, t)))).concat-maybe
 
 fun sub/single(tvar: typeVar, tau: tau)
@@ -48,28 +82,81 @@ fun sub/single(tvar: typeVar, tau: tau)
   // the IDs of built-in types such as .select must be distinct from further IDs generated
   // by the compiler.
   if tau.free-type-vars.member(tvar) then
-    throw("type/typevar: subSingle: recursive type " ++ tvar.show)
+    throw("type/typevar: subSingle: recursive type " ++ tvar.show-tv)
   if tau.kind != tvar.kind then
     throw("type/typevar: subSingle: kind mismatch " ++ tau.show ++ " " ++ tvar.show)
   LinearMap([(tvar, tau)])
 
-fun sub/remove(s: sub, tvars: list<typeVar>): sub
-  s.remove-all(tvars)
+fun sub/lookup(Sub(_): sub, tvar: typeVar): exn maybe<tau>
+  throw("Not implemented")
+  // TODO: Need map lookup with key
+
+fun sub/remove(Sub(sub, tvs): sub, tvars: list<typeVar>): sub
+  Sub(sub.remove-all(tvars), tvs - tvars)
 
 fun subtvs/remove(s: sub, tvars: tvs): sub
-  s.remove-all(tvars.list)
+  s.remove(tvars.list)
 
-fun find(s: sub, tv: typeVar): exn tau
-  s.get(tv)
+fun sub/find(Sub(sub): sub, tv: typeVar): exn tau
+  match sub.lookup(tv)
+    Nothing -> TVar(tv)
+    Just(tau) -> tau
 
-fun compose(s1: sub, s2: sub): pure sub
-  s1.union(s1 |-> s2)
+fun show-tv(tv: typeVar): string
+  tv.tid.show
+
+// (s1 \@\@ s2) |-> x == s1 |-> (s2 |-> x)
+fun sub/compose(Sub(s1, tv1): sub, Sub(s2, tv2): sub): pure sub
+  Sub(s1.union(s1 |-> s2), tv1.union(tv2)) // Assume: left biased union
+
+fun sub/extend(sub: sub, tv: typeVar, tau: tau): pure sub
+  single(tar, tau).compose(sub)
+
+// Insert a new substitution. (Note: breaks abstraction barrier)
+fun sub/insert(Sub(s, tvs): sub, tvar: typeVar, tau: tau)
+  if tau.free-type-vars.member(tvar) then
+    throw("type/typevar: insert: recursive type " ++ tvar.show-tv)
+  elif !tau.is-tau then
+    throw("type/typevar: insert: not a tau " ++ tau.show)
+  else
+    Sub(s.insert(tvar, tau), tvs.union(tvs, tau.free-type-var.insert(tvar)))
+
+fun sub/inserts(Sub(sub, tvs): sub, assoc: list<(typeVar, tau)>)
+  Sub(LinearMap() + assoc + sub, // ASSUME: left-biased union
+    unions([tvs, assoc.map(fst).tvs, assoc.map(snd).free-type-vars]))
+
+
+// Type variables
+
+// A set of type variables
+alias tvs = linearSet<typeVar>
+val tvs/empty:tvs = LinearSet([])
+// All the tvar functions defer to Set functions, just alias here
 
 fun tv/single(tv: typeVar) 
   [tv]
 
 fun new/tvs(tv: list<typeVar>) 
-  tv
+  LinearSet([]) + tv
+
+fun tvs/common(tvs1: tvs, tvs2: tvs): bool
+  !tvs1.disjoint(tvs2)
+
+fun tvslist/max(tvs: list<typeVar>): int
+  tvs.foldl(0, fn(n, tv) max(n, tv.tid))
+
+fun tvs/max(tvs: tvs): int
+  tvs.foldl(0, fn(n, tv) max(n, tv.tid))
+
+// Entities with type variables
+
+// Return the free unifiable type variables in a particular order
+fun ofuv(x: a, ?oftv: (a) -> e list<typeVar>): list<typeVar>
+  x.oftv.filter(is-meta)
+
+// TODO: add nub to standard library
+// fun oftv(x: a, ?odftv: (a) -> e list<typeVar>): list<typeVar>
+//   all-tv(x, odftv, oftv)
 
 fun list/free-type-vars(ps: list<a>, ?free-type-vars: (a) -> div tvs): div tvs
   ps.map(free-type-vars).unions
@@ -167,13 +254,15 @@ fun ktype/bound-type-vars(tp: ktype): div tvs
 fun tn/bound-type-vars(TName(_, tp): tName): div tvs
   tp.bound-type-vars
 
-fun sub/(|->)(s1: sub, s2: sub): pure sub
-  s2.map(fn(k, v) (k, s1 |-> v))
+fun sub/(|->)(s: sub, a: a, ?substitute: (sub, a) -> e a): e a
+  if s.is-null then a
+  else substitute(s, a)
 
-fun sublist/(|->)(s: sub, l: list<a>, ?(|->): (sub, a) -> e a): e list<a>
-  l.map(fn(a) s |-> a)
+fun sub/substitute(sub: sub, Sub(s, tvs2)): pure sub
+  val Sub(_, tvs1) = sub
+  Sub(s.map(fn(k, v) sub.substitute(v)), tvs1.union(tvs2))
 
-fun ktype/(|->)(s: sub, tp: ktype): pure tau
+fun ktype/substitute(s: sub, tp: ktype): pure tau
   match tp
     TForAll(vars, preds, t) ->
       val sub' = s.remove(vars)
@@ -184,16 +273,16 @@ fun ktype/(|->)(s: sub, tp: ktype): pure tau
     TApp(t, args) -> TApp(s |-> t, args.map(fn(t') s |-> t'))
     TSyn(syn, xs, t) -> TSyn(syn, xs, s |-> t)
 
-fun pred/(|->)(s: sub, pred: pred): pure pred
+fun pred/substitute(s: sub, pred: pred): pure pred
   match pred
     PredSub(sub, super) -> PredSub(s |-> sub, s |-> super)
     PredIFace(iface, args) -> PredIFace(iface, args.map(fn(t) s |-> t))
 
-fun tn/(|->)(s: sub, tn: tName): pure tName
+fun tn/substitute(s: sub, tn: tName): pure tName
   match tn
     TName(n, tp) -> TName(n, s |-> tp)
 
-fun pat/(|->)(s: sub, p: pattern): pure pattern
+fun pat/substitute(s: sub, p: pattern): pure pattern
   match p
     PatVar(tn, pat) -> PatVar(s |-> tn, s |-> pat)
     PatCon(tn, args, repr, targs, exists0, tres,  conInfo, skip) ->
@@ -202,7 +291,7 @@ fun pat/(|->)(s: sub, p: pattern): pure pattern
     PatWild -> PatWild
     PatLit(l) -> PatLit(l)
 
-fun expr/(|->)(s: sub, e: expr): pure expr
+fun expr/substitute(s: sub, e: expr): pure expr
   match e
     Lam(tn, eff, e) -> Lam(s |-> tn, s |-> eff, s |-> e)
     Var(tn, x) -> Var(s |-> tn, x)
@@ -216,24 +305,24 @@ fun expr/(|->)(s: sub, e: expr): pure expr
     Let(defGroups, e) -> Let(defGroups.map(fn(dg) s |-> dg), s |-> e)
     Case(es, bs) -> Case(s |-> es, bs.map(fn(b) s |-> b))
 
-fun dg/(|->)(s: sub, dg: defGroup): pure defGroup
+fun dg/substitute(s: sub, dg: defGroup): pure defGroup
   match dg
     DefRec(defs) -> DefRec(defs.map(fn(d) s |-> d))
     DefNonRec(e) -> DefNonRec(s |-> e)
 
-fun def/(|->)(s: sub, Def(name, scheme, expr, vis, isVal, inl, nameRng, doc): def): pure def
+fun def/substitute(s: sub, Def(name, scheme, expr, vis, isVal, inl, nameRng, doc): def): pure def
   Def(name, s |-> scheme, s |-> expr, vis, isVal, inl, nameRng, doc)
 
-fun branch/(|->)(s: sub, Branch(p, e): branch): pure branch
+fun branch/substitute(s: sub, Branch(p, e): branch): pure branch
   val sub' = s.remove(p.bound-type-vars)
   Branch(s |-> p, sub' |-> e)
 
-fun guard/(|->)(s: sub, g: guard): pure guard
+fun guard/substitute(s: sub, g: guard): pure guard
   match g
     Guard(e, e2) -> Guard(s |-> e, s |-> e2)
 
 // TODO: More
-fun freshTypeVar(k: kind, fl: flavour)
+fun fresh-typevar(k: kind, fl: flavour)
   val idbase = match fl
     Meta -> "_v"
     Skolem -> "$v"

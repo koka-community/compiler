@@ -10,37 +10,37 @@ alias locals = nameSet;
 alias renaming = name-map<name>
 
 effect uniquefy
-  fun setLocals(l: locals): ()
-  fun getLocals(): locals
-  fun setRenaming(r: renaming): ()
-  fun getRenaming(): renaming
+  fun set-locals(l: locals): ()
+  fun get-locals(): locals
+  fun set-renaming(r: renaming): ()
+  fun get-renaming(): renaming
 
-fun fullLocalized(f)
-  val locals = getLocals()
+fun full-localized(f)
+  val locals = get-locals()
   val r = localized(f)
-  setLocals(locals)
+  set-locals(locals)
   r
 
 fun localized(f)
-  val ren = getRenaming()
+  val ren = get-renaming()
   val r = f()
-  setRenaming(ren)
+  set-renaming(ren)
   r
 
-fun runUn(start: int, f: () -> <uniquePhase,uniquefy|e> a): e a
+fun run-unique(start: int, f: () -> <uniquePhase,uniquefy|e> a): e a
   with run-unique(start)
-  with runUn()
+  with run-unique()
   f()
 
 val eqName = fn(n1: name, n2: name) n1 == n2
-fun fun/runUn(f: () -> <uniquePhase,uniquefy|e> a): <uniquePhase|e> a
+fun fun/run-unique(f: () -> <uniquePhase,uniquefy|e> a): <uniquePhase|e> a
   var locals := names/empty
   var renaming := LinearMap([])
   with handler
-    fun setLocals(l) locals := l
-    fun getLocals() locals
-    fun setRenaming(r) renaming := r
-    fun getRenaming() renaming
+    fun set-locals(l) locals := l
+    fun get-locals() locals
+    fun set-renaming(r) renaming := r
+    fun get-renaming() renaming
   f()
 
 fun expr/uniquefy(e: expr): pure expr
@@ -48,118 +48,118 @@ fun expr/uniquefy(e: expr): pure expr
 
 fun free/uniquefy(e: expr, free: linearSet<tName>): pure expr
   val locals = LinearSet(free.union(e.free-locals).list.map(get-name))
-  with runUn(0)
-  setLocals(locals)
-  e.uniquefyExprX
+  with run-unique(0)
+  set-locals(locals)
+  e.uniquefyx
 
 fun uniquefyExprU(e: expr)
-  with runUn()
-  val e' = e.uniquefyExprX
+  with run-unique()
+  val e' = e.uniquefyx
   (e', get-unique())
 
-fun uniquefy(c: core): pure core
+fun core/uniquefy(c: core): pure core
   c(defs=uniquefy(c.defs))
 
 fun dgs/uniquefy(dgs: defGroups): pure defGroups
-  with runUn(0)
-  val locals = getLocals()
+  with run-unique(0)
+  val locals = get-locals()
   val topLevelDefs = dgs.flatten.map(def-name).filter(fn(n:name) !n.is-nil)
-  setLocals(topLevelDefs.foldl(locals, fn(acc, n) acc.add(n.unqualify)))
-  dgs.map(fn(dg) fullLocalized({uniquefyDG(dg)}))
+  set-locals(topLevelDefs.foldl(locals, fn(acc, n) acc.add(n.unqualify)))
+  dgs.map(fn(dg) full-localized({uniquefyDG(dg)}))
 
 fun dg/uniquefyDG(dg: defGroup)
   match dg
-    DefNonRec(d) -> DefNonRec(d(defExpr=d.defExpr.uniquefyExprX))
-    DefRec(ds) -> DefRec(ds.map(fn(d) d(defExpr=d.defExpr.uniquefyExprX)))
+    DefNonRec(d) -> DefNonRec(d(defExpr=d.defExpr.uniquefyx))
+    DefRec(ds) -> DefRec(ds.map(fn(d) d(defExpr=d.defExpr.uniquefyx)))
 
 fun dg/uniquefy(dg: defGroup): pure defGroup
-  with runUn(0)
+  with run-unique(0)
   match dg
-    DefNonRec(d) -> DefNonRec(d.uniquefyDef)
+    DefNonRec(d) -> DefNonRec(d.uniquefy)
     DefRec(defs) ->
-      val locals = getLocals()
-      setLocals(defs.map(def-name).filter(fn(n) !n.is-nil).foldl(locals, fn(acc, n) acc.add(n)))
-      DefRec(defs.map(fn(d) d(defExpr=localized({d.defExpr.uniquefyExprX}))))
+      val locals = get-locals()
+      set-locals(defs.map(def-name).filter(fn(n) !n.is-nil).foldl(locals, fn(acc, n) acc.add(n)))
+      DefRec(defs.map(fn(d) d(defExpr=localized({d.defExpr.uniquefyx}))))
 
-fun uniquefyInnerDefGroup(dg: defGroup)
+fun innerdefgroup/uniquefy(dg: defGroup)
   match dg
-    DefNonRec(d) -> DefNonRec(uniquefyDef(d))
-    DefRec(defs) -> DefRec(uniquefyRecDefs(defs))
+    DefNonRec(d) -> DefNonRec(uniquefy(d))
+    DefRec(defs) -> DefRec(recdefs/uniquefy(defs))
 
-fun uniquefyRecDefs(defs: list<def>)
-  val names = defs.map(fn(d) d.def-name.uniquefyName)
-  val exprs = localized({defs.map(fn(d) d.defExpr.uniquefyExprX)})
+fun recdefs/uniquefy(defs: list<def>)
+  val names = defs.map(fn(d) d.def-name.uniquefy)
+  val exprs = localized({defs.map(fn(d) d.defExpr.uniquefyx)})
   names.zip(exprs).zip(defs).map(fn(((n, e), d)) d(def-name=n, defExpr=e))
 
-fun uniquefyDef(d: def)
-  val expr1 = localized({d.defExpr.uniquefyExprX})
-  val name1 = d.def-name.uniquefyName
+fun def/uniquefy(d: def)
+  val expr1 = localized({d.defExpr.uniquefyx})
+  val name1 = d.def-name.uniquefy
   d(def-name=name1, defExpr=expr1)
 
-fun uniquefyExprX(e: expr)
+fun expr/uniquefyx(e: expr)
   match e
     Lam(tnames, eff, expr) ->
       with localized  
-      val tnames1 = tnames.map(uniquefyTName)
-      val expr1 = expr.uniquefyExprX
+      val tnames1 = tnames.map(uniquefy)
+      val expr1 = expr.uniquefyx
       Lam(tnames1, eff, expr1)
     Var(tname, info) ->
-      val renaming = getRenaming()
+      val renaming = get-renaming()
       match renaming.lookup(tname.get-name)
         Just(nm) -> Var(TName(nm, tname.type-of), info)
         Nothing -> e
-    App(f, args) -> App(f.uniquefyExprX, args.map(uniquefyExprX))
-    TypeLam(tvs, expr) -> TypeLam(tvs, expr.uniquefyExprX)
-    TypeApp(expr, tps) -> TypeApp(expr.uniquefyExprX, tps)
+    App(f, args) -> App(f.uniquefyx, args.map(uniquefyx))
+    TypeLam(tvs, expr) -> TypeLam(tvs, expr.uniquefyx)
+    TypeApp(expr, tps) -> TypeApp(expr.uniquefyx, tps)
     Con -> e
     ELit -> e
-    Let(defGroups, expr) -> Let(defGroups.map(uniquefyInnerDefGroup), expr.uniquefyExprX)
+    Let(defGroups, expr) -> Let(defGroups.map(innerdefgroup/uniquefy), expr.uniquefyx)
     Case(exprs, branches) ->
-      Case(exprs.map(uniquefyExprX), localized({branches.map(fn(b) b.uniquefyBranch(exprs.map(type-of)))}))
+      Case(exprs.map(uniquefyx), localized({branches.map(fn(b) b.uniquefy(exprs.map(type-of)))}))
 
-fun uniquefyBranch(b: branch, patTps: list<ktype>)
-  val patts = b.patterns.zip(patTps).map(fn((p, t)) p.uniquefyPattern(t))
-  val guards = b.guards.map(uniquefyGuard)
+fun branch/uniquefy(b: branch, patTps: list<ktype>)
+  val patts = b.patterns.zip(patTps).map(fn((p, t)) p.uniquefy(t))
+  val guards = b.guards.map(uniquefy)
   Branch(patts, guards)
 
-fun uniquefyGuard(g: guard)
-  Guard(g.test.uniquefyExprX, g.body.uniquefyExprX)
+fun guard/uniquefy(g: guard)
+  Guard(g.test.uniquefyx, g.body.uniquefyx)
 
-fun uniquefyPattern(pat: pattern, patTp: ktype)
+fun pattern/uniquefy(pat: pattern, patTp: ktype)
   match pat
-    PatVar(tname, p) -> PatVar(tname.uniquefyTName, p.uniquefyPatternX(patTp))
+    PatVar(tname, p) -> PatVar(tname.uniquefy, p.uniquefyX(patTp))
     _ ->
-      val name = "pat".new-hidden-name.uniquefyName
-      val p = pat.uniquefyPatternX(patTp)
+      val name = "pat".new-hidden-name.uniquefy
+      val p = pat.uniquefyX(patTp)
       PatVar(TName(name, patTp), p)
 
-fun uniquefyPatternX(p: pattern, patTp: ktype)
+fun pattern/uniquefyX(p: pattern, patTp: ktype)
   match p
     PatWild -> p
     PatLit -> p
     PatCon(patName, pats, repr, typeArgs, kexists, typeRes, info, skip) ->
-      PatCon(patName, pats.zip(typeArgs).map(fn((p', t)) p'.uniquefyPattern(t)), repr, typeArgs, kexists, typeRes, info, skip)
-    PatVar(tname, pat) -> PatVar(tname.uniquefyTName, pat.uniquefyPatternX(patTp)) 
+      PatCon(patName, pats.zip(typeArgs).map(fn((p', t)) p'.uniquefy(t)), repr, typeArgs, kexists, typeRes, info, skip)
+    PatVar(tname, pat) -> PatVar(tname.uniquefy, pat.uniquefyX(patTp)) 
 
-fun uniquefyTName(tn: tName)
-  TName(tn.get-name.uniquefyName, tn.type-of)
+fun tname/uniquefy(tn: tName)
+  TName(tn.get-name.uniquefy, tn.type-of)
 
-fun makeFullUnique()
+fun make-full-unique()
   get-unique() != 0
 
-fun uniquefyName(n:name)
+fun name/uniquefy(n:name)
   if n.is-nil then n
   else
-    val locals = getLocals()
-    val full = makeFullUnique()
+    val locals = get-locals()
+    val full = make-full-unique()
     if full || locals.member(n) then
-      val renaming = getRenaming()
+      val renaming = get-renaming()
       val name1 = if full then n.unique-name-from else find-unique-name(0, n, locals)
-      setLocals(locals.add(name1))
-      setRenaming(renaming.add(n, name1))
+      set-locals(locals.add(name1))
+      set-renaming(renaming.add(n, name1))
       name1
     else 
-      setLocals(locals.add(n))
+      set-locals(locals.add(n))
       n
 
 fun find-unique-name(i: int, n: name, locals: nameSet): div name

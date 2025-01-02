@@ -2,38 +2,42 @@
 Work on Syntax, Parsing, and Formatter
 
 ## Fully up to date
-// compiler/lib/* 11/11/24 updated
-// compiler/common/* 11/11/24 updated - other than parse, and some missing functions in range and file
-// compiler/syntax/lexeme & layout 11/11/24, range-map 11/11/24, partial highlight 11/11/24
+// syntax / highlight 11/11/24
 
-## Syntax errors
+- [x] lib/ updated: 11/11/24
+- [x] common/ updated: 11/11/24-12/16/25
+- [x] syntax/ updated 1/6/24 (pretty, format are new)
+- [x] static/ updated 1/7/24
+- [x] kind/ updated 1/7/24
+- [x] type/type, type/kind type/operations, type/pretty, updated 1/8/24
+- [ ] syntax/ needs debugging / tests
+
+## 
+Notes:
+- move common/parser to std/text/parser
+- move error / partial results to general error handling 
+
+Small missing
+- [ ] syntax/highlight 11/11/24 - partial (missing isocline?)
+- [ ] common/range - some missing
+- [ ] common/file - some missing
 
 ## Changes
-- [ ] check all in core/
-- [ ] check all in syntax/
-- [ ] check all in lib/ (start with finishing printer)
-- [ ] check all in kind/
-- [ ] changes in backend/c/from-core
-- [ ] integrate error effect into core effect alias
-
-- [ ] syntax/promote
-- [ ] syntax/parse (move common/parser to std/text/parser)
-- [ ] static/bindingGroups
-- [ ] core/parse
-- [ ] (finish kind/infer)
-- [ ] kind/inferMonad
+https://github.com/koka-lang/koka/compare/46b4fe631df398940727febc2a4f278da938842e...dev
+- [ ] type/typevar
+- [ ] type/infgamma
 - [ ] type/assumption
-- [ ] type/operations
-- [ ] type/pretty
 - [ ] type/unify
+- [ ] core/*
+- [ ] backend/c/*
 
 ## All dependencies ready
 - [ ] backend/c/parc 1037
 - [ ] backend/c/parcreuse 731
 - [ ] backend/c/parcreusespec 341
-- [ ] compiler/package 208
 - [ ] core/ctail 691
 - [ ] core/simplify 970
+- [ ] syntax/highlight 515 - needs isocline
 
 ## Next priority (lots of dependencies require)
 
@@ -44,18 +48,17 @@ Work on Syntax, Parsing, and Formatter
 - [ ] core/specialize 498 - needs simplify
 - [ ] type/infermonad 1500 - needs type/unify
 - [ ] type/infer 2300 - needs type/infermonad, core/analysismatch
-- [ ] compiler/module 180 - needs compiler/package
-- [ ] compiler/compile 1865 - needs everything
+- [ ] compile/* - needs lots + parallel / async features
 - [ ] main 144 - needs everything
+- [ ] main/language-server - needs everything + async + jsonrpc
 - [ ] platform(as needed)
 
 ## Low priority
 - [ ] interpreter/commands 318 - can be done
 - [ ] syntax/colorize 607 - can be done
-- [ ] syntax/highlight 515 - needs isocline
 - [ ] backend/csharp/from-core 1884 - can be done
 - [ ] backend/javascript/from-core 1371 - can be done
-- [ ] core/gendoc 598 - needs colorize / highlight
+- [ ] syntax/gendoc 598 - needs colorize / highlight
 - [ ] interpreter/interpret 734 - needs everything
 
 # TODO: Language Server

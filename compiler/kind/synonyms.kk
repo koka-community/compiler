@@ -9,28 +9,28 @@ import std/data/linearmap
 
 alias synonyms = name-map<synInfo>
 effect synonymsEff
-  fun synonymsExtend(newtp: synInfo): ()
-  fun synonymsLookup(name: name): maybe<synInfo>
-  fun synonymsFind(name: name): synInfo
-  fun synonymsList(): list<(name, synInfo)>
-  fun synonymsFilter(modName: name): synonyms
-  fun getSynonyms(): synonyms
-  fun setSynonyms(syns: synonyms): ()
+  fun synonyms-extend(newtp: synInfo): ()
+  fun synonyms-lookup(name: name): maybe<synInfo>
+  fun synonyms-find(name: name): synInfo
+  fun synonyms-list(): list<(name, synInfo)>
+  fun synonyms-filter(modName: name): synonyms
+  fun get-synonyms(): synonyms
+  fun set-synonyms(syns: synonyms): ()
 
 fun withSynonyms(synonyms0: synonyms, f: () -> <synonymsEff,pure,comp-flags|e> a): <pure,comp-flags|e> a
   var synonyms := synonyms0
   with handler
-    fun getSynonyms() synonyms
-    fun setSynonyms(syns: synonyms) synonyms := syns
-    fun synonymsExtend(k: synInfo)
+    fun get-synonyms() synonyms
+    fun set-synonyms(syns: synonyms) synonyms := syns
+    fun synonyms-extend(k: synInfo)
       synonyms := synonyms.extend(k)
-    fun synonymsLookup(name: name)
+    fun synonyms-lookup(name: name)
       synonyms.lookup(name)
-    fun synonymsFind(name: name)
+    fun synonyms-find(name: name)
       synonyms.synonyms/find(name)
-    fun synonymsList()
+    fun synonyms-list()
       synonyms.list
-    fun synonymsFilter(modName: name)
+    fun synonyms-filter(modName: name)
       synonyms.filter(fn(k, v) (k.qualifier) == modName)
       // TODO: Should this modify the synonyms?
   f()

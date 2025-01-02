@@ -1,3 +1,12 @@
+//---------------------------------------------------------------------------
+// Copyright 2024, Microsoft Research, Daan Leijen. Tim Whiting
+//
+// This is free software; you can redistribute it and/or modify it under the
+// terms of the Apache License, Version 2.0. A copy of the License can be
+// found in the LICENSE file at the root of this distribution.
+//---------------------------------------------------------------------------
+// Updated as of 12/31/24: Commit a62a4ca
+
 import std/num/float64
 import compiler/common/range
 import compiler/common/name
@@ -10,13 +19,18 @@ import std/data/linearset
 import std/core-extras
 import std/core/undiv
 
+effect val current-program : program<userType, userKind>
+
+fun current-modname(): current-program name
+  current-program.name
+
 pub struct program<t, k>
   source: source
   name: name
   name-range: range
   typeDefs: list<typeDefGroup<t,k>>
   defs: defGroups<t>
-  pub imports: imports
+  imports: imports
   externals: externals
   fixDefs: fixDefs
   doc: string
@@ -76,10 +90,13 @@ fun fixdef/show(f: fixDef): string
 alias imports = list<kimport>;
 
 struct kimport
-  name: name
-  fullName: name
-  range: range
-  vis: visibility
+  name: name // module name
+  fullName: name // fully qualified module name
+  nameRange: range
+  fullNameRange: range
+  range: range // range of the full import declaration
+  vis: visibility // visibility of the module
+  open: bool // Used in the IDE to make all definitions visible
 
 fun kimport/show(i: kimport): string
   i.name.name/name/show ++ " " ++ i.fullName.name/name/show ++ " " ++ i.range.show ++ " " ++ i.vis.show
@@ -97,14 +114,14 @@ fun typedefgroup/show(t: typeDefGroup<t,k>, ?t/show: (t) -> <div|e> string, ?k/s
 
 type typeDef<t,u,k>
   Synonym(binder: typeBinder<k>, params: list<typeBinder<k>>, synonym: t, range: range, vis: visibility, doc: string)
-  DataType(binder: typeBinder<k>, params: list<typeBinder<k>>, constrs: list<userCon<t,u,k>>, range: range, vis: visibility, sort: dataKind, ddef: dataDef, isExtend: bool, doc: string)
+  DataType(binder: typeBinder<k>, params: list<typeBinder<k>>, constrs: list<userCon<t,u,k>>, range: range, vis: visibility, sort: dataKind, ddef: dataDef, deffect: dataEffect, doc: string)
 
 fun typedef/show(td: typeDef<t,u,k>, ?t/show: (t) -> <div|e> string, ?u/show: (u) -> <div|e> string, ?k/show: (k) -> <div|e> string): <div|e> string
   match td
     Synonym(binder, params, synonym, range, vis, doc) -> "Synonym " ++ binder.show ++ " " ++ params.list/show ++ " " ++ synonym.t/show ++ " " ++ range.show ++ " " ++ vis.show ++ " " ++ doc.show
-    DataType(binder, params, constrs, range, vis, sort, ddef, isExtend, doc) -> 
+    DataType(binder, params, constrs, range, vis, sort, ddef, deffect, doc) -> 
       "DataType " ++ binder.show ++ " " ++ params.list/show ++ " " ++ constrs.list/show ++ " " ++ 
-      range.show ++ " " ++ vis.show ++ " " ++ sort.show ++ " " ++ ddef.show ++ " " ++ isExtend.show ++ " " ++ doc.show
+      range.show ++ " " ++ vis.show ++ " " ++ sort.show ++ " " ++ ddef.show ++ " " ++ deffect.show ++ " " ++ doc.show
 
 struct typeBinder<k>
   name: name
@@ -119,9 +136,10 @@ struct userCon<t, u, k>
   name: name
   existentials: list<typeBinder<k>>
   params: list<(visibility, valueBinder<t, maybe<expr<u>>>)>
-  result: maybe<t>
+  result: maybe<t> // used internally for limited GADT's (for now)
+  mblazy: maybe<(fipT, expr<u>)> // lazy constructor?
   name-range: range
-  range: range
+  range: range // full range
   vis: visibility
   doc: string  
 
@@ -145,7 +163,7 @@ struct valueBinder<t,e>
   name: name
   binderType: t // Always present for constructors
   expr: e // always present for definitions as 'Expr t'
-                // Function and constructor parameters use 'Maybe (Expr t)' for default values.
+                // functions and constructor parameters use 'Maybe (Expr t)' for default values.
                 // Pattern bindings ('PatVar') use unit '()'.
   name-range: range
   range: range; // full range
@@ -156,13 +174,13 @@ fun vb/show(v: valueBinder<t,v>, ?t/show: (t) -> <div|e> string, ?e/show: (v) ->
 struct def<t>
   binder: valueBinder<(), expr<t>>
   range: range
-  visibilty: visibility
+  visibility: visibility
   sort: defSort
   defInline: defInline
   doc: string;
 
 fun def/show(d: def<t>, ?show: (t) -> <div|e> string): <div|e> string
-  d.binder.show ++ " " ++ d.range.show ++ " " ++ d.visibilty.show ++ " " ++ d.sort.show ++ " " ++ d.defInline.show ++ " " ++ d.doc
+  d.binder.show ++ " " ++ d.range.show ++ " " ++ d.visibility.show ++ " " ++ d.sort.show ++ " " ++ d.defInline.show ++ " " ++ d.doc
 
 fun defIsVal(d: def<t>): bool
   !d.sort.is-fun
@@ -177,7 +195,7 @@ type expr<t>
   Var(name: name, isOp: bool, range: range) // The var is an op
   Literal(l: lit, range: range = l.range)
   Ann(e: expr<t>, t: t, range: range)
-  Case(e: expr<t>, cases: list<branch<t>>, range: range)
+  Case(e: expr<t>, cases: list<branch<t>>, lazy: bool, range: range)
   Parens(e: expr<t>, name: name, d: string, range: range) // name and string are used for the range map
   Inject(t: t, e: expr<t>, behind: bool, range: range)
   Handler(
@@ -411,7 +429,7 @@ fun program/null(n: name)
   Program(source/null, n, range/null, [], [], [preludeImport], [], [], "")
 
 // Import declaration for the standard prelude
-val preludeImport = Kimport(nameSystemCore, nameSystemCore, range/null, Private)
+val preludeImport = Kimport(nameSystemCore, nameSystemCore, null, null, null, Private, False)
 
 fun make-program(n: name, tdefs: list<typeDef<t,t,k>>, defs: list<def<t>>): program<t,k>
   Program(source/null, n, range/null, [TypeDefRec(tdefs)], [DefRec(defs)], [], [], [], "")

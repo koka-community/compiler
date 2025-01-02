@@ -16,38 +16,17 @@ import compiler/type/type
 import compiler/syntax/range-map
 import compiler/syntax/syntax
 import compiler/core/core
+import compiler/common/error
 import std/data/linearmap
 
 struct inferKindEnv
-  currentModule: name
   imports: importmap
   kGamma: kGamma
   infgamma: infKGamma
   synonyms: synonyms
   newtypesImported: newtypes
   newtypesExtended: newtypes
-
-fun allnewtypes(infKindEnv: inferKindEnv)
-  infKindEnv.newtypesImported.newtypesCompose(infKindEnv.newtypesExtended)
-
-fun runKindInfer(platform: platform, mbRangeMap: maybe<range-map>, moduleName: name, imports: importmap, kgamma: kGamma, syns: synonyms, datas: newtypes, f: () -> <inferKindEff,pure,colorSchemeEffect,uniquePhase> a): <pure,colorSchemeEffect,uniquePhase> (list<(doc,range)>, list<(doc,range)>, maybe<range-map>, a)
-  val imports' = match imports.importsExtend(moduleName, moduleName)
-    Just(imp) -> imp
-    Nothing -> imports // ignore
-  with handler
-    val infKindEnv = InferKindEnv(moduleName, imports', kgamma, infKGammaEmpty, syns, datas, emptyNewtypes)
-  var errs := []
-  var warns := []
-  var rm := mbRangeMap
-  var ksub := ksubEmpty
-  with handler
-    fun addWarning(d, rng) warns := Cons((d, rng), warns)
-    fun addError(d, rng) errs := Cons((d, rng), errs)
-    fun getKsub() ksub
-    fun extendKsub(s) ksub := ksub.compose(s)
-    fun addRangeInfo(r, info) rm := rm.map(fn(rm') rm'.insert(r, info))
-    val platform = platform
-  (errs, warns, rm, f())
+  dataEffects: name-map<dataEffect>
 
 alias inferKindEff = <inferKindEnvEffect, inferKindEffect>
 
@@ -55,29 +34,56 @@ effect inferKindEnvEffect
   val infKindEnv: inferKindEnv
 
 effect inferKindEffect
-  fun addError(d: doc, r: range): ()
-  fun addWarning(d: doc, r: range): ()
-  fun getKsub(): ksub
-  fun extendKsub(s: ksub): ()
-  fun addRangeInfo(r: range, info: rangeInfo): ()
+  fun get-ksub(): ksub
+  fun extend-ksub(s: ksub): ()
+  fun get-local-syns(): synonyms
+  fun get-syns(): synonyms
+  fun add-synonym(syn: synInfo): ()
+  fun add-external(name: name, rng: range): ()
+  fun lookup-external(name: name): maybe<range>
   val platform: platform
 
-fun freshKind()
-  KIVar(uniqueId("k"))
+fun allnewtypes(infKindEnv: inferKindEnv)
+  infKindEnv.newtypesImported.compose(infKindEnv.newtypesExtended)
 
-fun freshTypeVar(TypeBinder(name, kind): typeBinder<kind>, fl: flavour)
-  TypeVar(uniqueId(name.show), kind, fl)
+fun runKindInfer(platform: platform, moduleName: name, imports: importmap, kgamma: kGamma, syns: synonyms, datas: newtypes, f: () -> <inferKindEff,pure,colorSchemeEffect,uniquePhase,koka-error|e> a): <pure,colorSchemeEffect,uniquePhase,comp-error|e> a
+  with val current-error-kind = ErrKind
+  val imports' = match imports.extend(moduleName, moduleName)
+    Just(imp) -> imp
+    Nothing -> imports // ignore
+  with handler
+    val infKindEnv = InferKindEnv(imports', kgamma, LinearMap([]), syns, datas, newtypes/empty, LinearMap([]))
+  var local-syns := synonyms/empty
+  var ksub := LinearMap([])
+  var externals: name-map<range> := LinearMap([])
+  with handler
+    fun get-ksub() ksub
+    fun extend-ksub(s) ksub := ksub.compose(s)
+    fun get-local-syns() local-syns
+    fun get-syns() infKindEnv.synonyms.compose(local-syns)
+    fun add-synonym(syn) local-syns := local-syns.extend(syn)
+    fun lookup-external(nm) externals.lookup(nm)
+    fun add-external(nm, rng) externals := externals.add(nm, rng)
+    val platform = platform
+  mask<local>
+    f()
+
+fun fresh-kind()
+  KIVar(unique-id("k"))
+
+fun fresh-typevar(TypeBinder(name, kind): typeBinder<kind>, fl: flavour)
+  TypeVar(unique-id(name.show), kind, fl)
 
 fun subst(x: infKind)
-  getKsub() |-> x
+  get-ksub() |-> x
 
 // Extend the inference kind assumption; checks for 'shadow' definitions
-fun extendInfGamma(tbinders: list<typeBinder<infKind>>, f)
+fun extend-infgamma(tbinders: list<typeBinder<infKind>>, f)
   fun check(TypeBinder(nm, infkind, nmrng, _): typeBinder<infKind>, infgamma: infKGamma)
-    match infgamma.maybeGet(nm)
+    match infgamma.lookup(nm)
       Nothing -> infgamma.add(nm, infkind)
       Just(_) ->
-        addError("Type".text |+| nm.ppType |+| "is already defined".text, nmrng)
+        add-error(nmrng, "Type".text |+| nm.pp-type |+| "is already defined".text)
         infgamma.set(nm, infkind) // replace
   val infgammaNew = tbinders.foldl(infKindEnv.infgamma, fn(acc, tb) tb.check(acc))
   with override
@@ -85,116 +91,142 @@ fun extendInfGamma(tbinders: list<typeBinder<infKind>>, f)
   f()
 
 // Extend the kind assumption; checks for duplicate definitions
-fun extendKGamma(rngs: list<range>, dg: compiler/core/core/typeDefGroup, f)
+fun extend-kgamma(rngs: list<range>, dg: compiler/core/core/typeDefGroup, f)
   fun nameKind(tdef: compiler/core/core/typeDef)
     match tdef
-      core/Synonym(synInfo) -> (synInfo.name, synInfo.kind)
-      core/Data(ntInfo) -> (ntInfo.name, ntInfo.kind)
+      core/Synonym(synInfo) -> (synInfo.name, synInfo.kind, synInfo.doc)
+      core/Data(ntInfo) -> (ntInfo.name, ntInfo.kind, ntInfo.doc)
   fun check((kgamma: kGamma, tdefs: list<compiler/core/core/typeDef>), (rng: range, tdef: compiler/core/core/typeDef))
-    if tdef.isExtension then (kgamma, tdefs)
+    if tdef.is-extension then (kgamma, tdefs)
     else
-      val (nm, knd) = nameKind(tdef)
-      match kgamma.kgammaLookupQ(nm)
-        Nothing -> (kgamma.kgammaExtend(nm, knd), Cons(tdef, tdefs))
+      val (nm, knd, doc) = nameKind(tdef)
+      match kgamma.lookup-qualified(nm)
+        Nothing -> (kgamma.extend(nm, knd, doc), Cons(tdef, tdefs))
         Just(_) ->
-          addError("Type".text |+| nm.ppType |+| "is already defined".text, rng)
+          add-error(rng, "Type".text |+| nm.pp-type |+| "is already defined".text)
           (kgamma, tdefs)
   val (_, tdefs) = zip(rngs, dg).foldl((infKindEnv.kGamma, []), check)
   
-  fun nameSyn(tdef: compiler/core/core/typeDef)
+  fun name-syn(tdef: compiler/core/core/typeDef)
     match tdef
       core/Synonym(synInfo) -> [synInfo]
       _ -> []
-  fun nameNewtype(tdef: compiler/core/core/typeDef)
+  fun name-newtype(tdef: compiler/core/core/typeDef)
     match tdef
       Data(dataInfo) -> [dataInfo]
       _ -> []
-  val newkGamma = kgammaNewNub(tdefs.map(nameKind))
-  val kSyns = synonymsNew(tdefs.map(nameSyn).concat)
-  val kNewtypes = newtypesNew(tdefs.map(nameNewtype).concat)
+  val newkGamma = new-nub(tdefs.map(nameKind))
+  val kSyns = tdefs.map(name-syn).concat.new
+  val kNewtypes = tdefs.map(name-newtype).concat.new
   with override
     val infKindEnv = infKindEnv( 
       kGamma = infKindEnv.kGamma.union(newkGamma), 
-      synonyms = infKindEnv.synonyms.synonymsCompose(kSyns), 
-      newtypesExtended = infKindEnv.newtypesExtended.newtypesCompose(kNewtypes))  
+      synonyms = infKindEnv.synonyms.compose(kSyns), 
+      newtypesExtended = infKindEnv.newtypesExtended.compose(kNewtypes))  
   f()
 
-fun infQualifiedName(nm: name, rng: range)
-  if !nm.isQualified then nm
+fun member-doc(doc: string, header: string, members: list<string>): string
+  val mdoc = "// " ++ header ++ ":\n// ```koka\n" ++ members.map(fn(m) "//" ++ m).join("\n") ++ "// ```\n"
+  if doc == "" then mdoc else doc ++ "\n// * * *\n" ++ mdoc
+
+fun check-external(name: name, range: range)
+  val mbres = lookup-external(name)
+  match mbres
+    Just(rng0) ->
+      add-error(range, "external".text |+| name.pretty-name(colors) |+| "is already defined at".text |+| rng0.start.show.text |-| "hint: use a local qualifier?".text)
+    _ -> 
+      add-external(name, range)
+
+fun inf-qualified-name(nm: name, rng: range)
+  if !nm.is-qualified then nm
   else
-    match importsExpand(infKindEnv.imports, nm)
+    match expand(infKindEnv.imports, nm)
       Right((name', alias0)) ->
-        if !nm.qualifier.nameCaseEqual(alias0) then
-          addError("module".text |+| nm.ppModule |+| "should be cased as".text |+| alias0.pretty.color(colors.colorModule), rng)
+        if !nm.qualifier.name-case-equal-prefix-of(alias0) then
+          add-error(rng, "module".text |+| nm.pp-module |+| "should be cased as".text |+| alias0.pretty.color(colors.colorModule))
           name'
         else
           name'
       Left([]) ->
-        addError("module".text |+| nm.pretty.color(colors.colorModule) |+| "is undefined".text, rng)
+        add-error(rng, "module".text |+| nm.pp-module |+| "is undefined".text)
         nm
       Left(aliases) ->
-        addError("module".text |+| nm.pretty.color(colors.colorModule) |+| ambiguous(aliases), rng)
+        add-error(rng, "module".text |+| nm.pp-module |+| ambiguous(aliases))
         nm
 
-fun ppModule(nm: name)
+fun pp-module(nm: name)
   nm.nameModule.text.color(colors.colorModule)
 
-fun findInfKind(nm0: name, rng: range)
-  val (nm, mbAlias) = match importsExpand(infKindEnv.imports, nm0)
+fun find-infkind(nm0: name, rng: range)
+  val (nm, mbAlias) = match expand(infKindEnv.imports, nm0)
     Right((name', alias0)) -> (name', Just(alias0))
     _ -> (nm0, Nothing)
-  val qname = if nm.isQualified then nm else qualify(infKindEnv.currentModule, nm)
+  val qname = if nm.is-qualified then nm else qualify(current-modname(), nm)
   // lookup locally
   // note: also lookup qualified since it might be recursive definition
   // TODO: check for the locally inferred names for casing too.
   val infgamma = infKindEnv.infgamma
-  match infgamma.maybeGet(nm)
-    Just(infkind) -> (nm, infkind)
+  match infgamma.lookup(nm)
+    Just(infkind) -> (nm, infkind, "")
     Nothing ->
-      match infgamma.maybeGet(qname)
-        Just(infkind) -> (qname, infkind)
+      match infgamma.lookup(qname)
+        Just(infkind) -> (qname, infkind, "")
         _ ->
           val kgamma = infKindEnv.kGamma  
-          match kgamma.kgammaLookup(infKindEnv.currentModule, nm)
-            Found((qname', kind)) ->
-              val name' = if nm.isQualified then qname' else qname'.unqualify
-              if !name'.nameCaseEqual(nm) then
-                addError("type".text |+| nm0.unqualify.ppType |+| "should be cased as".text |+| name'.unqualify.ppType, rng)
+          match kgamma.lookup(current-modname(), nm)
+            Found((qname', TypeNameInfo(kind, doc))) ->
+              val name' = if nm.is-qualified then qname' else qname'.unqualify
+              if !name'.name-case-equal(nm) then
+                add-error(rng, "type".text |+| nm0.unqualify.pp-type |+| "should be cased as".text |+| name'.unqualify.pp-type)
               else
                 ()
               match mbAlias
-                Just(alias0) | nm0.nameModule != alias0.showPlain ->
-                  addError("module".text |+| nm0.nameModule.text.color(colors.colorModule) |+| "should be cased as ".text |+| alias0.pretty.color(colors.colorModule), rng)
+                Just(alias0) | nm0.nameModule != alias0.nameModule ->
+                  add-error(rng, "module".text |+| nm0.nameModule.text.color(colors.colorModule) |+| "should be cased as ".text |+| alias0.pretty.color(colors.colorModule))
                 _ -> ()
-              (qname, KICon(kind))
+              (qname, KICon(kind), doc)
             NotFound ->
-              addError("Type".text |+| nm.ppType |+| "is not defined".text |-| " hint: bind the variable using".text |+| ("forall<".text |.| nm.ppType |.| ">".text).color(colors.colorType) |+| "?".text, rng)
-              val k = freshKind()
-              (nm, k)
+              // trace("cannot find type: " ++ nm.pp-type(colors).show)
+              add-error(rng, "Type".text |+| nm.pp-type |+| "is not defined".text |-| " hint: bind the variable using".text |+| ("forall<".text |.| nm.pp-type |.| ">".text).color(colors.colorType) |+| "?".text)
+              val k = fresh-kind()
+              (nm, k, "")
             Ambiguous(names) ->
-              addError("Type".text |+| nm.ppType |+| ambiguous(names), rng)
-              val k = freshKind()
-              (nm, k)
+              add-error(rng, "Type".text |+| nm.pp-type |+| ambiguous(names))
+              val k = fresh-kind()
+              (nm, k, "")
 
 fun ambiguous(lst: list<name>)
   match lst
-    [name1, name2] -> "is ambiguous.".text |-| " hint: It can refer to either".text |+| name1.ppType |.| ", or".text |+| name2.ppType
-    [name1, name2, name3] -> "is ambiguous.".text |-| " hint: It can refer to either".text |+| name1.ppType |.| ", ".text |+| name2.ppType |.| ", or".text |+| name3.ppType
-    [name] -> "should be cased as:".text |+| name.unqualify.ppType
-    names -> "is ambiguous and can refer to multiple imports:".text |-| names.map(ppType).list.indent(1)
+    [name1, name2] -> "is ambiguous.".text |-| " hint: It can refer to either".text |+| name1.pp-type |.| ", or".text |+| name2.pp-type
+    [name1, name2, name3] -> "is ambiguous.".text |-| " hint: It can refer to either".text |+| name1.pp-type |.| ", ".text |+| name2.pp-type |.| ", or".text |+| name3.pp-type
+    [name] -> "should be cased as:".text |+| name.unqualify.pp-type
+    names -> "is ambiguous and can refer to multiple imports:".text |-| names.map(pp-type).list.indent(1)
 
-fun ppType(nm: name)
+fun pp-type(nm: name)
   nm.pretty.color(colors.colorType)
 
-fun qualifyDef(nm: name)
-  qualify(infKindEnv.currentModule, nm)
+fun qualify-def(nm: name)
+  qualify(current-modname(), nm)
 
-fun findKind(nm: name)
-  match kgammaLookup(infKindEnv.currentModule, nm)
-    Found((qname, kind)) -> (qname, kind)
-    _ -> fail("kind/infer findKind: unknown type constructor: " ++ nm.show)
+fun find-kind(nm: name)
+  match kgamma-lookup(current-modname(), nm)
+    Found((qname, (kind, doc))) -> (qname, kind, doc)
+    _ -> fail("kind/infer find-kind: unknown type constructor: " ++ nm.show)
 
-fun lookupDataInfo(nm: name)
-  match infKindEnv.newtypesExtended.newtypesLookupAny(nm)
-    Nothing -> infKindEnv.newtypesImported.newtypesLookupPublic(nm)
+fun lookup-datainfo(nm: name)
+  match infKindEnv.newtypesExtended.lookup-any(nm)
+    Nothing -> infKindEnv.newtypesImported.lookup-any(nm)
     just -> just
+
+fun with-data-effects(effs: name-map<dataEffect>, f)
+  with override
+    val infKindEnv = infKindEnv(dataEffects = effs)
+  f()
+
+fun lookup-data-effect(nm: name)
+  match infKindEnv.dataEffects.lookup(nm)
+    Just(eff) -> eff
+    Nothing -> 
+      match lookup-datainfo(nm)
+        Just(di) -> di.deffect
+        Nothing -> DataNoEffect

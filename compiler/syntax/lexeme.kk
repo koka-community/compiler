@@ -19,7 +19,7 @@ import compiler/common/syntax
 val type-var-regex = "^[a-z][0-9]*$".regex();
 
 pub fun is-type-var(n: name): bool
-  !type-var-regex.exec(n.nameStem).is-empty
+  !type-var-regex.exec(n.nameLocalQual).is-empty
 
 // Lexer tokens
 // A lexical token with an associated range.

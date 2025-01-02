@@ -13,6 +13,7 @@ effect koka-lex
   fun add-chunk(s: sslice): ()
   fun get-rawdelim(): int
   fun set-rawdelim(i: int): ()
+  fun check-linedir(c: lex, start: alex-pos, end: alex-pos): lex
   fun do-emit(l: lex, start: alex-pos, end: alex-pos): ()
 
 fun emit(l: lex): <alex,koka-lex> ()
@@ -21,13 +22,14 @@ fun emit(l: lex): <alex,koka-lex> ()
 fun start-chunked(s: string): <alex,koka-lex> ()
   do-start-chunked(s, get-start())
 
-fun end-chunk(f: (string) -> lex): <alex,koka-lex> ()
+fun end-chunk(f: (string) -> <alex,koka-lex> lex): <alex,koka-lex> ()
   val (s, start) = end-chunked()
   do-emit(f(s), start, get-end())
 }
 
 
 %encoding "utf8"
+%wrapper "effect"
 %effects "koka-lex"
 
 -----------------------------------------------------------
@@ -44,8 +46,8 @@ $return       = \r
 $linefeed     = \n
 $graphic      = [\x21-\x7E]
 $cont         = [\x80-\xBF]
-$symbol       = [\$\%\&\*\+\~\!\\\^\#\=\.\:\-\?\|\<\>]
-$special      = [\(\)\[\]\{\}\;\,]
+$symbol       = [\$\%\&\*\+\~\!\\\^\#\=\.\:\-\|\<\>]
+$special      = [\(\)\[\]\{\}\;\,\?]
 $anglebar     = [\<\>\|]
 $angle        = [\<\>]
 $finalid      = [\']
@@ -81,16 +83,21 @@ $charesc      = [nrt\\\'\"]    -- "
 @charchar     = ([$graphic$space] # [\\\'])|@utf8
 @stringraw    = ([$graphic$space$tab] # [\"])|@newline|@utf8  -- "
 
-@idchar       = $letter | $digit | _ | \-
-@lowerid      = $lower @idchar* $finalid*
-@upperid      = $upper @idchar* $finalid*
+@idchar       = $letter | $digit | _ | \- | \@
+@lowerid      = [\@]? $lower @idchar* $finalid*
+@upperid      = [\@]? $upper @idchar* $finalid*
+@wildcard     = [\@]? _ @idchar*
 @conid        = @upperid
-@modulepath   = (@lowerid\/)+
+
+@modpart      = @lowerid\/
+@modulepath   = @modpart+ (\# @modpart*)? | \? @modpart*
 @qvarid       = @modulepath @lowerid
 @qconid       = @modulepath @conid
-@symbols      = $symbol+ | \/
-@qidop        = @modulepath \(@symbols\)
-@idop         = \(@symbols\)
+
+@op           = $symbol+ | \/
+@idsym        = @lowerid? $symbol+ | \/
+@qidop        = @modulepath \(@idsym\)
+@idop         = \(@idsym\)
 
 @sign         = [\-]?
 @digitsep     = _ $digit+
@@ -120,9 +127,9 @@ program :-
 
 
 -- qualified identifiers
-<0> @qconid               { fn() { emit(LexCons(get-qname())) } }
+<0> @qconid               { fn() { emit(LexCons(get-qname(), "")) } }
 <0> @qvarid               { fn() { emit(LexId(get-qname())) } }
-<0> @qidop                { fn() { emit(LexIdOp(get-slice().strip-parens.newQName)) } }
+<0> @qidop                { fn() { emit(LexIdOp(get-qname())) } }
 
 -- identifiers
 <0> @lowerid              { fn() {
@@ -131,8 +138,8 @@ program :-
     elif s.is-malformed then emit(LexError(message-malformed))
     else emit(LexId(s.new-name))
   }}
-<0> @conid                { fn() { emit(LexCons(get-name())) } }
-<0> _@idchar*             { fn() { emit(LexWildCard(get-name())) } }
+<0> @conid                { fn() { emit(LexCons(get-name(), "")) } }
+<0> @wildcard             { fn() { emit(LexWildCard(get-name())) } }
 
 -- specials
 <0> $special              { fn() { emit(LexSpecial(get-string())) } }
@@ -145,15 +152,14 @@ program :-
 
 -- type operators
 <0> "||"                  { fn() { emit(LexOp(get-name())) } }
--- <0> $anglebar $anglebar+  { fn() { less(1, string(fn(s) if (s=="|") then LexKeyword(s, "") else LexOp(s.new-name))) } }
 
 -- operators
-<0> @idop                 { fn() { emit(LexIdOp(get-slice().strip-parens.new-name)) } }
-<0> @symbols              { fn() {
+<0> @idop                 { fn() { emit(LexIdOp(get-qname())) } }
+<0> @op                   { fn() {
     val s = get-string();  
     if s.is-reserved then emit(LexKeyword(s,""))
     elif s.is-prefix-op then emit(LexPrefix(s.new-name))
-    else emit(LexOp(s.new-name))
+    else s.split-op.foreach(emit)
    }}
 
 
@@ -236,10 +242,27 @@ program :-
 
 <linedir> @utf8unsafe     { fn() { unsafe-char("line directive") } }
 <linedir> @linechar       { fn() { extend-slice(id) } }
-<linedir> @newline        { fn() { pop-state(); end-chunk(fn(s) LexComment(s.list.filter(fn(c) c !='\r').string)) } }
+<linedir> @newline        { fn() { pop-state(); end-chunk(fn(s) check-linedir(LexComment(s.list.filter(fn(c) c !='\r').string), get-start(), get-end())) } }
 <linedir> .               { fn() { pop-state(); end-chunk(fn(s) LexError("illegal character in line directive: " ++ s.show)) } }
 
 {
+
+fun is-anglebar(c: char): bool
+  match c
+    '|' -> True
+    '<' -> True
+    '>' -> True
+    _ -> False
+
+fun split-op(s: string): list<lex>
+  fun split(s': list<char>): list<lex>
+    match s'
+      Cons('|', rst) | rst.all(fn(r) r.is-anglebar) -> Cons(LexKeyword("|", ""), split(rst))
+      Cons('>', rst) -> Cons(LexOp(">".new-name), split(rst))
+      Cons('<', rst) -> Cons(LexOp("<".new-name), split(rst))
+      Nil -> Nil
+      xs -> Cons(LexOp(xs.string.new-name), Nil)
+  split(s.list)
 
 fun extend-slice(f: sslice -> sslice)
   add-chunk(f(get-slice()))
@@ -254,21 +277,13 @@ fun get-name()
   get-string().new-name
 
 fun get-qname()
-  get-string().newQName
+  get-string().read-qualified-name
 
 fun unsafe-char(kind: string)
   LexError("unsafe character in " ++ kind ++ ": " ++ get-string())
   end-chunked()
   pop-state()
   ()
-
-fun newQName(s': string)
-  val s = s'.list 
-  val (rname, rsmod) = s.reverse.span(fn(c) { c != '/' })
-  match rsmod // TODO: First case needs condition on rname == Nil
-    Cons('/', Cons('/', rmod)) -> new-qualified(rmod.reverse.string, "/")
-    Cons('/', rmod) -> new-qualified(rmod.reverse.string, rname.reverse.string)
-    _ -> s.string.new-name
 
 fun strip-parens(s: sslice)
   match s.string.list.reverse
@@ -289,27 +304,23 @@ val special-names = [ "{", "}"
 val reserved-names = 
       delay({
         string-pool().add-all(
-        ["infix", "infixr", "infixl", "prefix", "postfix"
-              , "type", "alias"
-              , "struct", "enum", "con"
-              , "val", "fun", "fn", "extern", "var"
-              , "ctl", "final", "raw"
-              , "if", "then", "else", "elif"
-              , "return", "match", "with", "in"
-              , "forall", "exists", "some"
-              , "pub", "abstract"
+        ["infix", "infixr", "infixl"
               , "module", "import", "as"
-
-              // effect handlers
-              , "handler", "handle"
-              , "effect", "receffect"
-              , "named"
-              , "mask"
-              , "override"   
+              , "pub", "abstract"
+              , "type", "alias", "effect", "struct", "con"
+              , "forall", "exists", "some"
+              , "fun", "fn", "val", "var", "extern"
+              , "if", "then", "else", "elif"
+              , "match", "return", "with", "in"
+              , "handle", "handler", "mask"
+              , "ctl", "final", "raw"
+              , "override", "named"
+              , "ctx", "hole"
 
               // deprecated
               , "private", "public"  // use pub
               , "rawctl", "brk"      // use raw ctl, and final ctl
+              , "prefix", "postfix"
 
               // alternative names for backwards paper compatability
               , "control", "rcontrol", "except"
@@ -322,6 +333,8 @@ val reserved-names =
               // future reserved
               , "interface"
               , "unsafe"
+              , "break"
+              , "continue"
 
               // operators
               , "="

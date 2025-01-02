@@ -10,8 +10,8 @@ fun is-prefix(x: list<string>, y: list<string>): bool
     (Nil, _) -> True
     _ -> False
 
-fun extend(imp: importmap, name: name, fullName: name)
-  val rpath = name.split-module-name.reverse
+fun extend(imp: importmap, alias-name: name, fullName: name)
+  val rpath = alias-name.split-module-name.reverse
   match imp.lookup(rpath)
     Just(fullName1) -> if fullName1 == fullName then Just(imp) else Nothing
     Nothing -> Just(imp.set(rpath, fullName))
@@ -38,7 +38,7 @@ fun expand(imp: importmap, name: name): exn either<list<name>, (name, name)>
   imp.resolve-path(name.unqualify, rpath)
 
 fun resolve-path(imp: importmap, basename: name, rpath: list<string>): exn either<list<name>, (name, name)>
-  if rpath.length == 0 then return Right((basename, nil))
+  if rpath.length == 0 then return Right((basename, nil)) // unqualified
   match imp.entries.filter(fn((ralias, _)) -> rpath.is-prefix(ralias))
     [] -> // No match - assume local qualification (note: rpath cannot be null)
       match rpath

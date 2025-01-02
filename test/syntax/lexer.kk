@@ -6,16 +6,16 @@ import compiler/syntax/lexeme
 
 fun main()
   val files =  [
-    "compiler/syntax/lex",
-    "compiler/syntax/lexer",
-    "compiler/syntax/lexeme"
+    "../compiler/compiler/syntax/lex",
+    "../compiler/compiler/syntax/lexer",
+    "../compiler/compiler/syntax/lexeme"
   ]
   
   files.foreach fn(f)
     with handler
       final ctl throw-exn(e)
-        ()
+        e.trace-show
     val s = read-text-file((f ++ ".kk").path)
     val source = Source(f ++ ".kk", s)
-    lexing(source, 1, s).show.trace
+    lexing(source, 1, s).trace-show
     ()

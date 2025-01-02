@@ -11,20 +11,20 @@ import compiler/type/pretty
 // constraints and platform sizes.
 
 // value types
-fun createDataDef(emitError: (doc) -> e (), emitWarning: (doc) -> e (), lookupDataInfo: (name) -> e maybe<dataInfo>, platform: platform, nm:name, resultHasKindStar: bool, isRec: bool, sort: dataKind, extraFields: int, defaultDef:dataDef, conInfos0: list<conInfo>): e (dataDef, list<conInfo>)
-  val isVal = defaultDef.isValue
-  fun createConInfoRepr(c: conInfo)
-    val (orderedFields, vrepr) = orderConFields(emitError, "constructor ".text |+| (c.name:name).pretty, lookupDataInfo, platform, extraFields, c.params)
+fun create-data-def(emit-error: (doc) -> e (), emitWarning: (doc) -> e (), lookup-datainfo: (name) -> e maybe<dataInfo>, platform: platform, nm:name, resultHasKindStar: bool, isRec: bool, sort: dataKind, extraFields: int, defaultDef:dataDef, conInfos0: list<conInfo>): e (dataDef, list<conInfo>)
+  val isVal = defaultDef.is-value
+  fun create-con-info-repr(c: conInfo)
+    val (orderedFields, vrepr) = order-con-fields(emit-error, "constructor ".text |+| (c.name:name).pretty, lookup-datainfo, platform, extraFields, c.params)
     c(orderedParams=orderedFields, valueRepr=vrepr)
   
   // (m = raw, n = scan)
-  fun maxDataDefs(ddfs)
+  fun max-data-def(ddfs)
     match ddfs
       Nil ->
         if !isVal then DataDefNormal // reference type no constructors
         else
           val size = 
-            if nm == nameTpChar || nm == nameTpInt32 || nm == nameTpFloat32 then 4
+            if nm == nameTpChar || nm == nameTpInt32 || nm == nameTpFloat32 || nm == nameTpMarker then 4
             elif nm == nameTpFloat || nm == nameTpInt64 then 8
             elif nm == nameTpInt8 then 1
             elif nm == nameTpInt16 || nm == nameTpFloat16 then 2
@@ -39,7 +39,7 @@ fun createDataDef(emitError: (doc) -> e (), emitWarning: (doc) -> e (), lookupDa
           DataDefValue(ValueRepr(m, 0, m))
       [vr] -> DataDefValue(vr)
       Cons(vr, vrs) ->
-        val dd = vrs.maxDataDefs
+        val dd = vrs.max-data-def
         match (vr, dd)
           (ValueRepr(0, 0), DataDefValue(v)) -> DataDefValue(v)
           (v, DataDefValue(ValueRepr(0, 0))) -> DataDefValue(v)
@@ -52,25 +52,25 @@ fun createDataDef(emitError: (doc) -> e (), emitWarning: (doc) -> e (), lookupDa
             | n1 == n2 -> DataDefValue(ValueRepr(m1.max(m2), n1, a1.max(a2)))
             | True ->
               if isVal then
-                emitError("is declared as a value type but has".text|+|
+                emit-error("is declared as a value type but has".text|+|
                   "multiple constructors with different number of regular types overlapping with value types.".text |-|
                   "hint: value types with multiple constructors must all use the same number of regular types (use 'box' to use a value type as a regular type).".text )
               DataDefNormal
           _ -> DataDefNormal
 
-  fun createMaxDataDef(ci: list<conInfo>)
+  fun create-max-data-def(ci: list<conInfo>)
     val vreprs = ci.map(valueRepr)
-    val ddef = maxDataDefs(vreprs)
+    val ddef = max-data-def(vreprs)
     match ddef
       DataDefValue(ValueRepr(0, 0, 0)) -> // enum
         val n = ci.length
-        if n < 256 then DataDefValue(valueReprRaw(1)) // uint8
-        elif n < 65536 then DataDefValue(valueReprRaw(2)) // uint16
-        else DataDefValue(valueReprRaw(4)) // uint32
+        if n < 256 then DataDefValue(value-repr-raw(1)) // uint8
+        elif n < 65536 then DataDefValue(value-repr-raw(2)) // uint16
+        else DataDefValue(value-repr-raw(4)) // uint32
       _ -> ddef
 
   // calculate the value repr of each constructor
-  val conInfos = conInfos0.map(createConInfoRepr)
+  val conInfos = conInfos0.map(create-con-info-repr)
 
   // datadef
   val maxMembers = conInfos.map(fn(i) i.params.length).maximum()
@@ -80,40 +80,38 @@ fun createDataDef(emitError: (doc) -> e (), emitWarning: (doc) -> e (), lookupDa
   val isIso = canbeValue && maxMembers == 1 && conCount == 1
   
   val ddef = match defaultDef
-    DataDefOpen -> defaultDef
-    DataDefRec -> defaultDef
-    DataDefNormal | isRec -> DataDefRec
+    DataDefOpen(isExtend) -> DataDefOpen(isExtend)
+    DataDefLazy(fip) -> DataDefLazy(fip)
     DataDefNormal -> 
-      val dd = conInfos.createMaxDataDef
+      val dd = conInfos.create-max-data-def
       // match dd
       //   DataDefValue | isEnum -> dd // allow allocated enums
       //   DataDefValue | isIso -> dd // iso type are always value types
       DataDefNormal
-    DataDefAuto | isRec -> DataDefRec
     DataDefAuto ->
-      val dd = conInfos.createMaxDataDef
+      val dd = conInfos.create-max-data-def
       match dd
         DataDefValue | isEnum -> dd
         DataDefValue | isIso -> dd // iso types are preferred as value types
-        DataDefValue(vr) ->
-          val wouldGetTagField = conCount > 1 && !isEnum
-          val size = platform.size(vr) + (if wouldGetTagField then platform.fieldSize else 0)
-          if (size <= 2*platform.ptrSize && (maxMembers < 3 && canbeValue)) then
-            emitWarning("may be better declared as a value type for efficiency (e.g. 'value type/struct'),".text |-|
-              "or declared as a reference type to suppress this warning (e.g. 'reference type/struct')".text)
+        DataDefValue ->
+          // val wouldGetTagField = conCount > 1 && !isEnum
+          // val size = platform.size(vr) + (if wouldGetTagField then platform.fieldSize else 0)
+          // if (size <= 2*platform.ptrSize && (maxMembers < 3 && canbeValue)) then
+          //   emitWarning("may be better declared as a value type for efficiency (e.g. 'value type/struct'),".text |-|
+          //     "or declared as a reference type to suppress this warning (e.g. 'reference type/struct')".text)
           DataDefNormal
         _ -> DataDefNormal
     DataDefValue | isRec ->
-      emitError("cannot be declared as value type since it is recursive.".text)
+      emit-error("cannot be declared as value type since it is recursive.".text)
       DataDefNormal
     DataDefValue | !resultHasKindStar ->
-      emitError("is declared as a value type but does not have value kind ('V').".text)
+      emit-error("is declared as a value type but does not have value kind ('V').".text)
       DataDefNormal
-    DataDefValue | sort.is-retractive ->
-      emitError("is declared as a value type but is not (co)inductive.".text)
+    DataDefValue | !sort.is-inductive ->
+      emit-error("is declared as a value type but is not inductive.".text)
       DataDefNormal
     DataDefValue ->
-      val dd = conInfos.createMaxDataDef()
+      val dd = conInfos.create-max-data-def()
       match dd
         DataDefValue(vr) ->
           val size = platform.size(vr)
@@ -124,7 +122,7 @@ fun createDataDef(emitError: (doc) -> e (), emitWarning: (doc) -> e (), lookupDa
           dd
         _ ->
           // should never happen
-          emitError("cannot be used as a value type.".text) 
+          emit-error("cannot be used as a value type.".text) 
           DataDefNormal
   (ddef, conInfos)
 
@@ -132,13 +130,13 @@ fun createDataDef(emitError: (doc) -> e (), emitWarning: (doc) -> e (), lookupDa
 //  order constructor fields of constructors with raw field so the regular fields come first to be scanned.
 // return the ordered fields, and a ValueRepr (raw size part, the scan count (including tags), align, and full size)
 // The size is used for reuse and should include all needed fields including the tag field for "open" datatypes 
-fun orderConFields(emitError: (doc) -> e (), nameDoc: doc, getDataInfo: (name) -> e maybe<dataInfo>, platform: platform, extraPreScan: int, fields: list<(name, ktype)>): e (list<(name, ktype)>, valueRepr)
-  fun visit(rraw: list<((name, ktype), valueRepr)>, rmixed: list<((name, ktype), valueRepr)>, rscan: list<(name, ktype)>, scanCount0: int, alignment0: int, l: list<(name, ktype)>)
+fun order-con-fields(emit-error: (doc) -> e (), nameDoc: doc, get-datainfo: (name) -> e maybe<dataInfo>, platform: platform, extraPreScan: int, fields: list<(name, ktype)>): e (list<(name, ktype)>, valueRepr)
+  fun visit(rraw: list<((name, ktype), valueRepr)>, rmixed: list<((name, ktype), valueRepr)>, rscan: list<(name, ktype)>, scan-count0: int, alignment0: int, l: list<(name, ktype)>)
     if rmixed.length > 1 then
-      emitError(nameDoc |+| " has multiple value type fields that each contain both raw types and regular types".text |-|
+      emit-error(nameDoc |+| " has multiple value type fields that each contain both raw types and regular types".text |-|
         "hint: use 'box' on either field to make it a non-value type.".text)
     // size before any mixed and raw fields
-    val preSize = platform.headerSize + scanCount0 * platform.fieldSize
+    val preSize = platform.headerSize + scan-count0 * platform.fieldSize
     // if there is a mixed value member (with scan fields) we may need to add padding scan fields (!)
     // (or otherwise the C compiler may insert uninitialized padding)
     val (padding, mixedScan) =
@@ -147,32 +145,32 @@ fun orderConFields(emitError: (doc) -> e (), nameDoc: doc, getDataInfo: (name) -
           val padSize = preSize % ralign
           val padCount = padSize / platform.fieldSize
           if (padSize % platform.fieldSize) != 0 then
-            trace("kind/info orderConFields: illegal alignment " ++ ralign.show)
-          (list(1, padCount - 1).map(fn(i) ((newPaddingName(scanCount0 + i), typeAny), valueReprScan(1))), scan + padCount)
+            trace("kind/info order-con-fields: illegal alignment " ++ ralign.show)
+          (list(1, padCount - 1).map(fn(i) ((new-padding-name(scan-count0 + i), typeAny), value-repr-scan(1))), scan + padCount)
         _ -> (Nil, 0)
     // calculate the rest now
-    val scanCount = scanCount0 + mixedScan
-    val alignment = if scanCount > 0 then alignment0.max(platform.fieldSize) else alignment0
+    val scan-count = scan-count0 + mixedScan
+    val alignment = if scan-count > 0 then alignment0.max(platform.fieldSize) else alignment0
     val rest = padding ++ rmixed ++ rraw.reverse
     val restSizes = rest.map(fn((_, vr)) platform.size(vr))
     val restFields = rest.map(fst)
-    val size = alignedSum(preSize, restSizes)
-    val rawSize = size - platform.headerSize - (scanCount * platform.fieldSize)
-    val vrepr = ValueRepr(rawSize, scanCount, alignment)
+    val size = aligned/sum(preSize, restSizes)
+    val rawSize = size - platform.headerSize - (scan-count * platform.fieldSize)
+    val vrepr = ValueRepr(rawSize, scan-count, alignment)
     (rscan.reverse ++ restFields, vrepr)
   visit([], [], [], extraPreScan, 0, fields)
 
-fun extractDataDefType(tp: ktype): maybe<name>
+fun extract-datadef-type(tp: ktype): maybe<name>
   match tp
-    TApp(t) -> t.extractDataDefType
-    TForAll(_, _, t) -> t.extractDataDefType
+    TApp(t) -> t.extract-datadef-type
+    TForAll(_, _, t) -> t.extract-datadef-type
     TCon(tc) -> Just(tc.name)
     _ -> Nothing
 
 // Return the DataDef for a type.
 // This may be 'Nothing' for abstract types.
-fun getDataDef(lookupDI: (name) -> e maybe<dataInfo>, tp: ktype): e maybe<dataDef>
-  match tp.extractDataDefType
+fun get-data-def(lookupDI: (name) -> e maybe<dataInfo>, tp: ktype): e maybe<dataDef>
+  match tp.extract-datadef-type
     Nothing -> Just(DataDefNormal)
     Just(nm) | nm == nameTpBox -> Just(DataDefNormal)
     Just(nm) ->

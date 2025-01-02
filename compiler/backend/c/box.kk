@@ -16,77 +16,77 @@ import std/core/undiv
 // Box / unbox transformation
 alias boxEff = <uniquePhase,comp-flags,documentation,pure,colorSchemeEffect,ppEnvEff>
 
-fun boxCore(c: core): boxEff core
-  c(defs=boxDefGroups(c.defs))
+fun box-core(c: core): boxEff core
+  c(defs=box-def-groups(c.defs))
 
-fun boxDefGroups(dgs: defGroups)
-  dgs.map(boxDefGroup)
+fun box-def-groups(dgs: defGroups)
+  dgs.map(box-def-group)
 
-fun boxDefGroup(dg: defGroup)
+fun box-def-group(dg: defGroup)
   match dg
-    DefRec(defs) -> DefRec(defs.map(boxDef))
-    DefNonRec(d) -> DefNonRec(boxDef(d))
+    DefRec(defs) -> DefRec(defs.map(box-def))
+    DefNonRec(d) -> DefNonRec(box-def(d))
 
-fun boxDef(d: def): boxEff def
-  val bexpr = boxExpr(boxType(d.ktype), d.defExpr)
+fun box-def(d: def): boxEff def
+  val bexpr = box-expr(box-type(d.ktype), d.defExpr)
   val bdef = d(defExpr = bexpr)
   // simplify the whole def to avoid simplifying away functions to values (e.g. `fun(x){g(x)} -> val f = g`)
-  bdef.uniqueSimplify(True, False, 3, 6)
+  bdef.unique-simplify(True, False, 3, 6)
 
 // add box/unbox such that the type of `expr` matches `BoxType`
-fun boxExpr(tp: ktype, ex: expr)
+fun box-expr(tp: ktype, ex: expr)
   match ex
     // remove type abstraction and applications
-    TypeLam(_, e) -> boxExpr(tp, e)
-    TypeApp(e, _) -> boxExpr(tp, e)
+    TypeLam(_, e) -> box-expr(tp, e)
+    TypeApp(e, _) -> box-expr(tp, e)
     // Regular
     App(e, args) ->
-      val argTps = args.map(boxTypeOf)
-      val eTp = TFun(argTps.map(fn(t) (nameNil, t)), typeTotal, tp)
-      val bargs = args.map(fn(a) boxExpr(boxTypeOf(a), a))
-      val be = boxExpr(eTp, e)
+      val argTps = args.map(box-typeof)
+      val eTp = TFun(argTps.map(fn(t) (nil, t)), typeTotal, tp)
+      val bargs = args.map(fn(a) box-expr(box-typeof(a), a))
+      val be = box-expr(eTp, e)
       App(be, bargs)
     Lam(tparams, eff, body) ->
-      val fnTp = ex.boxTypeOf
-      val bbody = boxExpr(tp, body)
+      val fnTp = ex.box-typeof
+      val bbody = box-expr(tp, body)
       bcoerce(fnTp, tp, Lam(tparams, eff, bbody))
     Let(defGroups, body) ->
-      val bdgs = defGroups.boxDefGroups
-      val bbody = boxExpr(tp, body)
+      val bdgs = defGroups.box-def-groups
+      val bbody = box-expr(tp, body)
       Let(bdgs, bbody)
     Case(exprs, branches) ->
-      val exprTps = exprs.map(boxTypeOf)
-      val bexprs = exprTps.zip(exprs).map(fn((tp', e)) boxExpr(tp', e))
-      val bbranches = branches.map(fn(b) boxBranch(exprTps, tp, b))
+      val exprTps = exprs.map(box-typeof)
+      val bexprs = exprTps.zip(exprs).map(fn((tp', e)) box-expr(tp', e))
+      val bbranches = branches.map(fn(b) box-branch(exprTps, tp, b))
       Case(bexprs, bbranches)
-    _ -> bcoerce(ex.boxTypeOf, tp, ex)
+    _ -> bcoerce(ex.box-typeof, tp, ex)
 
-fun boxBranch(patTps: list<ktype>, tp: ktype, b: branch)
-  val (bpatterns, defss) = patTps.zip(b.patterns).map(fn((pt, p)) boxPattern(pt, p)).unzip
+fun box-branch(patTps: list<ktype>, tp: ktype, b: branch)
+  val (bpatterns, defss) = patTps.zip(b.patterns).map(fn((pt, p)) box-pattern(pt, p)).unzip
   fun binds(ex: expr)
-    makeLet(defss.concat.map(fn(d) DefNonRec(d)), ex)
-  val bguards = b.guards.map(fn(g) boxGuard(tp, binds, g))
+    make-let(defss.concat.map(fn(d) DefNonRec(d)), ex)
+  val bguards = b.guards.map(fn(g) box-guard(tp, binds, g))
   Branch(bpatterns, bguards)
 
-fun boxGuard(tp: ktype, binds: expr -> pure expr, Guard(test, expr): guard)
-  val btest = boxExpr(typeBool, test)
-  val bexpr = binds(boxExpr(tp, expr))
+fun box-guard(tp: ktype, binds: expr -> pure expr, Guard(test, expr): guard)
+  val btest = box-expr(typeBool, test)
+  val bexpr = binds(box-expr(tp, expr))
   Guard(btest, bexpr) // TODO: binds come to late to appear in guards but we need binds for function wrappers?.. perhaps create a special pattern just for the C backend?
 
 // add bindings and box/unbox such that pattern matches the required boxtype
-fun boxPattern(fromTp: ktype, p: pattern)
+fun box-pattern(fromTp: ktype, p: pattern)
   if p.is-patWild then
-    return boxPatternX(fromTp, p)
+    return box-patternX(fromTp, p)
   val toTp = match p
     PatCon(typeRes=res) -> res
-    PatVar(tname) -> tname.typeOf
-    PatLit(l) -> l.typeOf
-  if fromTp.cType != toTp.cType then
-    val mcoerce = bcoerceX(fromTp, toTp, Var(TName(nameNil, fromTp), InfoNone))
+    PatVar(tname) -> tname.type-of
+    PatLit(l) -> l.type-of
+  if fromTp.c-type != toTp.c-type then
+    val mcoerce = bcoerceX(fromTp, toTp, Var(TName(nil, fromTp), InfoNone))
     match mcoerce
       Just ->
         val isComplexCoerce =
-          match (fromTp.cType, toTp.cType)
+          match (fromTp.c-type, toTp.c-type)
             (CFun, _) -> True
             (_, CFun) -> True
             _ -> False
@@ -105,26 +105,26 @@ fun boxPattern(fromTp: ktype, p: pattern)
               val i = new-unique()
               val uname = new-hidden-name("fun-unbox-x" ++ i.show)
               val coerce = bcoerce(fromTp, toTp, Var(TName(uname, fromTp), InfoNone))
-              val def = makeTDef(TName(tname.getName, toTp), coerce)
+              val def = make-tdef(TName(tname.get-name, toTp), coerce)
               (PatVar(TName(uname, fromTp), PatWild), [def])
             _ ->
-              fail("backend/c/from-core boxPattern: nested match on a function?")
+              fail("backend/c/from-core box-pattern: nested match on a function?")
         else // regular box / unbox
           val i = new-unique()
           val uname = new-hidden-name("box-x" ++ i.show)
-          val (bpat, defs) = boxPatternX(toTp, p)
-          (PatVar(TName(uname, typeBoxStar), patBox(toTp, typeBoxStar, bpat)), defs)
+          val (bpat, defs) = box-patternX(toTp, p)
+          (PatVar(TName(uname, type-boxStar), pat-box(toTp, type-boxStar, bpat)), defs)
       _ ->
-        boxPatternX(fromTp, p)
-  else boxPatternX(fromTp, p)    
+        box-patternX(fromTp, p)
+  else box-patternX(fromTp, p)    
 
-fun boxPatternX(fromTp: ktype, p: pattern)
+fun box-patternX(fromTp: ktype, p: pattern)
   match p
     PatCon(name, pars, repr, targs, exists0, tres, conInfo, skip) ->
-      val (bparams, defss) = conInfo.params.map(snd).zip(pars).map(fn((ftp, par)) boxPattern(ftp, par)).unzip
+      val (bparams, defss) = conInfo.params.map(snd).zip(pars).map(fn((ftp, par)) box-pattern(ftp, par)).unzip
       (PatCon(name, bparams, repr, targs, exists0, tres, conInfo, skip), defss.concat)
     PatVar(tname, arg) ->
-      val (barg, defs) = boxPattern(tname.typeOf, arg)
+      val (barg, defs) = box-pattern(tname.type-of, arg)
       (PatVar(tname, barg), defs)
     PatLit -> (p, [])
     PatWild -> (p, [])
@@ -137,44 +137,44 @@ fun bcoerce(fromTp: ktype, toTp: ktype, ex: expr)
     Nothing -> ex
 
 fun bcoerceX(fromTp: ktype, toTp: ktype, ex: expr)
-  val coerceTp = TFun([(nameNil, fromTp)], typeTotal, toTp)
-  val boxVar = boxVarAtTp(coerceTp)
-  val unboxVar = unboxVarAtTp(coerceTp)
-  match (fromTp.cType, toTp.cType)
+  val coerceTp = TFun([(nil, fromTp)], typeTotal, toTp)
+  val boxVar = box-var-at-tp(coerceTp)
+  val unboxVar = unbox-var-at-tp(coerceTp)
+  match (fromTp.c-type, toTp.c-type)
     (CBox, CBox) -> Nothing
     (CBox, CData) -> Just(App(unboxVar, [ex]))
     (CData, CBox) -> Just(App(boxVar, [ex]))
     // boxed functions need to be wrapped to take all arguments and results as boxed as well :-(
     // set test/cgen/box3 and test/cgen/box3a
     (CBox, CFun) ->
-      val boxedToTp = toTp.boxedFunType
-      val unboxed = App(unboxVarAtTp(TFun([(nameNil, fromTp)], typeTotal, boxedToTp)), [ex])
+      val boxedToTp = toTp.boxed-funtp
+      val unboxed = App(unbox-var-at-tp(TFun([(nil, fromTp)], typeTotal, boxedToTp)), [ex])
       Just(bcoerce(boxedToTp, toTp, unboxed)) // unwrap function; we must return Just even if no further wrapping was needed
     (CFun, CBox) ->
-      val boxedFromTp = fromTp.boxedFunType
+      val boxedFromTp = fromTp.boxed-funtp
       val boxed = bcoerce(fromTp, boxedFromTp, ex) //wrap function
-      val wrapped = App(boxVarAtTp(TFun([(nameNil, boxedFromTp)], typeTotal, toTp)), [boxed])
+      val wrapped = App(box-var-at-tp(TFun([(nil, boxedFromTp)], typeTotal, toTp)), [boxed])
       Just(wrapped)
     // coerce between function arguments/results
     (CFun(fromPars, fromRes), CFun(toPars, toRes)) ->
       if !fromPars.zip(toPars).all(fn((t1, t2)) t1 == t2) && fromRes == toRes then
-        match toTp.splitFunScheme
+        match toTp.split-funScheme
           Just((_, _, toParTps, toEffTp, toResTp)) ->
-            match fromTp.splitFunScheme
-              Just((_, _, fromParTps, fromEffTp, fromResTp)) -> Just(boxBindExprAsValue(fromTp, toTp, ex, fn(vexpr) boxCoerceFun(toParTps, toEffTp, toResTp, fromParTps, fromEffTp, fromResTp, vexpr)))
+            match fromTp.split-funScheme
+              Just((_, _, fromParTps, fromEffTp, fromResTp)) -> Just(box-bind-expr-as-value(fromTp, toTp, ex, fn(vexpr) box-coerce-fun(toParTps, toEffTp, toResTp, fromParTps, fromEffTp, fromResTp, vexpr)))
               _ -> fail("backend/c/box bcoerceX: expecting function (from): " ++ fromTp.pretty.show)
           _ -> fail("backend/c/box bcoerceX: expecting function (to): " ++ toTp.pretty.show)
       else Nothing
     _ -> Nothing
 
-fun boxVarAtTp(tp: ktype)
+fun box-var-at-tp(tp: ktype)
   Var(TName(nameBox, tp), InfoExternal([(C(CDefault), "box(#1)")]))
 
-fun unboxVarAtTp(tp: ktype)
+fun unbox-var-at-tp(tp: ktype)
   Var(TName(nameUnbox, tp), InfoExternal([(C(CDefault), "unbox(#1)")]))
 
-fun boxCoerceFun(toParTps: list<(name, ktype)>, toEffTp: ktype, toResTp: ktype, fromParTps: list<(name, ktype)>, fromEffTp: ktype, fromResTp: ktype, ex: expr): <colorSchemeEffect,comp-flags,pure,documentation,ppEnvEff,uniquePhase> expr
-  val names = toParTps.map(fn(_) uniqueName("b"))
+fun box-coerce-fun(toParTps: list<(name, ktype)>, toEffTp: ktype, toResTp: ktype, fromParTps: list<(name, ktype)>, fromEffTp: ktype, fromResTp: ktype, ex: expr): <colorSchemeEffect,comp-flags,pure,documentation,ppEnvEff,uniquePhase> expr
+  val names = toParTps.map(fn(_) unique-name("b"))
   val pars = names.zipwith(toParTps.map(snd), fn(n, t) TName(n,t))
   val args = pars.map(fn(p) Var(p, InfoNone))
   val bargs = zip3(args, toParTps.map(snd), fromParTps.map(snd)).map(fn((arg, parToTp, parFromTp)) bcoerce(parToTp, parFromTp, arg))
@@ -186,40 +186,40 @@ fun zip3(l1: list<a>, l2: list<b>, l3: list<c>): list<(a,b,c)>
     (Cons(x1, xs1), Cons(x2, xs2), Cons(x3, xs3)) -> Cons((x1, x2, x3), zip3(xs1.pretend-decreasing, xs2, xs3))
     _ -> Nil
 
-fun boxBindExprAsValue(fromTp: ktype, toTp: ktype, ex: expr, f: expr -> boxEff expr)
-  if ex.isTotal then f(ex)
+fun box-bind-expr-as-value(fromTp: ktype, toTp: ktype, ex: expr, f: expr -> boxEff expr)
+  if ex.is-total then f(ex)
   else
-    val v = uniqueTName("bv", fromTp)
+    val v = unique-tname("bv", fromTp)
     val body = f(Var(v, InfoNone))
-    Let([DefNonRec(makeTDef(v, ex))], body)
+    Let([DefNonRec(make-tdef(v, ex))], body)
 
 // type without quantification
-fun boxTypeOf(ex: expr)
-  match ex.typeOf.splitPredType
+fun box-typeof(ex: expr)
+  match ex.type-of.split-pred-type
     (_, _, tp) -> tp
 
-fun boxType(tp: ktype)
+fun box-type(tp: ktype)
   match tp
-    TForAll(_, _, t) -> t.boxType
-    TFun(pars, eff, res) -> TFun(pars.map(fn((n, t)) (n, t.boxType)), eff.boxType, res.boxType)
-    TApp(t, ts) -> TApp(t.boxType, ts.map(fn(t') t'.kind.typeBox))
-    TSyn(syn, args, t) -> TSyn(syn, args.map(boxType), t.boxType)
+    TForAll(_, _, t) -> t.box-type
+    TFun(pars, eff, res) -> TFun(pars.map(fn((n, t)) (n, t.box-type)), eff.box-type, res.box-type)
+    TApp(t, ts) -> TApp(t.box-type, ts.map(fn(t') t'.kind.type-box))
+    TSyn(syn, args, t) -> TSyn(syn, args.map(box-type), t.box-type)
     _ -> tp
 
-fun boxedFunType(tp: ktype)
+fun boxed-funtp(tp: ktype)
   match tp
-    TForAll(_, _, t) -> t.boxedFunType
-    TSyn(_, _, t) -> t.boxedFunType
+    TForAll(_, _, t) -> t.boxed-funtp
+    TSyn(_, _, t) -> t.boxed-funtp
     TFun(pars, eff, res) ->
-      val bpars = pars.map(fn(_) boxedTypeVar())
-      val bres = res.boxedFunType
+      val bpars = pars.map(fn(_) boxed-tv())
+      val bres = res.boxed-funtp
       TFun(pars.zip(bpars).map(fn(((nm, _), bp)) (nm, bp)), eff, bres)
-    _ -> fail("backend/c/box boxedFunType: " ++ tp.pretty.show)
+    _ -> fail("backend/c/box boxed-funtp: " ++ tp.pretty.show)
 
-fun boxedTypeVar()
+fun boxed-tv()
   TVar(TypeVar(new-unique(), kindStar, Bound))
 
-fun typeBox(k: kind)
+fun type-box(k: kind)
   TCon(TypeCon(nameTpBox, k))
 
 type cType
@@ -227,22 +227,22 @@ type cType
   CFun(args: list<cType>, res: cType)
   CData
 
-fun cType(k: ktype)
+fun c-type(k: ktype)
   match k
-    TForAll(_, _, t) -> cType(t)
-    TFun(pars, res) -> CFun(pars.map(fn((_, t)) cType(t)), cType(res))
-    TApp(t) -> t.cType
+    TForAll(_, _, t) -> t.c-type
+    TFun(pars, res) -> CFun(pars.map(fn((_, t)) t.c-type), res.c-type)
+    TApp(t) -> t.c-type
     TCon -> CData
     TVar -> CBox
-    TSyn(_, _, t) -> cType(t)
+    TSyn(_, _, t) -> t.c-type
 
-fun (==)(c1s: list<cType>, c2s: list<cType>): div bool
+fun lt/(==)(c1s: list<cType>, c2s: list<cType>): div bool
   match (c1s, c2s)
     (Nil, Nil) -> True
     (Cons(c1, c1s'), Cons(c2, c2s')) -> c1 == c2 && c1s' == c2s'
     _ -> False
 
-fun (==)(c1: cType, c2: cType): div bool
+fun ct/(==)(c1: cType, c2: cType): div bool
   match (c1, c2)
     (CBox, CBox) -> True
     (CData, CData) -> True
@@ -252,21 +252,21 @@ fun (==)(c1: cType, c2: cType): div bool
 fun (!=)(c1: cType, c2: cType): div bool
   !(c1 == c2)
 
-val typeBoxStar = kindStar.typeBox
+val type-boxStar = kindStar.type-box
 
-fun isBoxPat(p: pattern)
+fun is-box-pat(p: pattern)
   match p
-    PatCon(name) -> name.getName == nameBoxCon
+    PatCon(name) -> name.get-name == nameBoxCon
     _ -> False
 
-fun patBox(tpPat: ktype, tpRes: ktype, p: pattern)
+fun pat-box(tpPat: ktype, tpRes: ktype, p: pattern)
   PatCon(TName(nameBoxCon, boxConInfo.typeScheme), [p], boxConRepr, [tpPat], [], tpRes, boxConInfo, True)
 
-val boxConRepr = ConSingle(nameTpBox, DataSingle(False), valueReprScan(1), CtxNone, 0)
+val boxConRepr = ConSingle(nameTpBox, DataSingle(False), value-repr-scan(1), CtxNone, 0)
 val tva = TypeVar(0, kindStar, Bound)
-val tp = TForAll([tva], [], TFun([(nameNil, TVar(tva))], typeTotal, typeBoxStar))
-val boxConInfo = ConInfo(nameBox, nameTpBox, [tva], [], [(nameNil, TVar(tva))], tp, Inductive, rangeNull, [], [Public], True, [(nameNil, TVar(tva))], valueReprScan(1), Public, "") // size is wrong with knowing the platform?
+val tp = TForAll([tva], [], TFun([(nil, TVar(tva))], typeTotal, type-boxStar))
+val boxConInfo = ConInfo(nameBox, nameTpBox, [tva], [], [(nil, TVar(tva))], tp, Inductive, null, [], [Public], True, [(nil, TVar(tva))], value-repr-scan(1), Public, "") // size is wrong with knowing the platform?
 
-fun uniqueTName(nm: string, tp: ktype)
-  val n = uniqueName(nm)
+fun unique-tname(nm: string, tp: ktype)
+  val n = unique-name(nm)
   TName(n, tp)

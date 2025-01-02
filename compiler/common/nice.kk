@@ -73,7 +73,12 @@ fun pretty(n: nice, id: id): doc
   n.show(id).text
 
 /// Tests for identifiers
+
+fun test()
+  group("nice")
+    test-ids()
+
 fun test-ids()
-  basic/test("ids")
+  test("ids")
     expect(1, {id-nil.new-id.new-id-from}, "new-id")
     expect("\"1\"", {gen-id("test", 1).show-id} , "show-id")

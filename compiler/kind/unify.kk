@@ -3,6 +3,7 @@ import compiler/common/name
 import compiler/common/range
 import compiler/common/message
 import compiler/common/color-scheme
+import compiler/common/error
 import compiler/platform/config
 import compiler/kind/kind
 import compiler/kind/infer-kind
@@ -17,20 +18,20 @@ type unifyContext
 effect unifyContextEff
   val uctx: unifyContext
 
-fun kunify(rng: range, k1: infKind, k2: infKind)
+fun unify(rng: range, k1: infKind, k2: infKind)
   val sk1 = subst(k1)
   val sk2 = subst(k2)
   match mgu(sk1, sk2)
-    UnifyKindOk(sub') -> extendKsub(sub')
+    UnifyKindOk(sub') -> extend-ksub(sub')
     err ->
-      kindError(rng, err, sk1, sk2)
+      kind-error(rng, err, sk1, sk2)
 
-fun kindError(rng: range, err: unify, k1: infKind, k2: infKind)
+fun kind-error(rng: range, err: unify, k1: infKind, k2: infKind)
   val message = match err
     InfiniteKind -> "Invalid type (due to an infinite kind)"
     _ -> "Invalid type"
   val inferExtra =
-    if k1.isInfKindScope || k2.isInfKindScope then
+    if k1.is-infkind-scope || k2.is-infkind-scope then
       [("hint".text, "scoped effects need a first type parameter annoted with kind \"::S\"".text)]
     else
       []
@@ -38,14 +39,14 @@ fun kindError(rng: range, err: unify, k1: infKind, k2: infKind)
     match uctx
       Check(msg, range) -> (range, "expected kind", [("because".text, msg.text)])
       Infer(range) -> (range, "expected kind", inferExtra)
-  val [niceKind1, niceKind2] = niceInfKinds([k1, k2])
-  addError(message.text |-| 
+  val [niceKind1, niceKind2] = nice-infkinds([k1, k2])
+  add-error(rng, message.text |-| 
     table([
-      ("type context".text, docFromRange(rangeContext)),
-      ("type".text, docFromRange(rng)),
+      ("type context".text, doc-from-range(rangeContext)),
+      ("type".text, doc-from-range(rng)),
       ("inferred kind".text, niceKind2),
       (expected.text, niceKind1)
-  ] ++ extra), rng)
+  ] ++ extra))
 
 
 // MGU
@@ -59,7 +60,7 @@ fun mgu(k1': infKind, k2': infKind)
     // Constants
     (KIVar(id1), KIVar(id2)) | id1 == id2 -> UnifyKindOk(ksubEmpty)
     (KICon(k1), KICon(k2)) -> 
-      if matchKind(k1, k2) then UnifyKindOk(ksubEmpty) else NoMatch
+      if match-kind(k1, k2) then UnifyKindOk(ksubEmpty) else NoMatch
     (KIApp(k1, k2), KIApp(l1, l2)) ->
       match mgu(k1, l1)
         UnifyKindOk(sub1) ->
@@ -73,15 +74,15 @@ fun mgu(k1': infKind, k2': infKind)
     (KIApp(k1, k2), KICon(KApp(l1, l2))) ->
       mgu(KIApp(k1, k2), KIApp(KICon(l1), KICon(l2)))
     // unify variables
-    (KIVar(id), k) -> unifyVar(id, k)
-    (k, KIVar(id)) -> unifyVar(id, k)
+    (KIVar(id), k) -> unify-var(id, k)
+    (k, KIVar(id)) -> unify-var(id, k)
     _ -> NoMatch
 
-fun unifyVar(id: int, k: infKind)
-  if k.fkv.member(id) then InfiniteKind else UnifyKindOk(ksubSingle(id, k))
+fun unify-var(id: int, k: infKind)
+  if k.fkv.member(id) then InfiniteKind else UnifyKindOk(ksub-single(id, k))
 
-fun matchKind(k1': kind, k2': kind)
+fun match-kind(k1': kind, k2': kind)
   match (k1', k2')
     (KCon(c1), KCon(c2)) -> c1 == c2
-    (KApp(k1, k2), KApp(l1, l2)) -> matchKind(k1, l1) && matchKind(k2, l2)
+    (KApp(k1, k2), KApp(l1, l2)) -> match-kind(k1, l1) && match-kind(k2, l2)
     _ -> False

@@ -57,7 +57,7 @@ val namesSameSize   = ["id","map","reverse","foldl","foldr","filter"].map(prelud
 //---------------------------------
 // Lists
 //---------------------------------
-val nameNull        = "Nil".core-types-name
+val nameListNil        = "Nil".core-types-name
 val nameCons        = "Cons".core-types-name
 val nameTpList      = "list".core-types-name
 
@@ -228,7 +228,7 @@ val nameTpLocalVar  = "local-var".core-types-name
 val nameTpLocal     = "local".core-types-name
 val nameRef         = "ref".core-types-name
 val nameLocalNew    = "local-new".core-types-name
-val nameLocal       = "local-var".core-hnd-name
+val nameLocalVar    = "local-var".core-hnd-name
 val nameRunLocal    = "local-scope".core-types-name
 
 val nameTpTotal     = nameEffectEmpty // "total"

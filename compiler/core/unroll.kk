@@ -7,7 +7,7 @@ import std/core/undiv
 import std/data/linearset
 
 fun unrollDefs(unrollMax: int)
-  setCoreDefs(unrollDefGroups(getCoreDefs()))
+  set-core-defs(unrollDefGroups(get-core-defs()))
 
 fun unrollDefGroups(defGroups: list<defGroup>)
   defGroups.map(unrollDefGroup).concat
@@ -30,7 +30,7 @@ fun unrollBody(d: def, tpars: list<typeVar>, pars: list<tName>, eff: keffect, bo
       match extractNonRecBranches(d.defTname, [], brnchs)
         (nonrecbs, recbs) | nonrecbs.length > 0 && recbs.length > 0 ->
           val dname = d.defTname
-          val rname = dname.uniqueTNameFrom
+          val rname = dname.unique-tnameFrom
           val info = InfoArity(tpars.length, pars.length)
           val sub = [(dname, Var(rname, info))]
           val rdef = d(def-name=rname.get-name, defExpr=(sub |-> d.defExpr), vis=Private)
@@ -97,5 +97,5 @@ fun dontSkip(Branch(pats, guards): branch)
       _ -> pat 
   Branch(pats.map(noSkip), guards)
 
-fun uniqueTNameFrom(tn: tName): <ndet,uniquePhase> tName
+fun unique-tnameFrom(tn: tName): <ndet,uniquePhase> tName
   TName(to-hidden-unique-name(unique(), "unroll", tn.get-name), tn.type-of)

@@ -52,9 +52,9 @@ fun cctx-create(e: expr)
 fun expr(e: expr)
   match e
     // constructor 
-    App(Con(name, repr), args) | repr.hasCtxPath && args.is-cons ->
+    App(Con(name, repr), args) | repr.has-ctx-path && args.is-cons ->
       make-con(name, repr, [], args)
-    App(TypeApp(Con(name, repr), targs), args) | repr.hasCtxPath && args.is-cons ->
+    App(TypeApp(Con(name, repr), targs), args) | repr.has-ctx-path && args.is-cons ->
       make-con(name, repr, targs, args)
     _ -> emit-ctx-errs([])
 
@@ -69,17 +69,17 @@ fun con-recurse(cName: tName, cRepr: conRepr, targs: list<ktype>, args: list<exp
   (pre ++ post).foreach(check-no-hole)
   val (ds, vars) = pre.map(make-unique-def).unzip
   val fname = cName.get-field-name(pre.length + 1)
-  val ctxrepr = cRepr.updateCtxPath(CtxField(fname))
-  val (d1, var1) = make-unique-def(App(makeTypeApp(Con(cName, ctxrepr), targs), vars ++ [cctx.top] ++ post))
+  val ctxrepr = cRepr.update-ctx-path(CtxField(fname))
+  val (d1, var1) = make-unique-def(App(make-type-app(Con(cName, ctxrepr), targs), vars ++ [cctx.top] ++ post))
   cctx(defs=ds ++ cctx.defs ++ [d1], top=var1)
 
 fun con-final(cName: tName, cRepr: conRepr, targs: list<ktype>, pre: list<expr>, chole: expr, post: list<expr>)
   (pre ++ post).foreach(check-no-hole)
   val fname = cName.get-field-name(pre.length + 1)
   val holetp = chole.type-of
-  val ctxrepr = cRepr.updateCtxPath(CtxField(fname))
+  val ctxrepr = cRepr.update-ctx-path(CtxField(fname))
   holetp.ensure-valid-hole-type
-  val (d1, var1) = make-unique-def(App(makeTypeApp(Con(cName, ctxrepr), targs), pre ++ [chole] ++ post))
+  val (d1, var1) = make-unique-def(App(make-type-app(Con(cName, ctxrepr), targs), pre ++ [chole] ++ post))
   val (d2, addr) = make-unique-def(make-field-addr-of(var1, cName, fname.get-name, holetp))
   Cctx([d1, d2], var1, Chole(addr, holetp))
 
@@ -98,7 +98,7 @@ fun find(errs: list<doc>, acc: list<expr>, args: list<expr>)
 
 fun make-unique-def(e: expr)
   val name = unique-name("cctx")
-  (makeDef(name, e), Var(TName(name, e.type-of), InfoNone))
+  (make-def(name, e), Var(TName(name, e.type-of), InfoNone))
 
 fun is-hole(e: expr)
   match e
@@ -148,7 +148,7 @@ fun ensure-valid-hole-type(tp: ktype)
     Left(TVar) -> emit-ctx-err("the hole in the constructor context has an unresolved or polymorphic type".text)
     Left -> emit-ctx-err("the hole in the constructor context has an invalid data type".text)
     Right(nm) -> 
-      match newtypesLookupAny(nm)
+      match newtypes-lookup-any(nm)
         Just(dataInfo) ->
           val (drepr, _) = dataInfo.dataRepr(is-value)
           if dataInfo.def.is-value || drepr.is-value then
@@ -156,7 +156,7 @@ fun ensure-valid-hole-type(tp: ktype)
           ()
 
 fun data-type-name-of(tp: ktype)
-  match tp.expandSyn
+  match tp.expand-syn
     TApp(t) -> t.data-type-name-of
     TCon(tc) -> Right(tc.name)
     t -> Left(t)
@@ -167,12 +167,12 @@ fun data-type-name-res(tp: ktype)
     Left(t) -> fail("core/ctail data-type-name-res: illegal result type: " ++ t.show)
 
 fun data-type-name(cName: tName)
-  match cName.type-of.splitFunScheme
+  match cName.type-of.split-funScheme
     Just((_, _, _, _, tres)) -> tres.data-type-name-res
     _ -> fail("core/ctail get-data-type-name: illegal constructor type: " ++ cName.show)
 
 fun lookup(cName: tName, fieldIdx: int)
-  match newtypesLookupAny(cName.data-type-name)
+  match newtypes-lookup-any(cName.data-type-name)
     Just(dinfo) ->
       val (drepr, _) = dinfo.dataRepr(is-value)
       if drepr.is-value then

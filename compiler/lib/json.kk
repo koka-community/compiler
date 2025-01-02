@@ -73,86 +73,86 @@ fun test()
 
 // val hexLeadRegex = r"0[xX]".regex();
 // fun hexadecimal()
-//   takePattern(leadingRegex).string ++ takePattern(hexLeadRegex).string ++ takePattern(integerRegex).string
+//   take-pattern(leadingRegex).string ++ take-pattern(hexLeadRegex).string ++ take-pattern(integerRegex).string
 
 // val leadingHexDotRegex = r"^.[0-9a-fA-F_]+([eEpP][+-]?[0-9a-fA-F_]+)?".regex() 
 // val wholeHexFloatRegex = r"^[0-9a-fA-F_]+(\.[0-9a-fA-F_]+)?([eEpP][+-]?[0-9a-fA-F_]+)?".regex() 
 // val integerRegex = r"^[0-9a-fA-F_]+".regex() 
 // fun integer()
-//   takePattern(leadingRegex).string ++ takePattern(integerRegex).string
+//   take-pattern(leadingRegex).string ++ take-pattern(integerRegex).string
 
 // val leadingRegex = r"[+-]".regex()
 // fun exp()
-//   takePattern(leadingRegex).string ++ integer()
+//   take-pattern(leadingRegex).string ++ integer()
   
 // fun decfloat()
-//   takePattern(leadingRegex).string ++ (fn() takePattern(wholeHexFloatRegex).string).or({takePattern(leadingHexDotRegex).string})
+//   take-pattern(leadingRegex).string ++ (fn() take-pattern(wholeHexFloatRegex).string).or({take-pattern(leadingHexDotRegex).string})
 
 // fun hexfloat()
-//   takePattern(leadingRegex).string++ hexadecimal() ++ (fn() takePattern(wholeHexFloatRegex).string).or({takePattern(leadingHexDotRegex).string})
+//   take-pattern(leadingRegex).string++ hexadecimal() ++ (fn() take-pattern(wholeHexFloatRegex).string).or({take-pattern(leadingHexDotRegex).string})
 
 // fun pLit()
 //   with scope("plit")
 //   ors([{text("true"); JsBool(True)},{text("false"); JsBool(False)},{text("null"); JsNull}])
 
-// fun pFloat()
+// fun parse-float()
 //   with atomic
 //   val d = or({decfloat().split("_").join}, {hexfloat().split("_").join})
 //   JsDouble(d, d.parse-float64.unjust)
 
-// fun pInteger()
+// fun parse-integer()
 //   with atomic
 //   val d = integer().split("_").join
 //   JsInt(d, d.parse-int.unjust)
 
 // val stringRegex = "^\"[^\\\\\"]*(?:\\\\.[^\"\\\\]*)*\"".regex()
 
-// inline fun takeString(): parse<string> sslice
-//   takePattern(stringRegex)
+// inline fun parse-str(): parse<string> sslice
+//   take-pattern(stringRegex)
 
-// fun pString()
-//   with scope("pstring")
-//   val s = takeString()
+// fun parse-string()
+//   with scope("parse-string")
+//   val s = parse-str()
 //   JsString(s.subslice(1, s.count - 1).string)
 
-// fun pArray()
-//   with scope("parray")
-//   pToken("[")
-//   val xs = separatedTrailing(pValue,{pToken(",")})
-//   optional(pWhitespace)
-//   pToken("]")
+// fun parse-array()
+//   with scope("parse-array")
+//   parse-token("[")
+//   val xs = parse-sep-trailing(pValue,{parse-token(",")})
+//   optional(parse-whitespace)
+//   parse-token("]")
 //   JsArray(xs)
 
 // fun pMember(): <pure,parse<string>> (string, jsValue)
 //   with scope("pmember")
-//   val k = takeString()
-//   optional(pWhitespace)
-//   pToken(":")
+//   val k = parse-str()
+//   optional(parse-whitespace)
+//   parse-token(":")
 //   val v = pValue()
 //   (k.string, v)
 
-// fun pObject()
-//   with scope("pobject")
-//   pToken("{")
-//   val members = separatedTrailing(pMember, {pToken(",")})
-//   optional(pWhitespace)
+// fun parse-object()
+//   with scope("parse-object")
+//   parse-token("{")
+//   val members = parse-sep-trailing(pMember, {parse-token(",")})
+//   optional(parse-whitespace)
 //   val o = JsObject(LinearMap(members))
-//   pToken("}")
+//   parse-token("}")
 //   o
 
 // fun pValue(): <pure,parse<string>> jsValue
 //   with scope("pvalue")
-//   val v = ors([pArray,pObject,pLit,pFloat,pInteger,pString])
-//   optional(pWhitespace)
+//   val v = ors([parse-array,parse-object,pLit,pFloat,parse-integer,parse-string])
+//   optional(parse-whitespace)
 //   v
 
 // val spacesRegex = r"^([ \n\t\r]|\/\/[^\n]+)+".regex()
-// fun pWhitespace()
-//   spacesRegex.takePattern()
+// fun parse-whitespace()
+//   spacesRegex.take-pattern()
 
-// fun pToken(s: string)
+// fun parse-token(s: string)
 //   text(s)
-//   optional(pWhitespace)
+//   optional(parse-whitespace)
 
 // fun parse(s: string): <console,pure> ()
 //   match run(s,pValue)

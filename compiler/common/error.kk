@@ -72,20 +72,23 @@ fun err-sev/cmp(e1: error-severity, e2: error-severity): order
 fun is-warning(e: error-msg): bool
   (<=)(e.severity, SevWarning, ?cmp=cmp)
 
-fun info-message-kind(ekind: error-kind, rng: range, d: doc): error-msg
+fun info-message-kind(d: doc, rng: range, ekind: error-kind = ErrGeneral): error-msg
   Error-msg(rng, d, SevInfo, ekind)
 
-fun warning-message-kind(ekind: error-kind, rng: range, d: doc): error-msg
+fun warning-message-kind(d: doc, rng: range, ekind: error-kind = ErrGeneral): error-msg
   Error-msg(rng, d, SevWarning, ekind)
 
-fun error-message-kind(ekind: error-kind, rng: range, d: doc): error-msg
+fun error-message-kind(d: doc, rng: range, ekind: error-kind = ErrGeneral): error-msg
   Error-msg(rng, d, SevError, ekind)
 
-fun warning-message(rng: range, d: doc): error-msg
-  warning-message-kind(ErrGeneral, rng, d)
+fun info-message(d: doc, rng: range): current-error-kind error-msg
+  d.info-message-kind(rng, current-error-kind)
 
-fun error-message(rng: range, d: doc): error-msg
-  error-message-kind(ErrGeneral, rng, d)
+fun warning-message(d: doc, rng: range): current-error-kind error-msg
+  d.warning-message-kind(rng, current-error-kind)
+
+fun error-message(d: doc, rng: range): current-error-kind error-msg
+  d.error-message-kind(rng, current-error-kind)
 
 //---------------------------------
 // pretty
@@ -122,53 +125,63 @@ fun pp-errors(errs: errors, cwd: path, showRangeEnd: bool): colorSchemeEffect do
   vcat(errs.map(fn(e) e.pp-error-message(cwd, showRangeEnd)))
 
 fun to-warning((range, doc): (range, doc), ekind: error-kind): error-msg
-  warning-message-kind(ekind, range, doc)
+  doc.warning-message-kind(range, ekind)
 
 //--------------------
 // Errors Monad
 //--------------------
 
-effect comp-error<p> // Partial result p
-  final ctl comp-errors(errs: errors): a
-  fun comp-add-warnings(w: warnings): ()
-  fun set-partial(a: p): ()
+alias koka-error = <comp-error,current-error-kind>
 
-fun comp-error(err: error-msg): comp-error<p> a
-  comp-errors([err])
+effect comp-error
+  ctl add-errors(errs: errors): a
+  fun add-warnings(w: warnings): ()
+  fun add-infos(w: warnings): ()
 
-fun comp-warn(msg: error-msg): comp-error<p> ()
-  comp-add-warnings([msg])
+effect val current-error-kind: error-kind
+
+fun default-error-kind(f): error-kind
+  with val current-error-kind = ErrGeneral
+  f()
+
+fun msg/add-error(err: error-msg): comp-error a
+  add-errors([err])
+
+fun msg/add-warning(msg: error-msg): comp-error ()
+  add-warnings([msg])
+
+fun msg/add-info(msg: error-msg): comp-error ()
+  add-infos([msg])
+
+fun doc/add-error(rng: range, error: doc): <comp-error,current-error-kind> a
+  add-errors([error-message(error, rng)])
+
+fun doc/add-warning(rng: range, warning: doc): <comp-error,current-error-kind> ()
+  add-warnings([error-message(warning, rng)])
+
+fun doc/add-info(rng: range, info: doc): <comp-error,current-error-kind> ()
+  add-infos([error-message(info, rng)])
 
 // check an 'error'
-fun check-error(f: () -> comp-error<p> a): either<errors, (a, warnings)>
+fun check-error(f: () -> comp-error a): either<errors, (a, warnings)>
   var warns := []
   with handler
-    final ctl comp-errors(errs) Left(errs)
-    fun comp-add-warnings(w) warns := w ++ warns
-    fun set-partial(a) ()
+    final ctl add-errors(errs) Left(errs)
+    fun add-warnings(w) warns := w ++ warns
+    fun add-infos(w) warns := w ++ warns
     return(x) Right((x, warns))
   f()
 
-fun check-partial(f: () -> comp-error<p> a): div either<(errors, maybe<p>), (a, warnings, maybe<p>)>
-  var warns := []
-  var partial := Nothing
+fun handle-error(f: () -> comp-error a, h: errors -> comp-error a): comp-error a
   with handler
-    final ctl comp-errors(errs) Left((errs, partial))
-    fun comp-add-warnings(w) warns :=  w ++ warns
-    fun set-partial(a) partial := Just(a)
-    return(x) Right((x, warns, partial))
+    final ctl add-errors(errs) h(errs)
+    fun add-warnings(w) add-warnings(w)
+    fun add-infos(w) add-warnings(w)
   f()
 
-fun handle-error(f: () -> comp-error<p> a, h: errors -> comp-error<p> a): comp-error<p> a
+fun ignore-warnings(f: () -> comp-error a): comp-error a
   with handler
-    final ctl comp-errors(errs) h(errs)
-    fun comp-add-warnings(w) comp-add-warnings(w)
-    fun set-partial(a) set-partial(a)
-  f()
-
-fun ignore-warnings(f: () -> comp-error<p> a): comp-error<p> a
-  with handler
-    final ctl comp-errors(errs) comp-errors(errs)
-    fun comp-add-warnings(w) ()
-    fun set-partial(a) set-partial(a)
+    final ctl add-errors(errs) add-errors(errs)
+    fun add-warnings(w) ()
+    fun add-infos(w) ()
   f()

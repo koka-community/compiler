@@ -41,8 +41,8 @@ fun cFromCore(cTarget: cTarget, b: buildType, sourceDir: path,
   var rddoc := [] // done expressions
   var canonicalLamTypes := LinearSet([])
   with handler
-    fun emitToH(d: doc) rhdoc := Cons(d, rhdoc)
-    fun emitToC(d: doc) rcdoc := Cons(d, rcdoc)
+    fun emit-to-h(d: doc) rhdoc := Cons(d, rhdoc)
+    fun emit-to-c(d: doc) rcdoc := Cons(d, rcdoc)
     fun emitToInit(d: doc) ridoc := Cons(d, ridoc)
     fun emitToTop(d: doc) rtdoc := Cons(d, rtdoc)
     fun emitToDone(d: doc) rddoc := Cons(d, rddoc)
@@ -79,10 +79,10 @@ val checkInitDoc = [
   "_kk_initialized = true;".text].vcat
 
 fun initImport(i: kimport)
-  i.importName.qualify(".init".newName).cppName |.| emptyArgs |.| semi
+  i.importName.qualify(".init".newName).cpp-name |.| emptyArgs |.| semi
 
 fun doneImport(i: kimport)
-  i.importName.qualify(".done".newName).cppName |.| emptyArgs |.| semi
+  i.importName.qualify(".done".newName).cpp-name |.| emptyArgs |.| semi
 
 val customInitDoc = [
   "#if defined(KK_CUSTOM_INIT)".text,
@@ -90,21 +90,21 @@ val customInitDoc = [
   "#endif".text].vcat
 
 fun genModule(core: core, mbMain: maybe<(name, bool)>): asmEff core
-  // boxCore
+  // box-core
   // borrowedExtend
   // parcCore
   // parcReuseCore
   // parcReuseSpecializeCore
 
   val headComment = "// Koka generated module:".text |+| modName.show.pretty |+| ", koka version:".text |+| comp-flags.version.pretty |.| ", platform:".text |+| (targetPlatform.ptrSize * 8).pretty |.| "-bit".text
-  val initSignature = "void".text |+| ".init".newName.qualify(modName).cppName |.| emptyParams
-  val doneSignature = "void".text |+| ".done".newName.qualify(modName).cppName |.| emptyParams
+  val initSignature = "void".text |+| ".init".newName.qualify(modName).cpp-name |.| emptyParams
+  val doneSignature = "void".text |+| ".done".newName.qualify(modName).cpp-name |.| emptyParams
 
   [checkInitDoc, core.imports.map(initImport).vcat, customInitDoc].vcat.emitToInit
   
   core.imports.reverse.map(doneImport).vcat.emitToDone
 
-  emitToC(
+  emit-to-c(
     vcat([
       headComment,
       "#include".text |+| dquotes(modName.moduleNameToPath.text) |.| ".h".text] ++ 
@@ -112,7 +112,7 @@ fun genModule(core: core, mbMain: maybe<(name, bool)>): asmEff core
       core.externals.map(includeExternalC).concat
     ))
   
-  emitToH(
+  emit-to-h(
     vcat([
       "#pragma once".text,
       "ifndef ".text |.| prettyModName |.| "_H".text,
@@ -123,16 +123,16 @@ fun genModule(core: core, mbMain: maybe<(name, bool)>): asmEff core
       core.externals.map(includeExternalH).concat
     ))
 
-  emitToH(
+  emit-to-h(
     linebreak |.| 
     "// type declarations".text)
 
-  genTypeDefs(core.typeDefs)
-  emitToH(
+  gen-typedefs(core.typeDefs)
+  emit-to-h(
     linebreak |.| 
     "// value declarations".text)
 
-  genTopGroups(core.defs)
+  gen-top-groups(core.defs)
 
   genMain(mbMain)
 
@@ -149,7 +149,7 @@ fun genModule(core: core, mbMain: maybe<(name, bool)>): asmEff core
 
   val init = getInit()
   val done = getDone()
-  emitToC(
+  emit-to-c(
     linebreak |.| 
     "// initialization".text |-|
     initSignature |.|
@@ -158,7 +158,7 @@ fun genModule(core: core, mbMain: maybe<(name, bool)>): asmEff core
     doneSignature |.|
     done.block)
   
-  emitToH(
+  emit-to-h(
     vcat([
       linebreak |.| initSignature |.| semi |.| linebreak,
       linebreak |.| doneSignature |.| semi |.| linebreak] ++
@@ -174,22 +174,22 @@ fun moduleImport(imp: kimport): doc
   else brackets(imp.package.text) |.| "/".text |.| imp.importName.moduleNameToPath.text |.| ".h".text)
 
 fun includeExternalC(ext: external)
-  match externalImportLookup(C(cTarget), buildType, "include-inline", ext)
+  match external-import-lookup(C(cTarget), buildType, "include-inline", ext)
     Just(content) -> [content.list.drop-while(isSpace).string.text]
     _ -> []
 
 fun includeExternalH(ext: external)
-  match externalImportLookup(C(cTarget), buildType, "header-include-inline", ext)
+  match external-import-lookup(C(cTarget), buildType, "header-include-inline", ext)
     Just(content) -> [content.list.drop-while(isSpace).string.text]
     _ -> []
 
 fun includeEndExternalH(ext: external)
-  match externalImportLookup(C(cTarget), buildType, "header-end-include-inline", ext)
+  match external-import-lookup(C(cTarget), buildType, "header-end-include-inline", ext)
     Just(content) -> [content.list.drop-while(isSpace).string.text]
     _ -> []
 
 fun importExternalInclude(ext: external): asmEff list<doc>
-  match externalImportLookup(C(cTarget),buildType,"include",ext)
+  match external-import-lookup(C(cTarget),buildType,"include",ext)
     Just(includePath) -> 
       [
         "#include".text |+| 
@@ -206,21 +206,21 @@ fun genMain(mbMain: maybe<(name, bool)>): asmEff ()
   match mbMain
     Nothing -> ()
     Just((name, _)) ->
-      emitToC(
+      emit-to-c(
         "\n// main exit\n static void _kk_main_exit(void)".text |+| block(
           vcat([
             "kk_context_t* _ctx = kk_get_context();".text,
-            cppName(modName.qualify(".done".newName)) |.| parens("_ctx".text) |.| semi
+            cpp-name(modName.qualify(".done".newName)) |.| parens("_ctx".text) |.| semi
           ])
         ) |-|
         "\n// main entry \nint main(int argc, char** argv)".text |+| block(vcat([
           text("kk_assert(sizeof(size_t) == " ++ targetPlatform.sizeSize.show ++ " && sizeof(void*) == " ++ targetPlatform.ptrSize.show ++ ");"),
           (if stackSize == 0 then empty else ("kk_os_set_stack_size(KK_IZ(" ++ stackSize.show ++ "));").text),
           "kk_context_t* _ctx = kk_main_start(argc, argv);".text,
-          cppName(modName.qualify(".init".newName)) |.| parens("_ctx".text) |.| semi,
+          cpp-name(modName.qualify(".init".newName)) |.| parens("_ctx".text) |.| semi,
           "atexit(&_kk_main_exit);".text,
-          cppName(name) |.| parens("_ctx".text) |.| semi,
-          cppName(modName.qualify(".done".newName)) |.| parens("_ctx".text) |.| semi,
+          cpp-name(name) |.| parens("_ctx".text) |.| semi,
+          cpp-name(modName.qualify(".done".newName)) |.| parens("_ctx".text) |.| semi,
           "kk_main_end(_ctx);".text,
           "return 0;".text
         ]))

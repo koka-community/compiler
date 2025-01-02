@@ -29,7 +29,7 @@ fun dg/extract-inlines(dg: defGroup, costMax: int)
     DefNonRec(d) -> d.extract-inlines(costMax, False).map(fn(d') [d']).default([])
 
 fun def/extract-inlines(d: def, costMax: int, isRec: bool)
-  val inlineable = d.isInlineable(costMax)
+  val inlineable = d.is-inlineable(costMax)
   if !inlineable then Nothing
   else
     val cost = (if d.def-name == nameBind || d.def-name == nameBind2 then 0 else d.cost)

@@ -5,28 +5,29 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
+module compiler/common/syntax
 // Updated as of 11/11/24: Commit a22ccc2
 
-type jsTarget
+pub type jsTarget
   JsDefault
   JsNode
   JsWeb
 
-fun jstarget/(==)(j1: jsTarget, j2: jsTarget): bool
+pub fun jstarget/(==)(j1: jsTarget, j2: jsTarget): bool
   match (j1, j2)
     (JsDefault, JsDefault) -> True
     (JsNode, JsNode) -> True
     (JsWeb, JsWeb) -> True
     _ -> False
 
-type cTarget
+pub type cTarget
   CDefault
   LibC
   Wasm
   WasmJs
   WasmWeb
 
-fun ctarget/(==)(c1: cTarget, c2: cTarget): bool
+pub fun ctarget/(==)(c1: cTarget, c2: cTarget): bool
   match (c1, c2)
     (CDefault, CDefault) -> True
     (LibC, LibC) -> True
@@ -35,13 +36,13 @@ fun ctarget/(==)(c1: cTarget, c2: cTarget): bool
     (WasmWeb, WasmWeb) -> True
     _ -> False
 
-value type target
+pub value type target
   CS
   JS(t: jsTarget)
   C(t: cTarget)
   DefaultTarget
 
-fun target/(==)(t1: target, t2: target): bool
+pub fun target/(==)(t1: target, t2: target): bool
   match (t1, t2)
     (CS, CS) -> True
     (JS(j1), JS(j2)) -> j1 == j2
@@ -49,14 +50,14 @@ fun target/(==)(t1: target, t2: target): bool
     (DefaultTarget, DefaultTarget) -> True
     _ -> False
 
-fun is-target-wasm(t: target): bool
+pub fun is-target-wasm(t: target): bool
   match t
     C(Wasm) -> True
     C(WasmJs) -> True
     C(WasmWeb) -> True
     _ -> False
 
-fun target/show(t: target): string
+pub fun target/show(t: target): string
   match t
     CS -> "cs"
     JS(JsWeb) -> "jsweb"
@@ -69,28 +70,28 @@ fun target/show(t: target): string
     C -> "c"
     DefaultTarget -> ""
 
-struct platform
+pub struct platform
   ptrSize: int // sizeof(intptr_t)
   sizeSize: int // sizeof(size_t)
   fieldSize: int // sizeof(kk_field_t) usually intptr_t but may be smaller for compression
   headerSize: int // used for correct alignment calculation
 
-val platform32 = Platform(4, 4, 4, 8)
-val platform64 = Platform(8, 8, 8, 8)
-val platform64c = Platform(8, 8, 4, 8) // Compressed fields
-val platformJS = Platform(8, 4, 8, 0)
-val platformCS = Platform(8, 4, 8, 0)
+pub val platform32 = Platform(4, 4, 4, 8)
+pub val platform64 = Platform(8, 8, 8, 8)
+pub val platform64c = Platform(8, 8, 4, 8) // Compressed fields
+pub val platformJS = Platform(8, 4, 8, 0)
+pub val platformCS = Platform(8, 4, 8, 0)
 
-fun platform/(==)(p1: platform, p2: platform): bool
+pub fun platform/(==)(p1: platform, p2: platform): bool
   p1.ptrSize == p2.ptrSize && p1.sizeSize == p2.sizeSize && p1.fieldSize == p2.fieldSize && p1.headerSize == p2.headerSize
 
-fun has-compressed-fields(p: platform): bool
+pub fun has-compressed-fields(p: platform): bool
   p.ptrSize != p.fieldSize
 
-fun platform/show(p: platform): string
+pub fun platform/show(p: platform): string
   "Platform(sizeof(void*)=" ++ p.ptrSize.show ++ ", sizeof(size_t)=" ++ p.sizeSize.show ++ ", sizeof(kk_box_t)=" ++ p.fieldSize.show ++ ", sizeof(kk_header_t)=" ++ p.headerSize.show ++ ")"
 
-fun aligned/sum(start: int, xs: list<int>): int
+pub fun aligned/sum(start: int, xs: list<int>): int
   xs.foldl(start, aligned/add)
 
 fun aligned/add(x: int, y: int): int
@@ -100,13 +101,13 @@ fun align-up(x: int, y: int): int
   if y <= 0 then x
   else ((x + y - 1) / y) * y
 
-type buildType
+pub type buildType
   DebugFull
   Debug
   RelWithDebInfo
   Release
 
-fun build-type/show(b: buildType): string
+pub fun build-type/show(b: buildType): string
   match b
     DebugFull -> "debugfull"
     Debug -> "debug"
@@ -114,23 +115,22 @@ fun build-type/show(b: buildType): string
     Release -> "release"
 
 // Visibility
-
-type visibility
+pub type visibility
   Public
   Private
 
-fun visibility/(==)(v1: visibility, v2: visibility): bool
+pub fun visibility/(==)(v1: visibility, v2: visibility): bool
   match (v1, v2)
     (Public, Public) -> True
     (Private, Private) -> True
     _ -> False
 
-fun visibility/show(v: visibility): string
+pub fun visibility/show(v: visibility): string
   match v
     Public -> "Public"
     Private -> "Private"
 
-type handlerSort
+pub type handlerSort
   HandlerNormal
   HandlerInstance
 
@@ -139,7 +139,7 @@ pub fun handler-sort/show(h: handlerSort): string
     HandlerNormal -> "normal"
     HandlerInstance -> "named"
 
-type operationSort
+pub type operationSort
   OpVal
   OpFun
   OpExcept
@@ -147,7 +147,7 @@ type operationSort
   OpControl
   OpControlErr
 
-fun op-sort/show(o: operationSort): string
+pub fun op-sort/show(o: operationSort): string
   match o
     OpVal -> "val"
     OpFun -> "fun"
@@ -156,7 +156,7 @@ fun op-sort/show(o: operationSort): string
     OpControlRaw -> "rawctl"
     OpControlErr -> ""
 
-fun op-sort/string(o: operationSort): string
+pub fun op-sort/string(o: operationSort): string
   match o
     OpVal -> "val"
     OpFun -> "fun"
@@ -165,7 +165,7 @@ fun op-sort/string(o: operationSort): string
     OpControlRaw -> "rawctl"
     OpControlErr -> ""
 
-fun read-op-sort(s: string): maybe<operationSort>
+pub fun read-op-sort(s: string): maybe<operationSort>
   match s
     "val" -> Just(OpVal)
     "fun" -> Just(OpFun)
@@ -178,31 +178,35 @@ fun read-op-sort(s: string): maybe<operationSort>
     "rcontrol" -> Just(OpControlRaw)
     _ -> Nothing
 
-value type dataEffect
+pub value type dataEffect
   DataNoEffect
   DataEffect(is-named: bool, is-linear: bool)
 
-// DataKind
+pub fun dataeffect/show(k: dataEffect): string
+  match k
+    DataNoEffect -> "noeffect"
+    DataEffect(n, l) -> sep-by-space([if n then "named" else "", if l then "linear" else ""])
 
-type dataKind
+// DataKind
+pub type dataKind
   Inductive
   CoInductive
   Retractive
 
-fun datakind/show(k: dataKind): string
+pub fun datakind/show(k: dataKind): string
   match k
     Inductive -> "type"
     CoInductive -> "co type"
     Retractive -> "div type"
 
-type dataDef
+pub type dataDef
   DataDefValue(repr: valueRepr) // value type
   DataDefNormal // reference type
   DataDefLazy(fipT: fipT) // Lazy reference type
   DataDefOpen(isExtend: bool)
   DataDefAuto(declaredAsStruct: bool) // value or reference type; determined by kind inference (in kind/repr.kk:create-data-def)
 
-fun datadef/(==)(d1: dataDef, d2: dataDef): bool
+pub fun datadef/(==)(d1: dataDef, d2: dataDef): bool
   match (d1, d2)
     (DataDefValue(r1), DataDefValue(r2)) -> r1 == r2
     (DataDefNormal, DataDefNormal) -> True
@@ -211,7 +215,7 @@ fun datadef/(==)(d1: dataDef, d2: dataDef): bool
     (DataDefAuto, DataDefAuto) -> True
     _ -> False
 
-fun datadef/show(d: dataDef): string
+pub fun datadef/show(d: dataDef): string
   match d
     DataDefValue(r) -> "value" ++ r.show
     DataDefNormal -> "reference"
@@ -219,81 +223,81 @@ fun datadef/show(d: dataDef): string
     DataDefOpen(isExtend) -> if isExtend then "extend" else "open"
     DataDefAuto(isStruct) -> "auto" ++ (if isStruct then " struct" else "")
 
-fun datadef/is-extend(d: dataDef): bool
+pub fun datadef/is-extend(d: dataDef): bool
   match d
     DataDefOpen(isExtend) -> isExtend
     _ -> False
   
-fun datadef/is-open(d: dataDef): bool
+pub fun datadef/is-open(d: dataDef): bool
   d.is-dataDefOpen
 
-fun datadef/is-value(d: dataDef): bool
+pub fun datadef/is-value(d: dataDef): bool
   d.is-dataDefValue
 
-fun datadef/is-normal(d: dataDef): bool
+pub fun datadef/is-normal(d: dataDef): bool
   d.is-dataDefNormal
 
-fun datadef/is-lazy(d: dataDef): bool
-  d.is-dataDefNormal
+pub fun datadef/is-lazy(d: dataDef): bool
+  d.is-dataDefLazy
 
-fun datadef/size(d: dataDef, p: platform): int
+pub fun datadef/size(d: dataDef, p: platform): int
   match d
     DataDefValue(r) -> size(p, r)
     _ -> p.fieldSize
 
-value struct valueRepr
+pub value struct valueRepr
   rawSize: int // size in bytes
-  scanCount: int // count of scannable fields 
+  scan-count: int // count of scannable fields 
   alignment: int // minimal alignment
 
-fun valuerepr/(==)(v1: valueRepr, v2: valueRepr): bool
-  v1.rawSize == v2.rawSize && v1.scanCount == v2.scanCount && v1.alignment == v2.alignment
+pub fun valuerepr/(==)(v1: valueRepr, v2: valueRepr): bool
+  v1.rawSize == v2.rawSize && v1.scan-count == v2.scan-count && v1.alignment == v2.alignment
 
-fun valuerepr/show(v: valueRepr): string
-  "{" ++ v.rawSize.show ++ ", " ++ v.scanCount.show ++ ", " ++ v.alignment.show ++ "}"
+pub fun valuerepr/show(v: valueRepr): string
+  "{" ++ v.rawSize.show ++ ", " ++ v.scan-count.show ++ ", " ++ v.alignment.show ++ "}"
 
-fun scan-size(p: platform, v: valueRepr): (int, int)
-  (p.size(v), v.scanCount)
+pub fun scan-size(p: platform, v: valueRepr): (int, int)
+  (p.size(v), v.scan-count)
 
-fun valuerepr/size(p: platform, v: valueRepr): int
-  v.rawSize + (v.scanCount * p.fieldSize)
+pub fun valuerepr/size(p: platform, v: valueRepr): int
+  v.rawSize + (v.scan-count * p.fieldSize)
 
-fun is-mixed(v: valueRepr): bool
-  v.rawSize > 0 && v.scanCount > 0
+pub fun is-mixed(v: valueRepr): bool
+  v.rawSize > 0 && v.scan-count > 0
 
-fun is-raw(v: valueRepr): bool
-  v.rawSize > 0 && v.scanCount == 0
+pub fun is-raw(v: valueRepr): bool
+  v.rawSize > 0 && v.scan-count == 0
 
 pub val valuerepr/zero = ValueRepr(0,0,0)
 
-fun value-repr-raw(m: int)
+pub fun value-repr-raw(m: int)
   ValueRepr(m,0,m)
 
-fun value-repr-scan(n: int)
+pub fun value-repr-scan(n: int)
   ValueRepr(0,n,0)
 
-type defSort
+pub type defSort
   DefFun(param: list<paramInfo>, fipKind: fipT=NoFip(False))
   DefVal
   DefVar
 
-type paramInfo
+pub type paramInfo
   Borrow
   Own
 
-fun def-fun-ex(pinfos: list<paramInfo>, fipKind: fipT)
+pub fun def-fun-ex(pinfos: list<paramInfo>, fipKind: fipT)
   if pinfos.all(fn(p) p.is-own) then DefFun([], fipKind) else DefFun(pinfos, fipKind)
 
-fun def-fun(pinfos: list<paramInfo>)
-  def-fun-ex(pinfos, no-fip)
+pub fun def-fun(pinfos: list<paramInfo>)
+  def-fun-ex(pinfos, noFip)
 
-fun defsort/show(s: defSort): string
+pub fun defsort/show(s: defSort): string
   match s
     DefFun -> "fun"
     DefVal -> "val"
     DefVar -> "var"
 
-fun show-full(s: defSort): string
+pub fun show-full(s: defSort): string
   match s
     DefFun(_, f) -> [f.show, "fun"].sep-by-space
     DefVal -> "val"
@@ -304,23 +308,23 @@ pub fun defsort/is-fun(s: defSort): bool
     DefFun(_) -> True
     _ -> False
 
-fun param/(==)(p1: paramInfo, p2: paramInfo): bool
+pub fun param/(==)(p1: paramInfo, p2: paramInfo): bool
   match (p1, p2)
     (Borrow, Borrow) -> True
     (Own, Own) -> True
     _ -> False
 
-fun param/show(p: paramInfo): string
+pub fun param/show(p: paramInfo): string
   match p
     Borrow -> "Borrow"
     Own -> "Own"
 
-type defInline
+pub type defInline
   InlineNever
   InlineAlways
   InlineAuto
 
-fun definline/show(i: defInline): string
+pub fun definline/show(i: defInline): string
   match i
     InlineNever -> "noinline"
     InlineAlways -> "inline"
@@ -329,57 +333,56 @@ fun definline/show(i: defInline): string
 // Fixities
 
 // Operator fixity
-type fixity
+pub type fixity
   FixInfix(prec: int, assoc: assoc) // Precedence and associativity
   FixPrefix
   FixPostfix
 
 // Operator associativity
-type assoc
+pub type assoc
   AssocNone
   AssocRight
   AssocLeft
 
-fun fixity/(==)(f1: fixity, f2: fixity): bool
+pub fun fixity/(==)(f1: fixity, f2: fixity): bool
   match (f1, f2)
     (FixInfix(p1, a1), FixInfix(p2, a2)) -> p1 == p2 && a1 == a2
     (FixPrefix, FixPrefix) -> True
     (FixPostfix, FixPostfix) -> True
     _ -> False
 
-fun fixity/show(f: fixity): string
+pub fun fixity/show(f: fixity): string
   match f
     FixInfix(p, a) -> "FixInfix(" ++ p.show ++ ", " ++ a.show ++ ")"
     FixPrefix -> "FixPrefix"
     FixPostfix -> "FixPostfix"
 
-fun assoc/(==)(a1: assoc, a2: assoc): bool
+pub fun assoc/(==)(a1: assoc, a2: assoc): bool
   match (a1, a2)
     (AssocNone, AssocNone) -> True
     (AssocRight, AssocRight) -> True
     (AssocLeft, AssocLeft) -> True
     _ -> False
 
-fun assoc/show(a: assoc): string
+pub fun assoc/show(a: assoc): string
   match a
     AssocNone -> "AssocNone"
     AssocRight -> "AssocRight"
     AssocLeft -> "AssocLeft"
 
 // Fip
-
-type fipT
+pub type fipT
   Fip(alloc: fipAlloc)
   Fbip(alloc: fipAlloc, tail: bool)
   NoFip(tail: bool) // Ordering seems wrong as `NoFip False` should be top but now NoFip True is the top
 
-fun fipt/show(f: fipT): string
+pub fun fipt/show(f: fipT): string
   match f
     Fip(a) -> "fip(" ++ a.show ++ ")"
     Fbip(a, t) -> "fbip(" ++ a.show ++ ", " ++ t.show ++ ")"
     NoFip(t) -> "NoFip(" ++ t.show ++ ")"
 
-fun fipt/cmp(f1: fipT, f2: fipT): order
+pub fun fipt/cmp(f1: fipT, f2: fipT): order
   match (f1, f2)
     (Fip(a1), Fip(a2)) -> fipa/cmp(a1, a2)
     (Fbip(a1, True), Fbip(a2, True)) -> fipa/cmp(a1, a2)
@@ -393,12 +396,12 @@ fun fipt/cmp(f1: fipT, f2: fipT): order
     (_, Fbip(_, _)) -> Gt
     _ -> Lt
 
-value type fipAlloc
+pub value type fipAlloc
   AllocAtMost(i: int)
   AllocFinitely
   AllocUnlimited
 
-fun fipa/cmp(f1: fipAlloc, f2: fipAlloc): order
+pub fun fipa/cmp(f1: fipAlloc, f2: fipAlloc): order
   match (f1, f2)
     (AllocAtMost(n1), AllocAtMost(n2)) -> n1.cmp(n2)
     (_, AllocAtMost) -> Gt
@@ -409,14 +412,14 @@ fun fipa/cmp(f1: fipAlloc, f2: fipAlloc): order
     (_, AllocUnlimited) -> Lt
     _ -> Lt
 
-fun combine(f1: fipAlloc, f2: fipAlloc)
+pub fun combine(f1: fipAlloc, f2: fipAlloc)
   match (f1, f2)
     (AllocAtMost(n), AllocAtMost(m)) -> AllocAtMost(n + m)
     _ -> AllocFinitely
 
-val fipa/zero = AllocAtMost(0)
+pub val fipa/zero = AllocAtMost(0)
 
-fun fipalloc/show(a: fipAlloc): string
+pub fun fipalloc/show(a: fipAlloc): string
   match a
     AllocAtMost(0) -> "AllocAtMost(0)"
     AllocAtMost(n) -> "AllocAtMost(" ++ n.show ++ ")"
@@ -425,27 +428,27 @@ fun fipalloc/show(a: fipAlloc): string
 
 pub val fipBot = Fip(AllocAtMost(0))
 pub val fipTop = NoFip(False)
-pub val fip-no-alloc = fipBot
-pub val no-fip = fipTop
+pub val fipNoAlloc = fipBot
+pub val noFip = fipTop
 
 pub fun is-top(f: fipT): bool
   match f
     NoFip(False) -> True
     _ -> False
 
-fun fipt/is-tail(f: fipT): bool
+pub fun fipt/is-tail(f: fipT): bool
   match f
     Fip(_) -> True
     Fbip(_, t) -> t
     NoFip(t) -> t
 
-fun fipt/alloc(f: fipT): fipAlloc
+pub fun fipt/alloc(f: fipT): fipAlloc
   match f
     Fip(a) -> a
     Fbip(a) -> a
     NoFip() -> AllocUnlimited
 
-fun show-fip(f: fipT)
+pub fun show-fip(f: fipT)
   fun show-tail(b: bool): string
     if b then "tail" else ""
   fun show-n(n: fipAlloc): string
@@ -459,10 +462,10 @@ fun show-fip(f: fipT)
     Fbip(n, t) -> [t.show-tail, "fbip" ++ show-n(n)].sep-by-space
     NoFip(t) -> t.show-tail
 
-fun sep-by-space(xs: list<string>)
+pub fun sep-by-space(xs: list<string>)
   xs.filter(fn(x) x != "").join(" ")
 
-fun fipt/max(fip1: fipT, fip2: fipT)
+pub fun fipt/max(fip1: fipT, fip2: fipT)
   match (fip1, fip2)
     (NoFip(isTail1), NoFip(isTail2)) -> NoFip(isTail1 && isTail2)
     (NoFip(t1), _) -> NoFip(t1 && fip2.is-tail)
@@ -472,7 +475,7 @@ fun fipt/max(fip1: fipT, fip2: fipT)
     (Fip(a1), Fbip(a2, t2)) -> Fbip(max(a1, a2), t2)
     (Fip(a1), Fip(a2)) -> Fip(max(a1, a2))
 
-fun fipa/max(a1: fipAlloc, a2: fipAlloc)
+pub fun fipa/max(a1: fipAlloc, a2: fipAlloc)
   match (a1, a2)
     (AllocUnlimited, _) -> AllocUnlimited
     (_, AllocUnlimited) -> AllocUnlimited
@@ -480,6 +483,6 @@ fun fipa/max(a1: fipAlloc, a2: fipAlloc)
     (_, AllocFinitely) -> AllocFinitely
     (AllocAtMost(n1), AllocAtMost(n2)) -> AllocAtMost(max(n1, n2))
 
-fun member-doc(doc: string, header: string, members: list<string>): string
+pub fun member-doc(doc: string, header: string, members: list<string>): string
   val mdoc = "// " ++ header ++ ":\n// ```koka\n" ++ members.map(fn(m) "// " ++ m).join("\n") ++ "// ```\n"
   if doc == "" then mdoc else doc ++ "\n// * * *\n" ++ mdoc

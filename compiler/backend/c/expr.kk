@@ -17,24 +17,24 @@ import compiler/common/color-scheme
 import compiler/common/nice
 import std/core/undiv
 
-fun genLocalGroups(dgs: defGroups): asmEff list<doc>
-  dgs.map(genLocalGroup)
+fun gen-local-groups(dgs: defGroups): asmEff list<doc>
+  dgs.map(gen-local-group)
 
-fun genLocalGroup(dg: defGroup): asmEff doc
+fun gen-local-group(dg: defGroup): asmEff doc
   match dg
-    DefRec -> fail("backend/c/from-core genLocalGroup: local recursive function definitions are not allowed")
-    DefNonRec(d) -> genLocalDef(d)
+    DefRec -> fail("backend/c/from-core gen-local-group: local recursive function definitions are not allowed")
+    DefNonRec(d) -> gen-local-def(d)
 
-fun genLocalDef(d: def): asmEff doc
-  val resDoc = typeComment(d.ktype.cppType)
-  val defDoc = genStat(ResultAssign(d.defTName, Nothing), d.defExpr)
+fun gen-local-def(d: def): asmEff doc
+  val resDoc = typeComment(d.ktype.cpp-type)
+  val defDoc = gen-statement(ResultAssign(d.defTName, Nothing), d.defExpr)
   fun isDiscardExpr(e: expr)
-    e.isUnit || e.isReuseNull
+    e.is-unit || e.isReuseNull
   vcat([
     (if d.doc == "" then empty else align(vcat(Cons(space, d.doc.trimComment.lines.map(text)))))
     ] ++ (if d.def-name.isNil && defDoc.dStartsWith(d.def-name.show ++ " =") then
      // single assignment without declarations
-        [d.ktype.cppType |+| defDoc |.| semi] 
+        [d.ktype.cpp-type |+| defDoc |.| semi] 
       else
         [(if d.def-name.isNil then empty else ppVarDecl(d.defTName) |.| d.ktype.unitSemi),
          (if d.defExpr.isDiscardExpr then empty else defDoc)]
@@ -43,61 +43,61 @@ fun genLocalDef(d: def): asmEff doc
 
 // Generate C declaration for top level definitions
 
-fun genTopGroups(d: list<defGroup>): asmEff ()
+fun gen-top-groups(d: list<defGroup>): asmEff ()
   with localUnique
-  d.map(genTopGroup)
+  d.map(gen-top-group)
   ()
 
-fun genTopGroup(g: defGroup): asmEff ()
+fun gen-top-group(g: defGroup): asmEff ()
   match g
     DefRec(defs) -> 
-      defs.map(genFunTopDefSig)
-      defs.map(fn(d) d.genTopDef(False, False))
+      defs.map(gen-fun-topdef-sig)
+      defs.map(fn(d) d.gen-topdef(False, False))
       ()
     DefNonRec(d) ->
-      val inlineC = d.kinline.is-inlineAlways || d.isInlineable(5)
-      d.genTopDef(True, inlineC)
+      val inlineC = d.kinline.is-inlineAlways || d.is-inlineable(5)
+      d.gen-topdef(True, inlineC)
 
-fun genFunTopDefSig(d: def)
-  emitToH(
-    linebreak |.| d.genFunDefSig(False) |.| semi |+|
-    d.ktype.cppType.typeComment
+fun gen-fun-topdef-sig(d: def)
+  emit-to-h(
+    linebreak |.| d.gen-fun-def-sig(False) |.| semi |+|
+    d.ktype.cpp-type.typeComment
   )
 
-fun genFunDefSig(d: def, inlineC: bool)
-  d.defExpr.genFunSig(inlineC, d.vis, d.def-name)
+fun gen-fun-def-sig(d: def, inlineC: bool)
+  d.defExpr.gen-fun-sig(inlineC, d.vis, d.def-name)
 
-fun genFunSig(ex: expr, inlineC: bool, vis: visibility, nm: name)
+fun gen-fun-sig(ex: expr, inlineC: bool, vis: visibility, nm: name)
   match ex
-    TypeApp(e) -> e.genFunSig(inlineC, vis, nm)
-    TypeLam(_, e) -> e.genFunSig(inlineC, vis, nm)
-    Lam(params, _, body) -> body.genLamSig(inlineC, vis, nm, params)
-    _ -> fail("backend/c/from-core genFunSig: expected lambda expression")
+    TypeApp(e) -> e.gen-fun-sig(inlineC, vis, nm)
+    TypeLam(_, e) -> e.gen-fun-sig(inlineC, vis, nm)
+    Lam(params, _, body) -> body.gen-lam-sig(inlineC, vis, nm, params)
+    _ -> fail("backend/c/from-core gen-fun-sig: expected lambda expression")
 
-fun genLamSig(body: expr, inlineC: bool, vis: visibility, nm: name, params: list<tName>)
+fun gen-lam-sig(body: expr, inlineC: bool, vis: visibility, nm: name, params: list<tName>)
   val inl = if inlineC then "static inline ".text else empty
-  inl |.| body.typeOf.cppType |+| nm.cppName |.| params.tParameters
+  inl |.| body.typeOf.cpp-type |+| nm.cpp-name |.| params.tParameters
 
-fun genTopDef(d: def, genSig: bool, inlineC: bool)
+fun gen-topdef(d: def, genSig: bool, inlineC: bool)
   if d.doc != "" then
     val doc = align(vcat(Cons(space, d.doc.trimComment.lines.map(text))))
-    if inlineC then emitToH(doc) else emitToC(doc)
-  d.genTopDefDecl(genSig, inlineC)
+    if inlineC then emit-to-h(doc) else emit-to-c(doc)
+  d.gen-topdef-decl(genSig, inlineC)
 
-fun genTopDefDecl(d: def, genSig: bool, inlineC: bool)
+fun gen-topdef-decl(d: def, genSig: bool, inlineC: bool)
   if d.ktype.isValueOperation then () // Don't generate code for phantom definitions for value operations (these were only needed for type checking)
   else
-    val emit = if inlineC then emitToH else emitToC
-    val resTp = match d.ktype.splitFunScheme
+    val emit = if inlineC then emit-to-h else emit-to-c
+    val resTp = match d.ktype.split-funScheme
       Nothing -> d.ktype
       Just((_, _, _, _, res)) -> res
     fun genFunDef(body: expr, params: list<tName>)
-      val args = params.map(fn(p) p.getName.cppName)
+      val args = params.map(fn(p) p.get-name.cpp-name)
       val isTailCall = body.isTailCalling(d.def-name)
-      val bodyDoc = genStat(ResultReturn(Just(TName(d.def-name, resTp)), params), body)
-      val tpDoc = d.ktype.cppType.typeComment
-      val sig = body.genLamSig(inlineC, d.vis, d.def-name, params)
-      if genSig && !inlineC then emitToH(linebreak |.| sig |.| semi |+| tpDoc)
+      val bodyDoc = gen-statement(ResultReturn(Just(TName(d.def-name, resTp)), params), body)
+      val tpDoc = d.ktype.cpp-type.typeComment
+      val sig = body.gen-lam-sig(inlineC, d.vis, d.def-name, params)
+      if genSig && !inlineC then emit-to-h(linebreak |.| sig |.| semi |+| tpDoc)
       val top = getTop() // get top level decls generated by body (for functions etc)
       emit(linebreak |.| top |.| sig |+| (if isTailCall then tcoBlock(tpDoc, bodyDoc) else debugComment("genFunDef: no tail calls to " ++ d.def-name.showName ++ " found") |.| tblock(tpDoc, bodyDoc)))
 
@@ -109,110 +109,110 @@ fun genTopDefDecl(d: def, genSig: bool, inlineC: bool)
         _ | d.sort.is-defFun -> 
           // some optimization turned a toplevel lambda into a value;
           // wrap it back into a lmabda again as all occurences will have InfoArity and call it directly (so it cannot be a function_t)
-          match d.ktype.splitFunScheme
-            Nothing -> fail("backend/c/from-core genTopDefDecl: expected function type, got: " ++ d.ktype.show ++ " for def " ++ d.def-name.show)
+          match d.ktype.split-funScheme
+            Nothing -> fail("backend/c/from-core gen-topdef-decl: expected function type, got: " ++ d.ktype.show ++ " for def " ++ d.def-name.show)
             Just((_, _, argTps, _, _)) ->
               val names = list(1, argTps.length).map(fn(x) ("x" ++ x.show).newVarName)
               val tnames = zip(names, argTps).map(fn((nm, (_, tp))) TName(nm, tp))
               val app = App(ex, tnames.map(fn(tn) Var(tn, InfoNone)))
               app.genFunDef(tnames)
         // Special case string literals
-        ELit(LitString(s)) -> s.genTopLevelStringLiteral(d.def-name, d.vis)
+        ELit(LitString(s)) -> s.gen-top-level-string-literal(d.def-name, d.vis)
         // Special case for doubles
         ELit(lit as LitFloat) ->
-          emitToH("#define".text |+| d.def-name.cppName |+| parens("(double)".text |.| lit.ppLit.parens))
+          emit-to-h("#define".text |+| d.def-name.cpp-name |+| parens("(double)".text |.| lit.ppLit.parens))
         _ ->
-          val doc = genStat(ResultAssign(TName(d.def-name, d.ktype), Nothing), d.defExpr)
+          val doc = gen-statement(ResultAssign(TName(d.def-name, d.ktype), Nothing), d.defExpr)
           emitToInit(doc.block) // must be scoped to avoid name clashes
-          match genDupDropCall(False, d.ktype, d.def-name.cppName)
+          match gen-dup-drop-call(False, d.ktype, d.def-name.cpp-name)
             [] -> ()
             docs -> emitToDone(docs.hcat |.| semi)
-          val hdecl = d.ktype.cppType |+| d.def-name.cppName |.| semi
-          val cdecl = d.ktype.cppType |+| d.def-name.cppName |.| d.ktype.unitSemi
-          emitToH(linebreak |.| "extern".text |+| hdecl)
-          emitToC(linebreak |.| cdecl)
+          val hdecl = d.ktype.cpp-type |+| d.def-name.cpp-name |.| semi
+          val cdecl = d.ktype.cpp-type |+| d.def-name.cpp-name |.| d.ktype.unitSemi
+          emit-to-h(linebreak |.| "extern".text |+| hdecl)
+          emit-to-c(linebreak |.| cdecl)
     with setDef(d.def-name, inlineC)
     genDecl(d.defExpr)
 
-fun genTopLevelStringLiteral(s: string, name: name, vis: visibility)
+fun gen-top-level-string-literal(s: string, name: name, vis: visibility)
   val (cstr, clen) = s.cString
   val decl = if vis.is-public then empty else "static".text
-  val nameDoc = name.cppName
+  val nameDoc = name.cpp-name
   if clen > 0 then
-    emitToC("kk_declare_string_literal".text |.| [decl, nameDoc, clen.pretty, cstr].tupled)
+    emit-to-c("kk_declare_string_literal".text |.| [decl, nameDoc, clen.pretty, cstr].tupled)
     emitToInit("kk_init_string_literal".text |.| [nameDoc].arguments)
     // TODO: Emit drop in Done?
   else
-    emitToC("kk_define_string_literal_empty".text |.| [decl, nameDoc].tupled)
+    emit-to-c("kk_define_string_literal_empty".text |.| [decl, nameDoc].tupled)
   if vis.is-public then
-    emitToH(linebreak |.| "extern".text |+| typeString.cppType |+| nameDoc |.| semi)
+    emit-to-h(linebreak |.| "extern".text |+| typeString.cpp-type |+| nameDoc |.| semi)
 
-fun genLambda(body: expr, params: list<tName>, eff: ktype)
+fun gen-lambda(body: expr, params: list<tName>, eff: ktype)
   val fnName = "fun".newDefVarName
   val newLamName = "new-".prepend(fnName)
   val fnTpName = "_t".postpend(fnName)
-  val fnTpDoc = fnTpName.cppName
+  val fnTpDoc = fnTpName.cpp-name
   val structDoc = "struct".text |+| fnTpDoc
   val freeVars = Lam(params, eff, body).freeLocals.list.map(fn(TName(nm, tp)) (nm, tp))
-  fun emitError(d: doc)
-    fail("backend/c/genLambda: " ++ d.show)
+  fun emit-error(d: doc)
+    fail("backend/c/gen-lambda: " ++ d.show)
   val nameDoc = (cdef-name.show ++ ".<lambda>").text
-  fun getDataInfo(nm)
+  fun get-datainfo(nm)
     newtypesLookupAny(nm)
-  val (allFields, vrepr) = orderConFields(emitError, nameDoc, getDataInfo, targetPlatform, 1, freeVars)
-  val scanCount = vrepr.scanCount
+  val (allFields, vrepr) = orderConFields(emit-error, nameDoc, get-datainfo, targetPlatform, 1, freeVars)
+  val scan-count = vrepr.scan-count
   val (_, fields) = allFields.partition(fn(f) f.fst.isPaddingName)
   val types = allFields.map(snd)
-  val canonicalName = newCanonicalVarName("lambda" ++ (if fields.is-nil then "" else "-") ++ types.map(fn(t) t.cppType.asString).join("-"))
+  val canonicalName = newCanonicalVarName("lambda" ++ (if fields.is-nil then "" else "-") ++ types.map(fn(t) t.cpp-type.asString).join("-"))
   val canonicalNewName = "new-".prepend(canonicalName)
   val canonicalFunTpName = "_t".postpend(canonicalName)
-  val canonicalStructDoc = "struct".text |+| canonicalFunTpName.cppName
+  val canonicalStructDoc = "struct".text |+| canonicalFunTpName.cpp-name
   val canonicalFieldNames = zip(allFields, list(1, allFields.length)).map(fn((nmTp, i)) (newName("field-" ++ i.show), nmTp.fst.isPaddingName))
   val canonicalFields = canonicalFieldNames.map(fst).zip(types)
   val canonicalFieldsMap = zip3(canonicalFieldNames.filter(fn(s) !s.snd).map(fst), fields.map(fst), types)
   val canonical = CanonicalLambda(canonicalName, canonicalFieldNames)
   val alreadyGenerated = addCanonical(canonical)
   if !alreadyGenerated && fields.is-cons then
-    val tpDecl = "struct".text |+| canonicalFunTpName.cppName |+| block(
-      vcat(["struct kk_function_s _base;".text] ++ canonicalFields.map(fn((nm, tp)) tp.cppType |+| nm.cppName |.| semi))
+    val tpDecl = "struct".text |+| canonicalFunTpName.cpp-name |+| block(
+      vcat(["struct kk_function_s _base;".text] ++ canonicalFields.map(fn((nm, tp)) tp.cpp-type |+| nm.cpp-name |.| semi))
     ) |.| semi
     val newDef = (if cdefToHeader then "static inline" else "static").text |+| 
-      "kk_function_t".text |+| canonicalNewName.cppName |.| canonicalFields.closFnParameters |+| block(
+      "kk_function_t".text |+| canonicalNewName.cpp-name |.| canonicalFields.closFnParameters |+| block(
         vcat([
-          canonicalStructDoc |.| "* _self = kk_function_alloc_as".text |.| arguments([canonicalStructDoc, scanCount.pretty]) |.| semi,
+          canonicalStructDoc |.| "* _self = kk_function_alloc_as".text |.| arguments([canonicalStructDoc, scan-count.pretty]) |.| semi,
           "_self->_base.fun = kk_kkfun_ptr_box(fnPtr, kk_context());".text
-        ] ++ canonicalFieldNames.filter(fn(f) !f.snd).map(fn(f) "_self->".text |.| f.fst.cppName |+| "=".text |+| f.fst.cppName |.| semi)
-         ++ canonicalFieldNames.filter(snd).map(fn(f) "_self->".text |.| f.fst.cppName |+| "= kk_box_null();".text)
+        ] ++ canonicalFieldNames.filter(fn(f) !f.snd).map(fn(f) "_self->".text |.| f.fst.cpp-name |+| "=".text |+| f.fst.cpp-name |.| semi)
+         ++ canonicalFieldNames.filter(snd).map(fn(f) "_self->".text |.| f.fst.cpp-name |+| "= kk_box_null();".text)
          ++ ["return kk_datatype_from_base(&_self->_base, kk_context());".text]
         )
       )
-    emitToH(vcat([linebreak, "// canonical lambda".text, tpDecl, newDef]) |.| linebreak)
+    emit-to-h(vcat([linebreak, "// canonical lambda".text, tpDecl, newDef]) |.| linebreak)
   
-  val tpDecl = (if fields.is-nil then "".text else "typedef struct".text) |+| canonicalFunTpName.cppName |+| fnTpName.cppName |.| semi
-  val funSig = text(if cdefToHeader then "extern" else "static") |+| body.typeOf.cppType |+| fnName.cppName |.| parameters(["kk_function_t _fself".text] ++ params.map(fn(TName(nm, tp)) tp.cppType |+| nm.cppName))
+  val tpDecl = (if fields.is-nil then "".text else "typedef struct".text) |+| canonicalFunTpName.cpp-name |+| fnTpName.cpp-name |.| semi
+  val funSig = text(if cdefToHeader then "extern" else "static") |+| body.typeOf.cpp-type |+| fnName.cpp-name |.| parameters(["kk_function_t _fself".text] ++ params.map(fn(TName(nm, tp)) tp.cpp-type |+| nm.cpp-name))
   val newDef = funSig |.| semi |-| (if fields.is-cons || cdefToHeader then "static inline" else "static").text |+|
-    "kk_function_t".text |+| newLamName.cppName |.| ntParameters(fields) |+| block(vcat(
+    "kk_function_t".text |+| newLamName.cpp-name |.| ntParameters(fields) |+| block(vcat(
       (
        if fields.is-nil then 
-        ["kk_define_static_function".text |.| arguments(["_fself".text, fnName.cppName]), "return kk_function_dup(_fself, kk_context());".text]
+        ["kk_define_static_function".text |.| arguments(["_fself".text, fnName.cpp-name]), "return kk_function_dup(_fself, kk_context());".text]
        else 
-        ["return".text |+| canonicalNewName.cppName |.| arguments(Cons("&".text |.| fnName.cppName, fields.map(fn(f) f.fst.cppName))) |.| semi]
+        ["return".text |+| canonicalNewName.cpp-name |.| arguments(Cons("&".text |.| fnName.cpp-name, fields.map(fn(f) f.fst.cpp-name))) |.| semi]
       )))
-  emitToCurrentDef(vcat([linebreak, "// lift anonymous function".text, tpDecl, newDef]) |.| linebreak)
-  val bodyDoc = genStat(ResultReturn(Nothing, params), body)
+  emit-to-current-def(vcat([linebreak, "// lift anonymous function".text, tpDecl, newDef]) |.| linebreak)
+  val bodyDoc = gen-statement(ResultReturn(Nothing, params), body)
   if fields.is-nil then 
-    emitToC(funSig |+| block("kk_unused(_fself);".text) |-| bodyDoc)
+    emit-to-c(funSig |+| block("kk_unused(_fself);".text) |-| bodyDoc)
   else 
-    val dups = braces(fields.map(fn((nm, tp)) genDupCall(tp, nm.cppName) |.| semi).hcat)
-    emitToC(funSig |+| block(
+    val dups = braces(fields.map(fn((nm, tp)) gen-dup-call(tp, nm.cpp-name) |.| semi).hcat)
+    emit-to-c(funSig |+| block(
       vcat(
         [fnTpDoc |.| "* _self = kk_function_as".text |.| arguments([fnTpDoc |.| "*".text, "_fself".text]) |.| semi] ++
-        canonicalFieldsMap.map(fn((nmCanon, nm, tp)) tp.cppType |+| nm.cppName |+| "= _self->".text |.| nmCanon.cppName |.| semi |+| "/*".text |+| tp.pretty |+| "*/".text) ++
+        canonicalFieldsMap.map(fn((nmCanon, nm, tp)) tp.cpp-type |+| nm.cpp-name |+| "= _self->".text |.| nmCanon.cpp-name |.| semi |+| "/*".text |+| tp.pretty |+| "*/".text) ++
         ["kk_drop_match".text |.| arguments(["_self".text, dups,"{}".text])]
       )
       |-| bodyDoc
     ))
-  val funNew = newLamName.cppName |.| arguments(fields.map(fst).map(cppName))
+  val funNew = newLamName.cpp-name |.| arguments(fields.map(fst).map(cpp-name))
   funNew
 
 fun zip3(l1: list<a>, l2: list<b>, l3: list<c>): list<(a,b,c)>
@@ -229,36 +229,36 @@ fun unzip4(l: list<(a,b,c,d)>): (list<a>, list<b>, list<c>, list<d>)
 
 // Statements
 // Applies a return context
-fun getResult(r: result, d: doc)
-  if d.is-empty then "".text else getResultX(r, d)
+fun get-result(r: result, d: doc)
+  if d.is-empty then "".text else get-resultx(r, d)
 
-fun getResultX(r: result, retDoc: doc)
+fun get-resultx(r: result, retDoc: doc)
   match r
     ResultReturn(Just(n)) | n.typeOf.isTypeUnit ->
       retDoc |.| "; return kk_Unit;".text
     ResultReturn -> "return".text |+| retDoc |.| semi
     ResultAssign(n, _) | n.typeOf.isTypeUnit && retDoc.dStartsWith("kk_Unit") -> empty
     ResultAssign(n, ml) ->
-      val fst = if n.getName == nameNil || n.typeOf.isTypeUnit then retDoc |.| semi else n.getName.cppName |+| "=".text |+| retDoc |.| semi |+| "/*".text |.| n.typeOf.pretty |.| "*/".text
+      val fst = if n.get-name == nil || n.typeOf.isTypeUnit then retDoc |.| semi else n.get-name.cpp-name |+| "=".text |+| retDoc |.| semi |+| "/*".text |.| n.typeOf.pretty |.| "*/".text
       match ml
         Nothing -> fst
-        Just(l) -> "goto".text |+| l.ppName |.| semi 
+        Just(l) -> "goto".text |+| l.pp-name |.| semi 
 
-fun tryTailCall(r: result, ex: expr)
+fun try-tailcall(r: result, ex: expr)
   fun tailblock(d: doc)
     hang("{ // tailcall".text |-| d, 2) |-| "}".text
   
-  fun genTailVarBinding(params: list<tName>, (p: tName, e: expr))
+  fun gen-tailvar-binding(params: list<tName>, (p: tName, e: expr))
     match e
-      Var(tn) | tn != p && params.any(fn(t) t == tn) -> e.genVarBindingAlways
-      _ -> e.genVarBinding
+      Var(tn) | tn != p && params.any(fn(t) t == tn) -> e.gen-var-binding-always
+      _ -> e.gen-var-binding
 
   // overriding function arguments carefully
-  fun genOverride(params: list<tName>, args: list<expr>)
-    val (stmts, varNames) = zip(params, args).map(fn(x) genTailVarBinding(params, x)).unzip
+  fun gen-override(params: list<tName>, args: list<expr>)
+    val (stmts, varNames) = zip(params, args).map(fn(x) gen-tailvar-binding(params, x)).unzip
     val docs1 = params.map(genDefName)
     val docs2 = varNames.map(genDefName)
-    val assigns = docs1.zip(docs2).map(fn((p, a)) if p == a then debugComment("genOverride: skipped overriding " ++ p.show ++ " with itself") else p |+| "=".text |+| a |.| semi)
+    val assigns = docs1.zip(docs2).map(fn((p, a)) if p == a then debugComment("gen-override: skipped overriding " ++ p.show ++ " with itself") else p |+| "=".text |+| a |.| semi)
     vcat(stmts ++ assigns)
   
   match ex
@@ -266,81 +266,81 @@ fun tryTailCall(r: result, ex: expr)
     App(Var(n, info), args) ->
       match r
         ResultReturn(Just(m), params) | m == n && info.arity == args.length ->
-          val stmts = genOverride(params, args)
+          val stmts = gen-override(params, args)
           Just(tailblock(stmts |-| tailcall))
         _ -> Nothing
     // Case 2
     App(TypeApp(Var(n, info)), args) ->
       match r
         ResultReturn(Just(m), params) | m == n && info.arity == args.length ->
-          val stmts = genOverride(params, args)
+          val stmts = gen-override(params, args)
           Just(tailblock(stmts |-| tailcall))
         _ -> Nothing
   
 
 // Generates a statement from an expression by applying a return context (deeply) inside
-fun genStat(res: result, ex: expr): asmEff doc
-  val mdoc = tryTailCall(res, ex)
+fun gen-statement(res: result, ex: expr): asmEff doc
+  val mdoc = try-tailcall(res, ex)
   match mdoc
     Just(doc) -> doc
-    Nothing -> genExprStat(res, ex)
+    Nothing -> gen-expression-statement(res, ex)
 
-fun genExprStat(r: result, ex: expr)
+fun gen-expression-statement(r: result, ex: expr)
     // If the expression is inlineable, inline it
-  if ex.isInlineableExpr then
-    getResult(r, genInline(ex))
+  if ex.is-inlineableExpr then
+    get-result(r, gen-inline(ex))
   else
     match ex
       Case(exprs, branches) ->
         val (docs, scrutinees) = exprs.map(fn(e) 
-          if e.isInlineableExpr && e.typeOf.isTypeBool then 
-            ("".text, genInline(e)) 
+          if e.is-inlineableExpr && e.typeOf.isTypeBool then 
+            ("".text, gen-inline(e)) 
           else
-            val (sd, vn) = e.genVarBinding
+            val (sd, vn) = e.gen-var-binding
             (sd, vn.genDefName)
         ).unzip
-        val doc = genMatch(r, scrutinees, branches)
+        val doc = gen-match(r, scrutinees, branches)
         vcat(docs) |-| doc
       Let(groups, body) ->
         fun default()
-          val docs1 = groups.genLocalGroups
-          val doc2 = genStat(r, body)
+          val docs1 = groups.gen-local-groups
+          val doc2 = gen-statement(r, body)
           vcat(docs1) |-|  doc2
         match (groups.reverse, body)
           (Cons(DefNonRec(Def(nm, _, expr, Private, DefVal)), rgroups), Case([Var(vname)], branches)) ->
-            if nm == vname.getName && !branches.map(freeLocals).unions.member(vname) && expr.isInlineableExpr then
-              genExprStat(r, makeLet(rgroups.reverse, Case([expr], branches)))
+            if nm == vname.get-name && !branches.map(freeLocals).unions.member(vname) && expr.is-inlineableExpr then
+              gen-expression-statement(r, make-let(rgroups.reverse, Case([expr], branches)))
             else
               default()
           _ -> default()
             
       // Default case
       _ ->
-        val (statDocs, exprDoc) = ex.genExpr
-        vcat(statDocs) |-| getResult(r, exprDoc)
+        val (statDocs, exprDoc) = ex.gen-expression
+        vcat(statDocs) |-| get-result(r, exprDoc)
 
 // Match
 
 alias bindings = list<(tName,doc)>
 
 // Generates a statement for a match expression regarding a given return context
-fun genMatch(res0: result, exprDocs: list<doc>, branches: list<branch>)
-  fun isZeroTestPat(p: pattern)
+fun gen-match(res0: result, exprDocs: list<doc>, branches: list<branch>)
+  fun is-zero-test-pattern(p: pattern)
     match p
       PatWild -> True
-      PatVar(_, p) -> p.isZeroTestPat
-      PatCon(pattern=ps, skip=sk) -> sk && ps.all(isZeroTestPat)
+      PatVar(_, p) -> p.is-zero-test-pattern
+      PatCon(pattern=ps, skip=sk) -> sk && ps.all(is-zero-test-pattern)
       _ -> False
-  fun isSingleTestPat(p: pattern)
+  fun is-single-test-pattern(p: pattern)
     match p
       PatWild -> True
       PatLit -> True
-      PatVar(_, p) -> isSingleTestPat(p)
-      PatCon(pattern=ps) -> ps.all(isZeroTestPat)
+      PatVar(_, p) -> is-single-test-pattern(p)
+      PatCon(pattern=ps) -> ps.all(is-zero-test-pattern)
   val isSingleTestBranch = match branches
-    [Branch([pat], [Guard(test, _)])] -> test.isTrue && pat.isSingleTestPat
+    [Branch([pat], [Guard(test, _)])] -> test.is-true && pat.is-single-test-pattern
     _ -> False
-  fun isJumpResult(r)
+  fun is-jump-result(r)
     match r
       ResultReturn -> True
       ResultAssign(_ , Just) -> True
@@ -349,35 +349,35 @@ fun genMatch(res0: result, exprDocs: list<doc>, branches: list<branch>)
     match res0
       ResultAssign(nm, Nothing) | branches.length > 1 && !isSingleTestBranch ->
         val lab = "match".newVarName
-        (ResultAssign(nm, Just(lab)), [lab.cppName |.| colon |+| semi])
+        (ResultAssign(nm, Just(lab)), [lab.cpp-name |.| colon |+| semi])
       _ -> (res0, [])
-  val docsInit = branches.init.map(fn(b) genBranch(r, exprDocs, False, b))
-  val docLast0 = genBranch(res0, exprDocs, False, branches.last.unjust)
-  val docLast = if isSingleTestBranch && !r.isJumpResult then "else".text |+| block(docLast0) else docLast0
+  val docsInit = branches.init.map(fn(b) gen-branch(r, exprDocs, False, b))
+  val docLast0 = gen-branch(res0, exprDocs, False, branches.last.unjust)
+  val docLast = if isSingleTestBranch && !r.is-jump-result then "else".text |+| block(docLast0) else docLast0
   val doc = vcat(docsInit ++ [docLast] ++ genLabel)
   doc
  
-fun genBranch(r: result, exprDocs: list<doc>, doTest: bool, Branch(patts, guards): branch)
-  val doc = genPattern(doTest, [], exprDocs.zip(patts), fn(binds) genGuards(r, guards, binds))
+fun gen-branch(r: result, exprDocs: list<doc>, doTest: bool, Branch(patts, guards): branch)
+  val doc = gen-pattern(doTest, [], exprDocs.zip(patts), fn(binds) gen-guards(r, guards, binds))
   if doc.dStartsWith("if") then doc else block(doc)
 
-fun genGuards(r: result, g: list<guard>, binds: bindings)
-  val (docs, _) = g.foldl(([], binds), fn(acc, g') genGuard(r, acc, g'))
+fun gen-guards(r: result, g: list<guard>, binds: bindings)
+  val (docs, _) = g.foldl(([], binds), fn(acc, g') gen-guard(r, acc, g'))
   vcat(docs)
 
-fun genGuard(r: result, (docs, bindings): (list<doc>, bindings), Guard(test, body): guard)
+fun gen-guard(r: result, (docs, bindings): (list<doc>, bindings), Guard(test, body): guard)
   val gFree = test.freeLocals
   val eFree = body.freeLocals
   val (bindsGuard, bindsOther) = bindings.partition(fn((nm, _)) gFree.member(nm))
   val guardLocals = bindsGuard.map(snd)
   val exprLocals = bindsOther.filter(fn((nm, _)) eFree.member(nm)).map(snd)
   match test
-    Con(tname, _) | tname.getName == nameTrue ->
-      val doc = genStat(r, body)
+    Con(tname, _) | tname.get-name == nameTrue ->
+      val doc = gen-statement(r, body)
       (docs ++ [vcat(guardLocals ++ exprLocals ++ [doc])], bindsOther)
     _ ->
-      val (gddoc, gdoc) = test.genExpr
-      val sdoc = genStat(r, body)
+      val (gddoc, gdoc) = test.gen-expression
+      val sdoc = gen-statement(r, body)
       (docs ++ [vcat(guardLocals ++ gddoc ++ ["if".text |+| parensIf(gdoc) |+| block(vcat(exprLocals ++ [sdoc]))])], bindsOther)
 
 fun concat(xss: list<(list<a>, list<b>, list<c>, list<d>)>): (list<a>, list<b>, list<c>, list<d>)
@@ -387,33 +387,33 @@ fun concat(xss: list<(list<a>, list<b>, list<c>, list<d>)>): (list<a>, list<b>, 
       val (la1, lb1, lc1, ld1) = concat(xs)
       (la ++ la1, lb ++ lb1, lc ++ lc1, ld ++ ld1)
 
-fun genPattern(doTest: bool, bindings0: bindings, l: list<(doc, pattern)>, genBody: bindings -> asmEff doc)
+fun gen-pattern(doTest: bool, bindings0: bindings, l: list<(doc, pattern)>, genBody: bindings -> asmEff doc)
   match l
     Nil -> genBody(bindings0)
     _ ->
-      val (testss, localss, bindingss, nextPatternss) = l.map(fn(x) genPatternTest(doTest, x).unzip4).concat
+      val (testss, localss, bindingss, nextPatternss) = l.map(fn(x) gen-pattern-test(doTest, x).unzip4).concat
       val tests = testss.concat
       val locals = localss.concat
       val bindings = bindings0 ++ bindingss.concat
-      val ndoc = genPattern(doTest, bindings, nextPatternss.concat, genBody)
+      val ndoc = gen-pattern(doTest, bindings, nextPatternss.concat, genBody)
       if tests.is-nil then
         vcat(locals ++ [ndoc])
       else
         "if".text |+| parensIf(hcat(tests.punctuate(" && ".text))) |+| block(vcat(locals ++ [ndoc]))
 
-fun genPatternTest(doTest: bool, (exprDoc, pat): (doc, pattern))
+fun gen-pattern-test(doTest: bool, (exprDoc, pat): (doc, pattern))
   fun test(xs)
     if doTest then xs else []
   match pat
     PatWild -> []
-    PatCon(bname, [patt], _, [targ], _, _, _, _) | bname.getName == nameBoxCon ->
-      val unbox = genUnboxCallBorrowed(targ, exprDoc)
-      val next = genNextPatterns(fn(slf, fld) slf, unbox, targ, [patt])
+    PatCon(bname, [patt], _, [targ], _, _, _, _) | bname.get-name == nameBoxCon ->
+      val unbox = gen-unbox-call-borrowed(targ, exprDoc)
+      val next = gen-next-patterns(fn(slf, fld) slf, unbox, targ, [patt])
       [([], [], [], next)]
     PatVar(tname, patt) ->
-      val binding = tname.typeOf.cppType |+| tname.getName.ppDefName |+| " =".text |+| exprDoc |.| semi
+      val binding = tname.typeOf.cpp-type |+| tname.get-name.ppDefName |+| " =".text |+| exprDoc |.| semi
       val (assign, bindings) = if patt.patternVarFree && !eagerPatBind then ([], [(tname, binding)]) else ([binding], [])
-      val next = genNextPatterns(fn(slf, fld) slf, exprDoc, tname.typeOf, [patt])
+      val next = gen-next-patterns(fn(slf, fld) slf, exprDoc, tname.typeOf, [patt])
       [([], assign, bindings, next)]
     PatLit(LitString(s)) ->
       [(test(["kk_string_cmp_cstr_borrow".text |.| arguments([exprDoc, s.cString.fst]) |+| "== 0".text]), [], [], [])]
@@ -428,35 +428,35 @@ fun genPatternTest(doTest: bool, (exprDoc, pat): (doc, pattern))
         ConEnum | info.name == nameTrue -> [(xtest([exprDoc]), [], [], [])]
         ConEnum | info.name == nameFalse -> [(xtest(["!".text |.| exprDoc.parens]), [], [], [])]
         ConAsJust ->
-          val next = genNextPatterns(fn(slf, fld) "kk_datatype_unJust".text |.| arguments([slf]), exprDoc, tname.typeOf, patts)
+          val next = gen-next-patterns(fn(slf, fld) "kk_datatype_unJust".text |.| arguments([slf]), exprDoc, tname.typeOf, patts)
           [(xtest([info.conTestName |.| arguments([exprDoc])]), [], [], next)]
         _ ->
           fun conTest(ci: conInfo)
             val local = "con".newVarName
-            val next = genNextPatterns(fn(slf, fld) slf |.| "->".text |.| fld, local.ppDefName, tname.typeOf, patts)
-            val typeDoc = "struct".text |+| ci.name.cppName |.| "*".text
+            val next = gen-next-patterns(fn(slf, fld) slf |.| "->".text |.| fld, local.ppDefName, tname.typeOf, patts)
+            val typeDoc = "struct".text |+| ci.name.cpp-name |.| "*".text
             val assign = typeDoc |+| local.ppDefName |+| "=".text |+| ci.conAsName |.| arguments([exprDoc]) |.| semi
             [(xtest([ci.conTestName |.| arguments([exprDoc])]), [assign], [], next)] 
           fun valTest(conName: tName, ci: conInfo, drepr: dataRepr)
-            val selectOp = if drepr.needsTagField then "._cons." ++ conName.getName.ppDefName.show ++ "." else "."
-            val next = genNextPatterns(fn(slf, fld) slf |.| selectOp.text |.| fld, exprDoc, tname.typeOf, patts)
+            val selectOp = if drepr.needsTagField then "._cons." ++ conName.get-name.ppDefName.show ++ "." else "."
+            val next = gen-next-patterns(fn(slf, fld) slf |.| selectOp.text |.| fld, exprDoc, tname.typeOf, patts)
             [(xtest([ci.conTestName |.| arguments([exprDoc])]), [], [], next)] 
           val drepr = crepr.repr
           if drepr.isValue || crepr.is-conSingleton then valTest(tname, info, drepr) else conTest(info)
 
-fun genNextPatterns(select: (doc, doc) -> doc, exprDoc: doc, tp: ktype, patts: list<pattern>)
+fun gen-next-patterns(select: (doc, doc) -> doc, exprDoc: doc, tp: ktype, patts: list<pattern>)
   match patts
     Nil -> Nil
     _ ->
-      val (_, _, rho) = tp.splitPredType
-      match rho.expandSyn
+      val (_, _, rho) = tp.split-pred-type
+      match rho.expand-syn
         TFun(args, _, _) ->
           match patts
             [PatWild] | args.length > 1 -> []
             [pat] | args.length == 0 || args.length > 1 -> [(exprDoc, pat)]
             _ ->
               if args.length != patts.length then
-                fail("c/from-core genNextPatterns: args != patterns " ++ args.length.show ++ "," ++ patts.length.show ++ " " ++ args.show-list(fn(x) x.fst.show) ++ "," ++ patts.show-list(show) ++ ":\n expr: " ++ exprDoc.show ++ "\n type: " ++  tp.show)
+                fail("c/from-core gen-next-patterns: args != patterns " ++ args.length.show ++ "," ++ patts.length.show ++ " " ++ args.show-list(fn(x) x.fst.show) ++ "," ++ patts.show-list(show) ++ ":\n expr: " ++ exprDoc.show ++ "\n type: " ++  tp.show)
               fun genNextPattern((nm, pat))
                 match pat
                   PatWild -> []
@@ -466,30 +466,30 @@ fun genNextPatterns(select: (doc, doc) -> doc, exprDoc: doc, tp: ktype, patts: l
           match patts
             [PatWild] -> []
             [pat] -> [(exprDoc, pat)]
-            _ -> fail("c/from-core genNextPatterns: patterns but not a function")
+            _ -> fail("c/from-core gen-next-patterns: patterns but not a function")
 
 // Expressions that produce statements on their way
 
 // Generates C statements and expressions from core expression
-fun genExpr(ex: expr): asmEff (list<doc>, doc)
-  if ex.isInlineableExpr then
-    ([], ex.genInline)
+fun gen-expression(ex: expr): asmEff (list<doc>, doc)
+  if ex.is-inlineableExpr then
+    ([], ex.gen-inline)
   else
-    ex.genExprPrim
+    ex.gen-expression-prim
 
-fun genExprPrim(ex: expr)
+fun gen-expression-prim(ex: expr)
   match ex
-    Con -> ex.genConEtaExpand
-    TypeApp(Con) -> ex.genConEtaExpand
-    TypeApp(e) -> e.genExpr
-    TypeLam(_, e) -> e.genExpr
-    App(f, args) -> genApp(f, args)
+    Con -> ex.gen-constr-eta-expand
+    TypeApp(Con) -> ex.gen-constr-eta-expand
+    TypeApp(e) -> e.gen-expression
+    TypeLam(_, e) -> e.gen-expression
+    App(f, args) -> gen-app(f, args)
     Let(groups, body) ->
-      val decls1 = groups.genLocalGroups
-      val (decls2, doc) = body.genExpr
+      val decls1 = groups.gen-local-groups
+      val (decls2, doc) = body.gen-expression
       (decls1 ++ decls2, doc)
     Case ->
-      val (doc, tname) = ex.genVarBinding
+      val (doc, tname) = ex.gen-var-binding
       val nameDoc = tname.genDefName
       ([doc], nameDoc)
     ELit(LitString(s)) ->
@@ -497,213 +497,213 @@ fun genExprPrim(ex: expr)
       if s == "" then ([], "kk_string_empty()".text)
       else
         val (cstr, clen) = s.cString
-        (["kk_define_string_literal".text |.| arguments([empty, name.cppName, clen.pretty, cstr])], "kk_string_dup".text |.| arguments([name.cppName]))
+        (["kk_define_string_literal".text |.| arguments([empty, name.cpp-name, clen.pretty, cstr])], "kk_string_dup".text |.| arguments([name.cpp-name]))
     Var(vname, InfoExternal(_)) ->
-      match vname.typeOf.splitFunScheme
+      match vname.typeOf.split-funScheme
         Just((_, _, tpars, teff, _)) ->
           val names = tpars.length.newVarNames
           val tnames = names.zip(tpars).map(fn((name, (_, tp))) TName(name, tp))
-          genExpr(Lam(tnames, teff, App(ex, tnames.map(fn(tn) Var(tn, InfoNone)))))
-        _ -> fail("backend/c/from-core genExpr: invalid partially applied external:\n" ++ ex.show)
-    _ -> fail("backend/c/from-core genExpr: invalid expression:\n" ++ ex.show)
+          gen-expression(Lam(tnames, teff, App(ex, tnames.map(fn(tn) Var(tn, InfoNone)))))
+        _ -> fail("backend/c/from-core gen-expression: invalid partially applied external:\n" ++ ex.show)
+    _ -> fail("backend/c/from-core gen-expression: invalid expression:\n" ++ ex.show)
 
-fun genConEtaExpand(cexpr: expr)
-  match cexpr.typeOf.splitFunScheme
+fun gen-constr-eta-expand(cexpr: expr)
+  match cexpr.typeOf.split-funScheme
     Just((_, _, tpars, teff, _)) ->
       val names = tpars.length.newVarNames
       val tnames = names.zip(tpars).map(fn((name, (_, tp))) TName(name, tp))
-      genExpr(Lam(tnames, teff, App(cexpr, tnames.map(fn(n) Var(n, InfoNone)))))
-    _ -> fail("backend/c/from-core genExpr: invalid partially applied constructor:\n" ++ cexpr.show)
+      gen-expression(Lam(tnames, teff, App(cexpr, tnames.map(fn(n) Var(n, InfoNone)))))
+    _ -> fail("backend/c/from-core gen-expression: invalid partially applied constructor:\n" ++ cexpr.show)
 
-fun genExprs(l: list<expr>)
-  val xs = l.map(genExpr)
+fun gen-expressions(l: list<expr>)
+  val xs = l.map(gen-expression)
   val (declss, docs) = xs.unzip
   (declss.concat, docs)
 
-fun genInlineableExprs(l: list<expr>)
-  val xs = l.map(genInlineableExpr)
+fun gen-inlineable-exprs(l: list<expr>)
+  val xs = l.map(gen-inlineable-expr)
   val (declss, docs) = xs.unzip
   (declss.concat, docs)
 
-fun genInlineableExpr(ex: expr)
-  if ex.isInlineableExpr then
-    ([], ex.genInline)
+fun gen-inlineable-expr(ex: expr)
+  if ex.is-inlineableExpr then
+    ([], ex.gen-inline)
   else
-    val (doc, vr) = ex.genVarBinding()
-    ([doc], vr.getName.cppName)
+    val (doc, vr) = ex.gen-var-binding()
+    ([doc], vr.get-name.cpp-name)
 
 // Introduces an additional let binding in core if necessary
 // The expression in the result is guranteed to be a Var afterwards
-fun genVarBinding(ex: expr)
+fun gen-var-binding(ex: expr)
   match ex
-    Var(tn) | !tn.getName.isQualified -> (empty, tn)
-    _ -> genVarBindingAlways(ex)
+    Var(tn) | !tn.get-name.isQualified -> (empty, tn)
+    _ -> gen-var-binding-always(ex)
 
-fun genVarBindingAlways(ex: expr)
+fun gen-var-binding-always(ex: expr)
   val nm = "x".newVarName
   val tp = ex.typeOf
   val tname = TName(nm, tp)
-  val doc = genStat(ResultAssign(tname, Nothing), ex)
-  if doc.dStartsWith(nm.cppName.show ++ " =") then
-    (tp.cppType |+| doc, tname)
+  val doc = gen-statement(ResultAssign(tname, Nothing), ex)
+  if doc.dStartsWith(nm.cpp-name.show ++ " =") then
+    (tp.cpp-type |+| doc, tname)
   else
     (tname.ppVarDecl |.| tp.unitSemi |-| doc, tname)
 
 // Pure expressions
-fun genPure(ex: expr)
+fun gen-pure(ex: expr)
   match ex
-    TypeApp(e) -> e.genPure
-    TypeLam(_, e) -> e.genPure
+    TypeApp(e) -> e.gen-pure
+    TypeLam(_, e) -> e.gen-pure
     Var(nm, info) ->
-      match nm.typeOf.splitFunScheme
-        Just((_, _, argTps, eff, _)) | nm.getName.isQualified && info.is-infoArity -> // wrap bare top-level functions
+      match nm.typeOf.split-funScheme
+        Just((_, _, argTps, eff, _)) | nm.get-name.isQualified && info.is-infoArity -> // wrap bare top-level functions
           val argNames = list(1, argTps.length).map(fn(i) "x" ++ i.show).map(newVarName)
           val tnames = argNames.zip(argTps).map(fn((name, (_, tp))) TName(name, tp))
           val body = App(ex, tnames.map(fn(n) Var(n, InfoNone)))
-          body.genLambda(tnames, eff)
+          body.gen-lambda(tnames, eff)
         _ -> match info
-          InfoExternal(formats) -> genInlineExternal(nm, formats, [])
-          _ -> nm.getName.cppName
+          InfoExternal(formats) -> gen-inline-external(nm, formats, [])
+          _ -> nm.get-name.cpp-name
     Con(nm, _) ->
-      if nm.getName == nameTrue then "true".text
-      elif nm.getName == nameFalse then "false".text
-      elif nm.getName == nameUnit then "kk_Unit".text
-      else nm.getName.conCreateNameX |.| arguments([])
+      if nm.get-name == nameTrue then "true".text
+      elif nm.get-name == nameFalse then "false".text
+      elif nm.get-name == nameUnit then "kk_Unit".text
+      else nm.get-name.conCreateNameX |.| arguments([])
     ELit(l) -> l.ppLit
-    Lam(params, eff, body) -> body.genLambda(params, eff)
-    _ -> fail("backend/c/from-core genPure: invalid expression:\n" ++ ex.show)
+    Lam(params, eff, body) -> body.gen-lambda(params, eff)
+    _ -> fail("backend/c/from-core gen-pure: invalid expression:\n" ++ ex.show)
 
 // Generates an effect-free expression
 // NOTE: Throws an error if expression is not guaranteed to be effectfree
-fun genInline(ex: expr)
+fun gen-inline(ex: expr)
   if ex.isPureExpr then
-    ex.genPure()
+    ex.gen-pure()
   else
-    val (decls, doc) = ex.genExprPrim()
+    val (decls, doc) = ex.gen-expression-prim()
     if decls.is-cons then
-      fail("backend/c/from-core genInline: not an inlineable expression? " ++ ex.show)
+      fail("backend/c/from-core gen-inline: not an inlineable expression? " ++ ex.show)
     doc
 
 // Applications
-fun genApp(f, args)
-  match genAppSpecial(f, args)
+fun gen-app(f, args)
+  match gen-app-special(f, args)
     Just(app) -> ([], app)
-    Nothing -> genAppNormal(f, args)
+    Nothing -> gen-app-normal(f, args)
 
-fun genAppNormal(f: expr, args: list<expr>)
+fun gen-app-normal(f: expr, args: list<expr>)
   match (f, args)
-    (Var(allocAt), [Var(at), App(Con(tname, repr), args)]) | allocAt.getName == nameAllocAt ->
-      val (decls, argDocs) = args.genInlineableExprs
-      val atDoc = at.getName.cppName
-      (decls, conCreateNameX(tname.getName) |.| arguments([atDoc] ++ ppCtxPath(repr, tname, args.is-nil) ++ argDocs))
-    (Var(allocAt), [Var(at), App(TypeApp(Con(tname, repr), _), args)]) | allocAt.getName == nameAllocAt ->
-      val (decls, argDocs) = args.genInlineableExprs
-      val atDoc = at.getName.cppName
-      (decls, conCreateNameX(tname.getName) |.| arguments([atDoc] ++ ppCtxPath(repr, tname, args.is-nil) ++ argDocs))
-    (v as Var(allocAt), [at, Let(dgs, expr)]) | allocAt.getName == nameAllocAt -> // can happen due to box operations
-      genExpr(Let(dgs, App(v, [at, expr])))
+    (Var(allocAt), [Var(at), App(Con(tname, repr), args)]) | allocAt.get-name == nameAllocAt ->
+      val (decls, argDocs) = args.gen-inlineable-exprs
+      val atDoc = at.get-name.cpp-name
+      (decls, conCreateNameX(tname.get-name) |.| arguments([atDoc] ++ pp-ctx-path(repr, tname, args.is-nil) ++ argDocs))
+    (Var(allocAt), [Var(at), App(TypeApp(Con(tname, repr), _), args)]) | allocAt.get-name == nameAllocAt ->
+      val (decls, argDocs) = args.gen-inlineable-exprs
+      val atDoc = at.get-name.cpp-name
+      (decls, conCreateNameX(tname.get-name) |.| arguments([atDoc] ++ pp-ctx-path(repr, tname, args.is-nil) ++ argDocs))
+    (v as Var(allocAt), [at, Let(dgs, expr)]) | allocAt.get-name == nameAllocAt -> // can happen due to box operations
+      gen-expression(Let(dgs, App(v, [at, expr])))
    
     // special: conAssignFields
     (Var(TName(conTagFieldAssign, typeAssign)), Cons(Var(reuseName, InfoConField(conName, conRepr, _)), Cons(Var(tag), fieldValues))) | conTagFieldAssign == nameConTagFieldsAssign ->
       val tmp = "con".genVarName
       val setTag = tmp |.| "->_base._block.header.tag = (kk_tag_t)".text |.| parens(tag.show.text) |.| semi
-      val fieldNames = match typeAssign.splitFunScheme
+      val fieldNames = match typeAssign.split-funScheme
         Just((_, _, args', _, _)) -> tail(tail(args'.map(fst)))
         _ -> fail("backend/c/from-core: illegal conAssignFields type: " ++ typeAssign.pretty.show)
-      val (decls, tmpDecl, assigns, result) = genAssignFields(tmp, conName, conRepr, reuseName, fieldNames, fieldValues)
+      val (decls, tmpDecl, assigns, result) = gen-assign-fields(tmp, conName, conRepr, reuseName, fieldNames, fieldValues)
       (decls ++ [tmpDecl, setTag] ++ assigns, result)
     (Var(TName(conFieldAssign, typeAssign)), Cons(Var(reuseName, InfoConField(conName, conRepr, _)), fieldValues)) | conFieldAssign == nameConFieldsAssign ->
       val tmp = "con".genVarName
-      val fieldNames = match typeAssign.splitFunScheme
+      val fieldNames = match typeAssign.split-funScheme
         Just((_, _, args', _, _)) -> tail(args'.map(fst))
         _ -> fail("backend/c/from-core: illegal conAssignFields type: " ++ typeAssign.pretty.show)
-      val (decls, tmpDecl, assigns, result) = genAssignFields(tmp, conName, conRepr, reuseName, fieldNames, fieldValues)
+      val (decls, tmpDecl, assigns, result) = gen-assign-fields(tmp, conName, conRepr, reuseName, fieldNames, fieldValues)
       (decls ++ [tmpDecl] ++ assigns, result)
   
     // special: cfield-hole
-    (Var(unbox), [App(Var(cfieldHole), [])]) | cfieldHole.getName == nameCCtxHoleCreate && unbox.getName == nameUnbox ->
-      ([], genHoleCall(unbox.typeOf.resultType))
+    (Var(unbox), [App(Var(cfieldHole), [])]) | cfieldHole.get-name == nameCCtxHoleCreate && unbox.get-name == nameUnbox ->
+      ([], gen-hole-call(unbox.typeOf.resultType))
     
     // special: cfield-of
-    (Var(cfieldOf), [App(Var(_), [App(Var(dup), [Var(c)])]), ELit(LitString(conName)), ELit(LitString(fieldName))]) | cfieldOf.getName == nameFieldAddrOf && dup.getName == nameDup ->
-      val doc = genFieldAddress(c, conName.readQualified, fieldName.readQualified)
+    (Var(cfieldOf), [App(Var(_), [App(Var(dup), [Var(c)])]), ELit(LitString(conName)), ELit(LitString(fieldName))]) | cfieldOf.get-name == nameFieldAddrOf && dup.get-name == nameDup ->
+      val doc = gen-field-address(c, conName.readQualified, fieldName.readQualified)
       ([], doc)
-    (Var(cfieldOf), [App(Var(_), [Var(c)]), ELit(LitString(conName)), ELit(LitString(fieldName))]) | cfieldOf.getName == nameFieldAddrOf ->
-      val drop = genDupDropCall(False, c.typeOf, c.getName.cppName).map(fn(x) x |.| semi)
-      val doc = genFieldAddress(c, conName.readQualified, fieldName.readQualified)
+    (Var(cfieldOf), [App(Var(_), [Var(c)]), ELit(LitString(conName)), ELit(LitString(fieldName))]) | cfieldOf.get-name == nameFieldAddrOf ->
+      val drop = gen-dup-drop-call(False, c.typeOf, c.get-name.cpp-name).map(fn(x) x |.| semi)
+      val doc = gen-field-address(c, conName.readQualified, fieldName.readQualified)
       (drop, doc)
     
     // Add/sub small constant
-    (Var(add), [arg, ELit(LitInt(i))]) | add.getName == nameIntAdd && i.isSmallInt -> // arg + i
-      val (decls, argDocs) = genInlineableExprs([arg])
+    (Var(add), [arg, ELit(LitInt(i))]) | add.get-name == nameIntAdd && i.isSmallInt -> // arg + i
+      val (decls, argDocs) = gen-inlineable-exprs([arg])
       (decls, "kk_integer_add_small_const".text |.| arguments(argDocs ++ [i.pretty]))
-    (Var(add), [ELit(LitInt(i)), arg]) | add.getName == nameIntAdd && i.isSmallInt -> // i + arg
-      val (decls, argDocs) = genInlineableExprs([arg])
+    (Var(add), [ELit(LitInt(i)), arg]) | add.get-name == nameIntAdd && i.isSmallInt -> // i + arg
+      val (decls, argDocs) = gen-inlineable-exprs([arg])
       (decls, "kk_integer_add_small_const".text |.| arguments(argDocs ++ [i.pretty]))
-    (Var(sub), [arg, ELit(LitInt(i))]) | sub.getName == nameIntSub && i.isSmallInt -> // arg - i
-      val (decls, argDocs) = genInlineableExprs([arg])
+    (Var(sub), [arg, ELit(LitInt(i))]) | sub.get-name == nameIntSub && i.isSmallInt -> // arg - i
+      val (decls, argDocs) = gen-inlineable-exprs([arg])
       (decls, "kk_integer_add_small_const".text |.| arguments(argDocs ++ [(0 - i).pretty]))
     // normal
     _ ->
-      val (decls, argDocs) = args.genInlineableExprs
-      match f.extractExtern
+      val (decls, argDocs) = args.gen-inlineable-exprs
+      match f.extract-extern
         Just((tname, formats)) ->
-          val (edecls, doc) = genExprExternal(tname, formats, argDocs)
+          val (edecls, doc) = gen-expression-external(tname, formats, argDocs)
           (edecls ++ decls, doc)
         _ ->
           match f
             // constructor
             Con(tname, crepr) ->
               val at = (if crepr.repr.isValue || crepr.is-conAsJust then [] else ["kk_reuse_null".text])
-              (decls, conCreateNameX(tname.getName) |.| arguments(at ++ ppCtxPath(crepr, tname, argDocs.is-nil) ++ argDocs))
+              (decls, conCreateNameX(tname.get-name) |.| arguments(at ++ pp-ctx-path(crepr, tname, argDocs.is-nil) ++ argDocs))
             // call to known function
-            Var(tname) | tname.getName == nameAllocAt ->
-              fail("backend/c/genApp Var allocat" ++ f.show ++ " " ++ args.show-list(show))
-            Var(tname, InfoArity) | tname.getName.isQualified ->
-              (decls, tname.getName.cppName |.| arguments(argDocs))
+            Var(tname) | tname.get-name == nameAllocAt ->
+              fail("backend/c/gen-app Var allocat" ++ f.show ++ " " ++ args.show-list(show))
+            Var(tname, InfoArity) | tname.get-name.isQualified ->
+              (decls, tname.get-name.cpp-name |.| arguments(argDocs))
             // call unknown function_t
             _ ->
               val (fdecls, fdoc) = match f
-                Var(tname, _) -> ([], tname.getName.cppName)
+                Var(tname, _) -> ([], tname.get-name.cpp-name)
                 _ ->
-                  val (fdecl, fname) = genVarBinding(f)
-                  ([fdecl], fname.getName.cppName)
-              val (cresTp, cargTps) = match f.typeOf.splitFunScheme
+                  val (fdecl, fname) = gen-var-binding(f)
+                  ([fdecl], fname.get-name.cpp-name)
+              val (cresTp, cargTps) = match f.typeOf.split-funScheme
                 Just((_, _, argTps, _, resTp)) ->
-                  (resTp.cppType, tupled(["kk_function_t".text] ++ argTps.map(snd).map(cppType) ++ ["kk_context_t*".text]))
+                  (resTp.cpp-type, tupled(["kk_function_t".text] ++ argTps.map(snd).map(cpp-type) ++ ["kk_context_t*".text]))
                 _ ->
-                  fail("backend/c/genAppNormal: expecting function type: " ++ f.typeOf.pretty.show)
+                  fail("backend/c/gen-app-normal: expecting function type: " ++ f.typeOf.pretty.show)
               (fdecls ++ decls, "kk_function_call".text |.| arguments([cresTp, cargTps, fdoc, arguments(Cons(fdoc, argDocs))]))
 
-fun ppCtxPath(crepr: conRepr, cname: tName, noArgs: bool)
+fun pp-ctx-path(crepr: conRepr, cname: tName, noArgs: bool)
   if noArgs then []
   else match crepr.ctxPath
     Just(CtxNone) -> ["0".text]
-    Just(CtxField(fname)) -> ["kk_field_index_of".text |.| tupled(["struct".text |+| cname.getName.cppName, fname.getName.unqualify.cppName])]
+    Just(CtxField(fname)) -> ["kk_field_index_of".text |.| tupled(["struct".text |+| cname.get-name.cpp-name, fname.get-name.unqualify.cpp-name])]
     _ -> []
 
-fun genAssignFields(tmp: doc, conName: tName, crepr: conRepr, reuseName: tName, fieldNames: list<name>, fieldValues: list<expr>)
-  val (decls, fieldDocs) = fieldValues.genExprs
-  val conTp = "struct".text |+| conName.getName.cppName |.| "*".text
-  val tmpDecl = conTp |+| tmp |+| "=".text |+| parens(conTp) |.| reuseName.getName.cppName
-  val assigns = zip(fieldNames, fieldDocs).map(fn((fname, fval)) tmp |.| "->".text |.| fname.cppName |+| "=".text |+| fval |.| semi)
+fun gen-assign-fields(tmp: doc, conName: tName, crepr: conRepr, reuseName: tName, fieldNames: list<name>, fieldValues: list<expr>)
+  val (decls, fieldDocs) = fieldValues.gen-expressions
+  val conTp = "struct".text |+| conName.get-name.cpp-name |.| "*".text
+  val tmpDecl = conTp |+| tmp |+| "=".text |+| parens(conTp) |.| reuseName.get-name.cpp-name
+  val assigns = zip(fieldNames, fieldDocs).map(fn((fname, fval)) tmp |.| "->".text |.| fname.cpp-name |+| "=".text |+| fval |.| semi)
   val ctxPath = match crepr.ctxPath
-    Just(CtxField(fname)) -> ["kk_set_cpath".text |.| tupled(["struct".text |+| conName.getName.cppName, tmp, fname.getName.unqualify.cppName]) |.| semi]
+    Just(CtxField(fname)) -> ["kk_set_cpath".text |.| tupled(["struct".text |+| conName.get-name.cpp-name, tmp, fname.get-name.unqualify.cpp-name]) |.| semi]
     _ -> []
-  val result = conBaseCastNameX(conName.getName) |.| arguments([tmp])
+  val result = conBaseCastNameX(conName.get-name) |.| arguments([tmp])
   (decls, tmpDecl, ctxPath ++ assigns, result)
 
-fun genFieldAddress(conVar: tName, conName: name, fieldName: name)
-  "kk_field_addr_create".text |.| arguments([conAsNameX(conName) |.| arguments([conVar.getName.ppName]) |.| "->".text |.| fieldName.unqualify.ppName])
+fun gen-field-address(conVar: tName, conName: name, fieldName: name)
+  "kk_field_addr_create".text |.| arguments([conAsNameX(conName) |.| arguments([conVar.get-name.pp-name]) |.| "->".text |.| fieldName.unqualify.pp-name])
 
-fun genCCtxSetContextPath(conVar: tName, conName: name, fieldName: name)
-  "kk_cctx_setcp".text |.| arguments([conVar.getName.cppName, "offsetof".text |.| tupled(["struct".text |+| conName.cppName, fieldName.unqualify.cppName])])
+fun gen-cctx-set-ctx-path(conVar: tName, conName: name, fieldName: name)
+  "kk_cctx_setcp".text |.| arguments([conVar.get-name.cpp-name, "offsetof".text |.| tupled(["struct".text |+| conName.cpp-name, fieldName.unqualify.cpp-name])])
 
-fun genAppSpecial(f: expr, args: list<expr>)
+fun gen-app-special(f: expr, args: list<expr>)
   fun default()
-    match f.extractExtern
+    match f.extract-extern
       Just((tname, _)) ->
-        val nm = tname.getName
+        val nm = tname.get-name
         match args
           [ELit(LitInt(i))] ->
             if nm == nameInt32 && i.isSmallInt32 then
@@ -722,7 +722,7 @@ fun genAppSpecial(f: expr, args: list<expr>)
       _ -> Nothing
   match (f, args)
     (Var(tname), [ELit(LitInt(i))]) ->
-      val nm = tname.getName
+      val nm = tname.get-name
       if nm == nameInt32 && i.isSmallInt32 then
         return Just(genLitInt32(i))
       elif nm == nameInt64 && i.isSmallInt64 then
@@ -737,22 +737,22 @@ fun genAppSpecial(f: expr, args: list<expr>)
     _ -> default()  
 
 // Externals
-fun extractExtern(ex: expr)
+fun extract-extern(ex: expr)
   match ex
     TypeApp(Var(tname, InfoExternal(formats)), _) -> Just((tname, formats))
     Var(tname, InfoExternal(formats)) -> Just((tname, formats))
     _ -> Nothing
 
 // inlined external sometimes needs wrapping in an applied function block
-fun genInlineExternal(tname: tName, formats: list<(target, string)>, args: list<doc>)
-  val (decls, doc) = genExprExternal(tname, formats, args)
+fun gen-inline-external(tname: tName, formats: list<(target, string)>, args: list<doc>)
+  val (decls, doc) = gen-expression-external(tname, formats, args)
   if decls.is-nil then doc
-  else fail("backend/c/from-core genInlineExternal: TODO: inline external declarations: " ++ show(vcat(decls ++ [doc])))
+  else fail("backend/c/from-core gen-inline-external: TODO: inline external declarations: " ++ show(vcat(decls ++ [doc])))
 
 // generate external: needs to add try blocks for primitives that can throw exceptions
 
-fun genExprExternal(tname: tName, formats: list<(target, string)>, args: list<doc>)
-  val nm = tname.getName
+fun gen-expression-external(tname: tName, formats: list<(target, string)>, args: list<doc>)
+  val nm = tname.get-name
   match args
     [argDoc] 
       | nm == nameBox || nm == nameUnbox ->
@@ -760,62 +760,62 @@ fun genExprExternal(tname: tName, formats: list<(target, string)>, args: list<do
         val isBox = nm == nameBox
         val tp = match tname.typeOf
           TFun([(_, fromTp)], _, toTp) -> if isBox then fromTp else toTp
-          _ -> fail("backend/c/from-core genExprExternal: box/unbox: expected function type")
-        ([], if isBox then genBoxCall(tp, argDoc) else genUnboxCallOwned(tp, argDoc))
+          _ -> fail("backend/c/from-core gen-expression-external: box/unbox: expected function type")
+        ([], if isBox then gen-box-call(tp, argDoc) else gen-unbox-call-owned(tp, argDoc))
       // special case dup/drop
       | nm == nameDup || nm == nameDrop ->
         val isDup = nm == nameDup
         val tp = match tname.typeOf
           TFun([(_, fromTp)], _, _) -> fromTp
-          _ -> fail("backend/c/from-core genExprExternal: dup/drop: expected function type")
-        ([], hcat(genDupDropCall(isDup, tp, argDoc)))
+          _ -> fail("backend/c/from-core gen-expression-external: dup/drop: expected function type")
+        ([], hcat(gen-dup-drop-call(isDup, tp, argDoc)))
       // special case is-unique
       | nm == nameIsUnique ->
         val tp = match tname.typeOf
           TFun([(_, fromTp)], _, _) -> fromTp
-          _ -> fail("backend/c/from-core genExprExternal: isUnique: expected function type")
-        ([], hcat(genIsUniqueCall(tp, argDoc)))
+          _ -> fail("backend/c/from-core gen-expression-external: isUnique: expected function type")
+        ([], hcat(gen-unique-call(tp, argDoc)))
       // special case free
       | nm == nameFree ->
         val tp = match tname.typeOf
           TFun([(_, fromTp)], _, _) -> fromTp
-          _ -> fail("backend/c/from-core genExprExternal: free: expected function type")
-        ([], hcat(genFreeCall(tp, argDoc)))
+          _ -> fail("backend/c/from-core gen-expression-external: free: expected function type")
+        ([], hcat(gen-free-call(tp, argDoc)))
       // special case decref
       | nm == nameDecRef ->
         val tp = match tname.typeOf
           TFun([(_, fromTp)], _, _) -> fromTp
-          _ -> fail("backend/c/from-core genExprExternal: decRef: expected function type")
-        ([], hcat(genDecRefCall(tp, argDoc)))
+          _ -> fail("backend/c/from-core gen-expression-external: decRef: expected function type")
+        ([], hcat(gen-decref-call(tp, argDoc)))
       // special case reuse
       | nm == nameReuse ->
         val tp = match tname.typeOf
           TFun([(_, fromTp)], _, _) -> fromTp
-          _ -> fail("backend/c/from-core genExprExternal: reuse: expected function type")
-        ([], hcat(genReuseCall(tp, argDoc)))
+          _ -> fail("backend/c/from-core gen-expression-external: reuse: expected function type")
+        ([], hcat(gen-reuse-call(tp, argDoc)))
     [argDoc1, argDoc2]
       // special case dropn
       | nm == nameDrop ->
         val tp = match tname.typeOf
           TFun([(_, fromTp)], _, _) -> fromTp
-          _ -> fail("backend/c/from-core genExprExternal: drop: expected function type")
-        ([], hcat(genDropNCall(tp, [argDoc1, argDoc2])))
+          _ -> fail("backend/c/from-core gen-expression-external: drop: expected function type")
+        ([], hcat(gen-dropn-call(tp, [argDoc1, argDoc2])))
       // special case drop_reuse
       | nm == nameDropReuse ->
         val tp = match tname.typeOf
           TFun([(_, fromTp)], _, _) -> fromTp
-          _ -> fail("backend/c/from-core genExprExternal: dropReuse: expected function type")
-        ([], hcat(genDropReuseCall(tp, [argDoc1, argDoc2])))
+          _ -> fail("backend/c/from-core gen-expression-external: dropReuse: expected function type")
+        ([], hcat(gen-drop-reuse-call(tp, [argDoc1, argDoc2])))
     Nil
       // special case cfield hold
       | nm == nameCCtxHoleCreate ->  
-        ([], genHoleCall(tname.typeOf.resultType))
+        ([], gen-hole-call(tname.typeOf.resultType))
   val format = getFormat(tname, formats)
   val argDocs = args.map(fn(d) if d.asString.list.all(fn(c) c.is-alpha || c.is-digit || c == '_') then d else d.parens)
-  fun ppExternalF(name: name, k: list<char>): <comp-flags,documentation,pure,colorSchemeEffect,ppEnvEff> doc
+  fun pp-externalf(name: name, k: list<char>): <comp-flags,documentation,pure,colorSchemeEffect,ppEnvEff> doc
     match k
       Nil -> empty
-      Cons('\\', Cons('#', xs)) -> char('#') |.| ppExternalF(name, xs)
+      Cons('\\', Cons('#', xs)) -> char('#') |.| pp-externalf(name, xs)
       Cons('#', Cons('#', _)) -> fail("backend/c/from-core: type arguments in C external in " ++ tname.show)
       Cons('#', Cons(y, xs)) ->
         if y >= '1' && y <= '9' then
@@ -823,9 +823,9 @@ fun genExprExternal(tname: tName, formats: list<(target, string)>, args: list<do
           val i = (y - '1').int
           if i >= args.length then
             fail("Illegal index in external: " ++ tname.show ++ ":" ++ tname.typeOf.pretty.show ++ "(" ++ k.string ++ "): index: " ++ i.show ++ ", arguments: " ++ args.show-list(show))
-          args[i].unjust |.| ppExternalF(name, xs)
-        else y.char |.| ppExternalF(name, xs)
-      Cons(x, xs) -> char(x) |.| ppExternalF(name, xs)
-  match format.lines.map(fn(fmt) ppExternalF(nm, fmt.list))    
+          args[i].unjust |.| pp-externalf(name, xs)
+        else y.char |.| pp-externalf(name, xs)
+      Cons(x, xs) -> char(x) |.| pp-externalf(name, xs)
+  match format.lines.map(fn(fmt) pp-externalf(nm, fmt.list))    
     Nil -> ([], empty)
     ds -> (ds.init, ds.last.unjust)

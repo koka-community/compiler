@@ -23,6 +23,18 @@ import std/data/sort
 
 pub infixr 5 (|->)
 
+effect range-map-eff
+  fun add-range-info(rng: range, ri: rangeInfo): ()
+  fun get-rangemap(): range-map
+
+fun build-range-map(f)
+  var rm := new/range-map
+  with handler
+    fun add-range-info(rng: range, ri: rangeInfo)
+      rm := rm.insert(rng, ri)
+    fun get-rangemap() rm
+  f()
+
 alias range-map = list<(range, rangeInfo)>
 
 fun rm-find-first(rm: range-map, p: (rangeInfo) -> e bool): e maybe<(range, rangeInfo)>
@@ -115,7 +127,7 @@ fun insert(rm: range-map, r: range, ri: rangeInfo)
   else
     val begin-end-token =
       match ri
-        RIId(nm) -> nm == nameUnit || nm == nameNull || nm.is-name-tuple
+        RIId(nm) -> nm == nameUnit || nm == nil || nm.is-name-tuple
         _ -> False
     if begin-end-token then Cons((r, ri), Cons((Range(r.end,r.end,r.hidden), ri), rm))
     else Cons((r, ri), rm)
@@ -124,13 +136,13 @@ fun append(rm1: range-map, rm2: range-map)
   rm1 ++ rm2
 
 fun sort(rm: range-map)
-  rm.sort(?cmp = fn((r1, _), (r2, _)) r1.cmp(r2))
+  rm.sort(?(<) = fn((r1, _), (r2, _)) r1.cmp(r2).is-lt)
 
 // select the best matching range infos from a selection
 fun prioritize(rm: range-map)
-  fun this-cmp((_, ri1: rangeInfo), (_, ri2: rangeInfo)) ri1.int.cmp(ri2.int)
+  fun this-cmp((_, ri1: rangeInfo), (_, ri2: rangeInfo)) ri1.int.cmp(ri2.int).is-lt
   fun eq((_, ri1: rangeInfo), (_, ri2: rangeInfo)) ri1.int / 10 == ri2.int / 10
-  val sorted = rm.filter(fn((_, ri)) !ri.is-rIimplicits).sort(?cmp=this-cmp)
+  val sorted = rm.filter(fn((_, ri)) !ri.is-rIimplicits).sort(?(<)=this-cmp)
   // Merge implicit documentation into identifiers
   val idocs = 
         rm.map fn((_, rinfo))
@@ -227,7 +239,7 @@ fun get-function-name-reverse(xs0: list<lexeme>)
           EmptyStatement -> xs'.go
           res -> res
       // x.partial, x().partial etc
-      Cons(f as Lexeme(_, LexId), Lexeme(_, LexKeyword(".")), xs') ->
+      Cons(f as Lexeme(_, LexId), Cons(Lexeme(_, LexKeyword(".")), xs')) ->
         chain(f, xs'.go)
       _ -> FnNotFound(xs)
   xs0.drop-auto-gen-closing.get-current-statement-reverse.go
@@ -239,7 +251,7 @@ fun chain(fn0: lexeme, chain: fn-syntax)
     FnValue -> FnChained(fn0, chain)
     FnIncomplete(ch) -> FnChained(fn0, ch)
     EmptyStatement -> FnValue(fn0)
-    FnNotFound(fxs) -> FnValue(fn0)
+    FnNotFound -> FnValue(fn0)
 
 type fn-syntax
   FnChained(name: lexeme, chain: fn-syntax) // a.b.c -- The chain's return type is the function's first argument type
@@ -263,13 +275,13 @@ fun get-current-statement-reverse(xs0: list<lexeme>)
   fun go(xs: list<lexeme>, blockn: int)
     match xs
       [] -> []
-      Cons(Lexeme(_, LexSpecial(";")), xs) | blockn == 0 -> []
-      Cons(Lexeme(_, LexInsSemi), xs) | blockn == 0 -> []
-      Cons(x as Lexeme(_, LexSpecial("}")), xs) -> Cons(x, go(xs, blockn + 1))
-      Cons(x as Lexeme(_, LexInsRCurly), xs) -> Cons(x, go(xs, blockn + 1))
-      Cons(x as Lexeme(_, LexSpecial("{")), xs) -> Cons(x, go(xs, blockn - 1))
-      Cons(x as Lexeme(_, LexInsLCurly), xs) -> Cons(x, go(xs, blockn - 1))
-      Cons(x, xs) -> Cons(x, go(xs, blockn))
+      Cons(Lexeme(_, LexSpecial(";"))) | blockn == 0 -> []
+      Cons(Lexeme(_, LexInsSemi)) | blockn == 0 -> []
+      Cons(x as Lexeme(_, LexSpecial("}")), xs') -> Cons(x, go(xs', blockn + 1))
+      Cons(x as Lexeme(_, LexInsRCurly), xs') -> Cons(x, go(xs', blockn + 1))
+      Cons(x as Lexeme(_, LexSpecial("{")), xs') -> Cons(x, go(xs', blockn - 1))
+      Cons(x as Lexeme(_, LexInsLCurly), xs') -> Cons(x, go(xs', blockn - 1))
+      Cons(x, xs') -> Cons(x, go(xs', blockn))
   go(xs0, 0)
 
 
@@ -278,27 +290,27 @@ fun get-current-block-reverse(xs0: list<lexeme>)
   fun go(xs: list<lexeme>, n: int)
     match xs
       [] -> []
-      Cons(Lexeme(_, LexSpecial("{")), xs) | n == 0 -> []
-      Cons(Lexeme(_, LexInsLCurly), xs) | n == 0 -> []
-      Cons(x as Lexeme(_, LexSpecial("}")), xs) -> Cons(x, go(xs, n + 1))
-      Cons(x as Lexeme(_, LexInsRCurly), xs) -> Cons(x, go(xs, n + 1))
-      Cons(x as Lexeme(_, LexSpecial("{")), xs) -> Cons(x, go(xs, n - 1))
-      Cons(x as Lexeme(_, LexInsLCurly), xs) -> Cons(x, go(xs, n - 1))
-      Cons(x, xs) -> Cons(x, get-current-block-reverse(xs))
+      Cons(Lexeme(_, LexSpecial("{"))) | n == 0 -> []
+      Cons(Lexeme(_, LexInsLCurly)) | n == 0 -> []
+      Cons(x as Lexeme(_, LexSpecial("}")), xs') -> Cons(x, go(xs', n + 1))
+      Cons(x as Lexeme(_, LexInsRCurly), xs') -> Cons(x, go(xs', n + 1))
+      Cons(x as Lexeme(_, LexSpecial("{")), xs') -> Cons(x, go(xs', n - 1))
+      Cons(x as Lexeme(_, LexInsLCurly), xs') -> Cons(x, go(xs', n - 1))
+      Cons(x, xs') -> Cons(x, get-current-block-reverse(xs'))
   go(xs0, 0)
 
 // Drops to a matching lexeme using `is-start` and `is-end` to detect nested lexemes
 // Assumes the first lexeme is already a start lexeme
-fun drop-to-lex-matching(xs: list<lexeme>, is-start: (lex) -> bool, is-end: (lex) -> bool)
+fun normal/drop-to-lex-matching(xs: list<lexeme>, is-start: (lex) -> bool, is-end: (lex) -> bool)
   n/drop-to-lex-matching(xs, is-start, is-end, 1)
 
 fun n/drop-to-lex-matching(xs: list<lexeme>, is-start: (lex) -> bool, is-end: (lex) -> bool, n: int)
   match xs
     [] -> []
-    Cons(Lexeme(_, l), xs) | l.is-start -> n/drop-to-lex-matching(xs, is-start, is-end, n + 1)
-    Cons(Lexeme(_, l), xs) | n > 1 && l.is-end -> n/drop-to-lex-matching(xs, is-start, is-end, n - 1)
-    Cons(Lexeme(_, l), xs) | n == 1 -> xs // Dropping from 1 to 0
-    Cons(Lexeme(_, l), xs) -> drop-to-lex-matching(xs, is-start, is-end, n)
+    Cons(Lexeme(_, l), xs') | l.is-start -> n/drop-to-lex-matching(xs', is-start, is-end, n + 1)
+    Cons(Lexeme(_, l), xs') | n > 1 && l.is-end -> n/drop-to-lex-matching(xs', is-start, is-end, n - 1)
+    Cons(Lexeme, xs') | n == 1 -> xs' // Dropping from 1 to 0
+    Cons(Lexeme, xs') -> n/drop-to-lex-matching(xs', is-start, is-end, n)
 
 // Assumes reverse ordered lexemes dropping till we get to actual written code
 fun drop-auto-gen-closing(lexes: list<lexeme>)
@@ -309,7 +321,7 @@ fun drop-auto-gen-closing(lexes: list<lexeme>)
     _ -> lexes
 
 // We should use the lexemes to find the right start token
-fun findAt(rm: range-map, p: pos, lexemes: list<lexeme>): maybe<(range, rangeInfo)>
+fun find-at(rm: range-map, p: pos, lexemes: list<lexeme>): exn maybe<(range, rangeInfo)>
   val lexstart = 
         match lexemes.drop-while(fn(l) !l.range.contains(p))
           Cons(l) -> l.range.start
@@ -326,10 +338,10 @@ fun maybe-head(xs: list<a>): maybe<a>
     Cons(x, _) -> Just(x)
 
 fun find(rm: range-map, r: range)
-  rm.filter(fn((r, _)) r == rng)
+  rm.filter(fn((rng, _)) r == rng)
 
 fun minimum-by-list(xs: list<a>, ?cmp: (a, a) -> order): list<a>
-  fun minlist(mx: maybe<list<a>>, y: a, ?cmp: (a, a) -> order): maybe<list<a>>
+  fun minlist(mx: maybe<list<a>>, y: a, ?a/cmp: (a, a) -> order): maybe<list<a>>
     Just(
       match mx
         Nothing -> [y]
@@ -342,11 +354,11 @@ fun minimum-by-list(xs: list<a>, ?cmp: (a, a) -> order): list<a>
     )
   xs.foldl(Nothing, minlist).default([])
 
-fun ri-type(ri: rangeInfo)
+fun ri-type(ri: rangeInfo): maybe<ktype>
   match ri
     RIId(_, i) ->
       match i
-        NIValue(tp) -> Just(tp)
+        NIValue(_, tp) -> Just(tp)
         NICon(tp) -> Just(tp)
         _ -> Nothing
     _ -> Nothing
@@ -376,12 +388,12 @@ fun ri/(|->)(s: sub, ri: rangeInfo): pure rangeInfo
 fun ri/free-type-vars(ri: rangeInfo): pure tvs
   match ri
     RIId(_, i) -> free-type-vars(i)
-    _ -> emptyTvs
+    _ -> tvs/empty
 
 fun ri/bound-type-vars(ri: rangeInfo): pure tvs
   match ri
     RIId(_, i) -> bound-type-vars(i)
-    _ -> emptyTvs
+    _ -> tvs/empty
 
 fun ni/(|->)(s: sub, ni: nameInfo): pure nameInfo
   match ni
@@ -391,12 +403,12 @@ fun ni/(|->)(s: sub, ni: nameInfo): pure nameInfo
 
 fun ni/free-type-vars(ni: nameInfo): pure tvs
   match ni
-    NIValue(tp) -> free-type-vars(tp)
+    NIValue(_, tp) -> free-type-vars(tp)
     NICon(tp) -> free-type-vars(tp)
-    _ -> emptyTvs
+    _ -> tvs/empty
 
 fun ni/bound-type-vars(ni: nameInfo): pure tvs
   match ni
-    NIValue(tp) -> bound-type-vars(tp)
+    NIValue(_, tp) -> bound-type-vars(tp)
     NICon(tp) -> bound-type-vars(tp)
-    _ -> emptyTvs
+    _ -> tvs/empty

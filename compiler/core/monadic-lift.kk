@@ -13,11 +13,11 @@ import compiler/platform/config
 
 fun monadicLift()
   with runLifted()
-  setCoreDefs(getCoreDefs().liftDefGroups(True))
+  set-core-defs(get-core-defs().lift-defgroups(True))
 
 //   transform definition groups
-fun liftDefGroups(dgs: defGroups, topLevel: bool)
-  dgs.map(fn(dg) dg.liftDefGroup(topLevel)).concat
+fun lift-defgroups(dgs: defGroups, topLevel: bool)
+  dgs.map(fn(dg) dg.lift-defgroup(topLevel)).concat
 
 alias liftedEff = <lifted, uniquePhase, pure, comp-flags>
 effect lifted
@@ -38,7 +38,7 @@ fun runLifted(f: () -> <lifted|e> a): e a
   mask<local>{f()}
 
 // transform definition groups
-fun liftDefGroup(dg: defGroup, topLevel: bool)
+fun lift-defgroup(dg: defGroup, topLevel: bool)
   if topLevel then
     match dg
       DefNonRec(d) ->
@@ -80,7 +80,7 @@ fun liftExprInl(expr': expr, topLevel: bool): liftedEff (expr, expr)
       val ibind = App(TypeApp(Var(TName(nameBind2, typeBind2), InfoArity(3, 3)), [tpArg, tpRes, tpEff]), [bexpr', f, (Lam([arg], eff, ibody'))])
       (bind, ibind)
     Let(defgs, body) ->
-      val defgs' = defgs.liftDefGroups(False)
+      val defgs' = defgs.lift-defgroups(False)
       val (body', ibody') = body.liftExprInl(False)
       (Let(defgs', body'), Let(defgs', ibody'))
     Case(exprs, bs) ->
@@ -124,7 +124,7 @@ fun liftExpr(expr': expr, topLevel: bool): liftedEff expr
       val body' = body.liftExpr(False)
       Lam(args, eff, body')
     Let(defgs, body) ->
-      val defgs' = defgs.liftDefGroups(False)
+      val defgs' = defgs.lift-defgroups(False)
       val body' = body.liftExpr(False)
       Let(defgs', body')
     Case(exprs, bs) ->
@@ -142,22 +142,22 @@ fun liftExpr(expr': expr, topLevel: bool): liftedEff expr
 fun liftLocalFun(e: expr, eff: keffect)
   val fvs = e.free-locals.list
   val tvs = e.free-type-vars.list
-  val (expr2, liftDef) = e.makeDef(fvs, tvs)
+  val (expr2, liftDef) = e.make-def(fvs, tvs)
   emit(DefNonRec(liftDef))
   expr2
 
-fun makeDef(e: expr, fvs: list<tName>, tvs: list<typeVar>)
+fun make-def(e: expr, fvs: list<tName>, tvs: list<typeVar>)
     
   fun unwild(TName(name, tp): tName)
     TName(if name.nameStem == "" || name.nameStem.starts-with("_").is-just then prepend("wild", name) else name, tp)
   val (tpars, pars, eff, body) = match e
     TypeLam(tpars, Lam(pars, eff, lbody)) -> (tpars, pars.map(unwild), eff, lbody)
     Lam(pars, eff, lbody) -> ([], pars.map(unwild), eff, lbody)
-    _ -> fail("core/monadic-lift makeDef lifting non function? " ++ e.show)
+    _ -> fail("core/monadic-lift make-def lifting non function? " ++ e.show)
   val alltpars = tvs ++ tpars
   val allpars = fvs ++ pars
   val allargs = allpars.map(fn(tn) Var(tn, InfoNone))
-  val liftedFun = addTypeLambdas(alltpars, Lam(allpars, eff, body))
+  val liftedFun = add-type-lambdas(alltpars, Lam(allpars, eff, body))
   val liftedTp = liftedFun.type-of
   fun liftedDef(nm, inl)
     Def(nm, liftedTp, liftedFun, Private, DefFun([]), InlineAuto, range/null, "// monadic lift")
@@ -166,8 +166,8 @@ fun makeDef(e: expr, fvs: list<tName>, tvs: list<typeVar>)
   fun etaExpr(n: name)
     match (tvs, fvs)
       (Nil, Nil) -> n.funExpr
-      _ -> addTypeLambdas(tpars, Lam(pars, eff, App(addTypeApps(alltpars, funExpr(n)), allargs)))
-  val (name, inl) = uniqueNameCurrentDef()
+      _ -> add-type-lambdas(tpars, Lam(pars, eff, App(add-type-apps(alltpars, funExpr(n)), allargs)))
+  val (name, inl) = unique-nameCurrentDef()
   (name.etaExpr, name.liftedDef(inl))
   
 // branches
@@ -180,7 +180,7 @@ fun liftGuard(Guard(guard, body): guard)
   val body' = body.liftExpr(False)
   Guard(guard', body')
 
-fun uniqueNameCurrentDef()
+fun unique-nameCurrentDef()
   val d = currentDef.last.unjust
   val i = new-unique()
   val udef-name = to-hidden-unique-name(i, "mlift", d.def-name)

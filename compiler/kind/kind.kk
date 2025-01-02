@@ -29,17 +29,17 @@ pub fun kind/has-kind-star-result(k: kind): bool
 pub fun has-kind-label-result(k: kind): bool
   k.extract-kind-fun.snd.is-kind-any-label
 
-val kindStar = KCon(nameKindStar) // *
-val kindLabel = KCon(nameKindLabel) // l
+val kindStar = KCon(nameKindStar) // V (or "*")
+val kindLabel = KCon(nameKindLabel) // X, atomic effects
 val kindArrow = KCon(nameKindFun) // -> 
 val kindPred = KCon(nameKindPred)
-val kindEffect = KCon(nameKindEffect) // X
+val kindEffect = KCon(nameKindEffect) // Effect row E
 val kindScope = KCon(nameKindScope) // S
 val kindHeap = KCon(nameKindHeap) // H
 val kindLocal = kind-fun(kindHeap, kindLabel)
-val kindHandled = KCon(nameKindHandled) // HX
-val kindHandled1 = KCon(nameKindHandled1) // HX1
-val kindExtend = kind-fun(kindLabel, kind-fun(kindEffect, kindEffect))
+val kindHandled = kind-fun(kindEffect, kind-fun(kindStar, kindStar)) // user defined effects (E,V) -> V (HX)
+val kindHandled1 = kindHandled // (user defined) linear effects: (E,V) -> V   (HX1)
+val kindExtend = kind-fun(kindLabel, kind-fun(kindEffect, kindEffect)) // Effect extension (X,E) -> E
 fun kind-con(n: int): kind
   kind-con-over(replicate(kindStar, n))
 fun kind-con-over(ks: list<kind>): kind
@@ -48,7 +48,7 @@ fun kind-fun-n(ks: list<kind>, k: kind): kind
   ks.foldr(k, kind-fun)
 fun kind-fun(k1: kind, k2: kind): kind
   KApp(KApp(kindArrow, k1), k2)
-fun isKindFun(k: kind): bool
+fun is-kind-fun(k: kind): bool
   match k
     KApp(KApp(k0, _), _) -> k0 == kindArrow
     _ -> False
@@ -62,6 +62,11 @@ pub fun extract-kind-fun(k: kind): (list<kind>, kind)
         ([], k)
     _ -> ([], k)
 
+fun is-kind-handled(k: kind): bool
+  match k.extract-kind-fun
+    ([k1, k2], k3) -> k1 == kindEffect && k2 == kindStar && k3 == kindStar
+    _ -> False
+
 fun is-kind-any-label(k: kind): bool
   k == kindHandled || k == kindHandled1 || k == kindLabel
 
@@ -74,6 +79,6 @@ val buildinKinds = [
   (nameKindLabel, kindLabel),
   (nameKindHeap, kindHeap),
   (nameKindScope, kindScope),
-  (nameKindHandled, kindHandled),
-  (nameKindHandled1, kindHandled1),
+  // (nameKindHandled, kindHandled),
+  // (nameKindHandled1, kindHandled1),
 ]
