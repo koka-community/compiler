@@ -705,7 +705,7 @@ fun isMonType(tp: ktype): pure bool
 
 fun is-mon-effect(eff: ktype): pure bool
   val (ls, tl) = eff.extract-effect-extend
-  !tl.is-effect-empty || ls.any(fn(l) match l.get-handled-effect([]) {Just((ResumeMany, _)) -> True; _ -> False})
+  !tl.is-effect-empty || ls.any(fn(l) match l.get-operation-effect() {Just((ResumeMany, _)) -> True; _ -> False})
 
 fun is-inlineable(d: def, max: int): div bool
   match d.kinline

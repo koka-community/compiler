@@ -233,7 +233,7 @@ fun is-mono-type(tp: ktype): bool
     TForAll -> False
     _ -> True
 
-fun must-split(tp)
+fun must-split(tp: ktype)
   match tp
     TForAll -> True
     TSyn(_, _, tp) -> tp.must-split
