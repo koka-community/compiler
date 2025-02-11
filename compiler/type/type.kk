@@ -151,6 +151,9 @@ pub fun is-literal(d: dataInfo): bool
   val n = d.name
   n == nameTpInt || n == nameTpChar || n == nameTpString || n == nameTpFloat
 
+fun lazy-name(di: dataInfo, stem: string): exn name
+  type-qualified-name(di.name, "lazy-" ++ stem).unqualify
+
 // Constructor information: constructor name, name of the newtype, field types, and the full type of the constructor
 pub struct conInfo
   name: name

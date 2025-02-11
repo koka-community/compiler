@@ -6,7 +6,7 @@
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
 module compiler/common/syntax
-// Updated as of 11/11/24: Commit a22ccc2
+// Updated as of 2/10/25: Commit 56f22b9
 
 pub type jsTarget
   JsDefault

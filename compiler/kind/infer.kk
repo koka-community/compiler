@@ -3,7 +3,9 @@
 // - Translate user types to internal types
 // - Collect lists of data types, synonyms and constructors
 // - Expand all synonyms (i.e., replace @id(int)@ by @id(int) == int@)
-// - Transate type definition groups and externals to Core.
+// - Translate type definition groups and externals to Core.
+
+// Updated to f7ecd0f on 2/10/25
 import compiler/lib/pprint
 import compiler/common/failure
 import compiler/common/color-scheme
@@ -98,8 +100,8 @@ fun syn-typedef(td: core/core/typeDef, lazyExprs: list<lazyExpr>): _ list<syntax
     core/core/Synonym -> []
     Data(di) | di.name.is-hidden-name -> []
     Data(di) ->
-      val accessors = if !di.is-open && !di.is-extend then di.syn-accessors else []
-      val copycon = if di.constrs.length == 1 && !di.is-open && !di.constrs.head.unjust.name.is-hidden-name && di.kind.has-kind-star-result then
+      val accessors = if !(di.is-open || di.di/is-lazy) then di.syn-accessors else []
+      val copycon = if di.constrs.length == 1 && !(di.is-open || di.di/is-lazy) && !di.constrs.head.unjust.name.is-hidden-name && di.kind.has-kind-star-result then
                       [syn-copycon(di, di.constrs.head.unjust)]
                     else []
       val testers = if (di.constrs.length > 1 || di.is-open) && !di.di/is-lazy then
@@ -107,7 +109,7 @@ fun syn-typedef(td: core/core/typeDef, lazyExprs: list<lazyExpr>): _ list<syntax
                     else []
       val contag = if di.is-open then di.constrs.map(syn-constr-tag) else []
       val synLazy = if di.di/is-lazy then 
-                      [di.syn-lazy-tag, di.syn-lazy-eval(lazyExprs), di.syn-lazy-whnf, di.syn-lazy-force]
+                      [di.syn-lazy-tag, di.syn-lazy-eval(lazyExprs), di.syn-lazy-step, di.syn-lazy-whnf, di.syn-lazy-force]
                     else [] 
       accessors ++ testers ++ copycon ++ contag ++ synLazy
 
@@ -201,7 +203,7 @@ fun syn-constr-tag(ci: conInfo)
 fun syn-lazy-tag(di: dataInfo)
   val xrng = di.range
   val rng = xrng.hide
-  val defName = di.lazy-name("lazy-tag")
+  val defName = di.lazy-name("tag")
   val lazyTag = 
     match di.constrs.find(fn(ci) ci.name.is-lazy-indirect-con-name)
       Nothing -> fail("kind/infer/syn-lazy-tag: no indirection constructor found: " ++ di.name.show)
@@ -209,16 +211,19 @@ fun syn-lazy-tag(di: dataInfo)
   val expr = App(Var(nameInternalInt32, False, rng), [(Nothing, Literal(syntax/syntax/LitInt(lazyTag, rng)))], rng)
   DefNonRec(Def(ValueBinder(defName, (), expr, rng, rng), rng, di.vis, DefVal, InlineAlways, "// Automatically generated tag value of lazy indirection"))
 
-// noinline fbip fun stream-eval( s : stream<a> ) : _ stream<a>
+// Add lazy evaluation step:
+// ```
+// noinline fbip fun stream/lazy-eval( s : stream<a> ) : _ stream<a>
 //   lazy-whnf-target(s)
 //   match s
 //     SAppRev( pre, post )
 //       -> match pre
-//            SNil        -> lazy-update(s,stream-eval(sreverse(post)))
-//            SCons(x,xx) -> lazy-update(s,SCons(x,SAppRev(xx,post)))
+//           SNil        -> lazy-update(s,sreverse(post))
+//           SCons(x,xx) -> lazy-update(s,SCons(x,SAppRev(xx,post)))
 //     SIndirect(ind)
-//       -> ind   // or stream-eval(ind) ?
+//       -> ind
 //     _ -> s
+// ```
 
 fun syn-lazy-eval(di: dataInfo, lazyExprs: list<lazyExpr>)
   val xrng = di.range
@@ -248,8 +253,11 @@ fun syn-lazy-eval(di: dataInfo, lazyExprs: list<lazyExpr>)
                    rng, rng), 
         [Guard(guardTrue, Var(par, False, rng))])
     else
+      fun make-pat(par, rng)
+        if par.is-wildcard then PatWild(rng)
+        else PatVar(ValueBinder(par, Nothing, PatWild(rng), rng, rng))
       Branch(PatCon(ci.name,
-                   ci.params.map(fn((par, _)) (Nothing, PatVar(ValueBinder(par, Nothing, PatWild(rng), rng, rng)))),
+                   ci.params.map(fn((par, _)) (Nothing, make-pat(par, rng))),
                    rng, rng),
             [Guard(guardTrue, ci.branch-expr)]
             )
@@ -262,8 +270,7 @@ fun syn-lazy-eval(di: dataInfo, lazyExprs: list<lazyExpr>)
   DefNonRec(def)
 
 
-// Add `lazy-update(s,...)` to tail positions if `...` is a whnf constructor.
-//    otherwise, use `lazy-update(s,stream/eval(...))` for arbitratry expressions `...`.
+// Add `lazy-update(s,...)` to tail positions
 // SAppRev( pre, post )
 //       -> match pre
 //            SNil        -> sreverse(post)
@@ -271,7 +278,7 @@ fun syn-lazy-eval(di: dataInfo, lazyExprs: list<lazyExpr>)
 // ~>
 // SAppRev( pre, post )
 //       -> match pre
-//            SNil        -> lazy-update(s,stream-eval(sreverse(post)))
+//            SNil        -> lazy-update(s,sreverse(post))
 //            SCons(x,xx) -> lazy-update(s,SCons(x,SAppRev(xx,post)))
 
 fun add-guard(di: dataInfo, ci: conInfo, evalName, g, arg)
@@ -306,7 +313,7 @@ fun add(di: dataInfo, ci: conInfo, evalName, e, arg)
     Ann(expr, tp, rng) -> Ann(add(di, ci, evalName, expr, arg), tp, rng)
     Case(expr, brs, lzy, rng) ->
       val brs' = brs.map(fn(b) add-branch(di, ci, evalName, b, arg))
-      val forceName = type-qualified-name(di.name, "force")
+      val forceName = di.lazy-name("force")
       val exprForce = if !lzy && brs.any(fn(b) di.is-whnf-con-branch(b)) then
                         App(Var(forceName, False, rng), [(Nothing, expr)], rng)
                       else
@@ -320,24 +327,28 @@ fun add(di: dataInfo, ci: conInfo, evalName, e, arg)
 fun unknown-update(di: dataInfo, ci: conInfo, evalName, expr, arg)
   val rng = expr.expr/range.hide
   update-warning(di, ci, rng, fn(_) "in-place as the result constructor is not statically known -- using an indirection instead".text)
-  lazy-update(App(Var(evalName, False, rng), [(Nothing, expr)], rng), arg)
+  lazy-update(expr)
 
-fun recursive-update(di: dataInfo, ci: conInfo, evalName, expr, arg)
+fun recursive-update(di: dataInfo, ci: conInfo, ci': conInfo, evalName, expr, arg)
   val rng = expr.expr/range.hide
-  update-warning(di, ci, rng, fn(show-con) "in-place as the lazy result constructor".text |+| ci.name.show-con |+| "needs to be recursively forced -- using an indirection instead".text)
-  lazy-update(App(Var(evalName, False, rng), [(Nothing, expr)], rng), arg)
+  // No need to warn anymore as we don't force recursively here
+  warn-udpate(di, ci, expr.rng, ci')
+  lazy-update(expr)
+
+fun warn-update(di: dataInfo, ci: conInfo, rng: range, resultCon)
+  val lazySize = alloc-size(con-repr(di, ci), platform)
+  val whnfSize = alloc-size(con-repr(di, resultCon), platform)
+  if lazySize <= whnfSize then
+    update-warning(di, resultCon, rng, fn(_) "in-place as the result constructor is larger(".text |.| lazySize.pretty |+| "vs".text |+| whnfSize.pretty |+| "bytes".text)
 
 fun lazy-update-con(di: dataInfo, ci: conInfo, cname: name, evalName, expr, arg)
   val (lazyConstrs, whnfConstrs) = di.constrs.partition(fn(ci') ci.coninfo/is-lazy)
   match di.lookup-con(whnfConstrs, cname)
     Nothing -> match di.lookup-con(lazyConstrs, cname)
       Nothing -> unknown-update(di, ci, evalName, expr, arg)
-      Just(ci') -> recursive-update(di, ci', evalName, expr, arg)
+      Just(ci') -> recursive-update(di, ci, ci', evalName, expr, arg)
     Just(whnf) ->
-      val lazySize = alloc-size(con-repr(di, ci), platform)
-      val whnfSize = alloc-size(con-repr(di, whnf), platform)
-      if lazySize <= whnfSize then
-        update-warning(di, ci, expr.range, fn(_) "in-place as the result constructor is larger(".text |.| lazySize.pretty |+| "vs".text |+| whnfSize.pretty |+| "bytes".text)
+      warn-update(di, ci, expr.rng, whnf)
       lazy-update(expr, arg)
 
 fun lazy-update(expr, arg)
@@ -358,18 +369,18 @@ fun lookup-con(di: dataInfo, constrs, cname: name)
 fun lazy-add-update(di: dataInfo, ci: conInfo, evalName: name, arg, topExpr)
   di.add(ci, evalName, topExpr, arg)
 
-// noinline fun stream-whnf( s : stream<a> ) : _ stream<a>
+// noinline fun stream/lazy-step( s : stream<a> ) : _ stream<a>
 //   if kk-datatype-ptr-is-unique || !lazy-atomic-enter(s,stream/lazy-tag) then
-//     stream-eval(s)
+//     stream/lazy-eval(s)
 //   else
-//     val v = stream-eval(s)
+//     val v = stream/lazy-eval(s)
 //     lazy-atomic-leave(s)
 //     v
 
-fun syn-lazy-whnf(di: dataInfo)
+fun syn-lazy-step(di: dataInfo)
   val xrng = di.range
   val rng = xrng.hide
-  val defName = di.lazy-name("whnf")
+  val defName = di.lazy-name("step")
   val dataTp = TApp(TCon(TypeCon(di.name, di.kind)), di.params.map(TVar))
   val fullTp = TForAll(di.params, [], TFun([(nil, dataTp)], typePure, dataTp))
 
@@ -380,7 +391,7 @@ fun syn-lazy-whnf(di: dataInfo)
        (Nothing, App(Var("std/core/types".new-qualified("not"), False, rng), 
            [(Nothing, App(Var(nameLazyEnter, False, rng), 
               [(Nothing, arg), 
-               (Nothing, Var(di.lazy-name("lazy-tag"), False, rng))], rng))], rng))], rng)
+               (Nothing, Var(di.lazy-name("tag"), False, rng))], rng))], rng))], rng)
   val eval = App(Var(di.lazy-name("eval"), False, rng), [(Nothing, arg)], rng)
   val atomic = 
     val v = "v".new-name
@@ -393,7 +404,38 @@ fun syn-lazy-whnf(di: dataInfo)
   val expr = Lam([ValueBinder(argName, Nothing, Nothing, rng, rng)], body, xrng)
   DefNonRec(Def(ValueBinder(defName, (), expr, rng, rng), rng, di.vis, DefFun([], di.lazy-fip), InlineNever, ""))
 
-// if kk-datatype-is-whnf(s,stream/lazy-tag) then s else stream-whnf(s)
+// recursive force:
+// noinline fun stream/lazy-whnf(s: stream<a>): div stream<a>
+//   val x = stream/step(s)
+//   if lazy/datatype-is-whnf(x, stream/lazy-tag) then x else stream/lazy-whnf(x)
+
+fun syn-lazy-whnf(di: dataInfo)
+  val xrng = di.range
+  val rng = xrng.hide
+  val defName = di.lazy-name("whnf")
+  val dataTp = TApp(TCon(TypeCon(di.name, di.kind)), di.params.map(TVar))
+  val nameIsWhnf = 
+    if di.constrs.all(fn(ci: conInfo) ci.params.length > 0)
+    then nameLazyPtrIsWhnf else nameLazyIsWhnf
+
+  val valName = "val".new-hidden-name
+  val vl = Var(valName, False, rng)
+
+  val argName = "lazy".new-hidden-name
+  val arg = Var(argName, False, rng)
+
+  val nameStep = di.lazy-name("step")
+  val stepExpr = App(Var(nameStep, False, rng), [(Nothing, arg)], rng)
+  val valDef = Def(ValueBinder(valName, (), stepExpr, rng, rng), rng, Private, DefVal, InlineNever, "")
+  val tst = App(Var(nameIsWhnf, False, rng), [(Nothing, vl), (Nothing, Var(di.lazy-name("lazy-tag"), False, rng))], rng)
+  val whnf = App(Var(di.lazy-name("whnf"), False, rng), [(Nothing, vl)], rng)
+  val body = Let(DefNonRec(valDef), Case(tst, [Branch(PatCon(nameTrue, [], rng, rng), [Guard(guardTrue, vl)]), Branch(PatCon(nameFalse, [], rng, rng), [Guard(guardTrue, whnf)])], False, rng), rng)
+  val expr = Lam([ValueBinder(argName, Nothing, Nothing, rng, rng)], body, xrng)
+  DefRec([Def(ValueBinder(defName, (), expr, rng, rng), rng, di.vis, DefFun([], di.lazy-fip), InlineNever, "")])
+
+// force is a one step unfolding of whnf and is inlined at call sites.
+// inline fun stream/lazy-force(s: stream<a>): div stream<a>
+//   if kk-datatype-is-whnf(s,stream/lazy-tag) then s else stream/lazy-whnf(s)
 fun syn-lazy-force(di: dataInfo)
   val xrng = di.range
   val rng = xrng.hide
@@ -405,7 +447,7 @@ fun syn-lazy-force(di: dataInfo)
   
   val argName = "lazy".new-hidden-name
   val arg = Var(argName, False, rng)
-  val tst = App(Var(nameIsWhnf, False, rng), [(Nothing, arg), (Nothing, Var(di.lazy-name("lazy-tag"), False, rng))], rng)
+  val tst = App(Var(nameIsWhnf, False, rng), [(Nothing, arg), (Nothing, Var(di.lazy-name("tag"), False, rng))], rng)
   val whnf = App(Var(di.lazy-name("whnf"), False, rng), [(Nothing, arg)], rng)
   val body = Case(tst, [Branch(PatCon(nameTrue, [], rng, rng), [Guard(guardTrue, arg)]), 
                         Branch(PatCon(nameFalse, [], rng, rng), [Guard(guardTrue, whnf)])], False, rng)
@@ -416,9 +458,6 @@ fun lazy-fip(di: dataInfo)
   match di.def
     DataDefLazy(fip) -> fip
     _ -> fail("kint/infer/lazy-fip: not a lazy data type? " ++ di.name.show)
-
-fun lazy-name(di: dataInfo, stem: string): exn name
-  type-qualified-name(di.name, stem).unqualify
 
 // Types for constructors
 fun constructor-gamma(dis: list<dataInfo>, is-value: (dataInfo) -> bool): exn gamma

@@ -9,17 +9,40 @@ import compiler/common/syntax
 import compiler/common/color-scheme
 import std/data/linearmap
 import compiler/lib/pprint
+// Updated to 7eb71dc on 2/10/25
 
 fun fixity-resolve(fixMap: fixities, program: userProgram)
   val fixMap1 = fixities-compose(fixMap, program.fixDefs.extract-fix-map)
   with handleFixities(fixMap1)
   val defs1 = program.defs.resolve
-  program(defs=defs1)
+  val tdefs = program.typeDefs.resolve
+  program(defs=defs1, typeDefs=tdefs)
 
 fun extract-fix-map(fds: list<fixDef>): fixities
   fun extractFix(FixDef(name, fixity): fixDef)
     (name, fixity)
   fixities-new(fds.map(extractFix))
+
+// Resolve lazy constructor definitions
+fun tdefgroups/resolve(tdefs: typeDefGroups<userType, userKind>)
+  tdefs.map(resolve)
+
+fun tdefgroup/resolve(tdefg: typeDefGroup<userType, userKind>)
+  match tdefg
+    TypeDefRec(tdefs) -> TypeDefRec(tdefs.map(resolve))
+    TypeDefNonRec(tdef) -> TypeDefNonRec(tdef.resolve)
+
+fun tdef/resolve(tdef: userTypeDef)
+  match tdef
+    DataType(tbinder, params, constrs, rng, vis, sort, ddef, deffect, doc) -> 
+      DataType(tbinder, params, constrs.map(resolve), rng, vis, sort, ddef, deffect, doc)
+    d -> d
+
+fun con/resolve(constr: userUserCon)
+  match constr
+    UserCon(nm, exists0, params, result, Just((fipT, lzy)), nmrng, rng, vis, doc) ->
+      UserCon(nm, exists0, params, result, Just((fipT, lzy.expr/resolve)), nmrng, rng, vis, doc)
+    c -> c
 
 // Rewrite syntax tree
 fun def-group/resolve(dg: defGroup<userType>)
@@ -130,7 +153,7 @@ fun handleFixities(initial: fixities, f: () -> <fixityEff,pure|e> a): <pure|e> (
       fixes := f'(fixes)
     fun add-fix-error(s, rng)
       errors := Cons(s, errors)
-  (mask<local>{f()}, fixes, errors)
+  (f(), fixes, errors)
 
 // Resolve fixities:
 // The algorithm is written a bit long to enable easy extension to prefix, postfix, and distfix operators

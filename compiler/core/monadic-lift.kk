@@ -35,7 +35,7 @@ fun runLifted(f: () -> <lifted|e> a): e a
       dgs := []
       dgs'
     val currentDef = Nil
-  mask<local>{f()}
+  f()
 
 // transform definition groups
 fun lift-defgroup(dg: defGroup, topLevel: bool)

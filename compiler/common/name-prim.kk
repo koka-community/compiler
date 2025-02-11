@@ -10,7 +10,7 @@ import compiler/common/name
 import compiler/common/syntax
 import compiler/common/failure
 import std/core/unsafe
-// Updated as of 11/11/24: Commit #5222887
+// Updated as of 2/10/25: Commit #4bc07f4
 
 //---------------------------------
 // Special
@@ -290,7 +290,7 @@ val nameTpAny       = "any".core-types-name
 val nameTpVector    = "vector".core-types-name
 
 // These are internal only inserted by the boxing phase
-val nameTpBox       = "@Box".core-types-name
+val nameTpBox       = "@box".core-types-name
 val nameBoxCon      = "@Box".core-types-name
 val nameBox         = "@box".core-types-name
 val nameUnbox       = "@unbox".core-types-name

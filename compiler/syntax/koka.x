@@ -6,6 +6,7 @@ import std/num/float64
 import std/core-extras
 import std/core/undiv
 import std/data/word-set
+// Updated to be roughly equivalent to commit 9e8299f on 2/10/25
 
 effect koka-lex
   fun do-start-chunked(s: string, start: alex-pos): ()
@@ -355,9 +356,14 @@ fun is-prefix-op(name: string)
 fun string/is-malformed(name: string)
   name.list.charlist/is-malformed
 
+fun is-at(c: char): bool
+  c == '@'
+
+// TODO: is-letter 
 fun charlist/is-malformed(name: list<char>)
   match name
-    Cons('-', Cons(c, cs)) -> !c.is-alpha || cs.is-malformed
+    // @ signs are added postpend to unique names (e.g. "x-@1") for variable x monadic lifted in a function (-).
+    Cons('-', Cons(c, cs)) -> !(c.is-alpha || c.is-at) || cs.is-malformed 
     Cons(c, Cons('-', cs)) -> !c.is-alpha || c.is-digit || cs.is-malformed
     Cons(_, cs) -> cs.is-malformed
     Nil -> False

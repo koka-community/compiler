@@ -144,7 +144,7 @@ fun parse-lexemes(src: source, lexemes0: list<lexeme>, p: () -> <console,parse|e
     fun ptrace(s: string)
       if debug then
         trace(s ++ "\n  " ++ history.map(fn(x) "When parsing " ++ x.snd).join("\n\t") ++ " next parse-token: " ++ lexemes.take(1).map(show).join(","))
-  mask<local>{p()}
+  p()
 
 fun parse-many(kind: string, l: () -> <parse|e> a): <parse|e> list<a>
   match parse-option-maybe("many " ++ kind, l)

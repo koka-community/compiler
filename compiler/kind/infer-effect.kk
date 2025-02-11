@@ -65,8 +65,7 @@ fun runKindInfer(platform: platform, moduleName: name, imports: importmap, kgamm
     fun lookup-external(nm) externals.lookup(nm)
     fun add-external(nm, rng) externals := externals.add(nm, rng)
     val platform = platform
-  mask<local>
-    f()
+  f()
 
 fun fresh-kind()
   KIVar(unique-id("k"))

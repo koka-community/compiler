@@ -4,12 +4,12 @@ Work on Syntax, Parsing, and Formatter
 ## Fully up to date
 // syntax / highlight 11/11/24
 
-- [x] lib/ updated: 11/11/24
-- [x] common/ updated: 11/11/24-12/16/25
-- [x] syntax/ updated 1/6/24 (pretty, format are new)
-- [x] static/ updated 1/7/24
-- [x] kind/ updated 1/7/24
-- [x] type/type, type/kind type/operations, type/pretty, updated 1/8/24
+- [x] lib/ updated: 2/10/25
+- [x] common/ updated: 2/10/25
+- [x] syntax/ updated 2/10/25 (pretty, format are new)
+- [x] static/ updated 2/10/25
+- [x] kind/ updated 2/10/25
+- [x] type/type, type/kind type/operations, type/pretty, updated 1/8/25
 - [ ] syntax/ needs debugging / tests
 
 ## 
