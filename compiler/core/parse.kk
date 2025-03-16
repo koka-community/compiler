@@ -404,7 +404,7 @@ fun parse-def-groups0()
 
 fun parse-def-group(): <parse,eenv,comp-flags,synonymsEff> defGroup
   val (sort, inl, _, doc) = pDefSort()
-  val (name, _) = parse-choices("def group", [parse-fun-id, {parse-wildcard(); (nil, rangeNull)}])
+  val (name, _) = parse-choices("def group", [{parse-fun-id(True)}, {parse-wildcard(); (nil, rangeNull)}])
   val tp = parse-type-annotation()
   val expr = parse-body()
   envExtendLocal(name, tp)

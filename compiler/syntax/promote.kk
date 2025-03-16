@@ -17,7 +17,7 @@
 //   (Or should that be: /
 //   Change unbound unparenthesized variables that only occur in label positions to
 //   label constants./)
-// Updated as of 1/6/25: Commit 284d301, not including extend / makeEffectExtends / extract which are not used nor exported
+// Updated as of 03/15/25: Commit a6fd2f2 not including extend / makeEffectExtends / extract which are not used nor exported
 
 import compiler/common/name
 import compiler/common/range
@@ -58,7 +58,7 @@ fun argres-types(uexpr: userExpr, mb-res-tp: maybe<(maybe<userType>, userType)>)
     Ann(e, t, r) -> 
       val (es, e') = argres-types(e, mb-res-tp)
       (es, Ann(e', t, r))
-    Lam(args, e, r) ->
+    Lam(args, e, tl, r) ->
       val (es, e1) = e.res-type(mb-res-tp)
       val (fs, args') = args.map(fn(binder)
         match binder.binderType
@@ -69,7 +69,7 @@ fun argres-types(uexpr: userExpr, mb-res-tp: maybe<(maybe<userType>, userType)>)
               _ -> t
             ((binder.name, Left(optTp)), binder(binderType=Nothing))
       ).unzip
-      (fs ++ es, Lam(args', e1, r))
+      (fs ++ es, Lam(args', e1, tl, r))
     _ -> ([], uexpr)
 
 fun res-type(expr: userExpr, mb-res-tp: maybe<(maybe<userType>, userType)>)

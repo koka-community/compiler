@@ -5,7 +5,7 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //---------------------------------------------------------------------------
-// Updated as of 12/31/24: Commit a62a4ca
+// Updated as of 03/15/25: Commit a6fd2f2
 
 import std/num/float64
 import compiler/common/range
@@ -188,7 +188,7 @@ fun defIsVal(d: def<t>): bool
 val guardTrue = Var(nameTrue, False, range/null)
 
 type expr<t>
-  Lam(binder: list<valueBinder<maybe<t>,maybe<expr<t>>>>, e: expr<t>, range: range)
+  Lam(binder: list<valueBinder<maybe<t>,maybe<expr<t>>>>, e: expr<t>, top-level: bool, range: range)
   Let(d: defGroup<t>, e: expr<t>, range: range)
   Bind(d: def<t>, e: expr<t>, range: range)
   App(e: expr<t>, args: list<(maybe<(name, range)>, expr<t>)>, range: range)

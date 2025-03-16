@@ -10,7 +10,7 @@ import compiler/common/name
 import compiler/common/syntax
 import compiler/common/failure
 import std/core/unsafe
-// Updated as of 2/10/25: Commit #4bc07f4
+// Updated as of 3/15/25: Commit #73451ee
 
 //---------------------------------
 // Special
@@ -76,8 +76,8 @@ val nameCoreFileModule = nameCoreDebug.qualify(new-locally-qualified("", "file",
 // std/core/lazy
 //---------------------------------
 
-val nameLazyTarget = "whnf-target".core-lazy-name
-val nameLazyUpdate = "whnf-update".core-lazy-name
+val nameLazyMemoizeTarget = "memoize-target".core-lazy-name
+val nameLazyMemoize = "whnf-memoize".core-lazy-name
 val nameLazyEnter  = "atomic-enter".core-lazy-name
 val nameLazyLeave  = "atomic-leave".core-lazy-name
 val nameLazyIsWhnf = "datatype-is-whnf".core-lazy-name

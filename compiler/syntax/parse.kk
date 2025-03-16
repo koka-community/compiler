@@ -78,7 +78,7 @@ fun parse-user-expression(name: name): parse userDef
   interactive
     val e = parse-annotated-expr()
     val r = e.range
-    Def(ValueBinder(name.unqualify, (), Lam([], e, r), r, r), r, Public, DefFun([], noFip), InlineNever, "")
+    Def(ValueBinder(name.unqualify, (), Lam([], e, False, r), r, r), r, Public, DefFun([], noFip), InlineNever, "")
 
 fun parse-dependencies(source: source, lexemes: list<lexeme>): io list<kimport>
   with handler
@@ -218,7 +218,7 @@ fun parse-extern-decl(dvis: visibility): <parse,fsys> list<topDef>
     else
       val externName = name.new-hidden-external-name
       val ext = External(externName, tp, pinfos, nameRng.before, fullRng.before, exprs, Private, fip, doc)
-      val body = annotate(Lam(pars, App(Var(externName, False, null), args, fullRng), fullRng))
+      val body = annotate(Lam(pars, App(Var(externName, False, null), args, fullRng), True, fullRng))
       val binder = ValueBinder(name, (), body, nameRng, fullRng)
       val extfun = Def(binder, fullRng, vis, def-fun-ex(pinfos, fip), InlineNever, doc)
       [DefExtern(ext), DefValue(extfun)]
@@ -590,7 +590,7 @@ fun parse-fun-decl(toplevel: bool, rng: range, doc: string, vis: visibility, inl
   val (name, nameRng) = parse-fun-id(toplevel)
   val FunDef(tpars, pars, pinfos, _, mbTres, preds, ann) = parse-fun-def(True, True)
   val body = parse-body-expr() // TODO: Incorporate the paramter rnge
-  val fnct = promote(spars, tpars, preds, mbTres, Lam(pars, body, rng.combine(body.range)))
+  val fnct = promote(spars, tpars, preds, mbTres, Lam(pars, body, toplevel, rng.combine(body.range)))
   Def(ValueBinder(name, (), ann(fnct), nameRng, nameRng), rng.combine(fnct.range), vis, def-fun-ex(pinfos, f), inl, doc)
 
 fun parse-fun-def(allowBorrow: bool, allowImplicits: bool)
@@ -642,7 +642,7 @@ fun parse-parameter-normal(allowDefaults: bool)
       val name = "pat".unique-range-hidden-name(rng)
       fun transform(e)
         match e
-          Lam(binders, body, lambdaRng) -> Lam(binders, Case(Var(name, False, rng), [Branch(pat, [Guard(guardTrue, body)])], False, rng), lambdaRng)
+          Lam(binders, body, tl, lambdaRng) -> Lam(binders, Case(Var(name, False, rng), [Branch(pat, [Guard(guardTrue, body)])], False, rng), tl, lambdaRng)
           Ann(body, tp', rng') -> Ann(body.transform, tp', rng')
           Parens(body, pname, pre, prng) -> Parens(body.transform, pname, pre, prng)
           _ -> parse-error("Syntax.Parse.parameter: unexpected function expression in parameter match transform", rng)
@@ -776,14 +776,14 @@ inline fun parse-fn-expr(): parse userExpr
 
 fun parse-fun-block(): parse userExpr
   val exp = parse-block()
-  Lam([], exp, exp.range)
+  Lam([], exp, False, exp.range)
 
 fun parse-lambda(alts: list<string>): parse userExpr
   val rng = parse-keyword("fn")
   val spars = parse-s-quantifier()
   val FunDef(tpars, pars, _, _, mbTres, preds, ann) = parse-fun-def(False, True)
   val body = parse-body-expr()
-  val f = promote(spars, tpars, preds, mbTres, Lam(pars, body, rng.combine(body.range)))
+  val f = promote(spars, tpars, preds, mbTres, Lam(pars, body, False, rng.combine(body.range)))
   ann(Parens(f, "fn".new-name, "", rng))
 
 fun parse-if-expr(): parse userExpr
@@ -887,7 +887,7 @@ fun parse-handler-clauses(rng: range, mbEff: maybe<userType>, scoped: handlerSco
       val retExpr = match ret // TODO: error on override/scoped/instance?
         Nothing -> fn(x) x
         Just(f) -> fn(actionExpr) App(f, [(Nothing, App(actionExpr, [], fullrange))], fullrange)
-      val handlerExpr = Lam([ValueBinder("action".new-hidden-name, Nothing, Nothing, rng, rng)], retExpr(Var("action".new-hidden-name, False, rng)), fullrange)
+      val handlerExpr = Lam([ValueBinder("action".new-hidden-name, Nothing, Nothing, rng, rng)], retExpr(Var("action".new-hidden-name, False, rng)), False, fullrange)
       binders(handlerExpr)
     _ -> binders(Handler(hsort, scoped, over, Nothing, mbEff, [], reinit, ret, finally, ops, rng, fullrange))
   apply-maybe(fullrange, reinit, finally, hand)
@@ -923,7 +923,7 @@ fun parse-handler-opx(): parse (clause, maybe<(userExpr -> userExpr)>)
           (new-name("_"), rng, Nothing)
         }])
       val expr = parse-body-expr()
-      (ClauseInitially(Lam([ValueBinder(name, tp, Nothing, prng, rng.combine(tp.map(fn(t) t.range).default(rng)))], expr, rng.combine(expr.range))), Nothing)
+      (ClauseInitially(Lam([ValueBinder(name, tp, Nothing, prng, rng.combine(tp.map(fn(t) t.range).default(rng)))], expr, False, rng.combine(expr.range))), Nothing)
     }, parse-handler-op
   ])
 
@@ -944,7 +944,7 @@ fun parse-handler-op(): parse (clause, maybe<(userExpr -> userExpr)>)
         }
       ])
       val expr = parse-body-expr()
-      (ClauseRet(Parens(Lam([ValueBinder(name, tp, Nothing, prng, prng.combine(tp.map(fn(t) t.range).default(prng)))], expr, rng.combine(expr.range)), "return".new-name, "", rng)), Nothing)
+      (ClauseRet(Parens(Lam([ValueBinder(name, tp, Nothing, prng, prng.combine(tp.map(fn(t) t.range).default(prng)))], expr, False, rng.combine(expr.range)), "return".new-name, "", rng)), Nothing)
     },{ // TODO: is "raw" needed for value definitions?
       parse-keyword("val")
       val (name, nameRng) = parse-qualified-identifier()
@@ -1187,7 +1187,7 @@ fun parse-mask-expr(): parse userExpr
   val (rng, mkInj) = parse-mask-type()
   parse-choices-nb("", [
     {mkInj(parens({parse-choices("", [parse-expression, parse-fun-block])}))}, // Need apply or the escape check may fail if it becomes a separate lambda
-    {val name = new-hidden-name("mask-action"); Lam([ValueBinder(name, Nothing, Nothing, rng, rng)], mkInj(Var(name, False, rng)), rng)}
+    {val name = new-hidden-name("mask-action"); Lam([ValueBinder(name, Nothing, Nothing, rng, rng)], mkInj(Var(name, False, rng)), False, rng)}
   ])
 
 fun parse-mask-type(): parse (range, (userExpr -> div userExpr))

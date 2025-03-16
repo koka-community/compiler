@@ -5,7 +5,7 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
-// Updated as of 11/11/24 Commit: 0d430f5
+// Updated as of 3/15/25 Commit: 69fe3ab
 
 import compiler/common/color-scheme
 import compiler/common/range
@@ -283,6 +283,12 @@ fun is-constructor-name(n: name): bool
         _ -> False
     _ -> False
 
+fun un-wildcard(n: name, post: string): name
+  match n.nameStem.list
+    Cons('_')  -> n.name-map-stem(fn(s) s.tail ++ post)
+    Cons('@',Cons('_')) -> n.name-map-stem(fn(s) "@" ++ s.list.drop(2).string ++ post)
+    _           -> n
+
 fun is-wildcard(n: name): bool
   match n.nameStem.slice.next
     Just(('_', _)) -> True
@@ -459,7 +465,7 @@ fun make-fresh-hidden-name(s: string, n: name, r: range)
 
 fun hidden/starts-with(n: name, pre: string): bool
   n.nameStem.starts-with("@" ++ pre).bool ||
-    n.nameStem.starts-with("@" ++ pre ++ "-").bool
+    n.name/starts-with("@" ++ pre ++ "-")
 
 // Various special names
 

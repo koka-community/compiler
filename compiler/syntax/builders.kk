@@ -144,7 +144,7 @@ pub fun make-user-constructor(const: name, foralls: list<userTypeBinder>, resTp:
   val arguments = params.map(fn(p) (Nothing, Var(p.name, False, p.name-range)))
   val tpParams = params.map(fn(p) (p.name, p.binderType))
   val tpFull = quantify(QForall, foralls, TpFun(tpParams, make-tp-total(nameRng), resTp, rng))
-  val body = Ann(Lam(lParams, App(Var(const, False, nameRng), arguments, rng), rng), tpFull, rng)
+  val body = Ann(Lam(lParams, App(Var(const, False, nameRng), arguments, rng), True, rng), tpFull, rng)
   val binder = ValueBinder(cName, (), body, nameRng, nameRng)
   val creator = Def(binder, rng, vis, DefFun([]), InlineAlways, doc) 
   (UserCon(const, exists0, conParams, Nothing, mbLazyExpr, nameRng, rng, vis, doc), if pars.any(fn(p) p.snd.expr.is-just) then [creator] else [])
@@ -248,7 +248,7 @@ pub fun make-effect-decl(decl: effectDecl): <parse-error,pure> list<topDef>
     (Nothing, Var("action".new-name, False, krng))
   ]
   val handleInner = App(Var(if isInstance then nameNamedHandle else nameHandle, False, grng), arguments, grng)
-  val handleBody = Ann(Lam(params, handleInner, grng), handleTp, grng)
+  val handleBody = Ann(Lam(params, handleInner, False, grng), handleTp, grng)
   val handleDef = Def(ValueBinder(handleName, (), handleBody, irng, rng), grng, vis, DefFun([]), InlineNever, "// handler for the " ++ docEffect)
   [DefValue(tagDef), DefType(hndTpDecl), DefValue(handleDef)] ++ opSelects.map(DefValue) ++ opDefs.map(DefValue) ++ opValDefs.concat-maybe.map(DefValue)
 
@@ -309,7 +309,7 @@ pub fun make-operation-decl(opCount: int, vis: visibility, forallsScoped: list<u
                          TpFun([(hndArg, 
                          TpApp(hndTp, (foralls ++ hndTpVars).map(tp-var), grng))], 
                            make-tp-total(grng), clauseRhoTp, grng))
-    val body = Ann(Lam([hndParam], innerBody, grng), fullTp, grng)
+    val body = Ann(Lam([hndParam], innerBody, False, grng), fullTp, grng)
     val binder = ValueBinder(selectId, (), body, krng, krng)
     Def(binder, krng, vis, DefFun([Borrow]), InlineAlways, ("// select `" ++ id.show ++ "` operation out of the " ++ docEffect ++ " handler"))
   val opSelect = create-select()
@@ -393,7 +393,7 @@ pub fun combine(e1: statement, exp: userExpr): <parse> userExpr
       // see test/ambient/ambient3: TODO: Is this still the case
        [(Nothing, expr), 
         (Nothing, Parens(
-          Lam([ValueBinder(name, Nothing, Nothing, nameRng, nameRng)], exp, def'.range.combine(exp.range)),
+          Lam([ValueBinder(name, Nothing, Nothing, nameRng, nameRng)], exp, False, def'.range.combine(exp.range)),
            name, "var", nameRng))],
            rng.combine(expr.range))
 
@@ -411,7 +411,7 @@ pub fun pat/un-parens(e: pattern<t>): pattern<t>
       _ -> e
 
 pub fun apply-to-continuation(wrng: range, params: list<valueBinder<maybe<t>, maybe<expr<t>>>>, expr: expr<t>, body: expr<t>): expr<t>  
-  val lam = Lam(params, body, wrng.combine(body.range))
+  val lam = Lam(params, body, False, wrng.combine(body.range))
   val f = Parens(lam, "with".new-name, "expr", wrng) // Parens makes it last in type inference so types can better propagate (ambients/heap1) (todo: no longer the case right?)
   val funarg = [(Nothing, f)]
   val fullrange = wrng.combine(f.range)
@@ -425,12 +425,12 @@ pub fun apply-maybe(rng: range, reinit: maybe<userExpr>, finally: maybe<userExpr
     _ -> 
       val applyH = App(f, [(Nothing, Var("act".new-hidden-name, False, rng))], rng)
       val bodyF = match finally
-        Just(fin) -> App(Var(nameFinally, False, rng), [(Nothing, fin),(Nothing, Lam([], applyH, rng))], rng)
+        Just(fin) -> App(Var(nameFinally, False, rng), [(Nothing, fin),(Nothing, Lam([], applyH, False, rng))], rng)
         Nothing -> applyH
       val bodyI = match reinit
-        Just(ini) -> App(Var(nameInitially, False, rng), [(Nothing, ini), (Nothing, Lam([], bodyF, rng))], rng)
+        Just(ini) -> App(Var(nameInitially, False, rng), [(Nothing, ini), (Nothing, Lam([], bodyF, False, rng))], rng)
         Nothing -> bodyF
-      Lam([ValueBinder("act".new-hidden-name, Nothing, Nothing, rng, rng)], bodyI, rng)
+      Lam([ValueBinder("act".new-hidden-name, Nothing, Nothing, rng, rng)], bodyI, False, rng)
 
 pub fun extract-binders(l: list<binder>): (list<clause>, (userExpr -> userExpr))
   l.foldr(([], fn(x) x)) fn(b, (cs, binders): (list<clause>, (userExpr -> userExpr)))

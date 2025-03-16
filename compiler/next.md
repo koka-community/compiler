@@ -5,8 +5,8 @@ Work on Syntax, Parsing, and Formatter
 // syntax / highlight 11/11/24
 
 - [x] lib/ updated: 2/10/25
-- [x] common/ updated: 2/10/25
-- [x] syntax/ updated 2/10/25 (pretty, format are new)
+- [x] common/ updated: 3/15/25
+- [x] syntax/ updated 3/15/25 (pretty, format are new)
 - [x] static/ updated 2/10/25
 - [x] kind/ updated 2/10/25
 - [x] type/type, type/kind type/operations, type/pretty, updated 1/8/25
