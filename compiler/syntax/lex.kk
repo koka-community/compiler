@@ -98,7 +98,7 @@ val alex_action_32: action = fn() { pop-state(); end-chunk(fn(s) LexError("illeg
 val alex_action_33: action = fn() { unsafe-char("raw string") }
 val alex_action_34: action = fn() { extend-slice(id) }
 val alex_action_35: action = fn() {
-                            val delim = get-slice().count
+                            val delim = get-slice().count - 1
                             val curdelim = get-rawdelim()
                             if delim == curdelim then
                               end-chunk(fn(s) LexString(s))
@@ -385,7 +385,7 @@ fun pop-rawdelim()
   set-rawdelim(0)
 
 fun push-rawdelim()
-  set-rawdelim(get-slice().count)
+  set-rawdelim(get-slice().count - 2)
 
 fun get-name()
   get-string().new-name

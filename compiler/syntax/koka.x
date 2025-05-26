@@ -191,7 +191,7 @@ program :-
 <stringraw> @utf8unsafe   { fn() { unsafe-char("raw string") } }
 <stringraw> @stringraw    { fn() { extend-slice(id) } }
 <stringraw> \"\#*         { fn() {
-                            val delim = get-slice().count
+                            val delim = get-slice().count - 1
                             val curdelim = get-rawdelim()
                             if delim == curdelim then
                               end-chunk(fn(s) LexString(s))
@@ -275,7 +275,7 @@ fun pop-rawdelim()
   set-rawdelim(0)
 
 fun push-rawdelim()
-  set-rawdelim(get-slice().count)
+  set-rawdelim(get-slice().count - 2)
 
 fun get-name()
   get-string().new-name

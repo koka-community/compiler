@@ -33,4 +33,3 @@ fun test-raw()
   val p = "../compiler/test/tests/lex/raw.kk".path
   val s = read-text-file(p)
   println(lexing(Source(p.string, s), 1, s).map(show).join("\n"))
-  

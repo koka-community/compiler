@@ -62,7 +62,7 @@ fun lex-parse(allow-at: bool, insert-semis: bool, preprocess: list<lexeme> -> pu
   val lexes = lexing(src, 1, input)
   // trace(lexes.map(show).join("\n"))
   val lexes' = preprocess(layout(lexes, allow-at, insert-semis))
-  trace(lexes'.map(show).join("\n"))
+  // trace(lexes'.map(show).join("\n"))
   with parse-lexemes(src, lexes')
   p()
   
