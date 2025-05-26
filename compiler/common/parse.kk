@@ -62,7 +62,7 @@ fun lex-parse(allow-at: bool, insert-semis: bool, preprocess: list<lexeme> -> pu
   val lexes = lexing(src, 1, input)
   // trace(lexes.map(show).join("\n"))
   val lexes' = preprocess(layout(lexes, allow-at, insert-semis))
-  // trace(lexes'.map(show).join("\n"))
+  trace(lexes'.map(show).join("\n"))
   with parse-lexemes(src, lexes')
   p()
   
@@ -172,6 +172,8 @@ fun parse-many-end1(kind: string, l: () -> <parse|e> a, p: () -> <parse|e> b): <
     Just(r) -> 
       match parse-option-maybe("sep " ++ kind, p)
         Just(_) -> Cons(r, parse-many-end(kind, l, p))
+        Nothing -> Cons(r, [])
+    Nothing -> parse-error("at least 1 of " ++ kind, peek().range)
 
 fun parse-token(msg: string, f: (lexeme) -> <parse|e> maybe<a>): <parse|e> a
   val t = peek()

@@ -28,3 +28,9 @@ fun test()
       lexing(Source(f.string, s), 1, s)
       println("Lexed ... " ++ f.show)
   println("Done")
+
+fun test-raw()
+  val p = "../compiler/test/tests/lex/raw.kk".path
+  val s = read-text-file(p)
+  println(lexing(Source(p.string, s), 1, s).map(show).join("\n"))
+  

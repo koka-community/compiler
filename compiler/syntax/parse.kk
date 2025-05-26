@@ -1085,14 +1085,14 @@ fun parse-indexer(): parse (userExpr -> userExpr)
     {
       val crng = parse-keyword("ctx")
       val ct = parse-constructor-context(crng)
-      val rng1 = parse-special("]")
+      val rng1 = parse-right-bracket()
       fn(e)
         val rng = e.range.combine(rng1)
         App(Var(nameCCtxComposeExtend, False, rng1), [(Nothing, e), (Nothing, ct)], rng1)
     },
     {
       val idxs = parse-sep-by1("", parse-expression, parse-comma)
-      val rng1 = parse-special("]")
+      val rng1 = parse-right-bracket()
       fn(e) App(Var(nameIndex, False, rng0.combine(rng1)), Cons(e, idxs).map(fn(a) (Nothing, a)), rng0.combine(rng1))
     }
   ])
