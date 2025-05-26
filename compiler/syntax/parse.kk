@@ -129,8 +129,12 @@ fun parse-body(vis: visibility, name: name, rng: range, doc: string): <parse,fsy
   parse-many("semicolons", parse-semicolon)
   val (imports, fixDefss, topDefss) = braced
     val imps = semis("imports", parse-import-declaration)
+    // trace("imports " ++ imps.show)
     val fixs = semis("fixities", parse-fixity-decl)
-    val tdefs = semis("topDefs", fn() parse-top-def(vis))
+    // trace("fixities " ++ fixs.show)
+    val tdefs = semis("topDefs", {val tdef = parse-top-def(vis); // trace(tdef.show ++ "\n\n"); 
+                                  tdef})
+    // trace("top defs " ++ tdefs.show)
     (imps, fixs, tdefs)
   parse-many("semicolons", parse-semicolon)
   val (defs, typeDefs, externals) = split-top-defs(topDefss.concat)
@@ -587,7 +591,9 @@ fun parse-val-decl(toplevel: bool, rng: range, doc: string, vis: visibility, inl
 
 fun parse-fun-decl(toplevel: bool, rng: range, doc: string, vis: visibility, inl: defInline, f: fipT): parse userDef
   val spars = parse-s-quantifier()
+  // trace("parsing function " ++ toplevel.show ++ "\n" ++ doc ++ "\n")
   val (name, nameRng) = parse-fun-id(toplevel)
+  // trace("parsing function " ++ name.show ++ "\n")
   val FunDef(tpars, pars, pinfos, _, mbTres, preds, ann) = parse-fun-def(True, True)
   val body = parse-body-expr() // TODO: Incorporate the paramter rnge
   val fnct = promote(spars, tpars, preds, mbTres, Lam(pars, body, toplevel, rng.combine(body.range)))
@@ -911,7 +917,7 @@ fun parse-handler-opx(): parse (clause, maybe<(userExpr -> userExpr)>)
       val rng = parse-special-id("finally")
       parse-maybe("", {parens({()})})
       val expr = parse-body-expr()
-      (ClauseFinally(Lam([], expr, rng.combine(expr.range))), Nothing)
+      (ClauseFinally(Lam([], expr, False, rng.combine(expr.range))), Nothing)
     },{
       val rng = parse-special-id("initially")
       val (name, prng, tp) = parens
@@ -1025,11 +1031,14 @@ inline fun parse-op-expr(): parse userExpr
 
 fun parse-op-exprx(allowTrailingLam: bool): parse userExpr
   val e1 = parse-prefix-expr(allowTrailingLam)
+  // trace("Parsed expression " ++ e1.show ++ "\n")
   parse-choices-nb("", [
     {
       val ess = parse-many1("", {
                                   val op = parse-operator-var(); 
+                                  // trace("Parsed operator " ++ op.show ++ "\n")
                                   val e2 = parse-prefix-expr(allowTrailingLam); 
+                                  // trace("Parsed expression2 " ++ e2.show ++ "\n")
                                   [op, e2]})
       App(Var(nameOpExpr, True, null), 
           Cons(e1, ess.concat).map(fn(e) (Nothing, e)), 
@@ -1050,6 +1059,7 @@ fun parse-prefix-expr(allowTrailingLam: bool): parse userExpr
 
 fun parse-application-expression(allowTrailingLam: bool): parse userExpr
   val e0 = parse-atomic()
+  // trace("applying " ++ e0.show ++ "\n")
   val fs = parse-many("", {parse-choices("", [parse-dot-expr, parse-applier, parse-indexer, {parse-func-applications(allowTrailingLam)}])})
   fs.foldl(e0, fn(e:userExpr, f:userExpr -> userExpr) f(e))
 

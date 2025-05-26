@@ -259,7 +259,7 @@ fun is-start-continuation-token(lex)
   match lex
     LexSpecial(s) -> [")",">","]",",","{","}"].any(fn(c) c == s)
     LexKeyword(k, _) -> ["then","else","elif","->","=","|",":",".",":="].any(fn(c) c == k)
-    LexOp(op) -> op.nameLocalQual != "<"
+    LexOp(op) -> op.local != "<"
     LexInsLCurly -> True
     LexInsRCurly -> True
     _ -> False
@@ -269,7 +269,7 @@ fun is-end-continuation-token(lex)
     LexSpecial(s) -> ["(","<","[",",","{"].any(fn(c) c == s)
     LexKeyword(k, _) -> k == "."
     LexInsLCurly -> True
-    LexOp(op) -> op.nameLocalQual != ">"
+    LexOp(op) -> op.local != ">"
     _ -> False
 
 inline fun is-close-brace(lex)

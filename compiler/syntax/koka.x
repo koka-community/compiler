@@ -146,8 +146,8 @@ program :-
 <0> $special              { fn() { emit(LexSpecial(get-string())) } }
 
 -- literals
-<0> @decfloat             { fn() { val s = get-string(); emit(LexFloat(s.parse-float64.expect(msg="when parsing " ++ s), s)) } }
-<0> @hexfloat             { fn() { val s = get-string(); emit(LexFloat(s.parse-float64.expect(msg="when parsing " ++ s), s)) } }
+<0> @decfloat             { fn() { val s = get-string(); emit(LexFloat(s.replace-all("_", "").parse-float64.expect(msg="when parsing " ++ s), s)) } }
+<0> @hexfloat             { fn() { val s = get-string(); emit(LexFloat(s.replace-all("_", "").parse-float64.expect(msg="when parsing " ++ s), s)) } }
 <0> @integer              { fn() { val s = get-string(); emit(LexInt(s.parse-int.expect(msg="when parsing " ++ s), s)) } }
 
 
@@ -263,7 +263,10 @@ fun split-op(s: string): list<lex>
       Cons('<', rst) -> Cons(LexOp("<".new-name), split(rst))
       Nil -> Nil
       xs -> Cons(LexOp(xs.string.new-name), Nil)
-  split(s.list)
+  val sl = s.list
+  if sl.all(fn(c) c.is-anglebar) // A type operator
+    split(sl)
+  else Cons(LexOp(s.new-name), Nil)
 
 fun extend-slice(f: sslice -> sslice)
   add-chunk(f(get-slice()))

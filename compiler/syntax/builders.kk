@@ -91,6 +91,15 @@ pub value type topDef
   DefType(def: userTypeDef)
   DefExtern(def: external)
 
+// Automatically generated.
+// Shows a string representation of the `topDef` type.
+pub fun topDef/show(this : topDef) : div string
+  match this
+    DefValue(def) -> "DefValue(def: " ++ def.show ++ ")"
+    DefType(def) -> "DefType(def: " ++ def.show ++ ")"
+    DefExtern(def) -> "DefExtern(def: " ++ def.show ++ ")"
+
+
 pub fun make-app(expr: expr<t>, args: list<expr<t>>, rT: (t) -> range): expr<t>
   App(expr, args.map(fn(a) (Nothing, a)), combine(Cons(expr.range, args.map(range))))
 
@@ -339,7 +348,7 @@ pub fun make-operation-decl(opCount: int, vis: visibility, forallsScoped: list<u
       if isInstance then Var(resourceName, False, krng)
       else App(Var(nameEvvAt, False, krng), [(Nothing, zeroIdx)], krng)
     val innerBody = App(perform, [(Nothing, inner), (Nothing, Var(selectId, False, krng))] ++ arguments, grng)
-    val body = Ann(Lam(lParams, innerBody, krng), tpFull, krng)
+    val body = Ann(Lam(lParams, innerBody, True, krng), tpFull, krng)
     val binder = ValueBinder(id, (), body, nameRng, nameRng)
     Def(binder, idrng, vis, DefFun([]), InlineAlways, docDef)
   val opDef = create-op()
@@ -378,7 +387,7 @@ pub fun local-scope(vdef: userDef, exp: userExpr): userExpr
   val erng = exp.range
   val drng = vdef.range
   val nrng = vdef.binder.name-range
-  App(Var(nameRunLocal, False, nrng.hide), [(Nothing, Lam([], exp, erng))], drng)
+  App(Var(nameRunLocal, False, nrng.hide), [(Nothing, Lam([], exp, False, erng))], drng)
 
 pub fun combine(e1: statement, exp: userExpr): <parse> userExpr
   match e1

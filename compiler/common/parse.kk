@@ -60,7 +60,10 @@ fun next(): <parse> lexeme
 fun lex-parse(allow-at: bool, insert-semis: bool, preprocess: list<lexeme> -> pure list<lexeme>, p: () -> <console,parse|e> a, sourceName: string, input: string): <console,parse-error,pure|e> a
   val src = Source(sourceName, input)
   val lexes = lexing(src, 1, input)
-  with parse-lexemes(src, preprocess(layout(lexes, allow-at, insert-semis)))
+  // trace(lexes.map(show).join("\n"))
+  val lexes' = preprocess(layout(lexes, allow-at, insert-semis))
+  // trace(lexes'.map(show).join("\n"))
+  with parse-lexemes(src, lexes')
   p()
   
 fun parse-lexemes(src: source, lexemes0: list<lexeme>, p: () -> <console,parse|e> a): <console,parse-error,pure|e> a
@@ -144,7 +147,7 @@ fun parse-lexemes(src: source, lexemes0: list<lexeme>, p: () -> <console,parse|e
     fun ptrace(s: string)
       if debug then
         trace(s ++ "\n  " ++ history.map(fn(x) "When parsing " ++ x.snd).join("\n\t") ++ " next parse-token: " ++ lexemes.take(1).map(show).join(","))
-  p()
+  mask<local>{p()}
 
 fun parse-many(kind: string, l: () -> <parse|e> a): <parse|e> list<a>
   match parse-option-maybe("many " ++ kind, l)

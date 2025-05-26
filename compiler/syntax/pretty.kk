@@ -73,7 +73,7 @@ fun definline/pretty(d: defInline): doc
   match d
     InlineNever -> "noinline".text
     InlineAlways -> "inline".text
-    InlineAuto -> pprint/empty
+    InlineAuto -> pretty/pprint/empty
 
 fun dbinder/pretty(vb: valueBinder<(), userExpr>, sort: defSort): div doc
   match sort

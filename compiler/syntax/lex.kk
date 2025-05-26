@@ -6,6 +6,7 @@ import std/num/float64
 import std/core-extras
 import std/core/undiv
 import std/data/word-set
+// Updated to be roughly equivalent to commit 9e8299f on 2/10/25
 
 effect koka-lex
   fun do-start-chunked(s: string, start: alex-pos): ()
@@ -68,8 +69,8 @@ val alex_action_8: action = fn() {
 val alex_action_9: action = fn() { emit(LexCons(get-name(), "")) }
 val alex_action_10: action = fn() { emit(LexWildCard(get-name())) }
 val alex_action_11: action = fn() { emit(LexSpecial(get-string())) }
-val alex_action_12: action = fn() { val s = get-string(); emit(LexFloat(s.parse-float64.expect(msg="when parsing " ++ s), s)) }
-val alex_action_13: action = fn() { val s = get-string(); emit(LexFloat(s.parse-float64.expect(msg="when parsing " ++ s), s)) }
+val alex_action_12: action = fn() { val s = get-string(); emit(LexFloat(s.replace-all("_", "").parse-float64.expect(msg="when parsing " ++ s), s)) }
+val alex_action_13: action = fn() { val s = get-string(); emit(LexFloat(s.replace-all("_", "").parse-float64.expect(msg="when parsing " ++ s), s)) }
 val alex_action_14: action = fn() { val s = get-string(); emit(LexInt(s.parse-int.expect(msg="when parsing " ++ s), s)) }
 val alex_action_15: action = fn() { emit(LexOp(get-name())) }
 val alex_action_16: action = fn() { emit(LexIdOp(get-qname())) }
@@ -356,7 +357,7 @@ fun alex-scan-tokens(s: int): alex-eff ()
               _ ->
                 consume-char()
                 alex-scan-tokens(new_s)
-/// LINE 248 "../../koka-community/compiler/compiler/syntax/koka.x"
+/// LINE 249 "../../koka-community/compiler/compiler/syntax/koka.x"
 fun is-anglebar(c: char): bool
   match c
     '|' -> True
@@ -372,7 +373,10 @@ fun split-op(s: string): list<lex>
       Cons('<', rst) -> Cons(LexOp("<".new-name), split(rst))
       Nil -> Nil
       xs -> Cons(LexOp(xs.string.new-name), Nil)
-  split(s.list)
+  val sl = s.list
+  if sl.all(fn(c) c.is-anglebar) // A type operator
+    split(sl)
+  else Cons(LexOp(s.new-name), Nil)
 
 fun extend-slice(f: sslice -> sslice)
   add-chunk(f(get-slice()))
@@ -465,9 +469,14 @@ fun is-prefix-op(name: string)
 fun string/is-malformed(name: string)
   name.list.charlist/is-malformed
 
+fun is-at(c: char): bool
+  c == '@'
+
+// TODO: is-letter 
 fun charlist/is-malformed(name: list<char>)
   match name
-    Cons('-', Cons(c, cs)) -> !c.is-alpha || cs.is-malformed
+    // @ signs are added postpend to unique names (e.g. "x-@1") for variable x monadic lifted in a function (-).
+    Cons('-', Cons(c, cs)) -> !(c.is-alpha || c.is-at) || cs.is-malformed 
     Cons(c, Cons('-', cs)) -> !c.is-alpha || c.is-digit || cs.is-malformed
     Cons(_, cs) -> cs.is-malformed
     Nil -> False

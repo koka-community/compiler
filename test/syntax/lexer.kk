@@ -1,5 +1,6 @@
 import std/os/file
 import std/os/path
+import std/os/dir
 import compiler/common/range
 import compiler/syntax/lexer
 import compiler/syntax/lexeme
@@ -19,3 +20,11 @@ fun main()
     val source = Source(f ++ ".kk", s)
     lexing(source, 1, s).trace-show
     ()
+
+fun test()
+  "/Users/timwhiting/koka/lib/std/".path.list-directory-recursive.foreach fn(f)
+    if f.is-file && f.string.ends-with(".kk").bool then
+      val s = read-text-file(f)
+      lexing(Source(f.string, s), 1, s)
+      println("Lexed ... " ++ f.show)
+  println("Done")

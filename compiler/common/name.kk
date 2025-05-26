@@ -176,7 +176,7 @@ fun pretty-name-ex(Name(m, _, l, _, n, _): name, lsep: string, cs: colorScheme):
   val ln = join(l, n.wrap-id)
   if m == "" then ln.text
   else 
-   (m.text |.| (if ln.is-empty then pprint/empty elif l.is-empty then "/".text else lsep.text)).color(cs.colorModule)
+   (m.text |.| (if ln.is-empty then pretty/pprint/empty elif l.is-empty then "/".text else lsep.text)).color(cs.colorModule)
            |.| ln.text
 
 fun pretty-name(nm: name, cs: colorScheme): <exn> doc // not explicit /#
@@ -465,7 +465,7 @@ fun make-fresh-hidden-name(s: string, n: name, r: range)
 
 fun hidden/starts-with(n: name, pre: string): bool
   n.nameStem.starts-with("@" ++ pre).bool ||
-    n.name/starts-with("@" ++ pre ++ "-")
+    n.name/name/starts-with("@" ++ pre ++ "-")
 
 // Various special names
 

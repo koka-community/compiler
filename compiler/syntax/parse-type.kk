@@ -227,7 +227,7 @@ fun parse-type-binder(): parse userTypeBinder
 
 pub fun parse-kind-annotation(): parse userKind
   parse-choices("kind", [{
-    parse-special-id("::")
+    parse-special-op("::")
     parse-kind()
   },
   { KindNone }])
@@ -244,11 +244,13 @@ pub fun parse-kind(): parse userKind
    },
    {
     val k = parse-kind-atom()
-    parse-choices("kind", [{
+    parse-choices("kind", 
+     [{
       parse-keyword("->")
       val k2 = parse-kind()
       KindArrow(k, k2)
-    }, {k}])
+      }, 
+      {k}])
    }
   ])
 
