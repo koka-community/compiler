@@ -148,7 +148,7 @@ program :-
 -- literals
 <0> @decfloat             { fn() { val s = get-string(); emit(LexFloat(s.replace-all("_", "").parse-float64.expect(msg="when parsing " ++ s), s)) } }
 <0> @hexfloat             { fn() { val s = get-string(); emit(LexFloat(s.replace-all("_", "").parse-float64.expect(msg="when parsing " ++ s), s)) } }
-<0> @integer              { fn() { val s = get-string(); emit(LexInt(s.parse-int.expect(msg="when parsing " ++ s), s)) } }
+<0> @integer              { fn() { val s = get-string(); emit(LexInt(s.replace-all("_", "").parse-int.expect(msg="when parsing " ++ s), s)) } }
 
 
 -- type operators
@@ -264,7 +264,7 @@ fun split-op(s: string): list<lex>
       Nil -> Nil
       xs -> Cons(LexOp(xs.string.new-name), Nil)
   val sl = s.list
-  if sl.all(fn(c) c.is-anglebar) // A type operator
+  if sl.all(fn(c) c.is-anglebar) then // A type operator
     split(sl)
   else Cons(LexOp(s.new-name), Nil)
 
@@ -367,7 +367,7 @@ fun charlist/is-malformed(name: list<char>)
   match name
     // @ signs are added postpend to unique names (e.g. "x-@1") for variable x monadic lifted in a function (-).
     Cons('-', Cons(c, cs)) -> !(c.is-alpha || c.is-at) || cs.is-malformed 
-    Cons(c, Cons('-', cs)) -> !c.is-alpha || c.is-digit || cs.is-malformed
+    Cons(c, Cons('-', cs)) -> !(c.is-alpha || c.is-digit) || cs.is-malformed
     Cons(_, cs) -> cs.is-malformed
     Nil -> False
 

@@ -13,9 +13,14 @@ fun test()
   "/Users/timwhiting/koka/lib/std/".path.list-directory-recursive.foreach fn(f)
     if f.is-file && f.string.ends-with(".kk").bool then
       println("Parsing... " ++ f.show)
-      parse-program-from-file(f, True, True)
+      catch { parse-program-from-file(f, True, True); () } fn(err) err.show.trace
       println("Parsed " ++ f.show)
 
 fun test-x1()
-  val f = "/Users/timwhiting/koka/lib/std/core/string.kk".path
+  val f = "/Users/timwhiting/koka/lib/std/num/random.kk".path
+  parse-program-from-file(f, True, True).pretty.show.println
+
+
+fun test-x2()
+  val f = "../compiler/test/tests/parse/indentation.kk".path
   parse-program-from-file(f, True, True).pretty.show.println

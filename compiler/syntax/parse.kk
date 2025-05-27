@@ -253,18 +253,21 @@ fun parse-external-includes(target: target, rng: range, (key, fname): (string, s
   else [(key, fpath.show)]
 
 fun pread-file(fpath: path): <fsys,parse-error> string
-  catch({read-text-file(fpath)}, fn(e) parse-error("Unable to read external file at path: " ++ fpath.show ++ ": got error " ++ e.message, null))
+  catch({read-text-file(fpath)}, fn(e) {
+      trace("Error reading file " ++ fpath.show)
+      parse-error("Unable to read external file at path: " ++ fpath.show ++ ": got error " ++ e.message, null)
+    })
 
 fun parse-external-import-entry() : <parse,fsys> (target, list<(string, string)>)
   val target = parse-external-target()
-  val (key-vals, rng) = parse-choices-nb("", [
+  val (key-vals, rng) = parse-choices("", [
     { val key = parse-external-import-key(); 
       val (v, rng) = parse-string-literal(); 
       ([(key, v)], rng)
     },
     { parse-semi-braces-ranged("", parse-external-import-key-val) }
     ])
-  (target, key-vals.map(fn(kv) parse-external-includes(target, rng, kv)).concat)
+  (target, key-vals.map(fn(kv) {parse-external-includes(target, rng, kv)}).concat)
 
 fun parse-external-import(r: range): <parse,fsys> external
   parse-choices-nb("import", [

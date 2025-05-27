@@ -71,7 +71,7 @@ val alex_action_10: action = fn() { emit(LexWildCard(get-name())) }
 val alex_action_11: action = fn() { emit(LexSpecial(get-string())) }
 val alex_action_12: action = fn() { val s = get-string(); emit(LexFloat(s.replace-all("_", "").parse-float64.expect(msg="when parsing " ++ s), s)) }
 val alex_action_13: action = fn() { val s = get-string(); emit(LexFloat(s.replace-all("_", "").parse-float64.expect(msg="when parsing " ++ s), s)) }
-val alex_action_14: action = fn() { val s = get-string(); emit(LexInt(s.parse-int.expect(msg="when parsing " ++ s), s)) }
+val alex_action_14: action = fn() { val s = get-string(); emit(LexInt(s.replace-all("_", "").parse-int.expect(msg="when parsing " ++ s), s)) }
 val alex_action_15: action = fn() { emit(LexOp(get-name())) }
 val alex_action_16: action = fn() { emit(LexIdOp(get-qname())) }
 val alex_action_17: action = fn() {
@@ -283,7 +283,7 @@ fun recognize(a: alexScanState, restart: bool)
                 // throw("Alex Error at: " ++ seek.subslice(0, 50).string.show)
         AlexAccRes(_, resnext, resacc, resend) ->
           // trace("Recognized " ++ resacc.show)
-          AlexScanState(states, resnext, resnext, resnext.truncate(), ' ', ' ', end, end, AlexAccResNone, Action-info(resacc, start, resend))
+          AlexScanState(states, resnext, resnext, resnext.truncate(), ' ', ' ', resend, resend, AlexAccResNone, Action-info(resacc, start, resend))
         AlexAccResSkip(resnext) ->
           AlexScanState(states, resnext, resnext, resnext.truncate(), ' ', ' ', end, end, AlexAccResNone, action-info)
 
@@ -374,7 +374,7 @@ fun split-op(s: string): list<lex>
       Nil -> Nil
       xs -> Cons(LexOp(xs.string.new-name), Nil)
   val sl = s.list
-  if sl.all(fn(c) c.is-anglebar) // A type operator
+  if sl.all(fn(c) c.is-anglebar) then // A type operator
     split(sl)
   else Cons(LexOp(s.new-name), Nil)
 
@@ -477,7 +477,7 @@ fun charlist/is-malformed(name: list<char>)
   match name
     // @ signs are added postpend to unique names (e.g. "x-@1") for variable x monadic lifted in a function (-).
     Cons('-', Cons(c, cs)) -> !(c.is-alpha || c.is-at) || cs.is-malformed 
-    Cons(c, Cons('-', cs)) -> !c.is-alpha || c.is-digit || cs.is-malformed
+    Cons(c, Cons('-', cs)) -> !(c.is-alpha || c.is-digit) || cs.is-malformed
     Cons(_, cs) -> cs.is-malformed
     Nil -> False
 
