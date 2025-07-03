@@ -14,17 +14,17 @@ fun lex(str: string, pos: pos): pure list<lexeme>
   var col-off := pos.col
   with handler
     fun do-start-chunked(s: string, start: alex-pos)
-      slices := Cons((s, start), slices)
+      slices := Cons((s.string/bytes, start), slices)
     fun end-chunked()
       match slices
         Cons((s, start), rst) -> 
           slices := rst
-          (s, start)
+          (s.string, start)
         Nil -> throw("end-chunked when no chunked input")
     fun add-chunk(f)
       match slices
         Cons((s, st), rst) -> 
-          slices := Cons((s ++ f.string, st), rst)
+          slices := Cons((s ++ f.bytes, st), rst)
         Nil -> 
           throw("add-chunk when no chunked input")
     fun get-rawdelim()
