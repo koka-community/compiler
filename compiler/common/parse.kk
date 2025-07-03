@@ -20,7 +20,7 @@ import std/core/debug
 effect parse-error
   final ctl parse-error(e: string, r: range): a
 
-effect token-parse
+linear effect token-parse
   val source-info: source
   fun add-warning(w: string, r: range): ()
   fun ppeek(): maybe<lexeme>
@@ -28,11 +28,11 @@ effect token-parse
   fun reset(msg: string): ()
   fun delimit(msg: string): ()
   fun pnext(): maybe<lexeme>
-  fun peof(): ()
   fun took-input(msg: string): bool
   fun ptrace(s: string): ()
   fun take-all(): list<lexeme>
   fun put-all(lexemes: list<lexeme>): ()
+  fun get-lexemes_(): list<lexeme>
 
 alias parse = <token-parse, parse-error, pure>
 
@@ -77,6 +77,7 @@ fun parse-lexemes(src: source, lexemes0: list<lexeme>, p: () -> <console,parse|e
       parse-error("Got error: " ++ e ++ "\n" ++ " when parsing:\n\t" ++ lexemes.take(2).map(show).join("\n\t"), r)
   with handler
     val source-info = src
+    fun get-lexemes_() lexemes
     fun take-all()
       val l = lexemes
       lexemes := Nil // TODO: This ruins the history -- especially with delimiting
@@ -127,14 +128,6 @@ fun parse-lexemes(src: source, lexemes0: list<lexeme>, p: () -> <console,parse|e
       match lexemes
         Cons(l, _) -> Just(l)
         Nil -> Nothing
-    fun peof()
-      // if debug then
-      //   trace("Parsing eof\n" ++ history.map(fn(x) "\tWhen parsing " ++ x.snd).join("\n") ++ "\n\nHad leftovers: " ++ lexemes.map(fn(x) x.show).join("\n"))
-      match lexemes
-        Cons(l, _) ->
-          parse-error("peof expected end of file", l.range)
-        Nil ->
-          ()
     fun took-input(str)
       match history
         Cons((_, msg, i), _) ->
@@ -150,6 +143,13 @@ fun parse-lexemes(src: source, lexemes0: list<lexeme>, p: () -> <console,parse|e
         trace(s ++ "\n  " ++ history.map(fn(x) "When parsing " ++ x.snd).join("\n\t") ++ " next parse-token: " ++ lexemes.take(1).map(show).join(","))
   mask<local>{p()}
 
+
+fun peof()
+  // if debug then
+  //   trace("Parsing eof\n" ++ history.map(fn(x) "\tWhen parsing " ++ x.snd).join("\n") ++ "\n\nHad leftovers: " ++ lexemes.map(fn(x) x.show).join("\n"))
+  match get-lexemes_()
+    Cons(l, _) -> parse-error("peof expected end of file", l.range)
+    Nil -> ()
 fun parse-many(kind: string, l: () -> <parse|e> a): <parse|e> list<a>
   match parse-option-maybe("many " ++ kind, l)
     Just(r) -> Cons(r, parse-many(kind, l))
