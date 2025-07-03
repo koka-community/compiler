@@ -416,7 +416,7 @@ val special-names = [ "{", "}"
     , "[", "]"
     , ";", ","
 ]
-val reserved-names = 
+pub val reserved-names = 
       delay({
         string-pool().add-all(
         ["infix", "infixr", "infixl"

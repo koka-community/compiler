@@ -1,7 +1,10 @@
 import std/os/file
 import std/os/path
+import std/os/task
 import std/os/dir
+import std/core/unsafe
 import compiler/common/range
+import compiler/syntax/lex
 import compiler/syntax/lexer
 import compiler/syntax/lexeme
 
@@ -22,13 +25,19 @@ fun main()
     ()
 
 fun test()
-  "/Users/timwhiting/koka/lib/std/".path.list-directory-recursive.foreach fn(f)
+  val r = reserved-names.force
+  val res = "/Users/timwhiting/koka/lib/std/".path.list-directory-recursive.map fn(f) fn()
+    with unsafe-total
+    with try
     if f.is-file && f.string.ends-with(".kk").bool then
       val s = read-text-file(f)
       lexing(Source(f.string, s), 1, s)
-      println("Lexed ... " ++ f.show)
+      "Lexed " ++ f.show
+    else 
+      "Not a koka file " ++ f.show
+  val x = res.parallel
+  r
   println("Done")
-
 
 fun test-unicode()
   ["/Users/timwhiting/koka/lib/std/time/locale.kk".path].foreach fn(f)
