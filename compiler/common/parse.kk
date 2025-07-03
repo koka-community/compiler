@@ -69,7 +69,7 @@ fun lex-parse(allow-at: bool, insert-semis: bool, preprocess: list<lexeme> -> pu
 fun parse-lexemes(src: source, lexemes0: list<lexeme>, p: () -> <console,parse|e> a): <console,parse-error,pure|e> a
   var lexemes := lexemes0
   // trace(lexemes0.show)
-  var history := Cons((ctx _, "top", 0), Nil)
+  var history := Cons(([], "top", 0), Nil)
   val debug = True
   with override
     final ctl parse-error(e: string, r: range)
@@ -92,7 +92,7 @@ fun parse-lexemes(src: source, lexemes0: list<lexeme>, p: () -> <console,parse|e
           lexemes := rst 
           match history
             Cons((h, msg, i), tl) ->
-              history := Cons((h ++ ctx Cons(l, _), msg, i + 1), tl)
+              history := Cons((Cons(l, h), msg, i + 1), tl)
             Nil -> 
               parse-error("unexpected top of context", null)
           Just(l)
@@ -104,19 +104,19 @@ fun parse-lexemes(src: source, lexemes0: list<lexeme>, p: () -> <console,parse|e
             // trace("Resetting " ++ str ++ " but expected " ++ msg)
             throw("Reset error")
           else
-            lexemes := h ++. lexemes
+            lexemes := h.reverse ++ lexemes
             history := rst
             // if debug then
             //   trace("Resetting " ++ str ++ "\n" ++ history.map(fn(x) "\tWhen parsing " ++ x.snd).join("\n") ++ " at " ++ lexemes.head.map(show).default("eof") ++ "\nputting back:\n\t" ++ (h ++. Nil).map(show).join("\n\t"))
         Nil ->
           parse-error("mismatched reset", null)
     fun delimit(msg)
-      history := Cons((ctx _, msg, 0), history)
+      history := Cons(([], msg, 0), history)
     fun undelimit(msg)
       match history
         Cons((lexes, str, _), Cons((lexes2, str2, i2), rst)) ->
           if str == msg then
-            history := Cons((lexes2 ++ lexes, str2, i2), rst)
+            history := Cons((lexes ++ lexes2, str2, i2), rst)
           else
             trace("Undelimiting " ++ str ++ " but expected " ++ msg)
             throw("Undelimit error")

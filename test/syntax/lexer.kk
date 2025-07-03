@@ -26,17 +26,13 @@ fun main()
 
 fun test()
   val r = reserved-names.force
-  val res = "/Users/timwhiting/koka/lib/std/".path.list-directory-recursive.map fn(f) fn()
-    with unsafe-total
-    with try
+  "/Users/timwhiting/koka/lib/std/".path.list-directory-recursive.foreach fn(f)
     if f.is-file && f.string.ends-with(".kk").bool then
       val s = read-text-file(f)
       lexing(Source(f.string, s), 1, s)
-      "Lexed " ++ f.show
+      ("Lexed " ++ f.show).println
     else 
-      "Not a koka file " ++ f.show
-  val x = res.parallel
-  r
+      ("Not a koka file " ++ f.show).println
   println("Done")
 
 fun test-unicode()
