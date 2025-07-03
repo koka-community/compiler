@@ -15,6 +15,7 @@ import compiler/common/syntax
 import compiler/common/name
 import compiler/common/name-prim
 import compiler/common/range
+import std/core/debug
 
 effect parse-error
   final ctl parse-error(e: string, r: range): a
@@ -94,7 +95,7 @@ fun parse-lexemes(src: source, lexemes0: list<lexeme>, p: () -> <console,parse|e
             Cons((h, msg, i), tl) ->
               history := Cons((Cons(l, h), msg, i + 1), tl)
             Nil -> 
-              parse-error("unexpected top of context", null)
+              impossible("unexpected top of context")
           Just(l)
         Nil -> Nothing
     fun reset(msg)
@@ -102,14 +103,14 @@ fun parse-lexemes(src: source, lexemes0: list<lexeme>, p: () -> <console,parse|e
         Cons((h, str, _), rst) -> 
           if str != msg then
             // trace("Resetting " ++ str ++ " but expected " ++ msg)
-            throw("Reset error")
+            impossible("Reset error")
           else
             lexemes := h.reverse ++ lexemes
             history := rst
             // if debug then
             //   trace("Resetting " ++ str ++ "\n" ++ history.map(fn(x) "\tWhen parsing " ++ x.snd).join("\n") ++ " at " ++ lexemes.head.map(show).default("eof") ++ "\nputting back:\n\t" ++ (h ++. Nil).map(show).join("\n\t"))
         Nil ->
-          parse-error("mismatched reset", null)
+          impossible("mismatched reset")
     fun delimit(msg)
       history := Cons(([], msg, 0), history)
     fun undelimit(msg)
@@ -119,9 +120,9 @@ fun parse-lexemes(src: source, lexemes0: list<lexeme>, p: () -> <console,parse|e
             history := Cons((lexes ++ lexes2, str2, i2), rst)
           else
             trace("Undelimiting " ++ str ++ " but expected " ++ msg)
-            throw("Undelimit error")
+            impossible("Undelimit error")
         _ ->
-          throw("Undelimiting from top")
+          impossible("Undelimiting from top")
     fun ppeek()
       match lexemes
         Cons(l, _) -> Just(l)
@@ -139,7 +140,7 @@ fun parse-lexemes(src: source, lexemes0: list<lexeme>, p: () -> <console,parse|e
         Cons((_, msg, i), _) ->
           if str != msg then
             trace("Checking if input was taken for " ++ str ++ " but expected " ++ msg)
-            throw("Take input error")
+            impossible("Take input error")
           else
             i != 0
         Nil ->
@@ -216,17 +217,19 @@ fun parse-try(p: () -> <parse|e> a, ?kk-file-line: string): <parse|e> a
 
 // Version of maybe that doesn't backtrack
 fun parse-option-maybe(str: string, p: () -> <parse|e> a): <parse|e> maybe<a>
-  with parse-delimited(str)
+  delimit(str)
   with override
     return(r)
+      undelimit(str)
       Just(r)
     final ctl parse-error(e, r)
       if took-input(str) then
-        parse-error(e, r)
+        undelimit(str)
+        parse-error("\nWhen parsing " ++ str ++ " " ++ e, r)
       else
+        undelimit(str)
         Nothing 
   p()
-  
 
 // Parse parse-choices without backtracking. 
 // Make sure that all parse-choices start differently or is the last choice.
