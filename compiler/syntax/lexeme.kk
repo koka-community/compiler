@@ -110,7 +110,7 @@ pub fun lex/show(l: lex): <> string
     LexInt(_, s) -> s
     LexFloat(_, s) -> s
     LexChar(c) -> c.show
-    LexString(s) -> s.show
+    LexString(s) -> s
     LexId(n) -> "identifier \"" ++ n.show ++ "\""
     LexOp(n) -> "operator \"" ++ n.show ++ "\""
     LexPrefix(n) -> "prefix operator \"" ++ n.show ++ "\""

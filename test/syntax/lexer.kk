@@ -29,6 +29,16 @@ fun test()
       println("Lexed ... " ++ f.show)
   println("Done")
 
+
+fun test-unicode()
+  ["/Users/timwhiting/koka/lib/std/time/locale.kk".path].foreach fn(f)
+    if f.is-file && f.string.ends-with(".kk").bool then
+      val s = read-text-file(f)
+      // s.println
+      val res = lexing(Source(f.string, s), 1, s)
+      println("Lexed ... " ++ f.show ++ "\n" ++ res.show(?show = fn(l) l.lex.show))
+  println("Done")
+
 fun test-raw()
   val p = "../compiler/test/tests/lex/raw.kk".path
   val s = read-text-file(p)

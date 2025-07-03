@@ -11,7 +11,7 @@ import std/data/word-set
 effect koka-lex
   fun do-start-chunked(s: string, start: alex-pos): ()
   fun end-chunked(): (string, alex-pos)
-  fun add-chunk(s: sslice): ()
+  fun add-chunk(s: bslice): ()
   fun get-rawdelim(): int
   fun set-rawdelim(i: int): ()
   fun check-linedir(c: lex, start: alex-pos, end: alex-pos): lex
@@ -168,22 +168,22 @@ program :-
 <0> \"                    { fn() { push-state(stringlit); start-chunked(""); } } -- "
 <0> r\#*\"                { fn() { push-state(stringraw); start-chunked(""); push-rawdelim(); } } -- "
 
-<0> \'\\$charesc\'        { fn() { emit(LexChar(get-slice().sslice/drop(2).next.expect.tuple2/fst.char/from-char-esc)) }}
-<0> \'\\@hexesc\'         { fn() { emit(LexChar(get-slice().sslice/drop(3).extend(-1).char/from-hex-esc)) }}
-<0> \'@charchar\'         { fn() { emit(LexChar(get-slice().sslice/drop(1).next.expect.tuple2/fst)) }}
-<0> \'.\'                 { fn() { emit(LexError("illegal character literal: " ++ get-slice().sslice/drop(1).next.map(tuple2/fst).default(' ').show)) }}
+<0> \'\\$charesc\'        { fn() { emit(LexChar(get-sslice().sslice/drop(2).next.expect.tuple2/fst.char/from-char-esc)) }}
+<0> \'\\@hexesc\'         { fn() { emit(LexChar(get-sslice().sslice/drop(3).extend(-1).char/from-hex-esc)) }}
+<0> \'@charchar\'         { fn() { emit(LexChar(get-sslice().sslice/drop(1).next.expect.tuple2/fst)) }}
+<0> \'.\'                 { fn() { emit(LexError("illegal character literal: " ++ get-sslice().sslice/drop(1).next.map(tuple2/fst).default(' ').show)) }}
 
 -- catch errors
 <0> $tab+                 { fn() { emit(LexError("tab characters: configure your editor to use spaces instead (soft tab)")) }}
-<0> .                     { fn() { emit(LexError("illegal character: " ++ get-slice().show ++ (if (get-string() =="\t") then " (replace tabs with spaces)" else ""))) }}
+<0> .                     { fn() { emit(LexError("illegal character: " ++ get-sslice().show ++ (if (get-string() =="\t") then " (replace tabs with spaces)" else ""))) }}
 
 --------------------------
 -- string literals
 
 <stringlit> @utf8unsafe   { fn() { unsafe-char("string") } }
 <stringlit> @stringchar+  { fn() { extend-slice(id) } }
-<stringlit> \\$charesc    { fn() { extend-slice(sslice/from-char-esc) } }
-<stringlit> \\@hexesc     { fn() { extend-slice(sslice/from-hex-esc) } }
+<stringlit> \\$charesc    { fn() { extend-slice(bslice/from-char-esc) } }
+<stringlit> \\@hexesc     { fn() { extend-slice(bslice/from-hex-esc) } }
 <stringlit> \"            { fn() { pop-state(); end-chunk(fn(s) LexString(s)) } } -- " 
 <stringlit> @newline      { fn() { pop-state(); end-chunk(fn(s) LexError("string literal ended by a new line")) } }
 <stringlit> .             { fn() { pop-state(); end-chunk(fn(s) LexError("illegal character in string: " ++ s.show)) } }
@@ -191,7 +191,7 @@ program :-
 <stringraw> @utf8unsafe   { fn() { unsafe-char("raw string") } }
 <stringraw> @stringraw    { fn() { extend-slice(id) } }
 <stringraw> \"\#*         { fn() {
-                            val delim = get-slice().count - 1
+                            val delim = get-sslice().count - 1
                             val curdelim = get-rawdelim()
                             if delim == curdelim then
                               end-chunk(fn(s) LexString(s))
@@ -268,14 +268,14 @@ fun split-op(s: string): list<lex>
     split(sl)
   else Cons(LexOp(s.new-name), Nil)
 
-fun extend-slice(f: sslice -> sslice)
+fun extend-slice(f: bslice -> bslice)
   add-chunk(f(get-slice()))
 
 fun pop-rawdelim()
   set-rawdelim(0)
 
 fun push-rawdelim()
-  set-rawdelim(get-slice().count - 2)
+  set-rawdelim(get-sslice().count - 2)
 
 fun get-name()
   get-string().new-name
@@ -381,13 +381,13 @@ fun char/from-char-esc(c)
     't' -> '\t'
     _ -> c
 
-fun sslice/from-char-esc(s: sslice)
+fun bslice/from-char-esc(s: bslice): bslice
   s.subslice(0, 2)
 
 fun char/from-hex-esc(s: sslice)
   '\n' // TODO: Implement from-hex-esc
 
-fun sslice/from-hex-esc(s: sslice)
+fun bslice/from-hex-esc(s: bslice): bslice
   s.drop(3).extend(-1)
 
 }

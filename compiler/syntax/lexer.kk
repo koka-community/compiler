@@ -54,7 +54,7 @@ fun lex(str: string, pos: pos): pure list<lexeme>
       val Alex-pos(soff, sline, scol) = lstart.adjust(line-off, if col-off-line == lstart.line then col-off else 0)
       val Alex-pos(eoff, eline, ecol) = lend.adjust(line-off, if col-off-line == lend.line then col-off else 0)
       lexemes := Cons(Lexeme(make-range(Pos(src, soff, sline, scol), Pos(src, eoff, eline, ecol)), l), lexemes)
-  alex-scan(str.slice, 0)
+  alex-scan(str.bytes.slice, 0)
   lexemes.reverse
 
 fun adjust(pos: alex-pos, l: int, c: int): alex-pos
