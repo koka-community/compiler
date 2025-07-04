@@ -151,27 +151,27 @@ fun peof()
     Cons(l, _) -> parse-error("peof expected end of file", l.range)
     Nil -> ()
 fun parse-many(kind: string, l: () -> <parse|e> a): <parse|e> list<a>
-  match parse-option-maybe("many " ++ kind, l)
+  match parse-maybe-nb("many " ++ kind, l)
     Just(r) -> Cons(r, parse-many(kind, l))
     Nothing -> Nil
 
 fun parse-many1(kind: string, l: () -> <parse|e> a): <parse|e> list<a>
-  match parse-option-maybe("many " ++ kind, l)
+  match parse-maybe-nb("many " ++ kind, l)
     Just(r) -> Cons(r, parse-many(kind, l))
     Nothing -> parse-error("at least 1 of " ++ kind, peek().range)
 
 fun parse-many-end(kind: string, l: () -> <parse|e> a, p: () -> <parse|e> b): <parse|e> list<a>
-  match parse-option-maybe("many " ++ kind, l)
+  match parse-maybe-nb("many " ++ kind, l)
     Just(r) -> 
-      match parse-option-maybe("sep " ++ kind, p)
+      match parse-maybe-nb("sep " ++ kind, p)
         Just(_) -> Cons(r, parse-many-end(kind, l, p))
         Nothing -> Cons(r, Nil)
     Nothing -> Nil
 
 fun parse-many-end1(kind: string, l: () -> <parse|e> a, p: () -> <parse|e> b): <parse|e> list<a>
-  match parse-option-maybe("many " ++ kind, l)
+  match parse-maybe-nb("many " ++ kind, l)
     Just(r) -> 
-      match parse-option-maybe("sep " ++ kind, p)
+      match parse-maybe-nb("sep " ++ kind, p)
         Just(_) -> Cons(r, parse-many-end(kind, l, p))
         Nothing -> Cons(r, [])
     Nothing -> parse-error("at least 1 of " ++ kind, peek().range)
@@ -216,7 +216,7 @@ fun parse-try(p: () -> <parse|e> a, ?kk-file-line: string): <parse|e> a
   
 
 // Version of maybe that doesn't backtrack
-fun parse-option-maybe(str: string, p: () -> <parse|e> a): <parse|e> maybe<a>
+fun parse-maybe-nb(str: string, p: () -> <parse|e> a): <parse|e> maybe<a>
   delimit(str)
   with override
     return(r)
@@ -238,7 +238,7 @@ fun parse-choices-nb(str: string, ps: list<() -> <parse|e> a>): <parse|e> a
   fun find(ps': list<() -> <parse|e> a>): <parse|e> a
     match ps'
       Cons(p, rst) -> 
-        match parse-option-maybe(str, p)
+        match parse-maybe-nb(str, p)
           Just(r) -> r
           Nothing -> find(rst)
       Nil -> parse-error("expected " ++ str, peek().range)
@@ -268,7 +268,7 @@ fun bracketed(open: () -> <parse|e> range, close: () -> <parse|e> range, f: (a, 
   f(x, rng1.range/combine(rng2))
 
 fun braced(p: () -> <parse|e> a): <parse|e> a
-  parse-choices-nb("braced", [{
+  parse-choices("braced", [{
       parse-left-curly() // TODO: Make sure right is same as left? (inserted versus actual)
       parse-many("semicolons", parse-semicolon)
       val x = p()
@@ -371,7 +371,7 @@ fun parse-right-angle(): <parse> range
   parse-range(">") fn(x) x.lex.is-rangle
 
 fun parse-type-binder-id(): <parse> (name, range)
-  parse-choices-nb("tBinderId", [parse-type-ident])
+  parse-choices("tBinderId", [parse-type-ident])
 
 fun parse-import-alias(): <parse> (name, name, range, range)
   val (name1, rng1) = parse-module-path()
@@ -427,7 +427,7 @@ fun parse-fip-ex(rng0: range, isTail: bool): <parse> (fipT, range)
   ])
 
 fun parse-inline(): <parse> defInline
-  parse-choices-nb("inline", [{
+  parse-choices("inline", [{
       parse-special-id("inline")
       InlineAlways
     }, {
@@ -488,7 +488,7 @@ fun ensure-unqualified(str: string, p: () -> <parse|e> (name, range)): <parse|e>
 
 fun parse-qualified-type-id(): <parse> (name, range)
   with parse-try()
-  val (name, range) = parse-choices-nb("qTypeId", [parse-qualified-var-id, parse-type-id-context])
+  val (name, range) = parse-choices("qTypeId", [parse-qualified-var-id, parse-type-id-context])
   if !name.is-type-var then 
     (name, range)
   else // TODO: This isn't quite the right hack.

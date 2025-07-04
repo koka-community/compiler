@@ -318,7 +318,7 @@ fun parse-inline-def-sort()
 fun parse-body()
   parse-keyword("=")
   val e = parse-expression()
-  parse-option-maybe("semis", parse-semicolon)
+  parse-maybe-nb("semis", parse-semicolon)
   e
 
 fun parse-expression()

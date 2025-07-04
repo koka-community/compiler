@@ -29,7 +29,7 @@ pub fun parse-type-annot(): parse userType
 
 pub fun parse-parameter-type-annotation(): parse userType
   parse-keyword(":")
-  parse-choices-nb("", [
+  parse-choices("", [
     {
       val rng = parse-special("?")
       val tp = parse-type()
@@ -255,7 +255,7 @@ pub fun parse-kind(): parse userKind
   ])
 
 fun parse-kind-atom(): parse userKind
-  parse-choices-nb("kind constant (V,E,H,S,X,HX, or P)", [
+  parse-choices("kind constant (V,E,H,S,X,HX, or P)", [
    {
     val (k, rng) = parens-ranged(parse-kind)
     KindParens(k, rng)
