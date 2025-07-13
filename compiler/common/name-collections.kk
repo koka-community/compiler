@@ -82,11 +82,11 @@ fun qname-map/union(m1: qname-map<a>, m2: qname-map<a>): <comp-flags,exn> qname-
     safe-combine("union", xs, ys)
 
 fun qname-map/union-left-bias(m1: qname-map<a>, m2: qname-map<a>): <comp-flags,exn> qname-map<a>
-  m1.union-with(m2, (++))
+  m1.union-with(m2, list/(++))
 
 fun qname-map/unions(ms: list<qname-map<a>>): <comp-flags,exn> qname-map<a>
   ms.foldl(LinearMap([])) fn(m1, m2)
-    m1.union(m2)
+    m1.qname-map/union(m2)
 
 fun qname-map/safe-combine(s: string, xs: list<(name,a)>, ys: list<(name,a)>): <comp-flags,exn> list<(name,a)>
   if xs.any(fn(x) ys.any(fn(y) y.fst == x.fst)) then
