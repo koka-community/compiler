@@ -7,14 +7,14 @@
 //---------------------------------------------------------------------------
 
 // using alex lexing in community libraries, instead of direct translation
-pub import examples/json/alex-parse
+pub import parsers/alex/json-parse-eff
 pub import std/data/json
 pub import std/pretty/pprint
 
 fun test()
   val s = r#"{"hello":"world" // a comment here
     }"#
-  s.parse.pretty.show.println
+  s.parse-json.pretty.show.println
 
 // The direct translation from Koka's Haskell compiler is below
 // import std/text/parse

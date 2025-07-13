@@ -63,7 +63,13 @@ fun tdefvb/pretty(v: valueBinder<userType,maybe<expr<userType>>>): div doc
   v.name.pretty |+| v.expr.pretty
 
 fun lamvb/pretty(v: valueBinder<maybe<userType>,maybe<expr<userType>>>): div doc
-  v.name.pretty |+| v.expr.pretty
+  val tp = match v.binderType 
+    Just -> ":".text |+| v.binderType.pretty
+    Nothing -> empty
+  val def = match v.expr 
+    Just -> "=".text |+| v.expr.pretty
+    Nothing -> empty
+  v.name.pretty |.| tp |.| (if tp.is-empty then def else " ".text |.| def)
 
 fun defsort/pretty(d: defSort): doc
   match d

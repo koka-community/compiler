@@ -26,7 +26,7 @@ fun name-map/find(m: name-map<a>, n: name): <div,exn> a
     Just(x) -> x
     _ -> throw("common/name-map/find: could not find: " ++ n.show)
 
-type lookup<a>
+pub type lookup<a>
   Found(name: (name, a))
   Ambiguous(names: list<name>)
   NotFound
@@ -92,10 +92,3 @@ fun qname-map/safe-combine(s: string, xs: list<(name,a)>, ys: list<(name,a)>): <
   if xs.any(fn(x) ys.any(fn(y) y.fst == x.fst)) then
     fail("common/name-collections " ++ s ++ ": overlapping names: " ++ xs.map(fn((x, _)) x).list/show ++ ys.map(fn((y,_)) y).list/show)
   xs ++ ys
-
-fun test-name-collections()
-  group("Name collections")
-    test("Qualified Name Map")
-      val qname1 = "hello/world".read-qualified-name
-      expect(Found((qname1, 0))) fn()
-        single(qname1, 0).lookup("".new-name, "world".new-name)
