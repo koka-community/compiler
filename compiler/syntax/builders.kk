@@ -17,7 +17,7 @@ import compiler/common/name-prim
 import compiler/common/parse // not actually parsing, but need it for types
 import compiler/syntax/syntax
 import compiler/syntax/promote
-// Updated to commit #a2ccc2 (of Parse.hs)
+// Updated to commit #752748d (of Parse.hs)
 
 // Effect definitions
 // 
@@ -126,7 +126,6 @@ pub fun gen-parameter-args(tp: userType)
     TpQuan(QSome) -> parse-error("external types cannot contain unspecified ('_') types", tp.range)
     TpQuan(QExists) -> parse-error("external types cannot contain existential types", tp.range)
     TpQuan(_, _, t) -> t.gen-parameter-args
-    TpQual(_, t) -> t.gen-parameter-args
     TpParens(t) -> t.gen-parameter-args
     TpAnn(t, _) -> t.gen-parameter-args
     TpFun(pars) -> pars.gen-fun-parameter-args

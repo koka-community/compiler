@@ -5,7 +5,7 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
-// Updated as of 3/15/25 Commit: 69fe3ab
+// Updated as of 7/12/25 Commit: b0822c5
 
 import compiler/common/color-scheme
 import compiler/common/range
@@ -114,14 +114,13 @@ pub fun name/cmp(n1: name, n2: name): order
     lg -> lg
 
 // Effects compare by name first, then by module name for efficiency at runtime
+// Labels are name@module, so if a name looks like name-x@module and name@module, we need to compare @ and - (which is what the runtime does)
 fun label-name/cmp(n1: name, n2: name): order
-  match n1.hashStem.int/cmp(n2.hashStem)
-    Eq -> match n1.nameStem.cmp-lower(n2.nameStem)
-      Eq -> match n1.hashLocalQual.int/cmp(n2.hashLocalQual)
-        Eq -> match n1.nameLocalQual.cmp-lower(n2.nameLocalQual)
-          Eq -> match n1.hashModule.int/cmp(n2.hashModule)
-            Eq -> n1.nameModule.cmp-lower(n2.nameModule)
-            lg -> lg
+  match (n1.nameStem ++ "@").cmp-lower(n2.nameStem ++ "@")
+    Eq -> match n1.hashLocalQual.int/cmp(n2.hashLocalQual)
+      Eq -> match n1.nameLocalQual.cmp-lower(n2.nameLocalQual)
+        Eq -> match n1.hashModule.int/cmp(n2.hashModule)
+          Eq -> n1.nameModule.cmp-lower(n2.nameModule)
           lg -> lg
         lg -> lg
       lg -> lg

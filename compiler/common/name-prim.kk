@@ -10,7 +10,7 @@ import compiler/common/name
 import compiler/common/syntax
 import compiler/common/failure
 import std/core/unsafe
-// Updated as of 3/15/25: Commit #73451ee
+// Updated as of 7/12/25: Commit #752748d
 
 //---------------------------------
 // Special
@@ -84,6 +84,7 @@ val nameLazyIsWhnf = "datatype-is-whnf".core-lazy-name
 val nameLazyPtrIsWhnf = "datatype-ptr-is-whnf".core-lazy-name
 val nameDataTypePtrIsUnique = "datatype-ptr-is-unique".core-lazy-name
 val nameDataTypePtrIsThreadShared = "datatype-ptr-is-thread-shared".core-lazy-name
+val nameLazyIndirectCompress = "indirect-compress".core-lazy-name
 
 //---------------------------------
 // std/core/vector
@@ -219,6 +220,11 @@ val nameLocalSet    = "local-set".core-types-name
 val nameLocalGet    = "local-get".core-types-name
 val nameDeref       = try({qualify-locally("ref".new-module-name, "!".core-types-name)}).default("error".new-name)
 val nameByref       = "@byref".core-types-name
+
+val nameTypeHeapDiv = "hdiv".core-types-name
+val nameEvHeapDiv   = "@Hdiv".core-types-name
+val nameEvHeapNoDiv = "@Hnodiv".core-types-name
+val nameHeapDiv     = "hdiv".new-name
 
 val namePredHeapDiv = "hdiv".core-types-name
 val namePredEffDiv  = "ediv".core-types-name
@@ -384,7 +390,6 @@ fun is-primitive-module(n: name): bool
 val nameKindStar    = "V".new-name
 val nameKindLabel   = "X".new-name
 val nameKindFun = "->".new-name
-val nameKindPred    = "P".new-name
 val nameKindEffect  = "E".new-name
 val nameKindHeap    = "H".new-name
 val nameKindScope   = "S".new-name

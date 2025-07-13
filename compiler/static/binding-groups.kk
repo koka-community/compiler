@@ -6,6 +6,7 @@ import compiler/syntax/syntax
 import compiler/lib/scc
 import std/data/linearset
 import std/data/linearmap
+// Updated 7/12/25; Commit #752748d
 
 effect val modname: name
 // Program
@@ -45,7 +46,6 @@ fun list/free-types(l: list<t>, ?free-types: (t) -> <pure|e> nameSet): <pure|e> 
 fun ktp/free-types(tp: userType): <pure|e> nameSet
   match tp
     TpQuan(_, _, t) -> t.free-types
-    TpQual(preds, t) -> Cons(t, preds).free-types
     TpFun(args, eff, t) -> args.map(snd).free-types + eff.free-types + t.free-types
     TpApp(t, args) -> Cons(t, args).free-types
     TpVar -> names/empty
@@ -128,10 +128,10 @@ fun mbexpr/dependencies(mex: maybe<expr<t>>): <pure,modname> (maybe<expr<t>>, na
 
 fun expr/dependencies(ex: expr<t>): <pure,modname> (expr<t>, nameSet)
   match ex
-    Lam(binders, body, rng) ->
+    Lam(binders, body, tl, rng) ->
       val (depBody, fv1) = body.dependencies
       val (binders', fv2) = binders.dependencies(fv1)
-      (Lam(binders', depBody, rng), fv2)
+      (Lam(binders', depBody, tl, rng), fv2)
     Bind(def, body, rng) ->
       val (depDef, fv1) = def.fv/dependencies
       val (depBody, fv2) = body.dependencies

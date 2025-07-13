@@ -5,7 +5,7 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //---------------------------------------------------------------------------
-// Updated as of 03/15/25: Commit a6fd2f2
+// Updated as of 07/12/25: Commit 752748d
 
 import std/num/float64
 import compiler/common/range
@@ -328,7 +328,6 @@ fun uquant/show(u: userQuantifier): string
 // Higher ranked types
 type kUserType<k>
   TpQuan(q: userQuantifier, b: typeBinder<k>, kind: kUserType<k>, range: range)
-  TpQual(l: list<kUserType<k>>, kind: kUserType<k>)
   TpFun(a: list<(name, kUserType<k>)>, b: kUserType<k>, c: kUserType<k>, range: range)
   TpApp(a: kUserType<k>, b: list<kUserType<k>>, range: range)
   TpVar(name: name, range: range)
@@ -341,7 +340,6 @@ alias userType = kUserType<userKind>
 fun ut/show(u: userType): div string
   match u
     TpQuan(q, b, kind, range) -> "TpQuan " ++ q.show ++ " " ++ b.show ++ " " ++ kind.show ++ " " ++ range.show
-    TpQual(l, kind) -> "TpQual " ++ l.list/show ++ " " ++ kind.show
     TpFun(a, b, c, range) -> "TpFun " ++ a.list/show(?show=fn((n, ut)) n.name/name/show ++ ":" ++ ut.show) ++ " " ++ b.show ++ " " ++ c.show ++ " " ++ range.show
     TpApp(a, b, range) -> "TpApp " ++ a.show ++ " " ++ b.list/show ++ " " ++ range.show
     TpVar(n, range) -> "TpVar " ++ n.name/name/show ++ " " ++ range.show
@@ -369,7 +367,6 @@ fun uk/show(u: userKind): string
 fun kut/range(tp: kUserType<k>, ?range: (k) -> range): range
   match tp
     TpQuan(range=r) -> r
-    TpQual(preds, tp) -> Range(preds.head.default(tp).pretend-decreasing.range.start, tp.range.end, False)
     TpFun(range=r) -> r
     TpApp(range=r) -> r
     TpVar(range=r) -> r
@@ -399,7 +396,6 @@ fun list/free-type-vars(l: list<a>, ?free-type-vars: (a) -> div nameSet): div na
 fun kut/free-type-vars(tp: kUserType<k>): div nameSet
   match tp
     TpQuan(_, TypeBinder(name), tp, _) -> tp.free-type-vars - name
-    TpQual(preds, tp) -> free-type-vars(Cons(tp, preds))
     TpFun(args, eff, tp) -> free-type-vars(Cons(tp,Cons(eff,args.map(snd))))
     TpApp(tp, args) -> tp.free-type-vars + args.free-type-vars
     TpVar(name) -> LinearSet([name])

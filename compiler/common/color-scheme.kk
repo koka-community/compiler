@@ -5,7 +5,7 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //---------------------------------------------------------------------------
-// Updated as of 7/23/24: Commit b603946
+// Updated as of 7/12/25: Commit 0c7d513
 
 import compiler/lib/printer
 import std/core/undiv
@@ -27,31 +27,31 @@ fun color-scheme-default(f)
     val colors = ColorScheme()
 
 struct colorScheme
-  colorInterpreter: color = DarkRed
+  colorInterpreter: color = DarkGreen
   colorType: color = DarkCyan
   colorParameter: color = DarkGray
   colorKind: color = ColorDefault
-  colorMarker: color = colorInterpreter
+  colorMarker: color = Red
   colorError: color = Red
-  colorWarning: color = colorError
+  colorWarning: color = DarkYellow
   colorSource: color = ColorDefault
-  colorCommand: color = Red
+  colorCommand: color = Green
   colorKeyword: color = DarkYellow
   colorEffect: color = colorType
-  colorRange: color = colorInterpreter
+  colorRange: color = DarkCyan
   colorSep: color = ColorDefault
   // syntax coloring
   colorComment: color = DarkGreen
   colorReserved: color = DarkYellow
   colorReservedOp: color = ColorDefault
   colorSpecial: color = ColorDefault
-  colorString: color = DarkRed
+  colorString: color = Cyan
   colorNumber: color = ColorDefault 
   colorModule: color = DarkCyan
-  colorCons: color = DarkGreen
+  colorCons: color = Yellow
   colorTypeCon: color = colorType
   colorTypeVar: color = colorType
-  colorTypeKeyword: color = Cyan
+  colorTypeKeyword: color = Blue
   colorTypeKeywordOp: color = colorType
   colorTypeSpecial: color = colorType
   colorTypeParam: color = colorParameter
@@ -69,18 +69,23 @@ fun cs/(==)(c1: colorScheme, c2: colorScheme): bool
   && c1.colorTypeSpecial == c2.colorTypeSpecial && c1.colorTypeParam == c2.colorTypeParam 
   && c1.colorNameQual == c2.colorNameQual && c1.colorImplicitParameter == c2.colorImplicitParameter && c1.colorImplicitExpr == c2.colorImplicitExpr
 
+val dark-color-scheme = ColorScheme()
 val light-color-scheme = ColorScheme(
   colorNumber = DarkGray,
-  colorSource = DarkGray,
+  colorSource = ColorDefault,
   colorCommand = Black,
-  colorInterpreter = DarkRed,
-  colorError = DarkRed,
-  colorWarning = DarkRed,
+  colorSep = ColorDefault,
+  colorSpecial = ColorDefault,
+//  colorInterpreter = Black,
+  colorError = Red,
+  colorWarning = DarkYellow,
   colorNameQual = DarkGray,
   colorRange = DarkRed,
   colorMarker = DarkRed,
-  colorString = Red
+  colorString = DarkRed
 )
+
+val color-themes = [("dark", dark-color-scheme), ("light", light-color-scheme)]
 
 // Replace "default" with an explicit color value
 fun color/default(c: color, clr: color): color
@@ -147,7 +152,10 @@ fun read-color-flag(scheme: colorScheme, s: string)
   val (name, xs) = s.list.span(fn(c) c != '=' && c != ':')
   match xs
     Cons(c, clr) | c == '=' || c == ':' -> scheme.update(name.string, clr.string)
-    _ -> scheme.update(name.string, "default")
+    _ -> 
+      match color-themes.find(fn((n,_)) n == name.string)
+        Just((_, theme)) -> theme
+        _ -> scheme.update(name.string, "default")
 
 fun update(scheme: colorScheme, name: string, color: string)
   val clr = match color

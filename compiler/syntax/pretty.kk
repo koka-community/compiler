@@ -3,6 +3,8 @@ import compiler/lib/pprint
 import compiler/common/name
 import compiler/common/syntax
 import compiler/common/range
+// Updated 7/12/25, Commit: #752748d, TODO: Check that it actually matches now
+
 
 fun program/pretty(Program(_, n, _, typeDefs, defs, imports, externals, fixDefs, _):userProgram): div doc
   vcat(Cons("module".text |+| n.pretty, imports.map(fn(i) i.pretty) ++ fixDefs.map(fn(fd) fd.pretty) ++ externals.map(fn(e) e.pretty) ++ typeDefs.map(fn(td) td.pretty) ++ defs.map(fn(d) d.pretty)))
@@ -183,7 +185,6 @@ fun uquant/pretty(u: userQuantifier): doc
 fun ut/pretty(u: userType): div doc
   match u
     TpQuan(q, b, kind) -> q.pretty |+| b.pretty |+| kind.pretty 
-    TpQual(l, kind) -> l.map(pretty).vcat |+| kind.pretty
     TpFun(a, b, c) -> a.map(fn((n, ut)) n.pretty |.| ":".text |.| ut.pretty).tupled |+| b.pretty |+| c.pretty 
     TpApp(a, b) -> a.pretty |.| tupled(b.map(pretty))
     TpVar(n) -> n.pretty 

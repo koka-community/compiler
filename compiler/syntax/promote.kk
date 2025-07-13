@@ -17,7 +17,7 @@
 //   (Or should that be: /
 //   Change unbound unparenthesized variables that only occur in label positions to
 //   label constants./)
-// Updated as of 03/15/25: Commit a6fd2f2 not including extend / makeEffectExtends / extract which are not used nor exported
+// Updated as of 07/12/25: Commit 752748d not including extend / makeEffectExtends / extract which are not used nor exported
 
 import compiler/common/name
 import compiler/common/range
@@ -106,7 +106,7 @@ fun promote-ex(some-pars: list<userTypeBinder>, forall-pars: list<userTypeBinder
   val full-tp =
     quantify(QSome, some-pars ++ (names ++ imp-some).map(to-type-binder),
     quantify(QForall, forall-pars ++ imp-forall.map(to-type-binder), 
-    qualify(fun-tp, preds)))
+    fun-tp))
   Ann(body, full-tp, body.range.combine(full-tp.range))
 
 fun insert-some((i, (name, either-tp)): (int, (name, either<userType, range>)))
@@ -118,9 +118,6 @@ fun insert-some((i, (name, either-tp)): (int, (name, either<userType, range>)))
 
 fun is-some-var(n: name)
   n.is-wildcard
-
-fun qualify(tp: userType, preds: list<userType>): userType
-  TpQual(preds, tp)
 
 fun quantify(q: userQuantifier, tbinders: list<userTypeBinder>, tp: userType): userType
   tbinders.foldr(tp, fn(tb, t) TpQuan(q, tb, t, combine(tb.range, t.range)))
@@ -136,7 +133,6 @@ fun name/promote-tp-vars(x: (name, either<userType, range>), vars: nameSet): div
 fun ut/promote-tp-vars(tp: userType, vars: nameSet): div userType
   match tp
     TpQuan(quant, tb, t, rng) -> TpQuan(quant, tb, t.promote-tp-vars(vars - tb.name), rng)
-    TpQual(preds, t) -> TpQual(preds.map(fn(p) p.promote-tp-vars(vars)), t.promote-tp-vars(vars))
     TpFun(args, eff, t, rng) -> TpFun(args.map(fn((name, t1)) (name, t1.promote-tp-vars(vars))), eff.promote-tp-vars(vars), t.promote-tp-vars(vars), rng)
     TpApp(t, args, rng) -> TpApp(t.promote-tp-vars(vars), args.map(fn(t') t'.promote-tp-vars(vars)), rng)
     TpVar(name, rng) -> TpVar(name, rng)

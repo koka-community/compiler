@@ -312,7 +312,7 @@ fun pp-gamma-internal(g: gamma, showHidden: bool)
   fun nice(scheme: ktype)
     align(nice-types([scheme]).head.unjust)
   vcat(nameSchemes.filter(fn((n, _)) showHidden || !n.is-hidden-name).map(fn((n, s))
-    fill(n.show-plain.text |.| type-colon().color(colors.colorSep) |+| align(nice(s)), maxWidth)
+    fill(n.show-plain.text |.| type-colon().color(colors.colorSep) |+| align(nice(s)), maxWidth) // TODO: Tim new color?
   ))
 
 fun pp-gamma(g: gamma)

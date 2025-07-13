@@ -21,7 +21,7 @@ import compiler/common/name-prim
 import compiler/common/range
 import compiler/common/parse
 
-// Updated to commit #a22ccc2 (of Parse.hs)
+// Updated to commit #752748d (of Parse.hs)
 
 pub fun parse-type-annot(): parse userType
   parse-keyword(":")
@@ -72,13 +72,7 @@ fun parse-type-qualifier(): parse userType
   parse-qualifier(parse-arrow-type())
 
 fun parse-qualifier(tp: userType): parse userType
-  parse-choices("", [
-    {
-      parse-keyword("with")
-      TpQual(parens({parse-many1("", parse-predicate)}), tp)
-    },
-    {tp}
-  ])
+  tp
 
 pub fun parse-predicate()
   parse-choices("predicate", [{parse-type-app(parse-type-id())}])
@@ -255,7 +249,7 @@ pub fun parse-kind(): parse userKind
   ])
 
 fun parse-kind-atom(): parse userKind
-  parse-choices("kind constant (V,E,H,S,X,HX, or P)", [
+  parse-choices("kind constant (V,E,H,S,X,or HX)", [
    {
     val (k, rng) = parens-ranged(parse-kind)
     KindParens(k, rng)
@@ -265,7 +259,6 @@ fun parse-kind-atom(): parse userKind
    { KindCon(nameKindEffect, parse-special-con-id("E")) },
    { KindCon(nameKindHeap, parse-special-con-id("H")) },
    { KindCon(nameKindScope, parse-special-con-id("S")) },
-   { KindCon(nameKindPred, parse-special-con-id("P")) },
    { make-kind-handled(parse-special-con-id("HX")) }
   ])
 

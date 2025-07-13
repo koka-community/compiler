@@ -23,7 +23,7 @@ import compiler/common/range
 import compiler/common/parse
 
 
-// Updated to commit #a22ccc2 (of Parse.hs)
+// Updated to commit #752748d (of Parse.hs) 7/12/25
 
 pub fun parse-program-from-file(fname: path, allow-at: bool, semiInsert: bool = True): io userProgram
   val r = read-text-file(fname)
@@ -606,7 +606,7 @@ fun parse-fun-def(allowBorrow: bool, allowImplicits: bool)
   val tpars = parse-type-params()
   val (pars, pinfos, transform, rng) = parse-parameters(allowBorrow, True, allowImplicits)
   val resultTp = parse-annot-result()
-  val preds = parse-maybe("predicates", {parse-keyword("with"); parens({parse-many1("", parse-predicate)})}).default([])
+  val preds = []
   FunDef(tpars, pars, pinfos, rng, resultTp, preds, transform)
 
 fun parse-annot-result(): parse maybe<(maybe<userType>, userType)>
@@ -665,7 +665,7 @@ fun parse-parameter-implicit()
       parse-error("unexpected implicit parameter name", rng)
     else (unpack, qname, rng)
   val tp = parse-maybe-nb("", parse-type-annot)
-  val unpackExpr = if unpack then Just(Parens(Var(qname.unqualify-full, False, rng), nil, "", rng)) // Encode . as a default value assuming it is a type name
+  val unpackExpr = if unpack then Just(Parens(Var(qname.unqualify-full, False, rng), nil, "", rng)) // Encode .? as a default value assuming it is a type name
                    else Nothing
   (ValueBinder(qname, tp, unpackExpr, combine([rng, tp.map(fn(t) t.range).default(rng)]), rng), id)
 
