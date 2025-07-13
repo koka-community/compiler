@@ -5,7 +5,7 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
-// Updated as of 7/12/25 Commit: b0822c5
+// Updated as of 7/14/25 Commit: 806d168
 
 import compiler/common/color-scheme
 import compiler/common/range
@@ -293,6 +293,9 @@ fun is-wildcard(n: name): bool
     Just(('_', _)) -> True
     Just(('@', r)) -> r.next.map(fn((c, _)) c == '_').default(False)
     _ -> False
+
+fun name/is-eta-hole(n: name): bool
+  is-wildcard(n)
 
 fun is-hidden-name(n: name): bool
   n.nameStem.starts-with("@").bool

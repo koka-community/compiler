@@ -48,21 +48,21 @@ fun make-if-expr(p: expr, t: expr, f: expr): expr
 
 fun make-vector(tp: ktype, exprs: list<expr>): expr
   val a = TypeVar(0, kindStar, Bound)
-  val vectorFromList = Var(TName(nameVector, TForAll([a], [], TFun([(name/nil, TApp(typeList, [TVar(a)]))], typeTotal, TApp(typeVector, [TVar(a)])))), InfoArity(1, 1))
+  val vectorFromList = Var(TName(nameVector, TForAll([a], TFun([(name/nil, TApp(typeList, [TVar(a)]))], typeTotal, TApp(typeVector, [TVar(a)])))), InfoArity(1, 1))
   App(TypeApp(vectorFromList, [tp]), [make-list(tp, exprs)])
 
 fun wrap-optional(tp: ktype, ex: expr): expr
   val a = TypeVar(0, kindStar, Bound)
-  val tpOptional = TForAll([a], [], TFun([(name/nil, TVar(a))], typeTotal, make-optional(TVar(a))))
+  val tpOptional = TForAll([a], TFun([(name/nil, TVar(a))], typeTotal, make-optional(TVar(a))))
   val conInfo = ConAsJust(nameTpOptional, DataAsMaybe, value-repr-scan(1), nameOptionalNone, 0)
   App(TypeApp(Con(TName(nameOptional, tpOptional), conInfo), [tp]), [ex])
 
 fun make-list(tp: ktype, exprs: list<expr>): expr
   val a = TypeVar(0, kindStar, Bound)
-  val nilTp = TForAll([a], [], TApp(typeList, [TVar(a)]))
+  val nilTp = TForAll([a], TApp(typeList, [TVar(a)]))
   val nilCon = Con(TName(nil, nilTp), ConSingleton(nameTpList, DataAsList, zero, 0))
   val nil = TypeApp(nilCon, [tp])
-  val consTp = TForAll([a], [], TFun([(name/nil, TVar(a)), (name/nil, TApp(typeList, [TVar(a)]))], typeTotal, TApp(typeList, [TVar(a)])))
+  val consTp = TForAll([a], TFun([(name/nil, TVar(a)), (name/nil, TApp(typeList, [TVar(a)]))], typeTotal, TApp(typeList, [TVar(a)])))
   val consCon = Con(TName(nameCons, consTp), ConAsCons(nameTpList, DataAsList, value-repr-scan(2), name/nil, CtxNone, 2))
   fun cons(e, xs)
     App(TypeApp(consCon, [tp]), [e, xs])
@@ -694,12 +694,12 @@ fun def/is-total(d: def): div bool
 fun has-total-effect(tp: ktype): bool
   match tp.split-fun-scheme
     Nothing -> False
-    Just((_, _, _, eff, _)) -> eff.is-type-total
+    Just((_, _, eff, _)) -> eff.is-type-total
 
 fun isMonType(tp: ktype): pure bool
   if tp.kind == kindEffect then tp.is-mon-effect
   else match tp.expand-syn
-    TForAll(_, _, t) -> t.isMonType
+    TForAll(_, t) -> t.isMonType
     TFun(_, eff, _) -> eff.is-mon-effect
     _ -> False
 
@@ -876,7 +876,7 @@ fun open-effect(effFrom: keffect, effTo: keffect, tpFrom: ktype, tpTo: ktype, ex
     val b = TypeVar(-2, kindStar, Bound)
     val e1 = TypeVar(-3, kindEffect, Bound)
     val e2 = TypeVar(-4, kindEffect, Bound)
-    val tpOpen = TForAll([e1, e2, a, b], [], TFun([(new-name("x"), tpFrom)], typeTotal, tpTo))
+    val tpOpen = TForAll([e1, e2, a, b], TFun([(new-name("x"), tpFrom)], typeTotal, tpTo))
     val varOpen = Var(TName(nameEffectOpen, tpOpen), InfoExternal([(DefaultTarget, "#1")]))
     App(TypeApp(varOpen, [effFrom, effTo, tpFrom, tpTo]), [expr])
 
@@ -906,12 +906,12 @@ fun expr/type-of(expr: expr): pure ktype
     Var(tn) -> type-of(tn)
     Con(tn) -> type-of(tn)
     App(f, args) -> match f.type-of.split-fun-scheme
-      Just((_, _, targs, eff, tres)) 
+      Just((_, targs, eff, tres)) 
         | args.length == targs.length || targs.length == 0 -> tres
         | args.length > targs.length -> type-of(App(Var(TName("tmp".new-name, tres), InfoNone), args.drop(targs.length)))
         | True -> TFun(targs.drop(args.length), eff, tres)
       _ -> throw("core/core type-of(App..) Expected function TODO: Show real type")
-    TypeLam(xs, e) -> TForAll(xs, [], e.type-of)
+    TypeLam(xs, e) -> TForAll(xs, e.type-of)
     TypeApp(e, []) -> e.type-of
     // TypeApp(expr, tps) ->
     //   val (tvs, tp1) = expr.type-of.split-tforall
@@ -954,7 +954,7 @@ fun split-fun(tp: ktype): <exn> (list<(name, ktype)>, ktype)
 
 fun split-tforall(tp: ktype): <exn> (list<typeVar>, ktype)
   match tp.expand-syn
-    TForAll(tvs, _, t) -> (tvs, t)
+    TForAll(tvs, t) -> (tvs, t)
     _ -> throw("core/core split-tforall: expected forall type")
 
 alias deps = linearSet<name>
@@ -966,53 +966,53 @@ fun name/dep(n: name): deps
   if n.is-qualified then LinearSet([n.qualifier]) else LinearSet([])
 
 fun idefscore/deps(l: list<inlineDef>, c: core): div deps
-  unions(l.map(fn(i) i.expr.dep)) + c.deps
+  deps/unions(l.map(fn(i) i.expr.dep)) + c.deps
 
 fun idefs/deps(l: list<inlineDef>): div deps
-  unions(l.map(fn(i) i.expr.dep))
+  deps/unions(l.map(fn(i) i.expr.dep))
 
 fun core/deps(c: core): div deps
-  val x0 : deps = unions(c.defs.flatten.map(dep)) + unions(c.typeDefs.flatten.map(dep))
+  val x0 : deps = deps/unions(c.defs.flatten.map(dep)) + deps/unions(c.typeDefs.flatten.map(dep))
   val x1 : deps = LinearSet(c.imports.filter(fn(i) i.visibility.is-public).map(importName))
   x0 + x1 - c.coreName
 
 fun td/dep(td: typeDef): div deps
   match td
     Synonym(info) -> info.t.dep
-    Data(info) -> unions(info.constrs.map(fn(c) c.typeScheme.dep))
+    Data(info) -> deps/unions(info.constrs.map(fn(c) c.typeScheme.dep))
 
 fun ktype/dep(t: ktype): div deps
   match t
-    TForAll(_, _, rho) -> rho.dep
-    TFun(args, eff, res) -> unions(Cons(eff.dep, args.map(fn((_, t')) t'.dep))) + res.dep
+    TForAll(_, rho) -> rho.dep
+    TFun(args, eff, res) -> deps/unions(Cons(eff.dep, args.map(fn((_, t')) t'.dep))) + res.dep
     TCon(tc) -> tc.name.dep
     TVar -> LinearSet([])
-    TApp(tp, tps) -> tp.dep + unions(tps.map(dep))
-    TSyn(_, args, tp) -> tp.dep + unions(args.map(dep))
+    TApp(tp, tps) -> tp.dep + deps/unions(tps.map(dep))
+    TSyn(_, args, tp) -> tp.dep + deps/unions(args.map(dep))
 
 fun def/dep(d: def): div deps
-  unions([d.ktype.dep, d.defExpr.dep])
+  deps/unions([d.ktype.dep, d.defExpr.dep])
 
 fun expr/dep(e: expr): div deps
   match e
     Var(tn) -> tn.dep
     Lam(_, eff, body) -> eff.dep + body.dep
-    App(e, args) -> unions(Cons(e.dep, args.map(dep)))
+    App(e, args) -> deps/unions(Cons(e.dep, args.map(dep)))
     TypeLam(_, body) -> body.dep
-    TypeApp(e, tps) -> e.dep + unions(tps.map(dep))
+    TypeApp(e, tps) -> e.dep + deps/unions(tps.map(dep))
     Con(tn) -> tn.dep
     ELit(_) -> LinearSet([])
-    Let(defs, body) -> unions(Cons(body.dep, defs.flatten.map(dep)))
-    Case(exprs, branches) -> unions(exprs.map(dep) ++ branches.map(dep))
+    Let(defs, body) -> deps/unions(Cons(body.dep, defs.flatten.map(dep)))
+    Case(exprs, branches) -> deps/unions(exprs.map(dep) ++ branches.map(dep))
 
 fun branch/dep(b: branch): div deps
-  unions(b.patterns.map(dep)) + unions(b.guards.map(dep))
+  deps/unions(b.patterns.map(dep)) + deps/unions(b.guards.map(dep))
 
 fun guard/dep(g: guard): div deps
   g.body.dep
 
 fun pattern/dep(p: pattern): div deps
   match p
-    PatCon(tn, pats) -> tn.dep + unions(pats.map(dep))
+    PatCon(tn, pats) -> tn.dep + deps/unions(pats.map(dep))
     PatVar(_, p) -> p.dep
     _ -> LinearSet([])

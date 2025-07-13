@@ -9,6 +9,7 @@
 module compiler/syntax/builders
 import std/os/path
 import std/os/file
+import std/core/undiv
 import std/data/sort
 import compiler/common/syntax
 import compiler/common/name
@@ -17,7 +18,7 @@ import compiler/common/name-prim
 import compiler/common/parse // not actually parsing, but need it for types
 import compiler/syntax/syntax
 import compiler/syntax/promote
-// Updated to commit #752748d (of Parse.hs)
+// Updated to commit #ddac17b (of Parse.hs)
 
 // Effect definitions
 // 
@@ -486,6 +487,31 @@ pub fun tuple(tps: list<(name, userType)>, r: range): userType
   match tps
     Cons(tp, Nil) -> tp.snd
     _ -> TpApp(TpCon(name-tp-tuple(tps.length), r), tps.map(snd), r)
+
+pub fun eta-expand(e: userExpr): userExpr
+  val (e', binders) = e.eta-transform
+  if binders.is-empty then e'
+  else Lam(binders, e', False, e.range)
+
+fun eta-transform(ue : userExpr): (userExpr, list<valueBinder<maybe<userType>, maybe<userExpr>>>)
+  match ue
+    Var(name, isOp, rng) | name.is-eta-hole -> 
+      val name' = "eta".unique-range-hidden-name(rng)
+      (Var(name', isOp, rng), [ValueBinder(name', Nothing, Nothing, range/null, range/null)])
+    Ann(e, tp, r) ->
+      val (e', binders) = e.eta-transform
+      (Ann(e', tp, r), binders)
+    Parens(e, nm, pre, r) ->
+      val (p', binders) = e.eta-transform
+      (Parens(p', nm, pre, r), binders)
+    App(f, args, r) ->
+      val (f', binders) = f.eta-transform
+      val (args', binders') = args.map(fn((n, e)){
+          val (e', bs) = e.pretend-decreasing.eta-transform
+          ((n, e'), bs)
+        }).unzip
+      (App(f', args', r), binders ++ binders'.concat)
+    _ -> (ue, [])
 
 fun test()
   "Helpers!".println

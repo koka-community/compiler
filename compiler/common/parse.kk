@@ -450,14 +450,12 @@ inline fun parse-qualified-constructor(): <parse> (name, range)
 inline fun parse-qualified-operator(): <parse> (name, range)
   parse-qualified-op()
 
-fun parse-fun-id(toplevel: bool): <parse> (name, range)
-  parse-locally-qualified-identifier(toplevel) // [] doesn't work with local qualification
+fun parse-fun-id(): <parse> (name, range)
+  parse-locally-qualified-identifier() // [] doesn't work with local qualification
 
-fun parse-locally-qualified-identifier(toplevel: bool): parse (name, range)
-  if toplevel then
-    val (name, rng) = parse-qualified-identifier()
-    (name.requalify-locally, rng)
-  else parse-identifier()
+fun parse-locally-qualified-identifier(): parse (name, range)
+  val (name, rng) = parse-qualified-identifier()
+  (name.requalify-locally, rng)
 
 fun parse-var-id(): <parse> (name, range)
   ensure-unqualified("variable id", parse-qualified-var-id)

@@ -92,7 +92,7 @@ fun skolemize-ex(tp: ktype, r: range)
 
 // General instantiation for skolemize and instantiate
 fun instantiate-exfl(tp: ktype, fl: flavour, r: range): <uniquePhase, comp-flags, pure> (list<typeVar>, list<evidence>, ktype, expr -> e expr)
-  match tp.split-pred-type
+  match tp.split-type-scheme
     ([], [], rho) -> ([], [], rho, id)
     (vars, preds, rho) ->
       val (tvars, sub) = fresh-subx(TVar, fl, vars, rho.all-tv())

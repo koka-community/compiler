@@ -13,6 +13,7 @@ import compiler/type/typevar
 import compiler/type/pretty
 import compiler/type/assumption
 import std/data/linearmap
+// Updated to #cf4024e on 7/13/25
 
 pub infixr 5 (|->)
 // inf gamma
@@ -40,6 +41,9 @@ fun ni/combine(nis: list<nameInfo>, nis2: list<nameInfo>): exn list<nameInfo>
     [] -> nis2
     Cons(ni, nis) -> combine(nis, Cons(ni, nis2.filter(fn(ni2) ni.cname != ni2.cname)))
 
+fun inf-gamma/delete(ig: infGamma, n : name): infGamma
+  ig.remove(n)
+
 // TODO: Update
 // note: qualified names can get inserted into gamma due to recursive definitions, or
 // during inference by inserting fully qualified expressions (in resolveApp-name)
@@ -59,7 +63,7 @@ fun inf-gamma-eff/extend-tp(name: name, cname: name, tp: ktype, doc: string)
 //   ig.extend-x(name, cname, tp, range/range/null, False, doc)
 
 fun inf-gamma-eff/extend-x(name: name, cname: name, tp: ktype, rng: range, isVar: bool, doc: string)
-  gamma-extend(name, InfoVal(Public, cname, tp, rng, isVar, doc))
+  gamma-extend(name, InfoVal(Public, cname, tp, rng, isVar, False, doc))
 // fun inf-gamma/extend-x(ig: gamma, name: name, cname: name, tp: ktype, rng: range, isVar: bool, doc: string)
 //   ig.set(name, [InfoVal(Public, cname, tp, rng, isVar, doc)])
 

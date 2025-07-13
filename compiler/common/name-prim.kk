@@ -10,7 +10,7 @@ import compiler/common/name
 import compiler/common/syntax
 import compiler/common/failure
 import std/core/unsafe
-// Updated as of 7/12/25: Commit #752748d
+// Updated as of 7/14/25: Commit #806d168
 
 //---------------------------------
 // Special
@@ -132,6 +132,8 @@ fun cfield-name(n: string): name
 
 val nameTpCCtxx           = "cctx".cfield-name
 val nameTpCCtx            = "ctx".cfield-name
+
+val nameEtaHole           = "_".new-name
 
 val nameCCtxCreate        = "@cctx-create".cfield-name
 val nameCCtxHoleCreate    = "@cctx-hole-create".cfield-name

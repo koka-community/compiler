@@ -136,7 +136,7 @@ val tvs/empty:tvs = LinearSet([])
 fun tv/single(tv: typeVar) 
   [tv]
 
-fun new/tvs(tv: list<typeVar>) 
+fun new/tvs(tv: list<typeVar>): tvs
   LinearSet([]) + tv
 
 fun tvs/common(tvs1: tvs, tvs2: tvs): bool
@@ -161,15 +161,10 @@ fun ofuv(x: a, ?oftv: (a) -> e list<typeVar>): e list<typeVar>
 fun list/free-type-vars(ps: list<a>, ?free-type-vars: (a) -> div tvs): div tvs
   ps.map(free-type-vars).unions
 
-fun pred/free-type-vars(pred: pred): div tvs
-  match pred
-    PredSub(sub, super) -> sub.free-type-vars + super.free-type-vars
-    PredIFace(_, args) -> args.map(free-type-vars).unions
-
 fun ktype/free-type-vars(tp: ktype): div tvs
   match tp
-    TForAll(vars, preds, t) -> 
-      val tv1 :tvs = t.free-type-vars + preds.free-type-vars
+    TForAll(vars, t) -> 
+      val tv1 :tvs = t.free-type-vars
       tv1 - vars
     TFun(args, eff, res) -> 
       val tv1: tvs = args.map(fn(a) a.snd.free-type-vars).unions 
@@ -241,8 +236,8 @@ fun list/bound-type-vars(l: list<a>, ?bound-type-vars: (a) -> div tvs): div tvs
 
 fun ktype/bound-type-vars(tp: ktype): div tvs
   match tp
-    TForAll(vars, preds, t) -> 
-      val tv1: tvs = preds.free-type-vars + t.bound-type-vars
+    TForAll(vars, t) -> 
+      val tv1: tvs = t.bound-type-vars
       tv1 + vars
     TFun(args, eff, res) -> 
       val tv1: tvs = args.map(tuple2/snd).bound-type-vars + res.bound-type-vars 
@@ -264,19 +259,14 @@ fun sub/substitute(sub: sub, Sub(s, tvs2): sub): pure sub
 
 fun ktype/substitute(s: sub, tp: ktype): pure tau
   match tp
-    TForAll(vars, preds, t) ->
+    TForAll(vars, t) ->
       val sub' = s.remove(vars)
-      TForAll(vars, preds.map(fn(p:pred) sub' |-> p), sub' |-> t)
+      TForAll(vars, sub' |-> t)
     TFun(args, eff, res) -> TFun(args.map(fn(a) (a.fst, s |-> a.snd)), s |-> eff, s |-> res)
     TCon -> tp
     TVar(tv) -> s.find(tv)
     TApp(t, args) -> TApp(s |-> t, args.map(fn(t') s |-> t'))
     TSyn(syn, xs, t) -> TSyn(syn, xs, s |-> t)
-
-fun pred/substitute(s: sub, pred: pred): pure pred
-  match pred
-    PredSub(sub, super) -> PredSub(s |-> sub, s |-> super)
-    PredIFace(iface, args) -> PredIFace(iface, args.map(fn(t) s |-> t))
 
 fun tn/substitute(s: sub, tn: tName): pure tName
   match tn

@@ -15,12 +15,12 @@ import std/data/linearmap
 import std/data/linearset
 import std/os/path
 import std/data/sort
-
+// Updated to #752748d on 7/13/25
 pub infixr 5 (|->)
 
 type nameInfo
-  InfoVal(vis: visibility, cname: name, typ: scheme, range: range, isVar: bool, doc: string)
-  InfoFun(vis: visibility, cname: name, typ: scheme, arity: (int, int), fipt: fipT, range: range, doc: string)
+  InfoVal(vis: visibility, cname: name, typ: scheme, scopeDepthX: int, range: range, isVar: bool, allowImplicitMaskX: bool, doc: string)
+  InfoFun(vis: visibility, cname: name, typ: scheme, scopeDepthX: int, arity: (int, int), fipt: fipT, range: range, doc: string)
   InfoCon(vis: visibility, typ: scheme, repr: conRepr, conInfo: conInfo, range: range, doc: string)
   InfoExternal(vis: visibility, cname: name, typ: scheme, format: list<(target, string)>, fipt: fipT, range: range, doc: string)
   InfoImport(vis: visibility, typ: scheme, nameAlias: name, fullName: name, range: range)
@@ -28,12 +28,23 @@ type nameInfo
 fun (==)(ni1: nameInfo, ni2: nameInfo)
   range/(==)(ni1.range, ni2.range)
 
+fun scope-depth(ni: nameInfo): int
+  match ni 
+    InfoVal(scopeDepth = depth) -> depth
+    InfoFun(scopeDepth = depth) -> scopeDepth
+    _ -> 0
+
+fun allow-implicit-mask(ni: nameInfo): bool
+  match ni
+    InfoVal(allowImplicitMask = allow) -> allow
+    _ -> False
+
 fun show(ni: nameInfo): div string
   match ni
-    InfoVal(vis, cname, typ, range, isVar) -> "InfoVal(" ++ show(vis) ++ ", " ++ show(cname) ++ ", " ++ show(typ) ++ ", " ++ show-full-range(range, "".path) ++ ", " ++ show(isVar) ++ ")"
-    InfoFun(vis, cname, typ, arity, fipt, range) -> "InfoFun(" ++ show(vis) ++ ", " ++ show(cname) ++ ", " ++ show(typ) ++ ", " ++ show-tuple(arity, show, show) ++ ", " ++ show(fipt) ++ ", " ++ show-full-range(range, "".path) ++ ")"
-    InfoCon(vis, typ, repr, conInfo, range) -> "InfoCon(" ++ show(vis) ++ ", " ++ show(typ) ++ ", " ++ show(repr) ++ ", " ++ show(conInfo) ++ ", " ++ show-full-range(range, "".path) ++ ")"
-    assumption/InfoExternal(vis, cname, typ, format, fipt, range) -> "InfoExternal(" ++ show(vis) ++ ", " ++ show(cname) ++ ", " ++ show(typ) ++ ", " ++ show-list(format, fn(s) s.show-tuple(show, fn(x) x)) ++ ", " ++ show(fipt) ++ ", " ++ show-full-range(range, "".path) ++ ")"
+    InfoVal(vis, cname, typ, scope, range, isVar, allowImplicitMask, doc) -> "InfoVal(" ++ show(vis) ++ ", " ++ show(cname) ++ ", " ++ show(typ) ++ ", " ++ show(scope) ++ ", " ++ show-full-range(range, "".path) ++ ", " ++ show(isVar) ++ "," ++ show(allowImplicitMask) ++ "," ++  show(doc) ++ ")"
+    InfoFun(vis, cname, typ, scope, arity, fipt, range, doc) -> "InfoFun(" ++ show(vis) ++ ", " ++ show(cname) ++ ", " ++ show(typ) ++ ", " ++ show(scope) ++ ", " ++ show-tuple(arity, show, show) ++ ", " ++ show(fipt) ++ ", " ++ show-full-range(range, "".path) ++ "," ++ show(doc) ++ ")"
+    InfoCon(vis, typ, repr, conInfo, range, doc) -> "InfoCon(" ++ show(vis) ++ ", " ++ show(typ) ++ ", " ++ show(repr) ++ ", " ++ show(conInfo) ++ ", " ++ show-full-range(range, "".path) ++ "," ++ show(doc) ++ ")"
+    assumption/InfoExternal(vis, cname, typ, format, fipt, range, doc) -> "InfoExternal(" ++ show(vis) ++ ", " ++ show(cname) ++ ", " ++ show(typ) ++ ", " ++ show-list(format, fn(s) s.show-tuple(show, fn(x) x)) ++ ", " ++ show(fipt) ++ ", " ++ show-full-range(range, "".path) ++ "," ++ show(doc) ++ ")"
     InfoImport(vis, typ, nameAlias, fullName, range) -> "InfoImport(" ++ show(vis) ++ ", " ++ show(typ) ++ ", " ++ show(nameAlias) ++ ", " ++ show(fullName) ++ ", " ++ show-full-range(range, "".path) ++ ")"
 
 fun info-sort(ni: nameInfo)
@@ -103,7 +114,7 @@ fun core-var-info(info: nameInfo)
 fun core-expr(info: nameInfo, qname: name)
   match info
     InfoVal(_, cname, tp) -> Var(TName(cname, tp), InfoNone)
-    InfoFun(_, cname, tp, (m, n), _) -> Var(TName(cname, tp), InfoArity(m ,n))
+    InfoFun(_, cname, tp, _, (m, n), _) -> Var(TName(cname, tp), InfoArity(m ,n))
     InfoCon(_, tp, repr) -> Con(TName(qname, tp), repr)
     assumption/InfoExternal(_, cname, tp, format) -> Var(TName(cname, tp), compiler/core/core/InfoExternal(format))
 
@@ -250,22 +261,25 @@ fun extract-def-group(d: defGroup, update-vis)
     DefNonRec(v) -> extract-def(v, update-vis)
 
 fun extract-def(d: def, update-vis)
-  qname-map/single(d.def-name, create-name-infoX(update-vis(d.vis), d.def-name, d.sort, d.nameRange, d.ktype, d.doc)) // specials since we cannot call isTopLevel as in coreDefInfo
+  qname-map/single(d.def-name, create-name-infoX(update-vis(d.vis), d.def-name, 0, d.sort, d.nameRange, d.ktype, d.doc)) // specials since we cannot call isTopLevel as in coreDefInfo
 
 fun core-def-info(d: def)
-  (d.def-name, create-name-infoX(d.vis, d.def-name, if d.sort.is-defFun && !d.is-top-level then DefVal else d.sort, d.nameRange, d.ktype, d.doc))
+  (d.def-name, create-name-infoX(d.vis, d.def-name, 0, if d.sort.is-defFun && !d.is-top-level then DefVal else d.sort, False, d.nameRange, d.ktype, d.doc))
 // since we use coreDefInfo also for local definitions, we need to be careful to to use DefFun for
 // things that do not get lifted to toplevel due to free type/variables. test: codegen/rec5
 
-fun create-name-infoX(vis, name, sort, rng, tp, doc)
+fun create-name-info(name, depth, is-val, rng, tp, doc)
+  create-name-infoX(Public, name, depth, if is-val then DefVal else defFun([]), rng, tp, doc)
+
+fun create-name-infoX(vis, name, depth: int, sort, allowImplicitMask, rng, tp, doc)
   match sort
-    DefFun(_, fipT) -> InfoFun(vis, name, tp, tp.arity, fipT, rng, doc)
-    DefVar -> InfoVal(vis, name, tp, rng, True, doc)
-    _ -> InfoVal(vis, name, tp, rng, False, doc)
+    DefFun(_, fipT) -> InfoFun(vis, name, tp, depth, tp.arity, fipT, rng, doc)
+    DefVar -> InfoVal(vis, name, tp, depth, rng, True, doc)
+    _ -> InfoVal(vis, name, tp, depth, rng, False, allowImplicitMask, doc)
 
 fun arity(tp: ktype): <comp-flags, exn> (int, int)
   match tp.expand-syn
-    TForAll(tvars, _, t) ->
+    TForAll(tvars, t) ->
       match t.expand-syn
         TFun(pars) -> (tvars.length, pars.length)
         _ -> (tvars.length, -1)

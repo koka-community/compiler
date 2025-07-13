@@ -23,7 +23,7 @@ import compiler/common/range
 import compiler/common/parse
 
 
-// Updated to commit #752748d (of Parse.hs) 7/12/25
+// Updated to commit #ddac17b (of Parse.hs) 7/12/25
 
 pub fun parse-program-from-file(fname: path, allow-at: bool, semiInsert: bool = True): io userProgram
   val r = read-text-file(fname)
@@ -199,7 +199,7 @@ fun parse-extern-decl(dvis: visibility): <parse,fsys> list<topDef>
     val (fip, frng) = parse-tail-fip()
     val (erng, doc) = parse-doc-keyword("extern",[])
     val krng = combine([vrng, frng, erng])
-    val (name, nameRng) = parse-fun-id(True) // Top level
+    val (name, nameRng) = parse-fun-id() // Top level
     val (pars, pinfos, args, tp, annotate) = parse-choices("extern type", [
       {
         parse-keyword(":")
@@ -560,7 +560,7 @@ fun parse-pure-decl(toplevel: bool, dvis: visibility): parse userDef
   parse-choices("", [
     { 
       val (rng, doc) = parse-doc-keyword("val"); 
-      parse-val-decl(toplevel, vrng.combine(rng), doc, vis, inl)
+      parse-val-decl(vrng.combine(rng), doc, vis, inl)
     },
     { 
       val (f,frng) = parse-tail-fip(); 
@@ -581,13 +581,13 @@ fun parse-function-decl(toplevel: bool, vrng: range, vis: visibility): parse use
 
 fun parse-variable-declaration(): parse userDef
   val (vrng, doc) = parse-doc-keyword("var")
-  val bind = parse-value-binder(False, vrng)
+  val bind = parse-value-binder(vrng)
   parse-keyword(":=")
   val body = parse-block-expr()
   Def(bind(body), vrng.combine(body.range), Private, DefVar, InlineNever, doc)
 
-fun parse-val-decl(toplevel: bool, rng: range, doc: string, vis: visibility, inl: defInline): parse userDef
-  val bind = parse-value-binder(toplevel, rng)
+fun parse-val-decl(rng: range, doc: string, vis: visibility, inl: defInline): parse userDef
+  val bind = parse-value-binder(rng)
   parse-keyword("=")
   val body = parse-block-expr()
   Def(bind(body), rng.combine(body.range), vis, DefVal, inl, doc)
@@ -595,7 +595,7 @@ fun parse-val-decl(toplevel: bool, rng: range, doc: string, vis: visibility, inl
 fun parse-fun-decl(toplevel: bool, rng: range, doc: string, vis: visibility, inl: defInline, f: fipT): parse userDef
   val spars = parse-s-quantifier()
   // trace("parsing function " ++ toplevel.show ++ "\n" ++ doc ++ "\n")
-  val (name, nameRng) = parse-fun-id(toplevel)
+  val (name, nameRng) = parse-fun-id()
   // trace("parsing function " ++ name.show ++ "\n")
   val FunDef(tpars, pars, pinfos, _, mbTres, preds, ann) = parse-fun-def(True, True)
   val body = parse-body-expr() // TODO: Incorporate the paramter rnge
@@ -1049,6 +1049,7 @@ fun parse-op-exprx(allowTrailingLam: bool): parse userExpr
     }, {e1}
   ])
 
+
 fun parse-operator-var(): parse userExpr
   parse-choices("", [
     {val (name, rng) = parse-qualified-operator(); Var(name, True, rng)},
@@ -1132,11 +1133,14 @@ fun parse-argument(): parse (maybe<(name,range)>, userExpr)
     Var(name, _, rng) ->
       val x = parse-maybe("=")
         parse-keyword("=")
-        (Just((name, rng)), parse-expression())
+        val exp' = parse-expression()
+        match exp'
+          Var -> (Just((name, rng)), exp') // Don't eta-expand if the argument is just a variable
+          _ -> (Just((name, rng)), exp'.eta-expand)
       match x
         Just(x') -> x'
         Nothing -> (Nothing, exp)
-    _ -> (Nothing, exp)
+    _ -> (Nothing, exp.eta-expand)
 
 /// Atomic expression
 fun parse-atomic(): parse userExpr
@@ -1146,6 +1150,7 @@ fun parse-atomic(): parse userExpr
     parse-list-expr, 
     {Literal(parse-literal())}, 
     parse-constructor-context-hole, 
+    parse-eta-hole, 
     parse-constructor-context-expr, 
     parse-mask-expr
   ])
@@ -1193,8 +1198,12 @@ fun parse-constructor-context(rng: range): parse userExpr
   make-app(Var(nameCCtxCreate, False, rng), [parse-non-trailing-lambda()], userTpRange)
 
 fun parse-constructor-context-hole(): parse userExpr
-  val rng = parse-choices("", [{parse-keyword("hole")}, {parse-wildcard().snd}])
+  val rng = parse-choices("", [{parse-keyword("hole")}])
   make-app(Var(nameCCtxHoleCreate, False, rng), [], userTpRange)
+
+fun parse-eta-hole(): parse userExpr
+  val (nm, rng) = parse-wildcard()
+  Var(nm, False, rng)
 
 fun parse-mask-expr(): parse userExpr
   val (rng, mkInj) = parse-mask-type()
@@ -1211,8 +1220,8 @@ fun parse-mask-type(): parse (range, (userExpr -> div userExpr))
   val rng2 = parse-right-angle()
   (rng1, fn(exp:userExpr) Inject(promote-type(tp), exp, behind, rng1.combine(rng2)))
 
-fun parse-value-binder(toplevel: bool, pre: range): parse (userExpr -> parse valueBinder<(), userExpr>)
-  val (name, range) = parse-locally-qualified-identifier(toplevel)
+fun parse-value-binder(pre: range): parse (userExpr -> parse valueBinder<(), userExpr>)
+  val (name, range) = parse-locally-qualified-identifier()
   val ann = parse-type-annotation()
   fn(e:userExpr) ValueBinder(name, (), ann(e), range, pre.combine(range))
 
@@ -1236,7 +1245,7 @@ fun parse-pattern-atom(): parse userPattern
       PatCon(name, ps, rng, rng.combine(r))
     },
     {
-      val (name, rng) = parse-identifier()
+      val (name, rng) = parse-locally-qualified-identifier()
       parse-choices("", [
         {parse-keyword("as"); val p = parse-pattern(); PatVar(ValueBinder(name, Nothing, p, rng, rng.combine(p.range)))},
         {PatVar(ValueBinder(name, Nothing, PatWild(rng), rng, rng))}

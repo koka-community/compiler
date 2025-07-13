@@ -1,6 +1,7 @@
 import compiler/common/name
 import compiler/common/name-prim
 import std/core/undiv
+// Updated 7/12/25; Commit #752748d
 
 type kind
   KCon(constant: kindCon) // Kind constants: "*","->","!","H","P"
@@ -32,7 +33,6 @@ pub fun has-kind-label-result(k: kind): bool
 val kindStar = KCon(nameKindStar) // V (or "*")
 val kindLabel = KCon(nameKindLabel) // X, atomic effects
 val kindArrow = KCon(nameKindFun) // -> 
-val kindPred = KCon(nameKindPred)
 val kindEffect = KCon(nameKindEffect) // Effect row E
 val kindScope = KCon(nameKindScope) // S
 val kindHeap = KCon(nameKindHeap) // H
@@ -74,7 +74,6 @@ fun is-kind-any-label(k: kind): bool
 val buildinKinds = [
   (nameKindStar, kindStar),
   (nameKindFun, kindArrow),
-  (nameKindPred, kindPred),
   (nameKindEffect, kindEffect),
   (nameKindLabel, kindLabel),
   (nameKindHeap, kindHeap),

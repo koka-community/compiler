@@ -285,7 +285,7 @@ fun dfs/group-bindings(defs: list<def<t>>, deps: deps): pure list<defGroup<t>>
 
   // create a map from definition id's to definitions
   val defMap = defs.map(fn(d) (d.name, [d])).foldl(LinearMap([])) fn(acc, (id, v))
-    acc.update(id, v, fn(old, new) old ++ new)
+    acc.update(id, v, fn(old: list<_>, new) old ++ new)
 
   // try to maintain original source order as much as possible
   // reorder the `defOrderScc` according to the (earliest) source line (of a recursive group)

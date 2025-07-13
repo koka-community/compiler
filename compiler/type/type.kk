@@ -8,6 +8,7 @@ import compiler/kind/kind
 import std/data/sort
 import std/core/unsafe
 import std/core/undiv
+// Updated to #7083c02 on 7/13/25
 
 // The flavour of a type variable. Types in a "Type.Assumption" (Gamma) and inferred types in "Core.Core"
 // are always of the 'Bound' flavour. 'Meta' and 'Skolem' type variables only ever occur during type inference.
@@ -27,7 +28,7 @@ fun flavour/(==)(f1: flavour, f2: flavour): bool
     _ -> False
 
 pub type ktype
-  TForAll(vars: list<typeVar>, pred: list<pred>, r: ktype) // rho
+  TForAll(vars: list<typeVar>, r: ktype) // rho
   TFun(args: list<(name, ktype)>, e: ktype, t: ktype) // keffect
   TCon(constant: typeCon)
   TVar(variable: typeVar)
@@ -36,7 +37,7 @@ pub type ktype
 
 fun ktype/show(tp: ktype): div string
   match tp
-    TForAll(vars, preds, t) -> "forall " ++ vars.show-list(show) ++ " . " ++ preds.show-list(show) ++ " => " ++ t.show
+    TForAll(vars, t) -> "forall " ++ vars.show-list(show) ++ " => " ++ t.show
     TFun(args, eff, t) -> "(" ++ args.show-list(fn((name, tp1)) name.name/name/show ++ tp1.pretend-decreasing.show) ++ " -> " ++ eff.show ++ " " ++ t.show ++ ")"
     TCon(c) -> c.name.name/name/show
     TVar(v) -> v.tid.show-id
@@ -111,7 +112,7 @@ pub fun max-synonym-rank(t: ktype): synonymRank
     tps.foldr(0) fn(t1, r) 
       max(r, max-synonym-rank(t1.pretend-decreasing))
   match t
-    TForAll(_, _, r) -> max-synonym-rank(r.pretend-decreasing)
+    TForAll(_, r) -> max-synonym-rank(r.pretend-decreasing)
     TFun(args, eff, ty) -> max-synonym-ranks(Cons(ty, Cons(eff, args.map(fn (f) -> f.snd))).pretend-decreasing)
     TCon(_) -> 0
     TVar(_) -> 0
@@ -223,11 +224,6 @@ fun tv/is-meta(t: typeVar): bool
 fun tv/is-skolem(t: typeVar): bool
   t.flavour == Skolem
 
-fun pred-type(p: pred): exn ktype
-  match p
-    PredSub(t1, t2) -> TFun([("sub".new-name, t1)], typeTotal, t2)
-    PredIFace(_, _) -> typeUnit // todo("type.kk: predType")
-
 fun is-mono-type(tp: ktype): bool
   match tp.expand-syn
     TForAll -> False
@@ -239,20 +235,15 @@ fun must-split(tp: ktype)
     TSyn(_, _, tp) -> tp.must-split
     _ -> False
 
-fun split-pred-type(tp: ktype): (list<typeVar>, list<pred>, rho)
+fun split-type-scheme(tp: ktype): (list<typeVar>, rho)
   match tp
-    TForAll(vars, preds, t) -> (vars, preds, t)
-    _ -> if tp.must-split then tp.pretend-decreasing.split-pred-type else ([], [], tp)
+    TForAll(vars, t) -> (vars, t)
+    _ -> if tp.must-split then tp.pretend-decreasing.split-type-scheme else ([], tp)
 
 fun shallow-split-vars(tp: ktype)
   match tp
-    TForAll(vars, preds, t) -> (vars, preds, t)
-    _ -> ([], [], tp)
-
-fun shallow-split-preds(tp: ktype)
-  match tp
-    TForAll(_, preds) -> preds
-    _ -> []
+    TForAll(vars, t) -> (vars, t)
+    _ -> ([], tp)
 
 fun expand-syn(tp: ktype): ktype
   match tp
@@ -262,7 +253,7 @@ fun expand-syn(tp: ktype): ktype
 fun canonical-form(tp: ktype): pure ktype
   match tp
     TSyn(_, _, t) -> canonical-form(t)
-    TForAll(vars, preds, t) -> TForAll(vars, preds, canonical-form(t))
+    TForAll(vars, t) -> TForAll(vars, canonical-form(t))
     TApp(t, ts) -> TApp(canonical-form(t), ts.map(canonical-form))
     TFun(args, eff, res) -> TFun(args.map(fn((name, t)) (name, t.canonical-form)), order-effect(eff.canonical-form), res.canonical-form)
     _ -> tp
@@ -271,22 +262,18 @@ fun canonical-form(tp: ktype): pure ktype
 fun minimal-form(tp: ktype): pure ktype
   match tp
     TSyn -> tp.canonical-form
-    TForAll(vars, preds, t) -> TForAll(vars, preds, t.canonical-form)
+    TForAll(vars, t) -> TForAll(vars, t.canonical-form)
     TApp(t, ts) -> TApp(t.canonical-form, ts.map(canonical-form))
     TFun(args, eff, res) -> TFun(args.map(fn((_, t)) (nameListNil, t.canonical-form)), order-effect(eff.canonical-form), res.canonical-form)
 
 // Create a type scheme from a list of quantifiers
 fun make-scheme(vars: list<typeVar>, rho: rho): scheme
-  val (vars0, preds, _) = rho.split-pred-type
-  TForAll(vars ++ vars0, preds, rho)
+  val (vars0, _) = rho.split-type-scheme
+  TForAll(vars ++ vars0, rho)
 
 fun quantify-type(vars: list<typeVar>, tp: scheme): scheme
-  val (vars0, preds, rho) = tp.split-pred-type
-  TForAll(vars ++ vars0, preds, rho)
-
-fun qualify-type(preds: list<pred>, tp: scheme): scheme
-  val (vars, preds0, rho) = tp.split-pred-type
-  TForAll(vars, preds ++ preds0, rho)
+  val (vars0, rho) = tp.split-type-scheme
+  TForAll(vars ++ vars0, rho)
 
 fun apply-type(tp1: ktype, tp2: ktype): ktype
   match tp1
@@ -296,13 +283,13 @@ fun apply-type(tp1: ktype, tp2: ktype): ktype
 
 fun type-arities(tp: ktype): (int, int)
   match tp.split-fun-scheme
-    Just((tvars, _, pars, _, _)) -> (tvars.length, pars.length)
+    Just((tvars, pars, _, _)) -> (tvars.length, pars.length)
     Nothing -> (0, 0)
 
-fun split-fun-scheme(tp: scheme): maybe<(list<typeVar>, list<pred>, list<(name, tau)>, keffect, tau)>
-  val (tvars, preds, rho) = tp.split-pred-type
+fun split-fun-scheme(tp: scheme): maybe<(list<typeVar>, list<(name, tau)>, keffect, tau)>
+  val (tvars, rho) = tp.split-type-scheme
   match rho.split-fun-type
-    Just((pars, eff, res)) -> Just((tvars, preds, pars, eff, res))
+    Just((pars, eff, res)) -> Just((tvars, pars, eff, res))
     Nothing -> Nothing
 
 fun tp/is-tvar(tp: ktype): bool
@@ -376,9 +363,9 @@ fun is-type-localvar(tp: ktype): bool
     _ -> False
 
 fun is-value-operation(tp: ktype): bool
-  match tp.split-pred-type
+  match tp.split-type-scheme
     // TSyn(syn, [_]) -> syn.name == nameTpValueOp
-    (_, _, TApp(TCon(TypeCon(nm, _)), [_, _])) -> nm == nameTpValueOp
+    (_, TApp(TCon(TypeCon(nm, _)), [_, _])) -> nm == nameTpValueOp
     _ -> False
 
 fun make-value-operation(eff: ktype, tp: ktype)
@@ -428,7 +415,7 @@ fun wrap-handled-from-data-effect(de: dataEffect, eff: ktype)
     DataNoEffect -> eff
 
 fun is-async-function(tp: ktype): pure bool
-  val rho = tp.split-pred-type.thd
+  val rho = tp.split-type-scheme.snd
   match rho.split-fun-type
     Just((_, eff, _)) ->
       val (ls, _) = eff.extract-effect-extend
@@ -437,7 +424,7 @@ fun is-async-function(tp: ktype): pure bool
 
 fun is-effect-async(tp: tau): div bool
   match tp.expand-syn
-    TForAll(_, _, rho) -> rho.is-effect-async
+    TForAll(_, rho) -> rho.is-effect-async
     TFun(_, eff) -> eff.is-effect-async
     TApp(TCon(TypeCon(name)), [t]) | name == nameTpHandled -> t.is-effect-async
     TCon(TypeCon(hxName)) -> hxName == nameTpAsync
@@ -532,7 +519,7 @@ fun kind-of(tau: ktype)
       (Cons(_, rst), KApp(KApp, k2)) -> kind-apply(rst, k2)
       (args, k) -> fail("type/type/kind-of: illegal kind in application? " ++ k.show ++ " to " ++ args.show ++ "\n  " ++ tau.show)
   match tau
-    TForAll(_, _, tp) -> tp.kind-of
+    TForAll(_, tp) -> tp.kind-of
     TFun -> kindStar
     TVar(v) -> v.kind
     TCon(c) -> c.kind
@@ -634,20 +621,13 @@ fun tcon/to-type(c: typeCon)
 // fun ktype/(==)(t1: ktype, t2: ktype): pure bool
 //   eq-type(t1, t2)
 
-fun pred/(==)(p1: pred, p2: pred): pure bool
-  match-pred(p1, p2)
-
-fun preds/(==)(p1: list<pred>, p2: list<pred>): pure bool
-  match-preds(p1, p2)
-
 fun elem-type(t: ktype, ts: list<ktype>)
   ts.any(fn(t1) t.eq-type(t1))
 
 fun eq-type(tp1: ktype, tp2: ktype)
   match (tp1.expand-syn, tp2.expand-syn)
-    (TForAll(vs1, ps1, t1), TForAll(vs2, ps2, t2)) -> 
-      vs1 == vs2 && 
-        match-preds(ps1, ps2) && eq-type(t1, t2)
+    (TForAll(vs1, t1), TForAll(vs2, t2)) -> 
+      vs1 == vs2 && eq-type(t1, t2)
     (TFun(pars1, eff1, res1), TFun(pars2, eff2, res2)) -> 
       pars1.map(snd).eq-types(pars2.map(snd))
         && eff1.match-effect(eff2) && res1.eq-type(res2)
@@ -661,12 +641,3 @@ fun eq-types(t1: list<ktype>, t2: list<ktype>): pure bool
 
 fun match-effect(eff1: tau, eff2: tau): pure bool
   eq-type(eff1.order-effect, eff2.order-effect)
-
-fun match-preds(l1: list<pred>, l2: list<pred>): pure bool
-  l1.zipwith(l2, match-pred).all(id)
-
-fun match-pred(p1: pred, p2: pred): pure bool
-  match (p1, p2)
-    (PredSub(sub1, sup1), PredSub(sub2, sup2)) -> eq-type(sub1, sub2) && eq-type(sup1, sup2)
-    (PredIFace(n1, tps1), PredIFace(n2, tps2)) -> n1 == n2 && eq-types(tps1, tps2)
-    _ -> False

@@ -70,7 +70,7 @@ fun list/format(l: list<lexeme>): <format-opts,pure> doc
       ()
     fun insert-range(r: range, text: string)
       ()
-  pretty(integrated)
+  ll/pretty(integrated)
 
 effect format-eff
   fun increase-indentation(): ()
@@ -94,28 +94,28 @@ fun integrate-comments(l: list<lexeme>, acc: ctx<list<lexeme>>): list<lexeme>
     Nil ->
       acc ++. Nil
 
-fun pretty(l: list<lexeme>)
+fun ll/pretty(l: list<lexeme>)
   match l
     Cons(comment, rest) | comment.lex.is-lexComment ->
-      comment.pretty |.| next-line(rest) |.| pretty(rest)
+      comment.pretty |.| next-line(rest) |.| ll/pretty(rest)
     Cons(lexeme, rest) | lexeme.lex.is-open-brace ->
       increase-indentation()
-      lexeme.pretty |.| next-line(rest) |.| pretty(rest)
+      lexeme.pretty |.| next-line(rest) |.| ll/pretty(rest)
     Cons(lexeme, Cons(next, rest)) | lexeme.lex.is-close-brace ->
       decrease-indentation()
       if lexeme.range.end.line < next.range.start.line then
-        lexeme.pretty |.| next-line(Cons(next, rest)) |.| pretty(Cons(next, rest))
+        lexeme.pretty |.| next-line(Cons(next, rest)) |.| ll/pretty(Cons(next, rest))
       elif lexeme.range.end.col != next.range.start.col then
-        lexeme.pretty |+| pretty(Cons(next, rest))
+        lexeme.pretty |+| ll/pretty(Cons(next, rest))
       else
-        lexeme.pretty |.| pretty(Cons(next, rest))
+        lexeme.pretty |.| ll/pretty(Cons(next, rest))
     Cons(lex, Cons(next, rest)) ->
       if lex.range.end.line < next.range.start.line then
-        lex.pretty |.| next-line(rest) |.| pretty(Cons(next, rest))
+        lex.pretty |.| next-line(rest) |.| ll/pretty(Cons(next, rest))
       elif lex.range.end.col != next.range.start.col then
-        lex.pretty |+| pretty(Cons(next, rest)) // TODO: Strings have bad ranges
+        lex.pretty |+| ll/pretty(Cons(next, rest)) // TODO: Strings have bad ranges
       else
-        lex.pretty |.| pretty(Cons(next, rest))
+        lex.pretty |.| ll/pretty(Cons(next, rest))
     Cons(lex, Nil) -> lex.pretty
     Nil -> pprint/empty
 

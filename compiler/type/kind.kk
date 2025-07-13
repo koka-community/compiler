@@ -3,6 +3,7 @@ import compiler/kind/kind
 import compiler/common/name
 import compiler/common/name-prim
 import std/core/undiv
+// Updated to #752748d on 7/13/25
 
 fun effect-is-affine(eff: keffect)
   val (labs, tl) = eff.extract-ordered-effect
@@ -85,7 +86,7 @@ fun get-operation-effect-of(hsort: handledSort, exclude: list<name>, tp: ktype)
 
 fun kind(tp: ktype): exn kind
   match tp
-    TForAll(_, _, t) -> t.kind
+    TForAll(_, t) -> t.kind
     TFun -> kindStar
     TVar(v) -> v.kind
     TCon(c) -> c.kind

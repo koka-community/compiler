@@ -5,7 +5,7 @@
 // - Expand all synonyms (i.e., replace @id(int)@ by @id(int) == int@)
 // - Translate type definition groups and externals to Core.
 
-// Updated to f7ecd0f on 2/10/25
+// Updated to 7083c02 on 7/13/25 (other than lazy)
 import compiler/lib/pprint
 import compiler/common/failure
 import compiler/common/color-scheme
@@ -118,10 +118,10 @@ fun syn-copycon(di: dataInfo, ci: conInfo)
   val defName = copy-name-of(di.name).unqualify
   val argName = "@this".new-name
   val fullTp = 
-    val (vars, preds, rho) = ci.typeScheme.split-pred-type
+    val (vars, rho) = ci.typeScheme.split-type-scheme
     match rho.split-fun-type
-      Just((args, eff, res)) -> TForAll(vars, preds, TFun([(argName, res)] ++ args.map(fn((nm, t)) (nm, if !ci.has-accessor(nm, t) then t else t.make-optional)), eff, res))
-      Nothing -> TForAll(vars, preds, TFun([(argName, rho)], typeTotal, rho))
+      Just((args, eff, res)) -> TForAll(vars, TFun([(argName, res)] ++ args.map(fn((nm, t)) (nm, if !ci.has-accessor(nm, t) then t else t.make-optional)), eff, res))
+      Nothing -> TForAll(vars, TFun([(argName, rho)], typeTotal, rho))
   fun vvar(n)
     Var(n, False, rc)
   fun app(x, xs)
@@ -130,7 +130,7 @@ fun syn-copycon(di: dataInfo, ci: conInfo)
       _ -> App(x, xs.map(fn(y) (Nothing, y)), rc)
   val params0 = ci.params.map(fn((fldname, t)) ValueBinder(fldname, Nothing, if !ci.has-accessor(fldname, t) then Nothing else Just(app(vvar(type-qualified-name-of(di.name, fldname)), [vvar(argName)])), rc, rc))
   val body = app(vvar(ci.name), ci.params.map(fn((nm, _)) vvar(nm)))
-  val expr = Lam([ValueBinder(argName, Nothing, Nothing, rc, rc)] ++ params0, body, rc)
+  val expr = Lam([ValueBinder(argName, Nothing, Nothing, rc, rc)] ++ params0, True, body, rc)
   DefNonRec(Def(ValueBinder(defName, (), Ann(expr, fullTp, rc), rc, rc), rc, di.vis, def-fun([]), InlineAuto, ""))
 
 fun has-accessor(ci: conInfo, nm: name, tp: ktype)
@@ -170,8 +170,8 @@ fun syn-accessors(di: dataInfo)
     val branches = di.constrs.map(make-branch).concat
     val isPartial = branches.length < di.constrs.length || di.is-open
     val fullTp = 
-      val (foralls, preds, rho) = tp.split-pred-type
-      TForAll(di.params ++ foralls, preds, TFun([(arg, dataTp)], if isPartial then typePartial else typeTotal, rho))
+      val (foralls, rho) = tp.split-type-scheme
+      TForAll(di.params ++ foralls, TFun([(arg, dataTp)], if isPartial then typePartial else typeTotal, rho))
     val messages = [Literal(LitString(rng.start.source.name ++ rng.show, rng)), Literal(LitString(nm.show, rng))]
     val doc = "// Automatically generated. Retrieves the `" ++ nm.show ++ "` constructor field of the `" ++ di.name.nameLocalQual ++ "` type.\n"
     val defaultBranch = if isPartial then [Branch(PatWild(rng), [Guard(guardTrue, App(Var(namePatternMatchError, False, rng), messages.map(fn(msg) (Nothing, msg)), rng))])] else []
@@ -307,7 +307,7 @@ fun is-whnf-con-branch(di, b)
 
 fun add(di: dataInfo, ci: conInfo, evalName, e, arg)
   match e
-    syntax/syntax/Lam(binds, expr, rng) -> syntax/syntax/Lam(binds, add(di, ci, evalName, expr, arg), rng)
+    syntax/syntax/Lam(binds, expr, tl, rng) -> syntax/syntax/Lam(binds, add(di, ci, evalName, expr, arg), tl, rng)
     Let(defs, expr, rng) -> Let(defs, add(di, ci, evalName, expr, arg), rng)
     Bind(def, expr, rng) -> Bind(def, add(di, ci, evalName, expr, arg), rng)
     Ann(expr, tp, rng) -> Ann(add(di, ci, evalName, expr, arg), tp, rng)
@@ -588,7 +588,7 @@ fun format-call((target, externalCall): (target, externalCall), tp: ktype)
   match externalCall
     ExternalInline(inl) -> (target, inl)
     ExternalCall(fname) ->
-      val (foralls, _, rho) = tp.split-pred-type
+      val (foralls, _, rho) = tp.split-type-scheme
       val argumentCount = match rho.split-fun-type
         Just((args, _, _)) -> args.length
         _ -> 0
@@ -678,7 +678,7 @@ fun handler-valuebinder/kinfer(ValueBinder(nm, mbTp, u, nmRng, rng): valueBinder
 
 fun expr/kinfer(ex: syntax/syntax/expr<userType>)
   match ex
-    syntax/syntax/Lam(binds, expr, rng) -> syntax/syntax/Lam(binds.map(kinfer), expr.kinfer, rng)
+    syntax/syntax/Lam(binds, expr, tl, rng) -> syntax/syntax/Lam(binds.map(kinfer), expr.kinfer, tl, rng)
     syntax/syntax/Let(defs, expr, rng) -> syntax/syntax/Let(defs.kinfer, expr.kinfer, rng)
     syntax/syntax/Bind(def, expr, rng) -> syntax/syntax/Bind(def.kinfer, expr.kinfer, rng)
     syntax/syntax/App(f, nargs, rng) -> syntax/syntax/App(f.kinfer, nargs.map(fn((nm, arg)) (nm, arg.kinfer)), rng)
@@ -795,12 +795,6 @@ fun usertp/kinfer(expected: infKind, userType: userType)
       with check-quant(r)
       val tp' = kinfer(ikind, tp)
       TpQuan(quant, tname', tp', r)
-    TpQual(preds, tp) ->
-      val r = userType.range
-      with check-pred(r)
-      val preds' = preds.map(fn(p) kinfer(KICon(kindPred), p))
-      val tp' = kinfer(expected, tp)
-      TpQual(preds', tp')
     TpFun(args, eff, tp, r) ->
       unify(r, expected, infKindStar)
       with check-arg(r)
@@ -1056,7 +1050,7 @@ fun resolve-typedef(isRec: bool, recNames: list<name>, td: syntax/syntax/typeDef
       (Data(dataInfo), lazyExprss.concat)
 
 fun occurs-negative-con(names: list<name>, ci: conInfo)
-  val (_, _, rho) = ci.typeScheme.split-pred-type
+  val (_, rho) = ci.typeScheme.split-type-scheme
   match rho.split-fun-type
     Just((pars, _, res)) -> pars.map(snd).any(fn(p) p.occurs-negative(names)) || res.occurs-negative(names)
     _ -> False
@@ -1066,7 +1060,7 @@ fun occurs-negative(tp: ktype, names: list<name>)
 
 fun occurs(tp: ktype, names: list<name>, isNeg: bool)
   match tp
-    TForAll(_, _, tp) -> tp.occurs(names, isNeg)
+    TForAll(_, tp) -> tp.occurs(names, isNeg)
     TFun(args, eff, res) -> args.map(snd).any(fn(p) p.occurs(names, !isNeg)) || eff.occurs(names, !isNeg) || res.occurs(names, isNeg)
     TCon(tcon) -> if names.any(fn(n) n == tcon.name) then isNeg else False
     TVar -> False
@@ -1158,10 +1152,6 @@ fun resolve-type(idmap: name-map<typeVar>, partialSyn: bool, userType: kUserType
       tp'
     TpQuan(QExists) ->
       fail("kind/kinfer resolve-type: existentials are not supported yet")
-    TpQual(preds, tp) ->
-      val preds' = preds.map(fn(p) resolve-predicate(idmap, p))
-      val tp' = resolve-type(idmap, False, tp)
-      qualify-type(preds', tp')
     TpFun(args, eff, tp) ->
       val args' = args.map(resolve-param)
       val eff' = resolve-type(idmap, False, eff)
@@ -1177,13 +1167,6 @@ fun resolve-type(idmap: name-map<typeVar>, partialSyn: bool, userType: kUserType
       resolve-type(idmap, partialSyn, tp)
     TpAnn(tp) ->
       resolve-type(idmap, partialSyn, tp)
-
-fun resolve-predicate(idmap: name-map<typeVar>, tp: kUserType<infKind>)
-  val tp' = resolve-type(idmap, False, tp)
-  match tp'
-    TApp(TCon(tc), targs) -> PredIFace(tc.name, targs)
-    TCon(tc) -> PredIFace(tc.name, [])
-    _ -> fail("kind/kinfer resolve-predicate: invalid predicate: " ++ tp'.show)
 
 fun resolve-app(idmap: name-map<typeVar>, partialSyn: bool, (tp, args): (kUserType<infKind>, list<kUserType<infKind>>), rng: range)
   match (tp, args)

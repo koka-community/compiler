@@ -69,9 +69,9 @@ val alex_action_8: action = fn() {
 val alex_action_9: action = fn() { emit(LexCons(get-name(), "")) }
 val alex_action_10: action = fn() { emit(LexWildCard(get-name())) }
 val alex_action_11: action = fn() { emit(LexSpecial(get-string())) }
-val alex_action_12: action = fn() { val s = get-string(); emit(LexFloat(s.replace-all("_", "").parse-float64.expect(msg="when parsing " ++ s), s)) }
-val alex_action_13: action = fn() { val s = get-string(); emit(LexFloat(s.replace-all("_", "").parse-float64.expect(msg="when parsing " ++ s), s)) }
-val alex_action_14: action = fn() { val s = get-string(); emit(LexInt(s.replace-all("_", "").parse-int.expect(msg="when parsing " ++ s), s)) }
+val alex_action_12: action = fn() { val s = get-string(); emit(LexFloat(s.replace-all("_", "").parse-float64.expect("when parsing " ++ s), s)) }
+val alex_action_13: action = fn() { val s = get-string(); emit(LexFloat(s.replace-all("_", "").parse-float64.expect("when parsing " ++ s), s)) }
+val alex_action_14: action = fn() { val s = get-string(); emit(LexInt(s.replace-all("_", "").parse-int.expect("when parsing " ++ s), s)) }
 val alex_action_15: action = fn() { emit(LexOp(get-name())) }
 val alex_action_16: action = fn() { emit(LexIdOp(get-qname())) }
 val alex_action_17: action = fn() {
@@ -82,9 +82,9 @@ val alex_action_17: action = fn() {
    }
 val alex_action_18: action = fn() { push-state(stringlit); start-chunked(""); }
 val alex_action_19: action = fn() { push-state(stringraw); start-chunked(""); push-rawdelim(); }
-val alex_action_20: action = fn() { emit(LexChar(get-sslice().sslice/drop(2).next.expect.tuple2/fst.char/from-char-esc)) }
+val alex_action_20: action = fn() { emit(LexChar(get-sslice().sslice/drop(2).next.unjust.tuple2/fst.char/from-char-esc)) }
 val alex_action_21: action = fn() { emit(LexChar(get-sslice().sslice/drop(3).extend(-1).char/from-hex-esc)) }
-val alex_action_22: action = fn() { emit(LexChar(get-sslice().sslice/drop(1).next.expect.tuple2/fst)) }
+val alex_action_22: action = fn() { emit(LexChar(get-sslice().sslice/drop(1).next.unjust.tuple2/fst)) }
 val alex_action_23: action = fn() { emit(LexError("illegal character literal: " ++ get-sslice().sslice/drop(1).next.map(tuple2/fst).default(' ').show)) }
 val alex_action_24: action = fn() { emit(LexError("tab characters: configure your editor to use spaces instead (soft tab)")) }
 val alex_action_25: action = fn() { emit(LexError("illegal character: " ++ get-sslice().show ++ (if (get-string() =="\t") then " (replace tabs with spaces)" else ""))) }

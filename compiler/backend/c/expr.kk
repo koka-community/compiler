@@ -448,7 +448,7 @@ fun gen-next-patterns(select: (doc, doc) -> doc, exprDoc: doc, tp: ktype, patts:
   match patts
     Nil -> Nil
     _ ->
-      val (_, _, rho) = tp.split-pred-type
+      val (_, _, rho) = tp.split-type-scheme
       match rho.expand-syn
         TFun(args, _, _) ->
           match patts

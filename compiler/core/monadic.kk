@@ -80,7 +80,7 @@ fun mon-expr(expr: expr, topLevel: bool): monadicEff trans<expr>
       val args' = args.map(mon-expr)
       val ftp = f.typeOf
       val feff =
-        val (_, _, rho) = ftp.split-pred-type
+        val (_, _, rho) = ftp.split-type-scheme
         match rho.split-funType
           Just((_, feff, _)) -> feff
           _ -> fail("core/monadic app: illegal application")

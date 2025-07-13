@@ -5,6 +5,7 @@ import compiler/common/failure
 import compiler/type/type
 import compiler/lib/pprint
 import compiler/type/pretty
+// Updated 7/12/25; Commit #752748d
 
 // Create a datadef and elaborate conInfo's with a ValueRepr
 // and correctly ordered fields depending on alignment
@@ -163,7 +164,7 @@ fun order-con-fields(emit-error: (doc) -> e (), nameDoc: doc, get-datainfo: (nam
 fun extract-datadef-type(tp: ktype): maybe<name>
   match tp
     TApp(t) -> t.extract-datadef-type
-    TForAll(_, _, t) -> t.extract-datadef-type
+    TForAll(_, t) -> t.extract-datadef-type
     TCon(tc) -> Just(tc.name)
     _ -> Nothing
 

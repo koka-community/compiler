@@ -195,7 +195,7 @@ fun box-bind-expr-as-value(fromTp: ktype, toTp: ktype, ex: expr, f: expr -> boxE
 
 // type without quantification
 fun box-typeof(ex: expr)
-  match ex.type-of.split-pred-type
+  match ex.type-of.split-type-scheme
     (_, _, tp) -> tp
 
 fun box-type(tp: ktype)

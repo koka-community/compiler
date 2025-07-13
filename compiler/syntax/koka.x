@@ -146,9 +146,9 @@ program :-
 <0> $special              { fn() { emit(LexSpecial(get-string())) } }
 
 -- literals
-<0> @decfloat             { fn() { val s = get-string(); emit(LexFloat(s.replace-all("_", "").parse-float64.expect(msg="when parsing " ++ s), s)) } }
-<0> @hexfloat             { fn() { val s = get-string(); emit(LexFloat(s.replace-all("_", "").parse-float64.expect(msg="when parsing " ++ s), s)) } }
-<0> @integer              { fn() { val s = get-string(); emit(LexInt(s.replace-all("_", "").parse-int.expect(msg="when parsing " ++ s), s)) } }
+<0> @decfloat             { fn() { val s = get-string(); emit(LexFloat(s.replace-all("_", "").parse-float64.expect("when parsing " ++ s), s)) } }
+<0> @hexfloat             { fn() { val s = get-string(); emit(LexFloat(s.replace-all("_", "").parse-float64.expect("when parsing " ++ s), s)) } }
+<0> @integer              { fn() { val s = get-string(); emit(LexInt(s.replace-all("_", "").parse-int.expect("when parsing " ++ s), s)) } }
 
 
 -- type operators
@@ -168,9 +168,9 @@ program :-
 <0> \"                    { fn() { push-state(stringlit); start-chunked(""); } } -- "
 <0> r\#*\"                { fn() { push-state(stringraw); start-chunked(""); push-rawdelim(); } } -- "
 
-<0> \'\\$charesc\'        { fn() { emit(LexChar(get-sslice().sslice/drop(2).next.expect.tuple2/fst.char/from-char-esc)) }}
+<0> \'\\$charesc\'        { fn() { emit(LexChar(get-sslice().sslice/drop(2).next.unjust.tuple2/fst.char/from-char-esc)) }}
 <0> \'\\@hexesc\'         { fn() { emit(LexChar(get-sslice().sslice/drop(3).extend(-1).char/from-hex-esc)) }}
-<0> \'@charchar\'         { fn() { emit(LexChar(get-sslice().sslice/drop(1).next.expect.tuple2/fst)) }}
+<0> \'@charchar\'         { fn() { emit(LexChar(get-sslice().sslice/drop(1).next.unjust.tuple2/fst)) }}
 <0> \'.\'                 { fn() { emit(LexError("illegal character literal: " ++ get-sslice().sslice/drop(1).next.map(tuple2/fst).default(' ').show)) }}
 
 -- catch errors
