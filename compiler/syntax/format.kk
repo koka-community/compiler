@@ -46,7 +46,7 @@ fun file/format(f: path): <format-opts,io> ()
 
 fun list/format(l: list<lexeme>): <format-opts,pure> doc
   // trace("Previous lexemes: " ++ l.show)
-  val integrated = l.integrate-comments(ctx _)
+  val integrated = l.integrate-comments(ctx hole)
   // trace("Integrated lexemes: " ++ integrated.show)
   var current-indent := 0
   with handler
@@ -84,13 +84,13 @@ effect format-eff
 fun integrate-comments(l: list<lexeme>, acc: ctx<list<lexeme>>): list<lexeme>
   match l
     Cons(lexeme as Lexeme(r, LexKeyword(k, d)), rest) | k.is-doc-keyword && !d.is-empty ->
-      Cons(Lexeme(r, LexComment(d)), acc ++. Cons(lexeme, integrate-comments(rest, ctx _)))
+      Cons(Lexeme(r, LexComment(d)), acc ++. Cons(lexeme, integrate-comments(rest, ctx hole)))
     Cons(lexeme as Lexeme(r, LexCons(_, d)), rest) | !d.is-empty ->
-      Cons(Lexeme(r, LexComment(d)), acc ++. Cons(lexeme, integrate-comments(rest, ctx _)))
+      Cons(Lexeme(r, LexComment(d)), acc ++. Cons(lexeme, integrate-comments(rest, ctx hole)))
     Cons(lexeme as Lexeme(_, lex), rest) | lex.is-valid-prefix ->
-      integrate-comments(rest, acc ++ ctx Cons(lexeme, _))
+      integrate-comments(rest, acc ++ ctx Cons(lexeme, hole))
     Cons(lexeme, rest) ->
-      acc ++. Cons(lexeme, integrate-comments(rest, ctx _))
+      acc ++. Cons(lexeme, integrate-comments(rest, ctx hole))
     Nil ->
       acc ++. Nil
 

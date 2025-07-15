@@ -779,7 +779,7 @@ fun get-effect(e: expr): keffect
 //   with handler 
 //     final ctl found(ex) Just(ex)
 //     return(x) Nothing
-//   val c = ctx _
+//   val c = ctx hole
 //   e.foldMap(fn(a) if f(a) then found(e) else c)
 
 

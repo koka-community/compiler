@@ -29,7 +29,7 @@ fun lex-source(source: source, line: int, allow-at: bool, semi-insert: bool, pre
 fun layout(lexemes: list<lexeme>, allow-at: bool, semi-insert: bool): list<lexeme>
   fun semi(v: list<lexeme>, f: (list<lexeme>) -> list<lexeme>) if semi-insert then f(v) else v
   val (comments, lexemes') = lexemes.semi(check-comments)
-      .combine-line-comments.remove-whitespace.associate-comments(ctx _, ctx _)
+      .combine-line-comments.remove-whitespace.associate-comments(ctx hole, ctx hole)
   val nowhite = lexemes'.remove-white
   val at = if allow-at then nowhite else nowhite.check-ids
   at.semi(indent-layout).integrate-comments(comments)
@@ -119,13 +119,13 @@ fun associate-comments(lexs: list<lexeme>, unassociated: ctx<list<lexeme>>, acc:
   match lexs
     // Special comments
     Cons(Lexeme(r1, LexComment(c1)), ls) | (c1.starts-with("//.").bool  && !(c1.slice.subslice(3, c1.count).string.trim-right.list.any(is-space))) -> 
-        ls.pretend-decreasing.associate-comments(unassociated, acc ++ ctx Cons(Lexeme(r1, LexSpecial(c1.trim-right)), _))
+        ls.pretend-decreasing.associate-comments(unassociated, acc ++ ctx Cons(Lexeme(r1, LexSpecial(c1.trim-right)), hole))
     // Comment association
     Cons(l1 as Lexeme(r1, LexComment(comment)), ls) ->
-      match scan-doc-keyword(comment, comment-line(r1, comment), ctx _, ls)
+      match scan-doc-keyword(comment, comment-line(r1, comment), ctx hole, ls)
         Just((pre, rest)) -> rest.pretend-decreasing.associate-comments(unassociated, acc ++ pre)
-        Nothing -> ls.pretend-decreasing.associate-comments(unassociated ++ ctx Cons(l1, _), acc)
-    Cons(l,ls) -> ls.pretend-decreasing.associate-comments(unassociated, acc ++ ctx Cons(l, _))
+        Nothing -> ls.pretend-decreasing.associate-comments(unassociated ++ ctx Cons(l1, hole), acc)
+    Cons(l,ls) -> ls.pretend-decreasing.associate-comments(unassociated, acc ++ ctx Cons(l, hole))
     Nil -> (unassociated ++. Nil, acc ++. Nil)
 
 // Combine adjacent line comments into one block comment (for html output)

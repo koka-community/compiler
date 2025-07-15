@@ -161,11 +161,11 @@ pub fun make-user-constructor(const: name, foralls: list<userTypeBinder>, resTp:
 pub fun split-top-defs(dfs: list<topDef>): (list<userDef>, list<userTypeDef>, list<external>)
   fun split(dfs': list<topDef>, userDefs: ctx<list<userDef>>, typeDefs: ctx<list<userTypeDef>>, externDefs: ctx<list<external>>): (list<userDef>, list<userTypeDef>, list<external>)
     match dfs'
-      Cons(DefValue(d), rst) -> rst.split(userDefs ++ ctx Cons(d, _), typeDefs, externDefs)
-      Cons(DefType(d), rst) -> rst.split(userDefs, typeDefs ++ ctx Cons(d, _), externDefs)
-      Cons(DefExtern(d), rst) -> rst.split(userDefs, typeDefs, externDefs ++ ctx Cons(d, _))
+      Cons(DefValue(d), rst) -> rst.split(userDefs ++ ctx Cons(d, hole), typeDefs, externDefs)
+      Cons(DefType(d), rst) -> rst.split(userDefs, typeDefs ++ ctx Cons(d, hole), externDefs)
+      Cons(DefExtern(d), rst) -> rst.split(userDefs, typeDefs, externDefs ++ ctx Cons(d, hole))
       Nil -> (userDefs ++. Nil, typeDefs ++. Nil, externDefs ++. Nil)
-  dfs.split(ctx _, ctx _, ctx _)
+  dfs.split(ctx hole, ctx hole, ctx hole)
 
 pub fun make-effect-decl(decl: effectDecl): <parse-error,pure> list<topDef>
   // TODO: Use record operations
@@ -465,9 +465,9 @@ pub fun partition-clauses(clauses: list<clause>, rng: range): parse-error (maybe
           parse-error("There can be at most one 'initially' clause in a handler body", e.range)
         else
           separate(rst, ret, fin, Just(e), br)
-      Cons(ClauseBranch(e), rst) -> separate(rst, ret, fin, init, br ++ (ctx Cons(e, _)))
+      Cons(ClauseBranch(e), rst) -> separate(rst, ret, fin, init, br ++ (ctx Cons(e, hole)))
       Nil -> (ret, fin, init, br ++. Nil)
-  separate(clauses, Nothing, Nothing, Nothing, ctx _)
+  separate(clauses, Nothing, Nothing, Nothing, ctx hole)
 
 pub val userTpRange = fn(tp: userType) tp.range
 

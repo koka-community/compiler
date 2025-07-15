@@ -423,18 +423,18 @@ fun scan-code-block2(n: int, com: (list<lexeme>, string) -> token-comment<lexeme
 fun end-code-block(n: int, com: (list<lexeme>, string) -> token-comment<lexeme>, m: int, lacc: ctx<list<token-comment<lexeme>>>, pre: list<char>, acc: list<char>, rest: list<char>): <pure,fmt> list<token-comment<lexeme>>
   val src = acc.reverse.drop-line.string
   val lexes = lexer(source-file, m, src)
-  scan(n, lacc ++ ctx Cons(com(lexes, if pre.is-nil then src else pre.string ++ "\n" ++ src), _), [], rest)
+  scan(n, lacc ++ ctx Cons(com(lexes, if pre.is-nil then src else pre.string ++ "\n" ++ src), hole), [], rest)
 
 fun scan(lineno: int, lacc: ctx<list<token-comment<lexeme>>>, acc: list<char>, chs: list<char>): <pure,fmt> list<token-comment<lexeme>>
   match chs
     // Skip inside tags (so html renders correctly)
-    Cons('<', Cons(c, rest)) | !c.is-space -> scan-tag(lineno, lacc ++ ctx Cons(ComText(acc.reverse.string), _), Cons('<', Cons(c, rest)))
+    Cons('<', Cons(c, rest)) | !c.is-space -> scan-tag(lineno, lacc ++ ctx Cons(ComText(acc.reverse.string), hole), Cons('<', Cons(c, rest)))
     // Skip inside $ (so math renders correctly)
-    Cons('$', Cons(c, rest)) -> scan-math(lineno, lacc ++ ctx Cons(ComText(acc.reverse.string), _), Cons(c, rest))
+    Cons('$', Cons(c, rest)) -> scan-math(lineno, lacc ++ ctx Cons(ComText(acc.reverse.string), hole), Cons(c, rest))
     // Code
     Cons('`', Cons(c, rest)) 
-      | c != '`' -> scan-code(lineno, comCode, lacc ++ ctx Cons(ComText(acc.reverse.string), _), [], Cons(c, rest))
-      | c == ':' -> scan-code(lineno, comCode, lacc ++ ctx Cons(ComText(acc.reverse.string), _), [':'], rest)
+      | c != '`' -> scan-code(lineno, comCode, lacc ++ ctx Cons(ComText(acc.reverse.string), hole), [], Cons(c, rest))
+      | c == ':' -> scan-code(lineno, comCode, lacc ++ ctx Cons(ComText(acc.reverse.string), hole), [':'], rest)
     Cons('`', Cons('`', Cons('`', Cons(c, rest)))) | acc.white-line && c != '`' ->
       val (pre, xpost) = Cons(c, rest).span(fn(c') c != '\n' && c' != '{' && c' != ' ')
       val (attr, post) = xpost.span(fn(c') c' != '\n')
@@ -446,12 +446,12 @@ fun scan(lineno: int, lacc: ctx<list<token-comment<lexeme>>>, acc: list<char>, c
       val attrs = attr.string
       val ccode = if pres == "unchecked" then comCodeBlock(cls) else comCodeLit(cls)
       if pres == "unchecked" || pres == "koka" || pres == "" then
-        scan-code-block(lineno + 1, ccode, lineno + 1, lacc ++ ctx Cons(ComText(acc.drop-line.string), _), [], post.drop-line)
+        scan-code-block(lineno + 1, ccode, lineno + 1, lacc ++ ctx Cons(ComText(acc.drop-line.string), hole), [], post.drop-line)
       else
-        scan-pre-block(3, lineno, lacc ++ ctx Cons(ComText(("```".list ++ pre ++ acc).reverse.string), _), [], post)
+        scan-pre-block(3, lineno, lacc ++ ctx Cons(ComText(("```".list ++ pre ++ acc).reverse.string), hole), [], post)
     Cons('`', rest) ->
       val (pre, post) = rest.span(fn(c) c != '`')
-      val lacc' = lacc ++ ctx Cons(ComText(Cons('`', pre ++ acc).reverse.string), _)
+      val lacc' = lacc ++ ctx Cons(ComText(Cons('`', pre ++ acc).reverse.string), hole)
       if acc.white-line && pre.length >= 2 then
         scan-pre-block(pre.length + 1, lineno, lacc', [], post)
       else
@@ -463,7 +463,7 @@ fun scan(lineno: int, lacc: ctx<list<token-comment<lexeme>>>, acc: list<char>, c
 
 // Parse comment formatters
 fun lex-comment(lineno: int, content: string): <pure,fmt> list<token-comment<lexeme>>
-  scan(lineno, ctx _, [], content.list.filter(fn(c) c != '\r'))
+  scan(lineno, ctx hole, [], content.list.filter(fn(c) c != '\r'))
 
 fun on-line(pre: list<char>, post: list<char>): bool
   pre.white-line && post.white-line

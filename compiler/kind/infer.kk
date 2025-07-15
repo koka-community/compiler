@@ -73,9 +73,9 @@ fun unzip-either(xs: list<either<a, b>>): (list<a>, list<b>)
   fun loop(ys: list<either<a, b>>, las: ctx<list<a>>, lbs: ctx<list<b>>): (list<a>, list<b>)
     match ys
       Nil -> (las ++. Nil, lbs ++. Nil)
-      Cons(Left(a), a1) -> loop(a1, las ++ ctx Cons(a, _), lbs)
-      Cons(Right(b), b1) -> loop(b1, las, lbs ++ ctx Cons(b, _))
-  loop(xs, ctx _, ctx _)
+      Cons(Left(a), a1) -> loop(a1, las ++ ctx Cons(a, hole), lbs)
+      Cons(Right(b), b1) -> loop(b1, las, lbs ++ ctx Cons(b, hole))
+  loop(xs, ctx hole, ctx hole)
 
 fun extract-infos(groups: list<core/core/typeDefGroup>): list<either<synInfo, dataInfo>>
   fun extract-info(td: core/core/typeDef): either<synInfo, dataInfo>

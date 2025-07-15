@@ -81,11 +81,11 @@ fun parse-lexemes(src: source, lexemes0: list<lexeme>, p: () -> <console,parse|e
     fun take-all()
       val l = lexemes
       lexemes := Nil // TODO: This ruins the history -- especially with delimiting
-      // history := Cons((ctx _, "top", 0), Nil)
+      // history := Cons((ctx hole, "top", 0), Nil)
       l
     fun put-all(lexemes': list<lexeme>)
       lexemes := lexemes' // TODO: This ruins the history -- especially with delimiting
-      // history := Cons((ctx _, "top", 0), Nil)
+      // history := Cons((ctx hole, "top", 0), Nil)
     fun add-warning(w: string, r: range)
       ()
     fun pnext()
