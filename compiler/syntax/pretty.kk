@@ -57,7 +57,7 @@ fun con/pretty(u: userCon<userType,userType,userKind>): div doc
 fun dg/pretty(d: defGroup<userType>): div doc
   match d
     DefRec(defs) -> defs.map(fn(df) df.pretty |+| "\n".text).vcat
-    DefNonRec(df) -> df.pretty |+| "\n".text
+    DefNonRec(df) -> df.pretty
 
 fun tdefvb/pretty(v: valueBinder<userType,maybe<expr<userType>>>): div doc
   v.name.pretty |+| v.expr.pretty
@@ -88,7 +88,9 @@ fun dbinder/pretty(vb: valueBinder<(), userExpr>, sort: defSort): div doc
     DefFun -> 
       match vb.expr
         Ann(Lam(binders, e)) -> 
-          vb.name.pretty |+| binders.map(fn(b) b.pretty).tupled |--| e.pretty.indent(2)
+          vb.name.pretty |.| binders.map(fn(b) b.pretty).tupled |--| e.pretty.indent(2)
+        Lam(binders, e) -> 
+          vb.name.pretty |.| binders.map(fn(b) b.pretty).tupled |--| e.pretty.indent(2)
         _ -> vb.name.pretty |+| vb.expr.pretty
     DefVal -> vb.name.pretty |+| "=".text |+| vb.expr.pretty
     DefVar -> vb.name.pretty |+| ":=".text |+| vb.expr.pretty
@@ -107,6 +109,7 @@ fun expr/pretty(expr: expr<userType>): div doc
     Lam(binder, e) -> "fn".text |.| binder.map(fn(b) b.pretty).tupled |--| e.pretty.indent(2)
     Let(d, e) -> d.dg/pretty |--| e.expr/pretty 
     Bind(d, e) ->  d.pretty |--| e.pretty
+    App(Var(opname, True), [a1, a2]) -> a1.pretty |+| opname.show-plain.pretty |+| a2.pretty
     App(e, args) -> e.pretty |.| args.map(fn(a) a.pretty).tupled 
     Var(n) -> n.pretty
     Literal(l) -> l.pretty
