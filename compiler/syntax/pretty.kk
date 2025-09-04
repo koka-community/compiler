@@ -109,6 +109,9 @@ fun expr/pretty(expr: expr<userType>): div doc
     Lam(binder, e) -> "fn".text |.| binder.map(fn(b) b.pretty).tupled |--| e.pretty.indent(2)
     Let(d, e) -> d.dg/pretty |--| e.expr/pretty 
     Bind(d, e) ->  d.pretty |--| e.pretty
+    App(Handler(_, _, _, _, _, _, _, hReturn, _, branches), [body]) -> 
+      "with handler".text |--| Cons(hReturn.pretty, branches.map(fn(b) b.pretty)).vcat.indent(2)
+      |--| body.pretty
     App(Var(opname, True), [a1, a2]) -> a1.pretty |+| opname.show-plain.pretty |+| a2.pretty
     App(e, args) -> e.pretty |.| args.map(fn(a) a.pretty).tupled 
     Var(n) -> n.pretty
@@ -119,11 +122,8 @@ fun expr/pretty(expr: expr<userType>): div doc
     Inject(t, e, behind) -> 
       if behind then "mask behind<".text |.| t.pretty |.| ">".text |--| e.pretty.indent(2)
       else "mask<".text |.| t.pretty |.| ">".text |--| e.pretty.indent(2)
-    Handler(sort, scope, hOverride, allowMask, hEffect, localPars, initially, hReturn, fin, branches) -> 
-      "Handler ".text |.| sort.pretty |+| scope.pretty |+| hOverride.pretty |+| 
-      allowMask.pretty |+| hEffect.pretty |+| 
-      initially.pretty |+| hReturn.pretty |+| fin.pretty |+|
-      branches.map(fn(b) b.pretty).vcat
+    Handler(_, _, _, _, _, _, _, hReturn, _, branches) -> 
+      "handler".text |--| Cons(hReturn.pretty, branches.map(fn(b) b.pretty)).vcat.indent(2)
 
 fun handbranch/pretty(b: handlerBranch<userType>): div doc
   b.branchSort.pretty |+| b.branchName.pretty |--| b.branchExpr.pretty.indent(2)

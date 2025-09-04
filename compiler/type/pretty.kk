@@ -372,7 +372,7 @@ fun pp-name-plain(n: name)
   if n.is-implicit-param-name then
     "?".text |.| pp-name-plain(n.from-implicit-param-name)
   elif ppEnv.fullNames || n.is-module-name then n.pretty
-  elif n.qualifier == moduleContext || alwaysUnqualify then
+  elif n.qualifier == moduleContext || ppEnv.alwaysUnqualify then
     n.unqualify.pretty
   elif n.is-system-core-name && !ppEnv.coreIface then
     n.shorten-system-core-name.pretty
