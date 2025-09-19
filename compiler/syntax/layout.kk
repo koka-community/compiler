@@ -94,7 +94,7 @@ fun scan-doc-keyword(doc: string, dline: int, acc: ctx<list<lexeme>>, ls: list<l
       Just((acc ++. Cons(Lexeme(r, LexCons(c, doc)), Nil), rst))
     Cons(l as Lexeme(_, lex), rst) ->
       if lex.is-valid-prefix then
-        scan-doc-keyword(doc, dline, acc ++ ctx Cons(l, _), rst)
+        scan-doc-keyword(doc, dline, acc ++ ctx Cons(l, hole), rst)
       else Nothing
 
 fun integrate-comments(lexs: list<lexeme>, comments: list<lexeme>): list<lexeme>
@@ -111,7 +111,7 @@ fun integrate-comments(lexs: list<lexeme>, comments: list<lexeme>): list<lexeme>
 fun ctx/(++)(ct: ctx<list<a>>, ctxs: list<a>): ctx<list<a>>
   match ctxs
     Nil -> ct
-    Cons(x, xs) -> (ct ++ ctx Cons(x, _)) ++ xs
+    Cons(x, xs) -> (ct ++ ctx Cons(x, hole)) ++ xs
 
 // Associate comments that precede a declaration
 // to the corresponding keyword
