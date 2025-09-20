@@ -175,47 +175,47 @@ fun ktype/free-type-vars(tp: ktype): div tvs
     TApp(t, args) -> t.free-type-vars + args.map(fn(a) a.free-type-vars).unions
     TSyn(_, xs, t) -> t.free-type-vars + xs.map(free-type-vars).unions
 
-// fun exp/free-type-vars(e0: expr): div tvs
-//   match e0
-//     Lam(tn, eff, e) -> 
-//       val tv1: tvs = tn.free-type-vars + eff.free-type-vars
-//       tv1 + e.free-type-vars
-//     Var(tn) -> tn.free-type-vars
-//     App(a, b) -> a.free-type-vars + b.free-type-vars
-//     TypeLam(tvs, e) -> e.free-type-vars - tvs
-//     TypeApp(e, tp) -> e.free-type-vars + tp.free-type-vars
-//     Con(tn) -> tn.free-type-vars
-//     ELit -> tvs/empty
-//     Let(defGroups, e) -> defGroups.map(free-type-vars).unions + e.free-type-vars
-//     Case(es, bs) -> es.free-type-vars + bs.map(free-type-vars).unions
+fun exp/free-type-vars(e0: expr): div tvs
+  match e0
+    Lam(tn, eff, e) -> 
+      val tv1: tvs = tn.free-type-vars + eff.free-type-vars
+      tv1 + e.free-type-vars
+    Var(tn) -> tn.free-type-vars
+    App(a, b) -> a.free-type-vars + b.free-type-vars
+    TypeLam(tvs, e) -> e.free-type-vars - tvs
+    TypeApp(e, tp) -> e.free-type-vars + tp.free-type-vars
+    Con(tn) -> tn.free-type-vars
+    ELit -> tvs/empty
+    Let(defGroups, e) -> defGroups.map(free-type-vars).unions + e.free-type-vars
+    Case(es, bs) -> es.free-type-vars + bs.map(free-type-vars).unions
 
-// fun dg/free-type-vars(dg: defGroup): div tvs
-//   match dg
-//     DefRec(defs) -> defs.map(free-type-vars).unions
-//     DefNonRec(e) -> free-type-vars(e)
+fun dg/free-type-vars(dg: defGroup): div tvs
+  match dg
+    DefRec(defs) -> defs.map(free-type-vars).unions
+    DefNonRec(e) -> free-type-vars(e)
 
-// fun def/free-type-vars(d: def): div tvs
-//   d.ktype.free-type-vars + d.defExpr.free-type-vars
+fun def/free-type-vars(d: def): div tvs
+  d.ktype.free-type-vars + d.defExpr.free-type-vars
 
-// fun branch/free-type-vars(bs: branch): div tvs
-//   match bs
-//     Branch(p, e) -> 
-//       e.free-type-vars - p.bound-type-vars + p.free-type-vars
+fun branch/free-type-vars(bs: branch): div tvs
+  match bs
+    Branch(p, e) -> 
+      e.free-type-vars - p.bound-type-vars + p.free-type-vars
 
-// fun pat/free-type-vars(p: pattern): div tvs
-//   match p
-//     PatVar(tn, pat) -> tn.free-type-vars + pat.free-type-vars
-//     PatCon(tn, args, _, targs, exists0, tres) ->
-//       val tv1:tvs = tn.free-type-vars + args.free-type-vars
-//       val tv2:tvs = tv1 + targs.free-type-vars 
-//       val tv3:tvs = tv2 + tres.free-type-vars
-//       tv3 - exists0
-//     PatWild -> tvs/empty
-//     PatLit(_) -> tvs/empty
+fun pat/free-type-vars(p: pattern): div tvs
+  match p
+    PatVar(tn, pat) -> tn.free-type-vars + pat.free-type-vars
+    PatCon(tn, args, _, targs, exists0, tres) ->
+      val tv1:tvs = tn.free-type-vars + args.free-type-vars
+      val tv2:tvs = tv1 + targs.free-type-vars 
+      val tv3:tvs = tv2 + tres.free-type-vars
+      tv3 - exists0
+    PatWild -> tvs/empty
+    PatLit(_) -> tvs/empty
 
-// fun guard/free-type-vars(gd: guard): div tvs
-//   match gd
-//     Guard(e, e2) -> e.free-type-vars + e2.free-type-vars
+fun guard/free-type-vars(gd: guard): div tvs
+  match gd
+    Guard(e, e2) -> e.free-type-vars + e2.free-type-vars
 
 fun tn/free-type-vars(TName(_, tp): tName): div tvs
   tp.free-type-vars
@@ -223,16 +223,16 @@ fun tn/free-type-vars(TName(_, tp): tName): div tvs
 fun list/bound-type-vars(l: list<a>, ?bound-type-vars: (a) -> div tvs): div tvs
   l.map(bound-type-vars).unions
 
-// fun pat/bound-type-vars(p: pattern): div tvs
-//   match p
-//     PatVar(tn, pat) -> tn.bound-type-vars + pat.bound-type-vars
-//     PatCon(tn, args, _, targs, exists0, tres) ->
-//       val tv1: tvs = tn.bound-type-vars + args.bound-type-vars
-//       val tv2: tvs = tv1 + targs.bound-type-vars
-//       val tv3: tvs = tv2 + tres.bound-type-vars
-//       tv3 + exists0.tvs
-//     PatWild -> tvs/empty
-//     PatLit(_) -> tvs/empty
+fun pat/bound-type-vars(p: pattern): div tvs
+  match p
+    PatVar(tn, pat) -> tn.bound-type-vars + pat.bound-type-vars
+    PatCon(tn, args, _, targs, exists0, tres) ->
+      val tv1: tvs = tn.bound-type-vars + args.bound-type-vars
+      val tv2: tvs = tv1 + targs.bound-type-vars
+      val tv3: tvs = tv2 + tres.bound-type-vars
+      tv3 + exists0.tvs
+    PatWild -> tvs/empty
+    PatLit(_) -> tvs/empty
 
 fun ktype/bound-type-vars(tp: ktype): div tvs
   match tp
@@ -253,6 +253,11 @@ fun sub/(|->)(s: sub, a: a, ?substitute: (sub, a) -> e a): e a
   if s.is-null then a
   else substitute(s, a)
 
+
+fun sub/list/substitute(s: sub, l: list<a>, ?substitute: (sub, a) -> <div|e> a): <div|e> list<a>
+  if s.is-null then l
+  else l.map(s.substitute(_))
+
 fun sub/substitute(sub: sub, Sub(s, tvs2): sub): pure sub
   val Sub(_, tvs1) = sub
   Sub(s.map(fn(k, v) sub.substitute(v)), tvs1.union(tvs2))
@@ -272,44 +277,44 @@ fun tn/substitute(s: sub, tn: tName): pure tName
   match tn
     TName(n, tp) -> TName(n, s |-> tp)
 
-// fun pat/substitute(s: sub, p: pattern): pure pattern
-//   match p
-//     PatVar(tn, pat) -> PatVar(s |-> tn, s |-> pat)
-//     PatCon(tn, args, repr, targs, exists0, tres,  conInfo, skip) ->
-//       val sub' = s.remove(exists0)
-//       PatCon(s |-> tn, sub' |-> args, repr, sub' |-> targs, exists0, sub' |-> tres, conInfo, skip)
-//     PatWild -> PatWild
-//     PatLit(l) -> PatLit(l)
+fun pat/substitute(s: sub, p: pattern): pure pattern
+  match p
+    PatVar(tn, pat) -> PatVar(s |-> tn, s |-> pat)
+    PatCon(tn, args, repr, targs, exists0, tres,  conInfo, skip) ->
+      val sub' = s.remove(exists0)
+      PatCon(s |-> tn, sub' |-> args, repr, sub' |-> targs, exists0, sub' |-> tres, conInfo, skip)
+    PatWild -> PatWild
+    PatLit(l) -> PatLit(l)
 
-// fun expr/substitute(s: sub, e: expr): pure expr
-//   match e
-//     Lam(tn, eff, e) -> Lam(s |-> tn, s |-> eff, s |-> e)
-//     Var(tn, x) -> Var(s |-> tn, x)
-//     App(a, b) -> App(s |-> a, s |-> b)
-//     TypeLam(tvs, e) -> 
-//       val sub' = s.remove(tvs)
-//       TypeLam(tvs, sub' |-> e)
-//     TypeApp(e, tp) -> TypeApp(s |-> e, s |-> tp)
-//     Con(tn, repr) -> Con(s |-> tn, repr)
-//     ELit(l) -> ELit(l)
-//     Let(defGroups, e) -> Let(defGroups.map(fn(dg) s |-> dg), s |-> e)
-//     Case(es, bs) -> Case(s |-> es, bs.map(fn(b) s |-> b))
+fun expr/substitute(s: sub, e: expr): pure expr
+  match e
+    Lam(tn, eff, e) -> Lam(s |-> tn, s |-> eff, s |-> e)
+    Var(tn, x) -> Var(s |-> tn, x)
+    App(a, b) -> App(s |-> a, s |-> b)
+    TypeLam(tvs, e) -> 
+      val sub' = s.remove(tvs)
+      TypeLam(tvs, sub' |-> e)
+    TypeApp(e, tp) -> TypeApp(s |-> e, s |-> tp)
+    Con(tn, repr) -> Con(s |-> tn, repr)
+    ELit(l) -> ELit(l)
+    Let(defGroups, e) -> Let(defGroups.map(fn(dg) s |-> dg), s |-> e)
+    Case(es, bs) -> Case(s |-> es, bs.map(fn(b) s |-> b))
 
-// fun dg/substitute(s: sub, dg: defGroup): pure defGroup
-//   match dg
-//     DefRec(defs) -> DefRec(defs.map(fn(d) s |-> d))
-//     DefNonRec(e) -> DefNonRec(s |-> e)
+fun dg/substitute(s: sub, dg: defGroup): pure defGroup
+  match dg
+    DefRec(defs) -> DefRec(defs.map(fn(d) s |-> d))
+    DefNonRec(e) -> DefNonRec(s |-> e)
 
-// fun def/substitute(s: sub, Def(name, scheme, expr, vis, isVal, inl, nameRng, doc): def): pure def
-//   Def(name, s |-> scheme, s |-> expr, vis, isVal, inl, nameRng, doc)
+fun def/substitute(s: sub, Def(name, scheme, expr, vis, isVal, inl, nameRng, doc): def): pure def
+  Def(name, s |-> scheme, s |-> expr, vis, isVal, inl, nameRng, doc)
 
-// fun branch/substitute(s: sub, Branch(p, e): branch): pure branch
-//   val sub' = s.remove(p.bound-type-vars)
-//   Branch(s |-> p, sub' |-> e)
+fun branch/substitute(s: sub, Branch(p, e): branch): pure branch
+  val sub' = s.remove(p.bound-type-vars)
+  Branch(s |-> p, sub' |-> e)
 
-// fun guard/substitute(s: sub, g: guard): pure guard
-//   match g
-//     Guard(e, e2) -> Guard(s |-> e, s |-> e2)
+fun guard/substitute(s: sub, g: guard): pure guard
+  match g
+    Guard(e, e2) -> Guard(s |-> e, s |-> e2)
 
 // TODO: More
 fun fresh-typevar(k: kind, fl: flavour)
@@ -319,3 +324,26 @@ fun fresh-typevar(k: kind, fl: flavour)
     Bound -> "v"
   val id = unique-id(idbase)
   TypeVar(id, k, fl)
+
+fun match-types(ts1: list<ktype>, ts2: list<ktype>): pure bool
+  ts1.zipwith(ts2, match-type).all(id)
+
+fun typevar/match-effect(eff1: tau, eff2: tau): pure bool
+  match-type(eff1.order-effect, eff2.order-effect)
+
+fun match-type(tp1: ktype, tp2: ktype): pure bool
+  match (tp1.expand-syn, tp2.expand-syn)
+    (TForAll(vs1, t1), TForAll(vs2, t2)) -> 
+      if vs1 == vs2 then eq-type(t1, t2)
+      elif vs1.length == vs2.length && vs1.zipwith(vs2, fn(v1, v2) v1.kind == v2.kind).all(id) then
+        val s = vs1.zip(vs2.map(TVar)).sub
+        match-type(s |-> t1, t2)
+      else False
+    (TFun(pars1, eff1, t1), TFun(pars2, eff2, t2)) -> 
+      match-types(pars1.map(snd), pars2.map(snd)) && 
+        typevar/match-effect(eff1, eff2) && 
+          match-type(t1, t2)
+    (TCon(c1), TCon(c2)) -> c1 == c2
+    (TVar(v1), TVar(v2)) -> v1 == v2
+    (TApp(t1, ts1), TApp(t2, ts2)) -> t1.match-type(t2) && match-types(ts1, ts2)
+    _ -> False

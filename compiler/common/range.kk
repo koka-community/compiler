@@ -8,6 +8,7 @@
 // Updated as of 7/23/24: Commit 5edd7ce -- missing utfDecode, readInput, extractLiterate
 
 import std/os/path
+import std/pretty/pprint
 
 pub value struct source 
   name: string
@@ -123,6 +124,9 @@ fun range/cmp(r1: range, r2: range): order
   match r1.start.cmp(r2.start)
     Eq -> r1.end.cmp(r2.end)
     o -> o
+
+fun range/pretty(r: range): doc
+  r.show-compact-range.pretty
 
 // Does r2 start after r1
 fun range/is-after(r1: range, r2: range): bool
