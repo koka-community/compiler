@@ -151,7 +151,7 @@ fun pretty-typedef-group(tdg: typeDefGroup)
 fun pretty-typedef(td: typeDef)
   match td
     Synonym(synInfo) -> synInfo.pp-syn-info(False, True, True) |.| semi
-    Data(dataInfo, isExtend) -> dataInfo.pretty-data-info(True, False, isExtend) |.| semi 
+    Data(dataInfo) -> dataInfo.pretty-data-info(True, False) |.| semi 
 
 fun pretty-defgroup(dg: defGroup)
   match dg
@@ -345,7 +345,7 @@ fun extract-type(tp: ktype)
     TSyn(syn, args, body) -> Cons(syn.name.qualifier, Cons(body,args).extract-types)
     TApp(c, args) -> Cons(c, args).extract-types
     TFun(args, eff, res) -> Cons(res, Cons(eff, args.map(snd))).extract-types
-    TForAll(_, _, b) -> b.extract-type
+    TForAll(_, b) -> b.extract-type
     TCon(tc) -> [tc.name.qualifier]
     TVar -> []
 
@@ -370,7 +370,7 @@ fun extract-synonym(tp: ktype): pure name-map<synInfo>
         Nothing -> syns
     TApp(c, args) -> Cons(c, args).extract-synonyms
     TFun(args, eff, res) -> Cons(res, Cons(eff, args.map(snd))).extract-synonyms
-    TForAll(_, _, b) -> b.extract-synonym
+    TForAll(_, b) -> b.extract-synonym
     _ -> synonyms/empty
 
 fun extract-synonyms(tps: list<ktype>): pure name-map<synInfo>

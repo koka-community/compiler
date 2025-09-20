@@ -52,10 +52,10 @@ fun kgamma/filter(kg: kGamma, modName: name)
 val kgamma/empty:kGamma = LinearMap([])
 
 fun core/extract-typedefs(c: core): <exn,comp-flags> kGamma
-  c.typeDefs.map(extract-typedefs).unions
+  c.typeDefs.map(extract-typedefs).qname-map/unions
 
 fun tdg/extract-typedefs(g: typeDefGroup): <exn,comp-flags> kGamma
-  g.map(extract-typedefs).unions
+  g.map(extract-typedefs).qname-map/unions
 
 fun td/extract-typedefs(d: typeDef): kGamma
   match d

@@ -380,6 +380,13 @@ fun is-system-core-name(n: name): bool
   val m = n.nameModule
   m == "std/core" || m.starts-with("std/core/").bool
 
+fun shorten-system-core-name(n: name): name
+  val m = n.nameModule
+  if m == "std/core" || m == "std/core/types" || m == "std/core/exn" then n.unqualify
+  elif m.starts-with("std/core/").bool then qualify(m.list.drop(9).string.new-module-name, n.unqualify)
+  else n
+
+
 fun is-primitive-name(n: name): bool
   n.qualifier.is-primitive-module
 

@@ -106,14 +106,14 @@ fun arg/pretty(a: (maybe<(name,range)>, expr<userType>)): div doc
 
 fun expr/pretty(expr: expr<userType>): div doc
   match expr
-    Lam(binder, e) -> "fn".text |.| binder.map(fn(b) b.pretty).tupled |--| e.pretty.indent(2)
+    Lam(binder, e) -> "fn".text |.| binder.map(pretty).tupled |--| e.pretty.indent(2)
     Let(d, e) -> d.dg/pretty |--| e.expr/pretty 
     Bind(d, e) ->  d.pretty |--| e.pretty
     App(Handler(_, _, _, _, _, _, _, hReturn, _, branches), [body]) -> 
-      "with handler".text |--| Cons(hReturn.pretty, branches.map(fn(b) b.pretty)).vcat.indent(2)
-      |--| body.pretty
-    App(Var(opname, True), [a1, a2]) -> a1.pretty |+| opname.show-plain.pretty |+| a2.pretty
-    App(e, args) -> e.pretty |.| args.map(fn(a) a.pretty).tupled 
+      "with handler".text |--| Cons(hReturn.pretty, branches.map(pretty)).vcat.indent(2)
+      |--| body.snd.expr/pretty
+    App(Var(opname, True), [a1, a2]) -> a1.arg/pretty |+| opname.show-plain.pretty |+| a2.arg/pretty
+    App(e, args) -> e.pretty |.| args.map(arg/pretty).tupled 
     Var(n) -> n.pretty
     Literal(l) -> l.pretty
     Ann(e, t) -> e.pretty |+| t.pretty
@@ -167,7 +167,7 @@ fun pat/pretty(p: userPattern): div doc
     PatAnn(p, t) -> p.pretty |+| ":".text |+| t.pretty
     PatCon(name, Nil) -> name.unqualify.pretty
     PatCon(name, args) -> 
-      val args' = args.map(fn(a) a.pretty).tupled
+      val args' = args.map(patarg/pretty).tupled
       name.unqualify.pretty |.| args'
     PatParens(p) -> tupled([p.pretty])
     PatLit(value) -> value.pretty

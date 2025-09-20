@@ -51,7 +51,7 @@ fun err/show(err: error-msg): div string
   err.pretty.show
 
 fun errs/show(errs: errors): div string
-  errs.pretty.show
+  errs.errs/pretty.show
 
 fun err-sev/cmp(e1: error-severity, e2: error-severity): order
   match e1
