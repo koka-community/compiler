@@ -89,41 +89,44 @@ fun parse-lexemes(src: source, lexemes0: list<lexeme>, p: () -> <console,parse|e
     fun add-warning(w: string, r: range)
       ()
     fun pnext()
-      match lexemes
-        Cons(l, rst) ->
-          lexemes := rst 
-          match history
-            Cons((h, msg, i), tl) ->
-              history := Cons((Cons(l, h), msg, i + 1), tl)
-            Nil -> 
-              impossible("unexpected top of context")
+      val res = match lexemes
+        Cons(l) -> 
+          std/core/types/@byref(history).update(fn(hist)
+            match hist
+              Cons((h, msg, i), tl) -> Cons((Cons(l, h), msg, i + 1), tl)
+              Nil -> impossible("unexpected top of context")
+          )
           Just(l)
-        Nil -> Nothing
+        _ -> Nothing
+      std/core/types/@byref(lexemes).update(fn(lex) lex.tail)
+      res
     fun reset(msg)
       match history
-        Cons((h, str, _), rst) -> 
-          if str != msg then
-            // trace("Resetting " ++ str ++ " but expected " ++ msg)
-            impossible("Reset error")
-          else
-            lexemes := h.reverse ++ lexemes
-            history := rst
-            // if debug then
-            //   trace("Resetting " ++ str ++ "\n" ++ history.map(fn(x) "\tWhen parsing " ++ x.snd).join("\n") ++ " at " ++ lexemes.head.map(show).default("eof") ++ "\nputting back:\n\t" ++ (h ++. Nil).map(show).join("\n\t"))
-        Nil ->
-          impossible("mismatched reset")
+        Cons((h, str, _)) | str == msg -> std/core/types/@byref(lexemes).update(h.reverse ++ _)
+        _ -> ()
+      std/core/types/@byref(history).update fn(hist)
+        match hist
+          Cons((_, str, _), rst) -> 
+            if str != msg then
+              // trace("Resetting " ++ str ++ " but expected " ++ msg)
+              impossible("Reset error")
+            else
+              rst
+              // if debug then
+              //   trace("Resetting " ++ str ++ "\n" ++ history.map(fn(x) "\tWhen parsing " ++ x.snd).join("\n") ++ " at " ++ lexemes.head.map(show).default("eof") ++ "\nputting back:\n\t" ++ (h ++. Nil).map(show).join("\n\t"))
+          Nil -> impossible("mismatched reset")
     fun delimit(msg)
-      history := Cons(([], msg, 0), history)
+      std/core/types/@byref(history).update(fn(hist) Cons(([], msg, 0), hist))
     fun undelimit(msg)
-      match history
-        Cons((lexes, str, _), Cons((lexes2, str2, i2), rst)) ->
-          if str == msg then
-            history := Cons((lexes ++ lexes2, str2, i2), rst)
-          else
-            trace("Undelimiting " ++ str ++ " but expected " ++ msg)
-            impossible("Undelimit error")
-        _ ->
-          impossible("Undelimiting from top")
+      std/core/types/@byref(history).update fn(hist)
+        match hist
+          Cons((lexes, str, _), Cons((lexes2, str2, i2), rst)) ->
+            if str == msg then
+              Cons((lexes ++ lexes2, str2, i2), rst)
+            else
+              trace("Undelimiting " ++ str ++ " but expected " ++ msg)
+              impossible("Undelimit error")
+          _ -> impossible("Undelimiting from top")
     fun ppeek()
       match lexemes
         Cons(l, _) -> Just(l)

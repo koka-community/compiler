@@ -297,35 +297,39 @@ fun alex-scan(input: bslice, sc: int, restart:bool=False): handled-alex-eff ()
       match state.states // Get the current lexer state (i.e. the state to start the next token in)
         Cons(s) -> s
     fun push-state(i)
-      state := state(states=Cons(i, state.states)) // Push a new state onto the stack
+      std/core/types/@byref(state).update(fn(s) s(states=Cons(i, s.states))) // Push a new state onto the stack
     fun replace-state(i)
       match state.states
         Cons(_, states) -> 
-          state := state(states=Cons(i, states)) // Push a new state onto the stack
+          std/core/types/@byref(state).update(_(states=Cons(i, states))) // Push a new state onto the stack
     fun pop-state() // Pop the current state off the stack
       match state.states
         Cons(s, ss) -> 
-          state := state(states=ss)
+          std/core/types/@byref(state).update(_(states=ss))
           s
         _ -> throw("No states to pop.")
     fun next-char() 
-      val mc = state.alex-next()
-      match mc
+      match state.seek.next()
         Nothing -> Nothing
-        Just(Alex-next(s, c)) -> 
-          state := s
-          Just(c)
+        Just((c, _)) ->
+          std/core/types/@byref(state).update fn(s)
+            match s
+              AlexScanState(states, seek, _, acc, _, curr, start, end, last-accept, action-info) ->
+                match seek.next()
+                  Just((_, slice')) -> AlexScanState(states, slice', seek, acc, curr, c.int, start, end, last-accept, action-info)
+                  _ -> impossible("next-char: inconsistent state")
+          Just(c.int)
     fun consume-char() 
-      state := state.alex-consume-char()
+      std/core/types/@byref(state).update(_.alex-consume-char())
     fun prev-char() // Gets the previous character
       state.prev
     fun action-info() // Gets the info for the action
       state.action-info
     fun set-accept(s) // Sets the accepting state
-      state := state.do-alex-accept(s)
+      std/core/types/@byref(state).update(_.do-alex-accept(s))
     fun recognize-token() 
       val la = state.last-accept
-      state := state.recognize(restart) 
+      std/core/types/@byref(state).update(_.recognize(restart))
       la
   alex-scan-tokens(sc)
 
@@ -416,7 +420,7 @@ val special-names = [ "{", "}"
     , "[", "]"
     , ";", ","
 ]
-pub val reserved-names = 
+val reserved-names = 
       delay({
         string-pool().add-all(
         ["infix", "infixr", "infixl"
