@@ -299,26 +299,28 @@ fun alex-scan(input: bslice, sc: int, restart:bool=False): handled-alex-eff ()
     fun push-state(i)
       std/core/types/@byref(state).update(fn(s) s(states=Cons(i, s.states))) // Push a new state onto the stack
     fun replace-state(i)
-      match state.states
-        Cons(_, states) -> 
-          std/core/types/@byref(state).update(_(states=Cons(i, states))) // Push a new state onto the stack
+      std/core/types/@byref(state).update(fn(s) s(states=Cons(i, s.states))) // Push a new state onto the stack
     fun pop-state() // Pop the current state off the stack
-      match state.states
-        Cons(s, ss) -> 
-          std/core/types/@byref(state).update(_(states=ss))
-          s
+      val (s, ss) = match state.states
+        Cons(s1, ss1) -> (s1, ss1)
         _ -> throw("No states to pop.")
+      std/core/types/@byref(state).update(_(states=ss))
+      s
     fun next-char() 
-      match state.seek.next()
+      val res = match state.seek.next()
         Nothing -> Nothing
-        Just((c, _)) ->
+        Just((c, _)) -> Just(c.int)
+      match res 
+        Just(c) -> 
           std/core/types/@byref(state).update fn(s)
             match s
               AlexScanState(states, seek, _, acc, _, curr, start, end, last-accept, action-info) ->
                 match seek.next()
-                  Just((_, slice')) -> AlexScanState(states, slice', seek, acc, curr, c.int, start, end, last-accept, action-info)
+                  Just((_, slice')) -> AlexScanState(states, slice', seek, acc, curr, c, start, end, last-accept, action-info)
                   _ -> impossible("next-char: inconsistent state")
-          Just(c.int)
+        _ -> ()
+      res
+          
     fun consume-char() 
       std/core/types/@byref(state).update(_.alex-consume-char())
     fun prev-char() // Gets the previous character

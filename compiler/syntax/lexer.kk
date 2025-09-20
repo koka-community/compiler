@@ -14,19 +14,19 @@ fun lex(str: string, pos: pos): pure list<lexeme>
   var col-off := pos.col
   with handler
     fun do-start-chunked(s: string, start: alex-pos)
-      slices := Cons((s.string/bytes, start), slices)
+      std/core/types/@byref(slices).update(Cons((s.string/bytes, start), _))
     fun end-chunked()
-      match slices
-        Cons((s, start), rst) -> 
-          slices := rst
+      val res = match slices
+        Cons((s, start)) -> 
           (s.string, start)
         Nil -> throw("end-chunked when no chunked input")
+      std/core/types/@byref(slices).update(_.list/tail)
+      res
     fun add-chunk(f)
-      match slices
-        Cons((s, st), rst) -> 
-          slices := Cons((s ++ f.bytes, st), rst)
-        Nil -> 
-          throw("add-chunk when no chunked input")
+      std/core/types/@byref(slices).update fn(slices')
+        match slices'
+          Cons((s, st), rst) -> Cons((s ++ f.bytes, st), rst)
+          _ -> impossible("add-chunk when no chunked input")
     fun get-rawdelim()
       raw-delim
     fun set-rawdelim(i)
@@ -53,14 +53,13 @@ fun lex(str: string, pos: pos): pure list<lexeme>
     fun do-emit(l, lstart, lend)
       val Alex-pos(soff, sline, scol) = lstart.adjust(line-off, if col-off-line == lstart.line then col-off else 0)
       val Alex-pos(eoff, eline, ecol) = lend.adjust(line-off, if col-off-line == lend.line then col-off else 0)
-      lexemes := Cons(Lexeme(make-range(Pos(src, soff, sline, scol), Pos(src, eoff, eline, ecol)), l), lexemes)
+      std/core/types/@byref(lexemes).update(fn(lexes) Cons(Lexeme(make-range(Pos(src, soff, sline, scol), Pos(src, eoff, eline, ecol)), l), lexes))
   alex-scan(str.bytes.slice, 0)
   lexemes.reverse
 
 fun adjust(pos: alex-pos, l: int, c: int): alex-pos
   match pos
-    Alex-pos(off, line, col) ->
-      Alex-pos(off, line + l, col + c)
+    Alex-pos(off, line, col) -> Alex-pos(off, line + l, col + c)
 
 fun get-int(l: list<char>): int
   l.drop-while(is-white).take-while(is-digit).string.parse-int.default(0)
