@@ -294,7 +294,7 @@ fun subsume(rng: range, free: tvs, tp1: ktype, tp2: ktype): <unify,pure,comp-fla
   // final type
   val (vars, ssub) = freshSub(Bound, sks)
   val subx = ssub |-> sub
-  val tp = quantify-type(vars, qualify-type(evs1.map(fn(ev) subx |-> ev.pred), subx |-> rho1)) // TODO: do rho1 and we get skolem errors: see Prelude.choose
+  val tp = quantify-type(vars, qualify-type(evs1.map(subx |-> _.pred), subx |-> rho1)) // TODO: do rho1 and we get skolem errors: see Prelude.choose
   // return
   (tp, subx |-> evsEnt, 
     fn(expr) add-type-lambdas(vars, // generalize 
@@ -348,8 +348,8 @@ fun overlaps(rng: range, free: tvs, tp1: ktype, tp2: ktype): <unify,pure,comp-fl
     (_, Nothing) -> ()
     // rest
     (Just((targs1, _, _)), Just((targs2, _, _))) ->
-      val (fixed1, optional1) = targs1.map(snd).span(fn(tp) !tp.is-optional)
-      val (fixed2, optional2) = targs2.map(snd).span(fn(tp) !tp.is-optional)
+      val (fixed1, optional1) = targs1.map(snd).span(!_.is-optional)
+      val (fixed2, optional2) = targs2.map(snd).span(!_.is-optional)
       val hi = max(fixed1.length, fixed2.length)
       val fo1 = (fixed1 ++ optional1.map(unOptional)).take(hi)
       val fo2 = (fixed2 ++ optional2.map(unOptional)).take(hi)

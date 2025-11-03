@@ -66,7 +66,7 @@ fun gen-typedef-post(td: typeDef)
       // generate types for constructors
       if dataRepr.is-dataEnum then ()
       else 
-        conInfos.map(fn(ci) ci.gen-constructor-type(info, dataRepr))
+        conInfos.map(_.gen-constructor-type(info, dataRepr))
         ()
 
       // wrap up the type definition
@@ -99,8 +99,8 @@ fun gen-typedef-post(td: typeDef)
       
       // generate functions for constructors
       val sconInfos = conInfos.sortBy(fn(ci1, ci2) ci1.fst.params.length.compare(ci2.fst.params.length)) // singletons first
-      sconInfos.map(fn(ci) ci.gen-constructor(info, dataRepr, maxSC))
-      sconInfos.map(fn(ci) ci.gen-constructor-test(info, dataRepr))
+      sconInfos.map(_.gen-constructor(info, dataRepr, maxSC))
+      sconInfos.map(_.gen-constructor-test(info, dataRepr))
 
       // generate functions for the data type
       if !isExtend then
@@ -202,7 +202,7 @@ fun gen-constructor-create(ci: conInfo, crepr: conRepr, allFields: list<(name, k
               if drepr.needsTagField then
                [info.name.typeClassName.cpp-name |+| tmp |.| semi,
                 tmp |.| "._tag =".text |+| ctag |.| semi] ++
-                conFields.map(fn(cf) cf.assignField(fn(fld) tmp |.| "._cons.".text |.| ci.name.ppDefName |.| ".".text |.| fld))
+                conFields.map(_.assignField(fn(fld) tmp |.| "._cons.".text |.| ci.name.ppDefName |.| ".".text |.| fld))
                 ++ paddingFields.map(fn((padding, _)) tmp |.| "._cons.".text |.| ci.name.ppDefName |.| ".".text |.| padding.ppDefName |+| "= kk_box_null();".text)
                 ++ list(scan-count - 1, maxScanCount - 2).map(fn(i) tmp |.| "._cons._fields[".text |.| i.pretty |.| "] = kk_box_null();".text)
               else []
@@ -222,7 +222,7 @@ fun gen-constructor-create(ci: conInfo, crepr: conRepr, allFields: list<(name, k
                   (if !drepr.is-dataOpen then ctag else "KK_TAG_OPEN".text)
                 ]) |.| semi]
               ++ (if !drepr.is-dataOpen then [] else [tmp |.| "->_base._tag = kk_string_dup".text |.| arguments([ctag]) |.| semi])
-              ++ conFields.map(fn(cf) cf.assignField(fn(fld) tmp |.| "->".text |.| fld))
+              ++ conFields.map(_.assignField(fn(fld) tmp |.| "->".text |.| fld))
               ++ paddingFields.map(fn((padding, _)) tmp |.| "->".text |.| padding.ppDefName |+| "= kk_box_null();".text)
               ++ ["return".text |+| ci.conBaseCastName |.| arguments([tmp]) |.| semi]
             )

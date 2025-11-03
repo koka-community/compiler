@@ -102,7 +102,7 @@ fun inf/fkv(k: infKind): kvs
 // Pretty printing
 fun infkind/show(infkind: infKind): <comp-flags,pure,colorSchemeEffect> string
   with nice-kind-env()
-  infkind.fkv.list.foreach(fn(fk) fk.extend-nice)
+  infkind.fkv.list.foreach(extend-nice)
   infkind.pp-infkind(precInfKindTop).pprint/show
 
 fun nice-infkinds(kinds: list<infKind>): <pure,comp-flags,colorSchemeEffect> list<doc>

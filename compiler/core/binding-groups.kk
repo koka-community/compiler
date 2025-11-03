@@ -40,7 +40,7 @@ fun regroup(dfs: list<def>): <comp-flags,pure> list<defGroup>
           [nm] -> 
             if deps.get(nm).member(nm) then DefRec([defMap.get(nm)])
             else DefNonRec(defMap.get(nm))
-          _ -> DefRec(names.map(fn(nm) defMap.get(nm)))
+          _ -> DefRec(names.map(defMap.get(_)))
       defOrder.map(makeGroup)
 
 fun find(nameMap: list<(tName, b)>, nm: tName): <comp-flags,exn> b

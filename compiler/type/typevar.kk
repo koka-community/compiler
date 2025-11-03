@@ -13,13 +13,13 @@ pub infixr 5 (|->)
 
 // The free unifiable (e.g. 'Meta') type variables
 fun fuv(tvs: tvs): tvs
-  tvs.filter(fn(tv) tv.flavour.is-meta)
+  tvs.filter(_.flavour.is-meta)
 // The free 'Skolem' type variables
 fun fsv(tvs: tvs): tvs
-  tvs.filter(fn(tv) tv.flavour.is-skolem)
+  tvs.filter(_.flavour.is-skolem)
 // The free 'Bound' type variables
 fun fbv(tvs: tvs): tvs
-  tvs.filter(fn(tv) tv.flavour.is-bound)
+  tvs.filter(_.flavour.is-bound)
 // All type variables (including the bound ones)
 fun all-tv(a: a, ?bound-type-vars: (a) -> e tvs, ?free-type-vars: (a) -> e tvs): e tvs
   a.bound-type-vars.union(a.free-type-vars)
@@ -297,7 +297,7 @@ fun expr/substitute(s: sub, e: expr): pure expr
     TypeApp(e, tp) -> TypeApp(s |-> e, s |-> tp)
     Con(tn, repr) -> Con(s |-> tn, repr)
     ELit(l) -> ELit(l)
-    Let(defGroups, e) -> Let(defGroups.map(fn(dg) s |-> dg), s |-> e)
+    Let(defGroups, e) -> Let(defGroups.map(s |-> _), s |-> e)
     Case(es, bs) -> Case(s |-> es, bs.map(s |-> _))
 
 fun dg/substitute(s: sub, dg: defGroup): pure defGroup

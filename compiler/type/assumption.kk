@@ -140,7 +140,7 @@ fun gamma-extend(g: gamma, name: name, ni: nameInfo)
   g.update(name.unqualify-full, [(name, ni)], fn(old, new) old ++ new) // TODO: Check for overlapping type schemes?
 
 fun gamma-lookup-canonical(g: gamma, name: name)
-  g.gamma-lookupQ(name).filter(fn(ni) ni.canonical-name(nil) == name)
+  g.gamma-lookupQ(name).filter(_.canonical-name(nil) == name)
 
 fun gamma-lookup-exact-con(g: gamma, name: name)
   g.gamma-lookupQ(name).filter(is-infoCon)

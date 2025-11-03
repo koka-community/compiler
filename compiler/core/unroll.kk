@@ -34,7 +34,7 @@ fun unrollBody(d: def, tpars: list<typeVar>, pars: list<tName>, eff: keffect, bo
           val info = InfoArity(tpars.length, pars.length)
           val sub = [(dname, Var(rname, info))]
           val rdef = d(def-name=rname.get-name, defExpr=(sub |-> d.defExpr), vis=Private)
-          val rcall = App(TypeApp(Var(rname, info), tpars.map(fn(tv) TVar(tv))), pars.map(Var(_, InfoNone)))
+          val rcall = App(TypeApp(Var(rname, info), tpars.map(TVar)), pars.map(Var(_, InfoNone)))
           val wild = Branch(pats.map(fn(_) PatWild), [Guard(exprTrue, rcall)])
           fun mkFun(b)
             val l = Lam(pars, eff, b)

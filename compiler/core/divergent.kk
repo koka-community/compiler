@@ -177,7 +177,7 @@ fun divExpr(e: expr): divEff ()
       expr.divExpr
     Case(exprs, branches) ->
       exprs.map(divExpr)
-      branches.foreach(fn(br) divBranch(exprs, br))
+      branches.foreach(divBranch(exprs, _))
     _ -> ()
 
 fun divBranch(exprs, Branch(pats, guards): branch): divEff ()

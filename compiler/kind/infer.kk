@@ -93,7 +93,7 @@ fun syn-typedef-groups(tdgs: list<core/core/typeDefGroup>, lazyExprs: list<lazyE
   tdgs.flatmap(fn(tdg) tdg.syn-typedef-group(lazyExprs))
 
 fun syn-typedef-group(tdg: core/core/typeDefGroup, lazyExprs: list<lazyExpr>): _ syntax/syntax/defGroups<ktype>
-  tdg.flatmap(fn(td) td.syn-typedef(lazyExprs))
+  tdg.flatmap(_.syn-typedef(lazyExprs))
 
 fun syn-typedef(td: core/core/typeDef, lazyExprs: list<lazyExpr>): _ list<syntax/syntax/defGroup<ktype>>
   match td
@@ -105,7 +105,7 @@ fun syn-typedef(td: core/core/typeDef, lazyExprs: list<lazyExpr>): _ list<syntax
                       [syn-copycon(di, di.constrs.head.unjust)]
                     else []
       val testers = if (di.constrs.length > 1 || di.is-open) && !di.di/is-lazy then
-                      di.constrs.flatmap(fn(ci) syn-tester(di, ci))
+                      di.constrs.flatmap(syn-tester(di, _))
                     else []
       val contag = if di.is-open then di.constrs.map(syn-constr-tag) else []
       val synLazy = if di.di/is-lazy then 
@@ -135,7 +135,7 @@ fun syn-copycon(di: dataInfo, ci: conInfo)
 
 fun has-accessor(ci: conInfo, nm: name, tp: ktype)
   val tvs = tp.free-type-vars
-  !(nm.is-field-name || nm == nil) && ci.existentials.all(fn(tv) !tvs.member(tv))
+  !(nm.is-field-name || nm == nil) && ci.existentials.all(!tvs.member(_))
 
 fun nub-by(xs: list<a>, f: (a, a) -> bool): list<a>
   match xs
@@ -150,7 +150,7 @@ fun syn-accessors(di: dataInfo)
     (nm, (tp, rng, pvis, ci))
   )
   fun occurs-on-all-constrs((nm, (tp, _, _, _)))
-    paramss.all(fn(ps) ps.any(fn((n, (t, _, _, _))) n == nm && t.eq-type(tp))) // TODO: Change this to eqType
+    paramss.all(_.any(fn((n, (t, _, _, _))) n == nm && t.eq-type(tp))) // TODO: Change this to eqType
   val fields = paramss.concat.filter(fn((nm, (tp, _, _, cinfo))) cinfo.has-accessor(nm, tp)).nub-by(fn(x, y) x.fst == y.fst).filter(occurs-on-all-constrs)
   fun syn-accessor((nm, (tp, xrng, visibility, _)))
     val rng = xrng.hide
@@ -205,7 +205,7 @@ fun syn-lazy-tag(di: dataInfo)
   val rng = xrng.hide
   val defName = di.lazy-name("tag")
   val lazyTag = 
-    match di.constrs.find(fn(ci) ci.name.is-lazy-indirect-con-name)
+    match di.constrs.find(_.name.is-lazy-indirect-con-name)
       Nothing -> fail("kind/infer/syn-lazy-tag: no indirection constructor found: " ++ di.name.show)
       Just(ind) -> ind.tag
   val expr = App(Var(nameInternalInt32, False, rng), [(Nothing, Literal(syntax/syntax/LitInt(lazyTag, rng)))], rng)
@@ -238,7 +238,7 @@ fun syn-lazy-eval(di: dataInfo, lazyExprs: list<lazyExpr>)
       Cons(x, xs) -> xs ++ [x]
       _ -> xs
   
-  val lazyConstrs = di.constrs.filter(fn(ci) ci.coninfo/is-lazy).rotate // indirect match comes last
+  val lazyConstrs = di.constrs.filter(coninfo/is-lazy).rotate // indirect match comes last
 
   fun branch-expr(ci: conInfo)
     match lazyExprs.lookup(_ == ci.name)
@@ -290,7 +290,7 @@ fun add-branch(di: dataInfo, ci: conInfo, evalName, b, arg)
     syntax/syntax/Branch(patt, guards) -> Branch(patt, guards.map(add-guard(di, ci, evalName, _, arg)))
 
 fun is-whnf-con(di, cname: name)
-  val (_, whnfConstrs) = di.constrs.partition(fn(ci) ci.coninfo/is-lazy)
+  val (_, whnfConstrs) = di.constrs.partition(coninfo/is-lazy)
   di.lookup-con(whnfConstrs, cname).is-just
 
 fun is-whnf-con-pat(di, p)
@@ -618,8 +618,8 @@ fun inf-resolvex(tp: userType, rng: range)
   if kargs.length > 2 || kargs.is-cons && kres.is-infkind-label then
     // either user defined, or a primitive like `:local`
     val vars = list(1, kargs.length - (if kres.is-infkind-label then 0 else 2)).map(new-name("_" ++ _.show))
-    val quals = vars.map(fn(nm) TypeBinder(nm, KindNone, rng, rng))
-    val tpvars = vars.map(fn(nm) TpVar(nm, rng))
+    val quals = vars.map(TypeBinder(_, KindNone, rng, rng))
+    val tpvars = vars.map(TpVar(_, rng))
     val newTp = quals.foldr(TpApp(tp, tpvars, rng), fn(q, t) TpQuan(QSome, q, t, rng))
     newTp.inf-resolvex(rng) // recurse
   else
@@ -999,7 +999,7 @@ fun resolve-typedef(isRec: bool, recNames: list<name>, td: syntax/syntax/typeDef
           TypeBinder(qname, kind, newtp.name-range, newtp.range)
         else
           newtp.resolve-typebinder-def(doc)
-      val params' = params.map(fn(tb) tb.resolve-typebinder(""))
+      val params' = params.map(_.resolve-typebinder(""))
       val typeResult = TCon(TypeCon(newtp'.name, newtp'.tb/kind))
       val typeVars =
         val (kargs, _kres) = extract-kind-fun(newtp'.tb/kind)
@@ -1022,7 +1022,7 @@ fun resolve-typedef(isRec: bool, recNames: list<name>, td: syntax/syntax/typeDef
         fun from-ops-name(nm: name)
           if nm.is-operations-name then [nm.from-operations-name] else []
         val effNames = recNames.map(from-ops-name).concat
-        if conInfos0.any(fn(ci) occurs-negative-con(recNames ++ effNames, ci)) then
+        if conInfos0.any(occurs-negative-con(recNames ++ effNames, _)) then
           add-error(rng, "Type".text |+| nameDoc |+| "is declared as being".text |-| "(co)inductive but it occurs recursively in a negative position.".text |-|
             " hint: declare it as a divergent (or retractive) type using 'div type' (or 'effect rec)' to allow negative occurences".text)
         else ()
@@ -1032,7 +1032,7 @@ fun resolve-typedef(isRec: bool, recNames: list<name>, td: syntax/syntax/typeDef
       fun emit-warning(d)
         add-warning(rng, "Type".text |+| nameDoc |+| d)
       val resultHasKindStar = typeResult.kind.has-kind-star-result
-      val maxMembers = conInfos0.map(fn(ci) ci.conInfo/params.length).maximum
+      val maxMembers = conInfos0.map(_.conInfo/params.length).maximum
       val conCount = conInfos0.length
       val willNeedStructTag = ddef.is-value && conCount > 1 && maxMembers >= 1
       val extraFields = 

@@ -56,7 +56,7 @@ fun con/pretty(u: userCon<userType,userType,userKind>): div doc
 
 fun dg/pretty(d: defGroup<userType>): div doc
   match d
-    DefRec(defs) -> defs.map(fn(df) df.pretty |+| "\n".text).vcat
+    DefRec(defs) -> defs.map(_.pretty |+| "\n".text).vcat
     DefNonRec(df) -> df.pretty
 
 fun tdefvb/pretty(v: valueBinder<userType,maybe<expr<userType>>>): div doc

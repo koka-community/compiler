@@ -54,7 +54,7 @@ fun tdg/extract-coninfo(g: typeDefGroup): <pure,comp-flags> constructors
 fun td/extract-coninfo(d: typeDef): <pure,comp-flags> constructors
   match d
     Data(dataInfo) | dataInfo.vis.is-public -> 
-      LinearMap(dataInfo.constrs.filter(fn(ci) ci.vis.is-public).list/map(fn(ci) (ci.conInfo/name, ci)))
+      LinearMap(dataInfo.constrs.filter(_.vis.is-public).list/map(fn(ci) (ci.conInfo/name, ci)))
     _ -> empty
 
 // TODO: Pretty print

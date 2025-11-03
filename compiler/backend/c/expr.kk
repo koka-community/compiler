@@ -114,7 +114,7 @@ fun gen-topdef-decl(d: def, genSig: bool, inlineC: bool)
             Just((_, _, argTps, _, _)) ->
               val names = list(1, argTps.length).map(fn(x) ("x" ++ x.show).newVarName)
               val tnames = zip(names, argTps).map(fn((nm, (_, tp))) TName(nm, tp))
-              val app = App(ex, tnames.map(fn(tn) Var(tn, InfoNone)))
+              val app = App(ex, tnames.map(Var(_, InfoNone)))
               app.genFunDef(tnames)
         // Special case string literals
         ELit(LitString(s)) -> s.gen-top-level-string-literal(d.def-name, d.vis)

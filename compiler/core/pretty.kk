@@ -220,12 +220,12 @@ fun pretty-expr(ex: expr)
     TypeLam(tvs, expr) ->
       if pretty-names then
         tvs.foreach(extend-nice)
-      val doc = overridePrec(precTypeTop, {"forall".text |.| tvs.map(fn(tv) tv.pretty-typeVar).angled |+| ".".text |+| expr.pretty-expr})
+      val doc = overridePrec(precTypeTop, {"forall".text |.| tvs.map(pretty-typeVar).angled |+| ".".text |+| expr.pretty-expr})
       doc.pparens(prec, precTypeArrow)
     TypeApp(expr, tps) ->
       if !ppEnv.coreShowTypes then expr.pretty-expr
       else
-        val dtps = overridePrec(precTypeTop, {tps.map(fn(tp) tp.pretty-type)}).angled
+        val dtps = overridePrec(precTypeTop, {tps.map(pretty-type)}).angled
         val de = overridePrec(precTypeApp - 1, {expr.pretty-expr})
         (de |.| dtps).pparens(prec, precTypeApp)
     // Literals and Contants
@@ -357,7 +357,7 @@ fun extract-imports-from-synonyms(imps: list<kimport>, syns: list<synInfo>)
   fun extractSyn(syn: synInfo)
     Cons(syn.name.qualifier, syn.t.extract-type)
   val quals = syns.map(extractSyn).concat.filter(fn(nm) !impNames.any(_ == nm))
-  quals.map(fn(nm) Kimport(nm, "", Private, "")) // TODO: import path?
+  quals.map(Kimport(_, "", Private, "")) // TODO: import path?
 
 // extract from type signatures the synonyms so we can compress .kki files
 // by locally defining imported synonyms

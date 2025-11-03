@@ -80,7 +80,7 @@ fun lift-defgroup(defg: defGroup, topLevel: bool)
         // we approximate here for now
         // Note that it can be important to have precise DefRec groups for other optimizations, like TMRC (compiler/core/ctail)
         val dnames = defs'.defsTNames
-        val (gnonrecs, grecs) = lifted.partition(fn(dg) dg.free-vars.intersection(tnames/empty + dnames).is-empty)
+        val (gnonrecs, grecs) = lifted.partition(_.free-vars.intersection(tnames/empty + dnames).is-empty)
         (gnonrecs ++ [DefRec(grecs.flatten ++ defs')])
   else
     match defg
@@ -147,7 +147,7 @@ fun make-def(fvs: list<tName>, tvs: list<typeVar>, pinfos: list<paramInfo>, orig
   val etaExpr = match (tvs, fvs)
     (Nil, Nil) -> funExpr
     _ -> add-type-lambdas(tpars, Lam(pars, eff, App(add-type-apps(alltpars, funExpr), allargs)))
-  val liftedDef = Def(name, liftedTp, liftedFun, Private, def-fun(allpinfos), inl, null, "// lifted local: " ++ (dnames ++ [origName.get-name]).map(fn(dn) dn.unqualify.show).join(", ") ++ "\n" ++ doc)
+  val liftedDef = Def(name, liftedTp, liftedFun, Private, def-fun(allpinfos), inl, null, "// lifted local: " ++ (dnames ++ [origName.get-name]).map(_.unqualify.show).join(", ") ++ "\n" ++ doc)
   (etaExpr, liftedDef)
 
 fun unique-name-current-def()

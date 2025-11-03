@@ -82,7 +82,7 @@ fun ni/show(ni: nameInfo): <comp-flags,pure> string
 fun ri/show(ri: rangeInfo): <comp-flags,pure> string
   match ri
     RIDecl(kind, name, name2, mbtp) -> 
-      "Decl " ++ kind ++ " " ++ show(name) ++ " " ++ show(name2) ++ mbtp.map(fn(tp) ": " ++ tp.pretty.show).default("")
+      "Decl " ++ kind ++ " " ++ show(name) ++ " " ++ show(name2) ++ mbtp.map(": " ++ _.pretty.show).default("")
     RIBlock(str) -> "Block " ++ str
     RIError -> "Error"
     RIWarning -> "Warning"
@@ -155,7 +155,7 @@ fun prioritize(rm: range-map)
     match ri
       RIId(name, info, docs, isDef) -> (rng, RIId(name, info, docs ++ idocsrev, isDef))
       _ -> (rng, ri)
-  sorted.group(?(==)=eq).map(fn(rs) rs.last.unjust.merge-docs())
+  sorted.group(?(==)=eq).map(_.last.unjust.merge-docs())
 
 fun merge-implicits(rm: range-map, for-inlay: bool)
   val idocs = 

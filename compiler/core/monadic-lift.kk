@@ -17,7 +17,7 @@ fun monadicLift()
 
 //   transform definition groups
 fun lift-defgroups(dgs: defGroups, topLevel: bool)
-  dgs.map(fn(dg) dg.lift-defgroup(topLevel)).concat
+  dgs.map(_.lift-defgroup(topLevel)).concat
 
 alias liftedEff = <lifted, uniquePhase, pure, comp-flags>
 effect lifted
@@ -156,7 +156,7 @@ fun make-def(e: expr, fvs: list<tName>, tvs: list<typeVar>)
     _ -> fail("core/monadic-lift make-def lifting non function? " ++ e.show)
   val alltpars = tvs ++ tpars
   val allpars = fvs ++ pars
-  val allargs = allpars.map(fn(tn) Var(tn, InfoNone))
+  val allargs = allpars.map(Var(_, InfoNone))
   val liftedFun = add-type-lambdas(alltpars, Lam(allpars, eff, body))
   val liftedTp = liftedFun.type-of
   fun liftedDef(nm, inl)

@@ -310,9 +310,9 @@ fun dfs/group-bindings(defs: list<def<t>>, deps: deps): pure list<defGroup<t>>
   fun insert(rdefs: list<list<name>>, idgrp: list<name>): pure list<list<name>>
     // insert `idgrp` into the reverse definitions (from most to least dependent)
     val n = line-of(idgrp)
-    val idgrp-deps = idgrp.map(fn(id) defDeps.find(id)).unions
+    val idgrp-deps = idgrp.map(defDeps.find(_)).unions
     fun goes-after(x: list<name>) // don't go beyond source order
-      n < x.line-of && !x.any(fn(id) idgrp-deps.member(id))
+      n < x.line-of && !x.any(idgrp-deps.member(_))
     val (pre, post) = rdefs.span(goes-after)
     pre ++ Cons(idgrp, post)
 
@@ -330,7 +330,7 @@ fun dfs/group-bindings(defs: list<def<t>>, deps: deps): pure list<defGroup<t>>
           [DefRec(defMap.get(id))]
         else
           defMap.get(id).map(DefNonRec)
-      _ -> [DefRec(ids.map(fn(id) defMap.get(id)).concat)]
+      _ -> [DefRec(ids.map(defMap.get(_)).concat)]
   
   defOrder.map(make-group).concat
 
@@ -353,7 +353,7 @@ fun typedefs/group(tdefs: list<userTypeDef>, deps: deps)
           [TypeDefRec(typeMap.get(id))]
         else
           typeMap.get(id).map(TypeDefNonRec)
-      _ -> [TypeDefRec(ids.map(fn(id) typeMap.get(id)).concat)]
+      _ -> [TypeDefRec(ids.map(typeMap.get(_)).concat)]
   typeOrder0.map(make-group).concat
 
     
