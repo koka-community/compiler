@@ -38,7 +38,7 @@ fun lex(str: string, pos: pos): pure list<lexeme>
             val lineadj = s.list.drop(6).drop-while(is-white)
             match lineadj
               Cons('(', rst) -> 
-                val linecol = rst.take-while(fn(c) c != ')').string.split(",")
+                val linecol = rst.take-while(_ != ')').string.split(",")
                 match linecol
                   Cons(ln, Cons(col)) -> 
                     line-off := ln.list.get-int - start.line

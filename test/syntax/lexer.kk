@@ -41,7 +41,7 @@ fun test-unicode()
       val s = read-text-file(f)
       // s.println
       val res = lexing(Source(f.string, s), 1, s)
-      println("Lexed ... " ++ f.show ++ "\n" ++ res.show(?show = fn(l) l.lex.show))
+      println("Lexed ... " ++ f.show ++ "\n" ++ res.show(?show = _.lex.show))
   println("Done")
 
 fun test-raw()

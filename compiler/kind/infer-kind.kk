@@ -108,7 +108,7 @@ fun infkind/show(infkind: infKind): <comp-flags,pure,colorSchemeEffect> string
 fun nice-infkinds(kinds: list<infKind>): <pure,comp-flags,colorSchemeEffect> list<doc>
   with nice-kind-env()
   kinds.map(fkv).unions.list.map(extend-nice)
-  kinds.map(fn(k) k.lift-kapp.pp-infkind(precInfKindTop))
+  kinds.map(_.lift-kapp.pp-infkind(precInfKindTop))
 
 fun pp-infkind(k: infKind, prec: int): <pure, niceEff<id>, comp-flags, colorSchemeEffect> doc
   fun collect-funargs(ik: infKind)

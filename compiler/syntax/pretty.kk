@@ -7,7 +7,7 @@ import compiler/common/range
 
 
 fun program/pretty(Program(_, n, _, typeDefs, defs, imports, externals, fixDefs, _):userProgram): div doc
-  vcat(Cons("module".text |+| n.pretty, imports.map(fn(i) i.pretty) ++ fixDefs.map(fn(fd) fd.pretty) ++ externals.map(fn(e) e.pretty) ++ typeDefs.map(fn(td) td.pretty) ++ defs.map(fn(d) d.pretty)))
+  vcat(Cons("module".text |+| n.pretty, imports.map(pretty) ++ fixDefs.map(pretty) ++ externals.map(pretty) ++ typeDefs.map(pretty) ++ defs.map(pretty)))
 
 fun external/pretty(e: external): doc
   empty
@@ -31,15 +31,15 @@ fun kimport/pretty(i: kimport): doc
 
 fun typedefgroup/pretty(t: typeDefGroup<userType,userKind>): div doc
   match t
-    TypeDefRec(defs) -> defs.map(fn(d) d.pretty).vcat
+    TypeDefRec(defs) -> defs.map(pretty).vcat
     TypeDefNonRec(d) -> d.pretty
 
 fun typedef/pretty(td: typeDef<userType,userType,userKind>): div doc
   match td
     Synonym(binder, params, synonym, _, vis, doc) -> 
-     doc.pretty |--| vis.pretty |.| "alias ".text |.| binder.pretty |+| params.map(fn(p) p.pretty).vcat |+| synonym.pretty 
+     doc.pretty |--| vis.pretty |.| "alias ".text |.| binder.pretty |+| params.map(pretty).vcat |+| synonym.pretty 
     DataType(binder, params, constrs, _, vis, _, _, _, doc) -> 
-      doc.pretty |--| vis.pretty |.| "type ".text |.| binder.pretty |+| params.map(fn(p) p.pretty).vcat |+| constrs.map(fn(c) c.pretty).vcat
+      doc.pretty |--| vis.pretty |.| "type ".text |.| binder.pretty |+| params.map(pretty).vcat |+| constrs.map(pretty).vcat
 
 fun vis/pretty(v: visibility): doc
   match v
@@ -50,7 +50,7 @@ fun tb/pretty(t: typeBinder<userKind>): div doc
   t.name.pretty |+| t.kind.pretty
 
 fun con/pretty(u: userCon<userType,userType,userKind>): div doc
-  u.name.pretty |+| u.existentials.map(fn(e) e.pretty).vcat |+| 
+  u.name.pretty |+| u.existentials.map(pretty).vcat |+| 
    u.params.map(fn((vis,bind)) tupled([vis.pretty, bind.pretty]) ).vcat |+| 
    u.result.pretty |+| u.vis.pretty |.| u.doc.pretty
 
@@ -88,9 +88,9 @@ fun dbinder/pretty(vb: valueBinder<(), userExpr>, sort: defSort): div doc
     DefFun -> 
       match vb.expr
         Ann(Lam(binders, e)) -> 
-          vb.name.pretty |.| binders.map(fn(b) b.pretty).tupled |--| e.pretty.indent(2)
+          vb.name.pretty |.| binders.map(pretty).tupled |--| e.pretty.indent(2)
         Lam(binders, e) -> 
-          vb.name.pretty |.| binders.map(fn(b) b.pretty).tupled |--| e.pretty.indent(2)
+          vb.name.pretty |.| binders.map(pretty).tupled |--| e.pretty.indent(2)
         _ -> vb.name.pretty |+| vb.expr.pretty
     DefVal -> vb.name.pretty |+| "=".text |+| vb.expr.pretty
     DefVar -> vb.name.pretty |+| ":=".text |+| vb.expr.pretty
@@ -117,13 +117,13 @@ fun expr/pretty(expr: expr<userType>): div doc
     Var(n) -> n.pretty
     Literal(l) -> l.pretty
     Ann(e, t) -> e.pretty |+| t.pretty
-    Case(e, cases) -> "match".text |+| e.pretty |--| cases.map(fn(c) c.pretty).vcat.indent(2)
+    Case(e, cases) -> "match".text |+| e.pretty |--| cases.map(pretty).vcat.indent(2)
     Parens(e, n, d) -> d.pretty |.| e.pretty |+| n.pretty
     Inject(t, e, behind) -> 
       if behind then "mask behind<".text |.| t.pretty |.| ">".text |--| e.pretty.indent(2)
       else "mask<".text |.| t.pretty |.| ">".text |--| e.pretty.indent(2)
     Handler(_, _, _, _, _, _, _, hReturn, _, branches) -> 
-      "handler".text |--| Cons(hReturn.pretty, branches.map(fn(b) b.pretty)).vcat.indent(2)
+      "handler".text |--| Cons(hReturn.pretty, branches.map(pretty)).vcat.indent(2)
 
 fun handbranch/pretty(b: handlerBranch<userType>): div doc
   b.branchSort.pretty |+| b.branchName.pretty |--| b.branchExpr.pretty.indent(2)
@@ -153,7 +153,7 @@ fun hs/pretty(h: handlerScope): doc
     HandlerNoScope -> empty
 
 fun branch/pretty(b: branch<userType>): div doc
-  b.branchPattern.pretty |+| b.branchGuard.map(fn(g) "->".text |--| g.guardExpr.pretty.indent(2)).vcat
+  b.branchPattern.pretty |+| b.branchGuard.map("->".text |--| _.guardExpr.pretty.indent(2)).vcat
 
 fun patarg/pretty(pa: (maybe<(name, range)>, userPattern)): div doc
   match pa
@@ -174,9 +174,9 @@ fun pat/pretty(p: userPattern): div doc
 
 fun vbm/pretty(ValueBinder(nm, tp, subpat): valueBinder<maybe<userType>, userPattern>): div doc
   if subpat.is-patWild then
-    nm.pretty |.| tp.map(fn(t) " : ".text |.| t.pretty).default(empty)
+    nm.pretty |.| tp.map(" : ".text |.| _.pretty).default(empty)
   else
-    nm.pretty |+| "as".text |+| subpat.pretty |.| tp.map(fn(t) " : ".text |.| t.pretty).default(empty)
+    nm.pretty |+| "as".text |+| subpat.pretty |.| tp.map(" : ".text |.| _.pretty).default(empty)
 
 fun lit/pretty(l: lit): doc
   match l

@@ -143,4 +143,4 @@ fun lex/pretty(lexeme: lexeme): div doc
     LexTypedId(n) -> n.pretty-local-name
 
 fun format-comment(s: string): doc
-  s.split("//").drop-while(is-empty).map(fn(l) "//".text |+| l.trim.text).vcat
+  s.split("//").drop-while(is-empty).map("//".text |+| _.trim.text).vcat

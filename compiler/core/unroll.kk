@@ -34,7 +34,7 @@ fun unrollBody(d: def, tpars: list<typeVar>, pars: list<tName>, eff: keffect, bo
           val info = InfoArity(tpars.length, pars.length)
           val sub = [(dname, Var(rname, info))]
           val rdef = d(def-name=rname.get-name, defExpr=(sub |-> d.defExpr), vis=Private)
-          val rcall = App(TypeApp(Var(rname, info), tpars.map(fn(tv) TVar(tv))), pars.map(fn(v) Var(v, InfoNone)))
+          val rcall = App(TypeApp(Var(rname, info), tpars.map(fn(tv) TVar(tv))), pars.map(Var(_, InfoNone)))
           val wild = Branch(pats.map(fn(_) PatWild), [Guard(exprTrue, rcall)])
           fun mkFun(b)
             val l = Lam(pars, eff, b)
@@ -51,12 +51,12 @@ fun extractNonRecBranches(dname: tName, recs: list<branch>, bs: list<branch>): d
     // Stop on end
     Nil -> (Nil, recs)
     // stop also when we cannot push down patterns of recursive branches any further
-    Cons(b, _) | pretend-no-div({recs.any(fn(r) r.matchCanOverlap(b))}) ->
+    Cons(b, _) | pretend-no-div({recs.any(_.matchCanOverlap(b))}) ->
       (Nil, recs ++ [b] ++ bs)
     // otherwise
     Cons(b as Branch(pats, guards), bs') ->
       // we only want cheap matches in the unrolling, and they should be non-recursive    
-      if pats.any(fn(p) !p.singletonPat) || guards.free-vars.member(dname) then
+      if pats.any(!_.singletonPat) || guards.free-vars.member(dname) then
         // assume it contains a recursive call
         // push down as long the other patterns don't match to maximize non-recursive matches
         extractNonRecBranches(dname, (recs ++ [b]), bs')

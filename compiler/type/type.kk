@@ -313,10 +313,10 @@ fun is-rho(tp: ktype): bool
 fun is-tau(tp: ktype): bool
   match tp
     TForAll -> False
-    TFun(xs, e, r) -> xs.all(fn(x) x.snd.pretend-decreasing.is-tau) && e.is-tau && r.is-tau
+    TFun(xs, e, r) -> xs.all(_.snd.pretend-decreasing.is-tau) && e.is-tau && r.is-tau
     TCon -> True
     TVar -> True
-    TApp(a, b) -> a.is-tau && b.all(fn(x) x.pretend-decreasing.is-tau)
+    TApp(a, b) -> a.is-tau && b.all(_.pretend-decreasing.is-tau)
     TSyn(_, _, t) -> t.is-tau
 
 fun split-fun-type(tp: ktype): maybe<(list<(name, ktype)>, ktype, ktype)>
@@ -446,7 +446,7 @@ fun effect-extend-no-dup(label: tau, eff: tau): pure tau
   match ls
     Nil ->
       val (els, _) = eff.extract-effect-extend
-      if els.any(fn(l) l.eq-type(label)) then eff // use eqType?
+      if els.any(_.eq-type(label)) then eff // use eqType?
       else app-effect-extend(label, eff)
     _ -> ls.effect-extend-no-dups(eff)
 
@@ -609,7 +609,7 @@ fun un-optional(tp: ktype): ktype
 fun prune-syn(rho: rho): rho
   match rho
     TSyn(_, _, t) -> t.prune-syn
-    TApp(t1, ts) -> TApp(t1.prune-syn, ts.map(fn(x) x.pretend-decreasing.prune-syn))
+    TApp(t1, ts) -> TApp(t1.prune-syn, ts.map(_.pretend-decreasing.prune-syn))
     _ -> rho
 
 fun tv/to-type(v: typeVar)

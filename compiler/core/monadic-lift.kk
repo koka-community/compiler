@@ -45,12 +45,12 @@ fun lift-defgroup(dg: defGroup, topLevel: bool)
         val d' = d.liftDef(topLevel)
         collect() ++ [DefNonRec(d')]
       DefRec(ds) ->
-        val ds' = ds.map(fn(d) d.liftDef(topLevel))
+        val ds' = ds.map(_.liftDef(topLevel))
         collect() ++ [DefRec(ds')]
   else
     match dg
       DefNonRec(d) -> [DefNonRec(d.liftDef(topLevel))]
-      DefRec(ds) -> [DefRec(ds.map(fn(d) d.liftDef(topLevel)))]
+      DefRec(ds) -> [DefRec(ds.map(_.liftDef(topLevel)))]
   
 fun liftDef(d: def, topLevel: bool)
   with override
@@ -72,7 +72,7 @@ fun liftExprInl(expr': expr, topLevel: bool): liftedEff (expr, expr)
       val a = TypeVar(0, kindStar, Bound)
       val b = TypeVar(1, kindStar, Bound)
       val e = TypeVar(2, kindEffect, Bound)
-      val typeBind2 = TForAll([a, b, e], [], 
+      val typeBind2 = TForAll([a, b, e], 
         TFun([(nil, TVar(a)), 
                  (nil, TFun([(nil, TVar(a))], TVar(e), TVar(b))),
                  (nil, TFun([(nil, TVar(a))], TVar(e), TVar(b))),
@@ -84,7 +84,7 @@ fun liftExprInl(expr': expr, topLevel: bool): liftedEff (expr, expr)
       val (body', ibody') = body.liftExprInl(False)
       (Let(defgs', body'), Let(defgs', ibody'))
     Case(exprs, bs) ->
-      val exprs' = exprs.map(fn(e) e.liftExpr(False))
+      val exprs' = exprs.map(_.liftExpr(False))
       val (bs', ibs') = bs.map(liftBranchInl).unzip
       (Case(exprs', bs'), Case(exprs', ibs'))
     TypeLam(tvars, body) ->
@@ -118,7 +118,7 @@ fun liftExpr(expr': expr, topLevel: bool): liftedEff expr
       App(tpApp, [bexpr', f])
     App(f, args) ->
       val f' = f.liftExpr(False)
-      val args' = args.map(fn(e) e.liftExpr(False))
+      val args' = args.map(_.liftExpr(False))
       App(f', args')
     Lam(args, eff, body) ->
       val body' = body.liftExpr(False)
@@ -128,7 +128,7 @@ fun liftExpr(expr': expr, topLevel: bool): liftedEff expr
       val body' = body.liftExpr(False)
       Let(defgs', body')
     Case(exprs, bs) ->
-      val exprs' = exprs.map(fn(e) e.liftExpr(False))
+      val exprs' = exprs.map(_.liftExpr(False))
       val bs' = bs.map(liftBranch)
       Case(exprs', bs')
     TypeLam(tvars, body) ->

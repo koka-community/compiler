@@ -187,21 +187,21 @@ fun special-to-keywords(lexemes: list<lexeme>): list<lexeme>
     Cons(l0 as Lexeme(_, LexKeyword("import", _)), Cons(l1 as Lexeme(_, LexWhite), Cons(Lexeme(r2, LexId(id)), lexes))) ->
       Cons(l0, Cons(l1, Cons(Lexeme(r2, LexModule(id, id)), lexes.special-to-keywords)))
     
-    Cons(Lexeme(r0, LexId(id)), Cons(l1 as Lexeme(_, LexWhite), Cons(l2 as Lexeme(_, LexKeyword("type")), lexes))) | ["co", "div", "open", "extend", "value", "reference"].any(fn(i) i == id.show) ->
+    Cons(Lexeme(r0, LexId(id)), Cons(l1 as Lexeme(_, LexWhite), Cons(l2 as Lexeme(_, LexKeyword("type")), lexes))) | ["co", "div", "open", "extend", "value", "reference"].any(_ == id.show) ->
       Cons(Lexeme(r0, LexKeyword(id.show, "")), Cons(l1, Cons(l2, lexes.special-to-keywords)))
-    Cons(Lexeme(r0, LexId(id)), Cons(l1 as Lexeme(_, LexWhite), Cons(l2 as Lexeme(_, LexKeyword("struct")), lexes))) | ["value", "reference"].any(fn(i) i == id.show) ->
+    Cons(Lexeme(r0, LexId(id)), Cons(l1 as Lexeme(_, LexWhite), Cons(l2 as Lexeme(_, LexKeyword("struct")), lexes))) | ["value", "reference"].any(_ == id.show) ->
       Cons(Lexeme(r0, LexKeyword(id.show, "")), Cons(l1, Cons(l2, lexes.special-to-keywords)))
     
-    Cons(Lexeme(r0, LexId(id)), Cons(l1 as Lexeme(_, LexWhite), Cons(l2 as Lexeme(_, LexKeyword("effect")), lexes))) | ["linear", "div", "named"].any(fn(i) i == id.show) ->
+    Cons(Lexeme(r0, LexId(id)), Cons(l1 as Lexeme(_, LexWhite), Cons(l2 as Lexeme(_, LexKeyword("effect")), lexes))) | ["linear", "div", "named"].any(_ == id.show) ->
       Cons(Lexeme(r0, LexKeyword(id.show, "")), Cons(l1, Cons(l2, lexes.special-to-keywords)))
-    Cons(Lexeme(r0, LexId(id)), Cons(l1 as Lexeme(_, LexWhite), Cons(l2 as Lexeme(r2, LexId(id2)), Cons(l3 as Lexeme(_, LexWhite), Cons(l4 as Lexeme(_, LexKeyword("effect")), lexes))))) | "named" == id.show && ["linear", "div"].any(fn(i) i == id2.show) ->
+    Cons(Lexeme(r0, LexId(id)), Cons(l1 as Lexeme(_, LexWhite), Cons(l2 as Lexeme(r2, LexId(id2)), Cons(l3 as Lexeme(_, LexWhite), Cons(l4 as Lexeme(_, LexKeyword("effect")), lexes))))) | "named" == id.show && ["linear", "div"].any(_ == id2.show) ->
       Cons(Lexeme(r0, LexKeyword(id.show, "")), Cons(l1, Cons(l2, Cons(Lexeme(r2, LexKeyword(id2.show, "")), Cons(l3, Cons(l4, lexes.special-to-keywords))))))
     Cons(Lexeme(r0, LexId(id)), Cons(l1 as Lexeme(_, LexWhite), Cons(l2 as Lexeme(r2, LexId(id2)), Cons(l3 as Lexeme(_, LexWhite), Cons(l4 as Lexeme(_, LexKeyword("effect")), lexes))))) | "linear" == id.show && "div" == id2.show ->
       Cons(Lexeme(r0, LexKeyword(id.show, "")), Cons(l1, Cons(l2, Cons(Lexeme(r2, LexKeyword(id2.show, "")), Cons(l3, Cons(l4, lexes.special-to-keywords))))))
     
-    Cons(Lexeme(r0, LexId(id)), Cons(l1 as Lexeme(_, LexWhite), Cons(l2 as Lexeme(_, LexKeyword("fun")), lexes))) | ["inline", "noinline", "fip", "fbip", "tail"].any(fn(i) i == id.show) ->
+    Cons(Lexeme(r0, LexId(id)), Cons(l1 as Lexeme(_, LexWhite), Cons(l2 as Lexeme(_, LexKeyword("fun")), lexes))) | ["inline", "noinline", "fip", "fbip", "tail"].any(_ == id.show) ->
       Cons(Lexeme(r0, LexKeyword(id.show, "")), Cons(l1, Cons(l2, lexes.special-to-keywords)))
-    Cons(Lexeme(r0, LexId(id)), Cons(l1 as Lexeme(_, LexWhite), Cons(l2 as Lexeme(r2, LexId(id2)), Cons(l3 as Lexeme(_, LexWhite), Cons(l4 as Lexeme(_, LexKeyword("fun")), lexes))))) | ["inline", "noinline"].any(fn(i) i == id.show) && ["fip", "fbip", "tail"].any(fn(i) i == id2.show) ->
+    Cons(Lexeme(r0, LexId(id)), Cons(l1 as Lexeme(_, LexWhite), Cons(l2 as Lexeme(r2, LexId(id2)), Cons(l3 as Lexeme(_, LexWhite), Cons(l4 as Lexeme(_, LexKeyword("fun")), lexes))))) | ["inline", "noinline"].any(_ == id.show) && ["fip", "fbip", "tail"].any(_ == id2.show) ->
       Cons(Lexeme(r0, LexKeyword(id.show, "")), Cons(l1, Cons(l2, Cons(Lexeme(r2, LexKeyword(id2.show, "")), Cons(l3, Cons(l4, lexes.special-to-keywords))))))
     
 
@@ -343,10 +343,10 @@ fun scan-tag(n: int, lacc: ctx<list<token-comment<lexeme>>>, content: list<char>
             Cons('<', cs) -> span-to-end-tag(Cons(['<'], acc), cs)
             Nil -> (acc.reverse.concat, [])
             Cons ->
-              val (pre, post) = chs.span(fn(c) c != '<')
+              val (pre, post) = chs.span(_ != '<')
               span-to-end-tag(Cons(pre, acc), post)
         val (elem, after) = span-to-end-tag([], content)
-        val m = elem.filter(fn(e) e == '\n').length
+        val m = elem.filter(_ == '\n').length
         scan(n + m, lacc ++ ctx Cons(ComText(elem.string), _), [], after)
       else
         default()
@@ -361,7 +361,7 @@ fun scan-math(n: int, lacc: ctx<list<token-comment<lexeme>>>, content: list<char
 fun scan-pre(m: int, n: int, lacc: ctx<list<token-comment<lexeme>>>, acc: list<char>, chs: list<char>): <pure,fmt> list<token-comment<lexeme>>
   match chs
     Cons('`', rest) ->
-      val (pre, post) = rest.span(fn(c) c == '`')
+      val (pre, post) = rest.span(_ == '`')
       if m == pre.length + 1 then
         scan(n, lacc, Cons('`', pre ++ acc), post)
       else
@@ -450,7 +450,7 @@ fun scan(lineno: int, lacc: ctx<list<token-comment<lexeme>>>, acc: list<char>, c
       else
         scan-pre-block(3, lineno, lacc ++ ctx Cons(ComText(("```".list ++ pre ++ acc).reverse.string), hole), [], post)
     Cons('`', rest) ->
-      val (pre, post) = rest.span(fn(c) c != '`')
+      val (pre, post) = rest.span(_ != '`')
       val lacc' = lacc ++ ctx Cons(ComText(Cons('`', pre ++ acc).reverse.string), hole)
       if acc.white-line && pre.length >= 2 then
         scan-pre-block(pre.length + 1, lineno, lacc', [], post)
@@ -463,7 +463,7 @@ fun scan(lineno: int, lacc: ctx<list<token-comment<lexeme>>>, acc: list<char>, c
 
 // Parse comment formatters
 fun lex-comment(lineno: int, content: string): <pure,fmt> list<token-comment<lexeme>>
-  scan(lineno, ctx hole, [], content.list.filter(fn(c) c != '\r'))
+  scan(lineno, ctx hole, [], content.list.filter(_ != '\r'))
 
 fun on-line(pre: list<char>, post: list<char>): bool
   pre.white-line && post.white-line

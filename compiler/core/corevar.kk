@@ -65,7 +65,7 @@ fun def/free-vars(Def(_, _, e): def): div linearSet<tName>
 
 // Term substitutions
 fun list/(|->)(sub: list<(tName, expr)>, l: list<a>, ?(|->): (list<(tName, expr)>, a) -> pure a): pure list<a>
-  l.map(fn(x) (|->)(sub, x))
+  l.map(sub |-> _)
 
 fun dg/(|->)(sub: list<(tName, expr)>, dg: defGroup): pure defGroup
   match dg
@@ -80,9 +80,9 @@ fun def/(|->)(sub: list<(tName, expr)>, d: def): pure def
 fun expr/(|->)(sub: list<(tName, expr)>, ex: expr): pure expr
   match ex
     Lam(tnames, eff, expr) ->
-      val sub' = sub.filter(fn((nm, _)) !tnames.any(fn(n) n == nm))
+      val sub' = sub.filter(fn((nm, _)) !tnames.any(_ == nm))
       Lam(tnames, eff, sub' |-> expr)
-    Var(tn, _) -> sub.lookup(fn(n) n == tn).default(ex)
+    Var(tn, _) -> sub.lookup(_ == tn).default(ex)
     App(e1, e2) -> App(sub |-> e1, sub |-> e2)
     TypeLam(tvs, e) -> TypeLam(tvs, sub |-> e)
     TypeApp(e, tp) -> TypeApp(sub |-> e, tp)
@@ -90,7 +90,7 @@ fun expr/(|->)(sub: list<(tName, expr)>, ex: expr): pure expr
     ELit -> ex
     Let(dgs, e) ->
       val defnames = dgs.flatten.map(def-name)
-      val sub' = sub.filter(fn((nm, _)) !defnames.any(fn(n) n == nm.get-name))
+      val sub' = sub.filter(fn((nm, _)) !defnames.any(_ == nm.get-name))
       Let(sub' |-> dgs, sub' |-> e)
     Case(exprs, bs) -> Case(sub |-> exprs, sub |-> bs)
 

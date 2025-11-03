@@ -125,7 +125,7 @@ fun extend-kgamma(rngs: list<range>, dg: compiler/core/core/typeDefGroup, f)
   f()
 
 fun member-doc(doc: string, header: string, members: list<string>): string
-  val mdoc = "// " ++ header ++ ":\n// ```koka\n" ++ members.map(fn(m) "//" ++ m).join("\n") ++ "// ```\n"
+  val mdoc = "// " ++ header ++ ":\n// ```koka\n" ++ members.map("//" ++ _).join("\n") ++ "// ```\n"
   if doc == "" then mdoc else doc ++ "\n// * * *\n" ++ mdoc
 
 fun check-external(name: name, range: range)

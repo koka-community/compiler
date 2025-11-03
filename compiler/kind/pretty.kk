@@ -14,7 +14,7 @@ fun kind-colon()
 
 // Generate nice quantifier names
 fun nice-kinds(kinds: list<kind>): prettyKindEff list<doc>
-  kinds.map(fn(k) k.pp-kind(precTop))
+  kinds.map(_.pp-kind(precTop))
 
 fun pretty-kind(k: kind): prettyKindEff doc
   k.pp-kind(precTop)
@@ -60,7 +60,7 @@ fun pp-kind(k: kind, prec: prec)
       val x = match k.collect-funargs
         Cons(k', ks) -> 
           k'.pp-kind(precApp - 1) |.| 
-          ks.comma-parens(fn(x) x.pp-kind(precTop))
+          ks.comma-parens(_.pp-kind(precTop))
         _ -> fail("kind/pretty pp-kind.KApp: match failure")
       x.pparens(prec, precApp)
   nm.color(colors.colorKind)

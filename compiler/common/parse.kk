@@ -344,31 +344,31 @@ inline fun parse-comma(): <parse> range
   parse-special(",")
 
 inline fun parse-semicolon(): <parse> range
-  parse-range("semicolon") fn(x) x.is-semicolon
+  parse-range("semicolon", is-semicolon)
 
 fun parse-left-curly(): <parse> range
-  parse-range("{") fn(x) x.lex.is-lcurly
+  parse-range("{", _.lex.is-lcurly)
 
 fun parse-right-curly(): <parse> range
-  parse-range("}") fn(x) x.lex.is-rcurly
+  parse-range("}", _.lex.is-rcurly)
 
 fun parse-left-bracket(): <parse> range
-  parse-range("[") fn(x) x.lex.is-lbracket
+  parse-range("[", _.lex.is-lbracket)
 
 fun parse-right-bracket(): <parse> range
-  parse-range("]") fn(x) x.lex.is-rbracket
+  parse-range("]", _.lex.is-rbracket)
 
 fun parse-left-paren(): <parse> range
-  parse-range("(") fn(x) x.lex.is-lparen
+  parse-range("(", _.lex.is-lparen)
 
 fun parse-right-paren(): <parse> range
-  parse-range(")") fn(x) x.lex.is-rparen
+  parse-range(")", _.lex.is-rparen)
 
 fun parse-left-angle(): <parse> range
-  parse-range("<") fn(x) x.lex.is-langle
+  parse-range("<", _.lex.is-langle)
 
 fun parse-right-angle(): <parse> range
-  parse-range(">") fn(x) x.lex.is-rangle
+  parse-range(">", _.lex.is-rangle)
 
 fun parse-type-binder-id(): <parse> (name, range)
   parse-choices("tBinderId", [parse-type-ident])
@@ -583,7 +583,7 @@ fun parse-special-id(s: string, alternates: list<string>): <parse> range
   parse-token(s) fn(x)
     match x.lex
       LexId(id) | id.show-plain == s -> Just(x.range)
-      LexId(id) | alternates.any(fn(v) v == id.show-plain) -> 
+      LexId(id) | alternates.any(_ == id.show-plain) -> 
         add-warning("using deprecated keyword " ++ id.show-plain ++ ", use " ++ s ++ " instead", x.range)
         Just(x.range)
       _ -> Nothing
@@ -601,7 +601,7 @@ fun parse-special(s: string, alternates: list<string>): <parse> range
   parse-token(s) fn(x)
     match x.lex
       LexSpecial(s') | s == s' -> Just(x.range)
-      LexSpecial(s') | alternates.any(fn(v) v == s') -> 
+      LexSpecial(s') | alternates.any(_ == s') -> 
         add-warning("using deprecated keyword " ++ s' ++ ", use " ++ s ++ " instead", x.range)
         Just(x.range)
       _ -> Nothing
@@ -616,7 +616,7 @@ fun parse-keyword_(s: string, alternates: list<string>): <parse> lexeme
   parse-token("keyword " ++ s) fn(x)
     match x.lex
       LexKeyword(s', _) | s == s' -> Just(x)
-      LexKeyword(s', _) | alternates.any(fn(v) v == s') -> 
+      LexKeyword(s', _) | alternates.any(_ == s') -> 
         add-warning("using deprecated keyword " ++ s' ++ ", use " ++ s ++ " instead", x.range)
         Just(x)
       _ -> Nothing

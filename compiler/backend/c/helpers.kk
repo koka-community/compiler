@@ -59,11 +59,6 @@ value struct canonicalLambda
   canonicalName : name
   fieldNames: list<(name, bool)>
 
-fun list/(==)(fn1: list<(name, bool)>, fn2: list<(name, bool)>): bool
-  match (fn1, fn2)
-    (Cons((n1, b1), r1), Cons((n2, b2), r2)) -> n1 == n2 && b1 == b2 && r1.pretend-decreasing == r2 
-    _ -> False
-
 fun can/(==)(c1: canonicalLambda, c2: canonicalLambda): pure bool
   c1.canonicalName == c2.canonicalName && c1.fieldNames == c2.fieldNames
 
@@ -212,7 +207,7 @@ fun is-pure-expr(ex: expr): pure bool
     TypeLam(_, e) -> e.is-pure-expr
     Var(_, InfoExternal) -> False
     Var -> True
-    Con -> ex.type-of.split-funScheme.is-nothing
+    Con -> ex.type-of.split-fun-scheme.is-nothing
     ELit(LitString) -> False // for our purposes, it's not pure (as it needs a declaration)
     ELit -> True
     Lam -> True
@@ -251,8 +246,8 @@ type cType
 
 fun c-type(tp: ktype): cType
   match tp
-    TForAll(_, _, t) -> t.c-type
-    TFun(pars, _, res) -> CFun(pars.map(fn(p) p.snd.pretend-decreasing.c-type), res.c-type)
+    TForAll(_, t) -> t.c-type
+    TFun(pars, _, res) -> CFun(pars.map(_.snd.pretend-decreasing.c-type), res.c-type)
     TApp(t) -> t.c-type
     TCon(c) -> c.c-type-con
     TVar -> CBox
@@ -292,7 +287,7 @@ fun type-con-class-name(n: name)
   n
 
 fun cprim-can-be-boxed(s: string): bool
-  ["kk_char_t", "int64_t", "int16_t", "int32_t", "float", "double", "intptr_t", "kk_ssize_t"].any(fn(x) x == s)
+  ["kk_char_t", "int64_t", "int16_t", "int32_t", "float", "double", "intptr_t", "kk_ssize_t"].any(_ == s)
 
 fun cpp-type(tp: ktype): doc
   match tp.c-type
@@ -334,7 +329,7 @@ fun ppLit(l: lit): <exn,comp-flags> doc
 
 fun cString(s: string)
   fun bytes(bs: list<int>)
-    ("\" \"" ++ bs.map(fn(b) b.show-hex(2, pre="\\x")).join ++ "\" \"").text
+    ("\" \"" ++ bs.map(_.show-hex(2, pre="\\x")).join ++ "\" \"").text
   fun escape(c: char): (doc, int)
     if c.int == 0 then (bytes([0xC0, 0x80]), 2) // embedded zero character
     elif c < ' ' then
@@ -422,7 +417,7 @@ fun encode(n: name, isModule: bool)
 
 fun is-reserved(s: string): bool
   if s.starts-with("kk_").is-just then True
-  else reserved.any(fn(r) r == s)
+  else reserved.any(_ == s)
 
 val reserved = [ 
   // C pseudo-keywords
@@ -539,7 +534,7 @@ fun is-whitespace(c: char)
 
 fun trim-comment(comm: string)
   fun trim-rest(xs: list<char>)
-    xs.drop-while(fn(x) x.is-whitespace).reverse.string
+    xs.drop-while(is-whitespace).reverse.string
   fun trim-line(s: string)
     match s.list.reverse
       Cons('\\', xs) -> xs.trim-rest
@@ -547,7 +542,7 @@ fun trim-comment(comm: string)
   comm.lines.map(trim-line).unlines
 
 fun unit-semi(tp: ktype): doc
-  if tp.isTypeUnit then " = kk_Unit;".text else semi
+  if tp.is-type-unit then " = kk_Unit;".text else semi
 
 fun debug-comment(s: string)
   if debug then comment(s.text)
@@ -564,6 +559,6 @@ fun t-parameters(tns: list<tName>): doc
   nt-parameters(tns.map(fn(tn) (tn.get-name, tn.tNameType)))
 
 fun result-type(tp: ktype): <pure,comp-flags> ktype
-  match tp.split-funScheme
-    Just((_, _, _, _, res)) -> res
+  match tp.split-fun-scheme
+    Just((_, _, _, res)) -> res
     _ -> fail("backend/c/from-core result-type: not a function type: " ++ tp.show) // TODO: Pretty type

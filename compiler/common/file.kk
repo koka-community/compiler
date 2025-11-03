@@ -102,7 +102,7 @@ fun run-cmd-env(env: env, cmd: string, args: list<string>): io ()
 fun build-env(env: env): io maybe<env>
   if env.is-empty then return Nothing
   val old = get-env()
-  Just(env ++ old.filter(fn((k,_)) env.lookup(fn(x) x == k).is-nothing))
+  Just(env ++ old.filter(fn((k,_)) env.lookup(_ == k).is-nothing))
 
 // TODO: Missing file time and exists functions - in koka std core - though the libuv branch would have it
 // Compare to file modification times (uses 0 for non-existing files)

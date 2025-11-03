@@ -194,7 +194,7 @@ fun importExternalInclude(ext: external): asmEff list<doc>
       [
         "#include".text |+| 
         (
-          if includePath.head-char.map(fn(x) x=='<').is-just then includePath.text 
+          if includePath.head-char.map(_=='<').is-just then includePath.text 
           else 
             dquotes(
               if sourceDir.string == "" then includePath.text 

@@ -38,7 +38,7 @@ fun isDivFun(b: expr, pars: list<tName>, dname: name): <comp-flags, pure> bool
       val calls = runDiv(dname, pars, {divExpr(b)})
       val orders = calls.transpose.permutations.map(transpose)
       fun isAnOrder(cs)
-        cs.all(fn(call) match call.drop-while(fn(c) c == SEq) {Cons(SLt) -> True; _ -> False})
+        cs.all(fn(call) match call.drop-while(_ == SEq) {Cons(SLt) -> True; _ -> False})
       !orders.any(isAnOrder)
 
 fun transpose(xss:list<list<a>>): pure list<list<a>>
@@ -101,7 +101,7 @@ fun setRel(r: rel, f: () -> divEff a): divEff a
 fun runDiv(dname: name, args: list<tName>, f: () -> divEff a): <comp-flags, pure> list<call>
   var calls: list<call> := []
   with handler
-    val rel = Rel(dname, args.map(fn(a) names/empty + a.get-name), args.map(fn(a) names/empty))
+    val rel = Rel(dname, args.map(names/empty + _.get-name), args.map(fn(a) names/empty))
     fun addCall(n, c)
       calls := Cons(c, calls)
   f()
@@ -184,7 +184,7 @@ fun divBranch(exprs, Branch(pats, guards): branch): divEff ()
   fun extractName(e: expr)
     match e
       Var(tname) -> Just(tname.get-name)
-      App(TypeApp(Var(sameSize)), [Var(tname)]) | namesSameSize.any(fn(x) x == sameSize.get-name) ->
+      App(TypeApp(Var(sameSize)), [Var(tname)]) | namesSameSize.any(_ == sameSize.get-name) ->
         Just(tname.get-name)
       _ -> Nothing
   fun divGuard(Guard(test, expr))
@@ -192,7 +192,7 @@ fun divBranch(exprs, Branch(pats, guards): branch): divEff ()
     expr.divExpr
     ()
   exprs.map(extractName).zip(pats).foreach(fn((n, p)) divPattern(SEq, n, p))
-  guards.foreach(fn(g) g.divGuard)
+  guards.foreach(divGuard)
 
 fun divPattern(size: size, mbName: maybe<name>, p: pattern): divEff ()
   match (mbName, p)

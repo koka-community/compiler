@@ -369,13 +369,13 @@ fun is-anglebar(c: char): bool
 fun split-op(s: string): list<lex>
   fun split(s': list<char>): list<lex>
     match s'
-      Cons('|', rst) | rst.all(fn(r) r.is-anglebar) -> Cons(LexKeyword("|", ""), split(rst))
+      Cons('|', rst) | rst.all(is-anglebar) -> Cons(LexKeyword("|", ""), split(rst))
       Cons('>', rst) -> Cons(LexOp(">".new-name), split(rst))
       Cons('<', rst) -> Cons(LexOp("<".new-name), split(rst))
       Nil -> Nil
       xs -> Cons(LexOp(xs.string.new-name), Nil)
   val sl = s.list
-  if sl.all(fn(c) c.is-anglebar) then // A type operator
+  if sl.all(is-anglebar) then // A type operator
     split(sl)
   else Cons(LexOp(s.new-name), Nil)
 
@@ -403,7 +403,7 @@ fun unsafe-char(kind: string)
 fun strip-parens(s: sslice)
   match s.string.list.reverse
     Cons(')', cs) -> 
-      match cs.span(fn(c) { c != '(' })
+      match cs.span(_ != '(' )
         (op, Cons('(', qual)) -> (op ++ qual).reverse.string
         _ -> s.string
     _ -> s.string

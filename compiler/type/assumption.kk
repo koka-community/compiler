@@ -44,7 +44,7 @@ fun show(ni: nameInfo): div string
     InfoVal(vis, cname, typ, scope, range, isVar, allowImplicitMask, doc) -> "InfoVal(" ++ show(vis) ++ ", " ++ show(cname) ++ ", " ++ show(typ) ++ ", " ++ show(scope) ++ ", " ++ show-full-range(range, "".path) ++ ", " ++ show(isVar) ++ "," ++ show(allowImplicitMask) ++ "," ++  show(doc) ++ ")"
     InfoFun(vis, cname, typ, scope, arity, fipt, range, doc) -> "InfoFun(" ++ show(vis) ++ ", " ++ show(cname) ++ ", " ++ show(typ) ++ ", " ++ show(scope) ++ ", " ++ show-tuple(arity, show, show) ++ ", " ++ show(fipt) ++ ", " ++ show-full-range(range, "".path) ++ "," ++ show(doc) ++ ")"
     InfoCon(vis, typ, repr, conInfo, range, doc) -> "InfoCon(" ++ show(vis) ++ ", " ++ show(typ) ++ ", " ++ show(repr) ++ ", " ++ show(conInfo) ++ ", " ++ show-full-range(range, "".path) ++ "," ++ show(doc) ++ ")"
-    assumption/InfoExternal(vis, cname, typ, format, fipt, range, doc) -> "InfoExternal(" ++ show(vis) ++ ", " ++ show(cname) ++ ", " ++ show(typ) ++ ", " ++ show-list(format, fn(s) s.show-tuple(show, fn(x) x)) ++ ", " ++ show(fipt) ++ ", " ++ show-full-range(range, "".path) ++ "," ++ show(doc) ++ ")"
+    assumption/InfoExternal(vis, cname, typ, format, fipt, range, doc) -> "InfoExternal(" ++ show(vis) ++ ", " ++ show(cname) ++ ", " ++ show(typ) ++ ", " ++ show-list(format, _.show-tuple(show, id)) ++ ", " ++ show(fipt) ++ ", " ++ show-full-range(range, "".path) ++ "," ++ show(doc) ++ ")"
     InfoImport(vis, typ, nameAlias, fullName, range) -> "InfoImport(" ++ show(vis) ++ ", " ++ show(typ) ++ ", " ++ show(nameAlias) ++ ", " ++ show(fullName) ++ ", " ++ show-full-range(range, "".path) ++ ")"
 
 fun info-sort(ni: nameInfo)
@@ -125,7 +125,7 @@ alias gamma = name-map<list<(name, nameInfo)>>
 val empty:gamma = LinearMap([])
 
 fun schemes(g: gamma): list<scheme>
-  g.gamma-list.map(fn(n) n.snd.typ)
+  g.gamma-list.map(_.snd.typ)
 
 fun single(name: name, ni: nameInfo)
   assumption/empty.set(name, [(name, ni)])
@@ -149,7 +149,7 @@ fun gamma-lookup-exact-con(g: gamma, name: name)
 fun gamma-lookupQ(g: gamma, name: name)
   match g.lookup(name.unqualify-full)
     Nothing -> []
-    Just(xs) -> xs.filter(fn(n) n.fst == name).map(snd)
+    Just(xs) -> xs.filter(_.fst == name).map(snd)
 
 // @gamma-lookup name gamma@ looks up a potentially (partially) qualified name and returns all matches.
 fun gamma-lookup(g: gamma, name: name)
@@ -227,7 +227,7 @@ fun gamma-public-names(g: gamma)
 
 // Extract from core
 fun extract-gamma-imports(imports: list<(name,name)>, modName: name): gamma
-  val modAlias = modName //.nameStem.list.reverse.take-while(fn(a) a != '.').reverse.string.new-name
+  val modAlias = modName //.nameStem.list.reverse.take-while(_ != '.').reverse.string.new-name
   imports.map(extract-import).gamma-unions.gamma-extend(modAlias, InfoImport(Private, typeVoid, modAlias, modName, null))
 
 fun extract-import((name, qname))
@@ -240,13 +240,13 @@ fun extract-gamma(isValue: (dataInfo -> bool), privateAsPublic: bool, c: core): 
       Public -> Public
       _ -> if privateAsPublic then Public else vis
   gamma-unions([
-    c.defs.map(fn(dg) dg.extract-def-group(update-vis)).gamma-unions,
-    c.externals.map(fn(ex) ex.extract-external(update-vis)).gamma-unions,
-    c.typeDefs.map(fn(td) td.extract-type-def-group(isValue, update-vis)).gamma-unions
+    c.defs.map(_.extract-def-group(update-vis)).gamma-unions,
+    c.externals.map(_.extract-external(update-vis)).gamma-unions,
+    c.typeDefs.map(_.extract-type-def-group(isValue, update-vis)).gamma-unions
   ])
 
 fun extract-type-def-group(td: typeDefGroup, isValue: (dataInfo -> bool), update-vis)
-  td.map(fn(d) extract-type-def(isValue, update-vis, d)).gamma-unions
+  td.map(extract-type-def(isValue, update-vis, _)).gamma-unions
 
 fun extract-type-def(isValue: (dataInfo -> bool), update-vis, td: typeDef)
   fun extract-con-info((info, repr): (conInfo, conRepr))
@@ -257,7 +257,7 @@ fun extract-type-def(isValue: (dataInfo -> bool), update-vis, td: typeDef)
 
 fun extract-def-group(d: defGroup, update-vis)
   match d
-    DefRec(defs) -> defs.map(fn(v) extract-def(v, update-vis)).gamma-unions
+    DefRec(defs) -> defs.map(extract-def(_, update-vis)).gamma-unions
     DefNonRec(v) -> extract-def(v, update-vis)
 
 fun extract-def(d: def, update-vis)
@@ -304,7 +304,7 @@ fun gamma/bound-type-vars(g: gamma): pure tvs
   g.schemes.map(bound-type-vars).unions
 
 fun ni/(|->)(sub: sub, ni: nameInfo): pure nameInfo
-  ni.map-type(fn(t) sub |-> t)
+  ni.map-type(sub |-> _)
 
 fun ni/free-type-vars(info: nameInfo): pure tvs
   info.typ.free-type-vars

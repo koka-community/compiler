@@ -74,7 +74,7 @@ fun create-data-def(emit-error: (doc) -> e (), emitWarning: (doc) -> e (), looku
   val conInfos = conInfos0.map(create-con-info-repr)
 
   // datadef
-  val maxMembers = conInfos.map(fn(i) i.params.length).maximum()
+  val maxMembers = conInfos.map(_.params.length).maximum()
   val conCount = conInfos.length
   val canbeValue = resultHasKindStar && !sort.is-retractive
   val isEnum = canbeValue && maxMembers == 0 && conCount >= 1

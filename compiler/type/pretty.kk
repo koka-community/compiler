@@ -234,7 +234,7 @@ fun pretty-data-info(d: dataInfo, showBody: bool, publicOnly: bool)
     val params = if d.params.is-nil then pprint/empty else d.params.map(TVar).nice-types.angled
     val kind = if d.kind == kindStar then pprint/empty else " ::".text |+| d.kind.pp-kind(precTop)
     val body = if showBody && d.constrs.is-cons then 
-        "{".text |-| d.constrs.map(fn(c) c.pretty-con-info(publicOnly)).vcat.indent(2) |-| "}".text 
+        "{".text |-| d.constrs.map(_.pretty-con-info(publicOnly)).vcat.indent(2) |-| "}".text 
       else pprint/empty
     val data = vis |.| recur |.| ext |.| eff |.| sort |+| d.name.pp-name |.| d.range.pretty |.| params |.| body
     data.pretty-comment(d.doc)
@@ -291,7 +291,7 @@ fun pp-type(tp: ktype)
     TForAll(vars, t) ->
       val p = prec
       vars.foreach(extend-nice)
-      val d = (if vars.is-nil then pprint/empty else "forall".keyword |.| vars.map(fn(v) v.pp-typevar).angled |.| space)
+      val d = (if vars.is-nil then pprint/empty else "forall".keyword |.| vars.map(pp-typevar).angled |.| space)
       val d' = d |.| t.pp-type
       d'.pparens(p, precTypeQuant)
     TFun(args, eff, res) -> pp-fun("->".text, args, eff, res)

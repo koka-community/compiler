@@ -121,4 +121,4 @@ fun reachable(g: graph<v>, v: v, ?(==): (v,v) -> bool): list<v>
   g.dfs([v]).preorderF
 
 fun path(g: graph<v>, v: v, w: v, ?(==): (v,v) -> bool): bool
-  g.reachable(v).find(fn(e) e == w).is-just
+  g.reachable(v).find(_ == w).is-just

@@ -286,7 +286,7 @@ pub type paramInfo
   Own
 
 pub fun def-fun-ex(pinfos: list<paramInfo>, fipKind: fipT)
-  if pinfos.all(fn(p) p.is-own) then DefFun([], fipKind) else DefFun(pinfos, fipKind)
+  if pinfos.all(_.is-own) then DefFun([], fipKind) else DefFun(pinfos, fipKind)
 
 pub fun def-fun(pinfos: list<paramInfo>)
   def-fun-ex(pinfos, noFip)
@@ -463,7 +463,7 @@ pub fun show-fip(f: fipT)
     NoFip(t) -> t.show-tail
 
 pub fun sep-by-space(xs: list<string>)
-  xs.filter(fn(x) x != "").join(" ")
+  xs.filter(_ != "").join(" ")
 
 pub fun fipt/max(fip1: fipT, fip2: fipT)
   match (fip1, fip2)
@@ -484,5 +484,5 @@ pub fun fipa/max(a1: fipAlloc, a2: fipAlloc)
     (AllocAtMost(n1), AllocAtMost(n2)) -> AllocAtMost(max(n1, n2))
 
 pub fun member-doc(doc: string, header: string, members: list<string>): string
-  val mdoc = "// " ++ header ++ ":\n// ```koka\n" ++ members.map(fn(m) "// " ++ m).join("\n") ++ "// ```\n"
+  val mdoc = "// " ++ header ++ ":\n// ```koka\n" ++ members.map("// " ++ _).join("\n") ++ "// ```\n"
   if doc == "" then mdoc else doc ++ "\n// * * *\n" ++ mdoc

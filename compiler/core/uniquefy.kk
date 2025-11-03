@@ -78,7 +78,7 @@ fun dg/uniquefy(dg: defGroup): pure defGroup
     DefNonRec(d) -> DefNonRec(d.uniquefy)
     DefRec(defs) ->
       val locals = get-locals()
-      set-locals(defs.map(def-name).filter(fn(n) !n.is-nil).foldl(locals, fn(acc, n) acc.add(n)))
+      set-locals(defs.map(def-name).filter(!_.is-nil).foldl(locals, add))
       DefRec(defs.map(fn(d) d(defExpr=localized({d.defExpr.uniquefyx}))))
 
 fun innerdefgroup/uniquefy(dg: defGroup)
@@ -87,8 +87,8 @@ fun innerdefgroup/uniquefy(dg: defGroup)
     DefRec(defs) -> DefRec(recdefs/uniquefy(defs))
 
 fun recdefs/uniquefy(defs: list<def>)
-  val names = defs.map(fn(d) d.def-name.uniquefy)
-  val exprs = localized({defs.map(fn(d) d.defExpr.uniquefyx)})
+  val names = defs.map(_.def-name.uniquefy)
+  val exprs = localized({defs.map(_.defExpr.uniquefyx)})
   names.zip(exprs).zip(defs).map(fn(((n, e), d)) d(def-name=n, defExpr=e))
 
 fun def/uniquefy(d: def)
@@ -115,7 +115,7 @@ fun expr/uniquefyx(e: expr)
     ELit -> e
     Let(defGroups, expr) -> Let(defGroups.map(innerdefgroup/uniquefy), expr.uniquefyx)
     Case(exprs, branches) ->
-      Case(exprs.map(uniquefyx), localized({branches.map(fn(b) b.uniquefy(exprs.map(type-of)))}))
+      Case(exprs.map(uniquefyx), localized({branches.map(_.uniquefy(exprs.map(type-of)))}))
 
 fun branch/uniquefy(b: branch, patTps: list<ktype>)
   val patts = b.patterns.zip(patTps).map(fn((p, t)) p.uniquefy(t))

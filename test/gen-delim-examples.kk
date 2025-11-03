@@ -204,10 +204,10 @@ fun main()
       val ident = "x" ++ id.show
       id := id + 1
       ident.new-name
-  for(1) fn(i)
+  for(1) fn(_)
     val op = new-id()
     add-handler(defh(new-id(), [(OpFun, op, [(new-id(), tint())], tint())]), op)
-  for(1) fn(i) 
+  for(1) fn(_) 
     var hnds := []
     with fun needs-handler(op) hnds := Cons(op, hnds)
     with fun get-binders() []

@@ -52,19 +52,19 @@ fun expr'(e: expr, defaultKind: resumeKind): div resumeKind
       exprs.map(expr).ands && brnchs.branches(defaultKind)
 
 fun branches(bs: list<branch>, defaultKind: resumeKind): div resumeKind
-  bs.map(fn(b) b.branch(defaultKind)).ors
+  bs.map(_.branch(defaultKind)).ors
 
 fun branch(b: branch, defaultKind: resumeKind): div resumeKind
-  b.guards.map(fn(g) g.guard(defaultKind)).ors
+  b.guards.map(_.guard(defaultKind)).ors
 
 fun guard(g: guard, defaultKind: resumeKind): div resumeKind
   g.body.expr && g.test.expr'(defaultKind)
 
 fun ands(exprs: list<resumeKind>)
-  exprs.foldl(ResumeNever, fn(e, e') e && e')
+  exprs.foldl(ResumeNever, _ && _)
 
 fun ors(exprs: list<resumeKind>)
-  exprs.foldl(ResumeNever, fn(e, e') e || e')
+  exprs.foldl(ResumeNever, _ || _)
 
 fun is-scoped(rk: resumeKind): bool
   match rk

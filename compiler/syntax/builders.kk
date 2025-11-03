@@ -102,7 +102,7 @@ pub fun topDef/show(this : topDef) : div string
 
 
 pub fun make-app(expr: expr<t>, args: list<expr<t>>, rT: (t) -> range): expr<t>
-  App(expr, args.map(fn(a) (Nothing, a)), combine(Cons(expr.range, args.map(range))))
+  App(expr, args.map((Nothing, _)), combine(Cons(expr.range, args.map(range))))
 
 pub fun make-tp-pure(rng: range): kUserType<k>
   TpCon(nameTpPure, rng)
@@ -156,7 +156,7 @@ pub fun make-user-constructor(const: name, foralls: list<userTypeBinder>, resTp:
   val body = Ann(Lam(lParams, App(Var(const, False, nameRng), arguments, rng), True, rng), tpFull, rng)
   val binder = ValueBinder(cName, (), body, nameRng, nameRng)
   val creator = Def(binder, rng, vis, DefFun([]), InlineAlways, doc) 
-  (UserCon(const, exists0, conParams, Nothing, mbLazyExpr, nameRng, rng, vis, doc), if pars.any(fn(p) p.snd.expr.is-just) then [creator] else [])
+  (UserCon(const, exists0, conParams, Nothing, mbLazyExpr, nameRng, rng, vis, doc), if pars.any(_.snd.expr.is-just) then [creator] else [])
 
 pub fun split-top-defs(dfs: list<topDef>): (list<userDef>, list<userTypeDef>, list<external>)
   fun split(dfs': list<topDef>, userDefs: ctx<list<userDef>>, typeDefs: ctx<list<userTypeDef>>, externDefs: ctx<list<external>>): (list<userDef>, list<userTypeDef>, list<external>)
@@ -225,7 +225,7 @@ pub fun make-effect-decl(decl: effectDecl): <parse-error,pure> list<topDef>
   // Handler datatype
   val hndFieldCfc = ValueBinder("cfc".new-hidden-name, TpCon(nameTpInt, krng), Nothing, krng, krng) // first field is the control-flow-context for the handler
   val hndFields = Cons(hndFieldCfc, opFields)
-  val hndCon = UserCon(hndName.to-handler-con-name, [], hndFields.map(fn(f) (Private, f)), Nothing, Nothing, krng, grng, vis, "")
+  val hndCon = UserCon(hndName.to-handler-con-name, [], hndFields.map((Private, _)), Nothing, Nothing, krng, grng, vis, "")
   val hndTpDecl = DataType(hndTpName, tpars ++ [hndEffTp, hndResTp], [hndCon], grng, vis, tpSort, 
                             DataDefNormal, DataEffect(isInstance, singleShot), 
                             docx)

@@ -301,7 +301,7 @@ fun parse-external-import-body()
 fun parse-inline-def-sort()
   val isRec = parse-maybe("inline recursive", {parse-special-id("recursive")}).is-just
   val inl = parse-inline()
-  val spec = parse-maybe("inline specialize", {parse-special-id("specialize"); val (s,_) = parse-string-literal(); s.list.map(fn(c) c == '*')}).default([])
+  val spec = parse-maybe("inline specialize", {parse-special-id("specialize"); val (s,_) = parse-string-literal(); s.list.map(_ == '*')}).default([])
   val pinfos = parse-maybe("inline borrow", {parse-special-id("borrow"); val (s, _) = parse-string-literal(); s.list.map(fn(c) if c == '^' then Borrow else Own)}).default([])
   parse-choices("fun or val inline", [
     {
@@ -605,7 +605,7 @@ fun extract(params, msg)
     Nil -> typeUnit
     [(name, tp)] | name == nil -> tp
     _ -> 
-      if params.all(fn(n) n.fst == nil) then
+      if params.all(_.fst == nil) then
         TApp(type-tuple(params.length), params.map(snd))
       else
         fail(msg)

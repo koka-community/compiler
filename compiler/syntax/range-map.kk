@@ -192,11 +192,11 @@ fun find-in(rm: range-map, r: range, for-inlay: bool): list<(range, rangeInfo)>
 
 // Gets all lexemes less than the given position and then reverses their order
 fun previous-lexemes-reversed(lexes: list<lexeme>, p: pos)
-  lexes.take-while(fn(l) l.range.start < p).reverse
+  lexes.take-while(_.range.start < p).reverse
 
 // Drops everything inside and including matched parentheses, assumes the ending paren is already dropped
 fun drop-matched-parens-reverse(lexes: list<lexeme>)
-  lexes.drop-to-lex-matching(fn(l) l == LexSpecial(")"), fn(l) l == LexSpecial("("))
+  lexes.drop-to-lex-matching(_ == LexSpecial(")"), _ == LexSpecial("("))
 
 // Assumes in the middle of the function parameters
 // (drops to nearest open paren that didn't have a close paren before it)
@@ -323,14 +323,14 @@ fun drop-auto-gen-closing(lexes: list<lexeme>)
 // We should use the lexemes to find the right start token
 fun find-at(rm: range-map, p: pos, lexemes: list<lexeme>): exn maybe<(range, rangeInfo)>
   val lexstart = 
-        match lexemes.drop-while(fn(l) !l.range.contains(p))
+        match lexemes.drop-while(!_.range.contains(p))
           Cons(l) -> l.range.start
           _ -> p
   val rinfos = rm.drop-while(fn((r,_)) r.start < lexstart).take-while(fn((r, _)) r.start == lexstart)
   rinfos.prioritize.maybe-head  
 
 fun lexemes-from-pos(lexes: list<lexeme>, p: pos)
-  lexes.drop-while(fn(l) !l.range.contains(p))
+  lexes.drop-while(!_.range.contains(p))
 
 fun maybe-head(xs: list<a>): maybe<a>
   match xs

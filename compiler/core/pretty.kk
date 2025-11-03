@@ -68,7 +68,7 @@ fun pretty-core(target: target, inlineDefs: list<inlineDef>, c as Core(name, imp
       "import declarations".separator,
       set-env(px, {imports.map(pretty-import)}),
       "external imports".separator,
-      set-env(px, {externals.map(fn(e) e.pretty-external-import(target))}),
+      set-env(px, {externals.map(_.pretty-external-import(target))}),
       "fixity declarations".separator,
       set-env(px, {fixDefs.map(pretty-fix-def)}),
       "local imported aliases".separator,
@@ -167,7 +167,7 @@ fun pretty-inline-def(InlineDef(name, expr, isRec, inlkind, cost, sort, specArgs
   val specdoc = if specArgs.is-nil then pprint/empty else "specialize ".keyword |.| prettySpecArgs |.| " ".text 
   val inl = if cost <= 0 || inlkind.is-inlineAlways then "inline ".keyword else empty
   val pidoc = match sort
-    DefFun(pinfos) -> if pinfos.any(fn(p) p.is-borrow) then "borrow".keyword |+| dquotes(pinfos.map(fn(i) if i.is-borrow then '^' else '_').string.text) |.| " ".text else empty
+    DefFun(pinfos) -> if pinfos.any(is-borrow) then "borrow".keyword |+| dquotes(pinfos.map(fn(i) if i.is-borrow then '^' else '_').string.text) |.| " ".text else empty
     _ -> empty
   val nm = if name.is-nil then "_".text else name.pretty-def-name
   rdoc |.| specdoc |.| inl |.| pidoc |.| sort.show-full.keyword |+|
@@ -215,7 +215,7 @@ fun pretty-expr(ex: expr)
     Var(tname) ->
       tname.pretty-var
     App(a, args) ->
-      overridePrec(precTypeApp, {a.pretty-expr |.| args.map(fn(e) e.pretty-expr).tupled}).pparens(prec, precTypeApp)
+      overridePrec(precTypeApp, {a.pretty-expr |.| args.map(pretty-expr).tupled}).pparens(prec, precTypeApp)
     // Type abstraction / application
     TypeLam(tvs, expr) ->
       if pretty-names then
@@ -241,7 +241,7 @@ fun pretty-expr(ex: expr)
       vcat([defgs.map(pretty-defgroup).vcat.align, e.pretty-expr])
     // Case expressions
     Case(exprs, branches) -> 
-      val doc = "match".keyword |+| tupled(overridePrec(precTypeAtom, {exprs.map(fn(e) e.pretty-expr)})) |+| "{".text |--|
+      val doc = "match".keyword |+| tupled(overridePrec(precTypeAtom, {exprs.map(pretty-expr)})) |+| "{".text |--|
         tab(branches.pretty-branches) |--| "}".text
       doc.pparens(prec, precTypeTop) 
 
@@ -356,7 +356,7 @@ fun extract-imports-from-synonyms(imps: list<kimport>, syns: list<synInfo>)
   val impNames = imps.map(importName)
   fun extractSyn(syn: synInfo)
     Cons(syn.name.qualifier, syn.t.extract-type)
-  val quals = syns.map(extractSyn).concat.filter(fn(nm) !impNames.any(fn(n) n == nm))
+  val quals = syns.map(extractSyn).concat.filter(fn(nm) !impNames.any(_ == nm))
   quals.map(fn(nm) Kimport(nm, "", Private, "")) // TODO: import path?
 
 // extract from type signatures the synonyms so we can compress .kki files

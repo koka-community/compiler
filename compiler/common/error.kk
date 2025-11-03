@@ -122,7 +122,7 @@ fun pp-error-message(msg: error-msg, cwd: path, showRangeEnd: bool): colorScheme
   ).hang(2)
 
 fun pp-errors(errs: errors, cwd: path, showRangeEnd: bool): colorSchemeEffect doc
-  vcat(errs.map(fn(e) e.pp-error-message(cwd, showRangeEnd)))
+  vcat(errs.map(_.pp-error-message(cwd, showRangeEnd)))
 
 fun to-warning((range, doc): (range, doc), ekind: error-kind): error-msg
   doc.warning-message-kind(range, ekind)

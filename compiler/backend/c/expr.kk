@@ -52,7 +52,7 @@ fun gen-top-group(g: defGroup): asmEff ()
   match g
     DefRec(defs) -> 
       defs.map(gen-fun-topdef-sig)
-      defs.map(fn(d) d.gen-topdef(False, False))
+      defs.map(_.gen-topdef(False, False))
       ()
     DefNonRec(d) ->
       val inlineC = d.kinline.is-inlineAlways || d.is-inlineable(5)
@@ -92,7 +92,7 @@ fun gen-topdef-decl(d: def, genSig: bool, inlineC: bool)
       Nothing -> d.ktype
       Just((_, _, _, _, res)) -> res
     fun genFunDef(body: expr, params: list<tName>)
-      val args = params.map(fn(p) p.get-name.cpp-name)
+      val args = params.map(_.get-name.cpp-name)
       val isTailCall = body.isTailCalling(d.def-name)
       val bodyDoc = gen-statement(ResultReturn(Just(TName(d.def-name, resTp)), params), body)
       val tpDoc = d.ktype.cpp-type.typeComment
@@ -161,15 +161,15 @@ fun gen-lambda(body: expr, params: list<tName>, eff: ktype)
     newtypesLookupAny(nm)
   val (allFields, vrepr) = orderConFields(emit-error, nameDoc, get-datainfo, targetPlatform, 1, freeVars)
   val scan-count = vrepr.scan-count
-  val (_, fields) = allFields.partition(fn(f) f.fst.isPaddingName)
+  val (_, fields) = allFields.partition(_.fst.isPaddingName)
   val types = allFields.map(snd)
-  val canonicalName = newCanonicalVarName("lambda" ++ (if fields.is-nil then "" else "-") ++ types.map(fn(t) t.cpp-type.asString).join("-"))
+  val canonicalName = newCanonicalVarName("lambda" ++ (if fields.is-nil then "" else "-") ++ types.map(_.cpp-type.asString).join("-"))
   val canonicalNewName = "new-".prepend(canonicalName)
   val canonicalFunTpName = "_t".postpend(canonicalName)
   val canonicalStructDoc = "struct".text |+| canonicalFunTpName.cpp-name
   val canonicalFieldNames = zip(allFields, list(1, allFields.length)).map(fn((nmTp, i)) (newName("field-" ++ i.show), nmTp.fst.isPaddingName))
   val canonicalFields = canonicalFieldNames.map(fst).zip(types)
-  val canonicalFieldsMap = zip3(canonicalFieldNames.filter(fn(s) !s.snd).map(fst), fields.map(fst), types)
+  val canonicalFieldsMap = zip3(canonicalFieldNames.filter(!_.snd).map(fst), fields.map(fst), types)
   val canonical = CanonicalLambda(canonicalName, canonicalFieldNames)
   val alreadyGenerated = addCanonical(canonical)
   if !alreadyGenerated && fields.is-cons then
@@ -181,8 +181,8 @@ fun gen-lambda(body: expr, params: list<tName>, eff: ktype)
         vcat([
           canonicalStructDoc |.| "* _self = kk_function_alloc_as".text |.| arguments([canonicalStructDoc, scan-count.pretty]) |.| semi,
           "_self->_base.fun = kk_kkfun_ptr_box(fnPtr, kk_context());".text
-        ] ++ canonicalFieldNames.filter(fn(f) !f.snd).map(fn(f) "_self->".text |.| f.fst.cpp-name |+| "=".text |+| f.fst.cpp-name |.| semi)
-         ++ canonicalFieldNames.filter(snd).map(fn(f) "_self->".text |.| f.fst.cpp-name |+| "= kk_box_null();".text)
+        ] ++ canonicalFieldNames.filter(!_.snd).map(fn(f) "_self->".text |.| f.fst.cpp-name |+| "=".text |+| f.fst.cpp-name |.| semi)
+         ++ canonicalFieldNames.filter(snd).map("_self->".text |.| _.fst.cpp-name |+| "= kk_box_null();".text)
          ++ ["return kk_datatype_from_base(&_self->_base, kk_context());".text]
         )
       )
@@ -196,7 +196,7 @@ fun gen-lambda(body: expr, params: list<tName>, eff: ktype)
        if fields.is-nil then 
         ["kk_define_static_function".text |.| arguments(["_fself".text, fnName.cpp-name]), "return kk_function_dup(_fself, kk_context());".text]
        else 
-        ["return".text |+| canonicalNewName.cpp-name |.| arguments(Cons("&".text |.| fnName.cpp-name, fields.map(fn(f) f.fst.cpp-name))) |.| semi]
+        ["return".text |+| canonicalNewName.cpp-name |.| arguments(Cons("&".text |.| fnName.cpp-name, fields.map(_.fst.cpp-name))) |.| semi]
       )))
   emit-to-current-def(vcat([linebreak, "// lift anonymous function".text, tpDecl, newDef]) |.| linebreak)
   val bodyDoc = gen-statement(ResultReturn(Nothing, params), body)
@@ -250,12 +250,12 @@ fun try-tailcall(r: result, ex: expr)
   
   fun gen-tailvar-binding(params: list<tName>, (p: tName, e: expr))
     match e
-      Var(tn) | tn != p && params.any(fn(t) t == tn) -> e.gen-var-binding-always
+      Var(tn) | tn != p && params.any(_ == tn) -> e.gen-var-binding-always
       _ -> e.gen-var-binding
 
   // overriding function arguments carefully
   fun gen-override(params: list<tName>, args: list<expr>)
-    val (stmts, varNames) = zip(params, args).map(fn(x) gen-tailvar-binding(params, x)).unzip
+    val (stmts, varNames) = zip(params, args).map(gen-tailvar-binding(params, _)).unzip
     val docs1 = params.map(genDefName)
     val docs2 = varNames.map(genDefName)
     val assigns = docs1.zip(docs2).map(fn((p, a)) if p == a then debugComment("gen-override: skipped overriding " ++ p.show ++ " with itself") else p |+| "=".text |+| a |.| semi)
@@ -351,7 +351,7 @@ fun gen-match(res0: result, exprDocs: list<doc>, branches: list<branch>)
         val lab = "match".newVarName
         (ResultAssign(nm, Just(lab)), [lab.cpp-name |.| colon |+| semi])
       _ -> (res0, [])
-  val docsInit = branches.init.map(fn(b) gen-branch(r, exprDocs, False, b))
+  val docsInit = branches.init.map(gen-branch(r, exprDocs, False, _))
   val docLast0 = gen-branch(res0, exprDocs, False, branches.last.unjust)
   val docLast = if isSingleTestBranch && !r.is-jump-result then "else".text |+| block(docLast0) else docLast0
   val doc = vcat(docsInit ++ [docLast] ++ genLabel)
@@ -391,7 +391,7 @@ fun gen-pattern(doTest: bool, bindings0: bindings, l: list<(doc, pattern)>, genB
   match l
     Nil -> genBody(bindings0)
     _ ->
-      val (testss, localss, bindingss, nextPatternss) = l.map(fn(x) gen-pattern-test(doTest, x).unzip4).concat
+      val (testss, localss, bindingss, nextPatternss) = l.map(gen-pattern-test(doTest, _).unzip4).concat
       val tests = testss.concat
       val locals = localss.concat
       val bindings = bindings0 ++ bindingss.concat
@@ -456,7 +456,7 @@ fun gen-next-patterns(select: (doc, doc) -> doc, exprDoc: doc, tp: ktype, patts:
             [pat] | args.length == 0 || args.length > 1 -> [(exprDoc, pat)]
             _ ->
               if args.length != patts.length then
-                fail("c/from-core gen-next-patterns: args != patterns " ++ args.length.show ++ "," ++ patts.length.show ++ " " ++ args.show-list(fn(x) x.fst.show) ++ "," ++ patts.show-list(show) ++ ":\n expr: " ++ exprDoc.show ++ "\n type: " ++  tp.show)
+                fail("c/from-core gen-next-patterns: args != patterns " ++ args.length.show ++ "," ++ patts.length.show ++ " " ++ args.show-list(_.fst.show) ++ "," ++ patts.show-list(show) ++ ":\n expr: " ++ exprDoc.show ++ "\n type: " ++  tp.show)
               fun genNextPattern((nm, pat))
                 match pat
                   PatWild -> []
@@ -503,7 +503,7 @@ fun gen-expression-prim(ex: expr)
         Just((_, _, tpars, teff, _)) ->
           val names = tpars.length.newVarNames
           val tnames = names.zip(tpars).map(fn((name, (_, tp))) TName(name, tp))
-          gen-expression(Lam(tnames, teff, App(ex, tnames.map(fn(tn) Var(tn, InfoNone)))))
+          gen-expression(Lam(tnames, teff, App(ex, tnames.map(Var(_, InfoNone)))))
         _ -> fail("backend/c/from-core gen-expression: invalid partially applied external:\n" ++ ex.show)
     _ -> fail("backend/c/from-core gen-expression: invalid expression:\n" ++ ex.show)
 
@@ -512,7 +512,7 @@ fun gen-constr-eta-expand(cexpr: expr)
     Just((_, _, tpars, teff, _)) ->
       val names = tpars.length.newVarNames
       val tnames = names.zip(tpars).map(fn((name, (_, tp))) TName(name, tp))
-      gen-expression(Lam(tnames, teff, App(cexpr, tnames.map(fn(n) Var(n, InfoNone)))))
+      gen-expression(Lam(tnames, teff, App(cexpr, tnames.map(Var(_, InfoNone)))))
     _ -> fail("backend/c/from-core gen-expression: invalid partially applied constructor:\n" ++ cexpr.show)
 
 fun gen-expressions(l: list<expr>)
@@ -557,9 +557,9 @@ fun gen-pure(ex: expr)
     Var(nm, info) ->
       match nm.typeOf.split-funScheme
         Just((_, _, argTps, eff, _)) | nm.get-name.isQualified && info.is-infoArity -> // wrap bare top-level functions
-          val argNames = list(1, argTps.length).map(fn(i) "x" ++ i.show).map(newVarName)
+          val argNames = list(1, argTps.length).map("x" ++ _.show).map(newVarName)
           val tnames = argNames.zip(argTps).map(fn((name, (_, tp))) TName(name, tp))
-          val body = App(ex, tnames.map(fn(n) Var(n, InfoNone)))
+          val body = App(ex, tnames.map(Var(_, InfoNone)))
           body.gen-lambda(tnames, eff)
         _ -> match info
           InfoExternal(formats) -> gen-inline-external(nm, formats, [])
@@ -629,7 +629,7 @@ fun gen-app-normal(f: expr, args: list<expr>)
       val doc = gen-field-address(c, conName.readQualified, fieldName.readQualified)
       ([], doc)
     (Var(cfieldOf), [App(Var(_), [Var(c)]), ELit(LitString(conName)), ELit(LitString(fieldName))]) | cfieldOf.get-name == nameFieldAddrOf ->
-      val drop = gen-dup-drop-call(False, c.typeOf, c.get-name.cpp-name).map(fn(x) x |.| semi)
+      val drop = gen-dup-drop-call(False, c.typeOf, c.get-name.cpp-name).map(_ |.| semi)
       val doc = gen-field-address(c, conName.readQualified, fieldName.readQualified)
       (drop, doc)
     

@@ -227,7 +227,7 @@ fun unify(t1: ktype, t2: ktype): <pure,unify,uniquePhase> ()
       // replace with shared bound variables in both types
       // note: assumes ordered quantifiers and ordered predicates
       // note: we don't use Skolem as a Meta variable can unify with a Skolem but not with a Bound one
-      val vars = kinds1.map(fn(k) freshTVar(k, Bound))
+      val vars = kinds1.map(freshTVar(_, Bound))
       val sub1 = vars1.zip(vars).subNew
       val sub2 = vars2.zip(vars).subNew
       val stp1 = sub1 |-> tp1
@@ -287,7 +287,7 @@ fun subsume(rng: range, free: tvs, tp1: ktype, tp2: ktype): <unify,pure,comp-fla
   val sub = get-subst()
   val tvs1 : tvs = (free + tp1.free-type-vars)
   val allfree = tvs1.list
-  val escaped = sub.list.filter(fn((tv, _)) allfree.any(fn(t) t == tv)).map(snd).free-type-vars.fsv
+  val escaped = sub.list.filter(fn((tv, _)) allfree.any(_ == tv)).map(snd).free-type-vars.fsv
   if escaped.disjoint(sks.tvsNew) then ()
   else unify-error(NoSubsume)
   val (evsEnt, coreEnt) = entails(sks.tvsNew, sub |-> evs1, sub |-> evs2)
@@ -314,11 +314,11 @@ fun match-arguments(matchSome: bool, rng: range, free: tvs, tp: ktype, fixed: li
         fpars.map(snd).zip(fixed).map(fn((tpar, targ)) subsume(rng, free, tpar.unOptional, targ))
         // subsume named parameters
         namedArgs.map fn((name, targ))
-          match npars.lookup(fn(n) n == name)
+          match npars.lookup(_ == name)
             Nothing -> unify-error(NoMatchType)
             Just(tpar) -> subsume(rng, free, tpar, targ.makeOptional)
         // check the rest is optional
-        val rest = npars.filter(fn((nm, _)) !(namedArgs.map(fst).any(fn(n) n == nm))).map(snd)
+        val rest = npars.filter(fn((nm, _)) !(namedArgs.map(fst).any(_ == nm))).map(snd)
         if matchSome || rest.all(isOptional) then ()
         else unify-error(NoMatchType)
 

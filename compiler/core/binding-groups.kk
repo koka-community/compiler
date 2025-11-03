@@ -23,7 +23,7 @@ fun regroup(dfs: list<def>): <comp-flags,pure> list<defGroup>
       val fvdef = d.free-vars
       //  this is for recursive definitions where the type may still differ since we cannot improve too early for mutual recursive definitions (or we unify too eagerly, see "while")
       if fvdef.member(TName(d.def-name, d.ktype)) || 
-        fvdef.list.map(get-name).filter(fn(n) !n.is-qualified).any(fn(dn) dn == d.def-name) then
+        fvdef.list.map(get-name).filter(!_.is-qualified).any(_ == d.def-name) then
         [DefRec([d])]
       else
         [DefNonRec(d)]
@@ -31,7 +31,7 @@ fun regroup(dfs: list<def>): <comp-flags,pure> list<defGroup>
       val def-names = defs.map(fn(d) TName(d.def-name, d.ktype))
       val def-nameSet = LinearSet(def-names)
       val defMap = LinearMap(def-names.zip(defs))
-      val deps = LinearMap(def-names.zip(defs.map(fn(d) d.free-vars.intersection(def-nameSet))))
+      val deps = LinearMap(def-names.zip(defs.map(_.free-vars.intersection(def-nameSet))))
       // determine strongly connected components
       val defOrder = deps.list.map(fn((nm, fvs)) (nm, fvs.linearset/list)).scc
       // create a definition group

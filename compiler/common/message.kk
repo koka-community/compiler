@@ -25,7 +25,7 @@ fun table(xs: list<(doc, doc)>)
 
 fun tablex(n: int, xs: list<(doc, doc)>)
   val headers = xs.map(fst)
-  val headerwidth = headers.map(fn(x) x.show.count).maximum
+  val headerwidth = headers.map(_.show.count).maximum
   val doc = 
     if headerwidth <= 0 then vcat(xs.map(snd))
     else vcat(xs.map(fn((hd, d)) hd.fill(headerwidth) |.| colon |+| align(d)))
@@ -36,19 +36,19 @@ fun source-from-ranges(rngs: list<range>)
   rngs.map(source)
 
 fun docs-from-ranges(rngs: list<range>)
-  rngs.map(fn(r) r.doc-from-range)
+  rngs.map(_.doc-from-range)
 
 fun doc-from-range(r: range)
   fun remove-indent(ls: list<string>)
-    val i = Cons(0, ls.map(fn(l) l.list.take-while(is-space).length)).minimum
-    ls.map(fn(l) l.list.drop(i).string)
+    val i = Cons(0, ls.map(_.list.take-while(is-space).length)).minimum
+    ls.map(_.list.drop(i).string)
   fun limit-line-len(line: string, n: int)
     if line.count <= n then line
     else
       val n3 = n / 3
       val (x, y) = line.list.split(2 * n3)
-      val pre = x.reverse.drop-while(fn(c) !c.is-space).reverse
-      val post = y.reverse.take(n3).reverse.drop-while(fn(c) !c.is-space)
+      val pre = x.reverse.drop-while(!_.is-space).reverse
+      val post = y.reverse.take(n3).reverse.drop-while(!_.is-space)
       pre.string ++ " ... " ++ post.string
   fun limit-lines(ls: list<string>, n: int)
     if ls.length <= n then ls.remove-indent
@@ -59,7 +59,7 @@ fun doc-from-range(r: range)
       val post = ls.reverse.take(n2).reverse
       val prepost = (pre ++ post).remove-indent
       prepost.take(n2) ++ ["..."] ++ prepost.drop(n2)
-  val x = r.source-from-range.lines.limit-lines(3).map(fn(l) l.limit-line-len(80))
+  val x = r.source-from-range.lines.limit-lines(3).map(_.limit-line-len(80))
   match x
     Nil -> pprint/empty
     src -> 

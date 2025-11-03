@@ -31,7 +31,7 @@ fun promote-type(tp: userType): div userType
   val free = tp.free-type-vars
   if free.is-empty then tp
   else
-    val (someVars, forallVars) = free.list.partition(fn(x) x.is-some-var)
+    val (someVars, forallVars) = free.list.partition(is-some-var)
     quantify(QSome, someVars.map(to-type-binder), quantify(QForall, forallVars.map(to-type-binder), tp))
 
 fun promote-free(bound: list<userTypeBinder>, tps: list<userType>): div list<userTypeBinder>
@@ -46,7 +46,7 @@ fun promote-free(bound: list<userTypeBinder>, tps: list<userType>): div list<use
 // foo : some(a,a1) forall(b,c) (a,b,a1) -> total c = fun(x,y,z) { .. }
 fun promote(some-pars: list<userTypeBinder>, forall-pars: list<userTypeBinder>, preds: list<userType>, mb-res-tp: maybe<(maybe<userType>, userType)>, uexpr: userExpr): pure userExpr
   val (argres-tps, expr') = argres-types(uexpr, mb-res-tp)
-  if argres-tps.all(fn(a) a.snd.is-right) then uexpr // no annotation, no promotion
+  if argres-tps.all(_.snd.is-right) then uexpr // no annotation, no promotion
   else
     promote-ex(some-pars, forall-pars, preds, argres-tps, expr')
 
@@ -89,7 +89,7 @@ fun res-type(expr: userExpr, mb-res-tp: maybe<(maybe<userType>, userType)>)
 fun promote-ex(some-pars: list<userTypeBinder>, forall-pars: list<userTypeBinder>, preds: list<userType>, argres-tps: list<(name, either<userType, range>)>, body: userExpr)
   // promote quantified variables of TpCon to TpVar
   val quantified = names/empty + some-pars.map(name) + forall-pars.map(name)
-  val argres-types1 = argres-tps.map(fn(a) promote-tp-vars(a, quantified))
+  val argres-types1 = argres-tps.map(promote-tp-vars(_, quantified))
 
   // create full type by inserting some types if no parameter was annotated
   val (namess, argres-types2) = list(1, argres-types1.length).zip(argres-types1).map(insert-some).unzip

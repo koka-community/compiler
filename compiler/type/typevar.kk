@@ -72,7 +72,7 @@ fun sub/list(s: sub): list<(typeVar, ktype)>
   s.map.list
 
 fun sub/common(s1: sub, s2: sub): exn list<(typeVar, (tau, tau))>
-  s1.list.map(fn(s) s2.lookup(s.fst).map(fn(t) (s.fst, (s.snd, t)))).concat-maybe
+  s1.list.map(fn(s) s2.lookup(s.fst).map((s.fst, (s.snd, _)))).concat-maybe
 
 fun sub/single(tvar: typeVar, tau: tau)
   // Top assertion is invalid; it can happen (and happens) in the CoreF typechecker when
@@ -167,12 +167,12 @@ fun ktype/free-type-vars(tp: ktype): div tvs
       val tv1 :tvs = t.free-type-vars
       tv1 - vars
     TFun(args, eff, res) -> 
-      val tv1: tvs = args.map(fn(a) a.snd.free-type-vars).unions 
+      val tv1: tvs = args.map(_.snd.free-type-vars).unions 
       val tv2: tvs = tv1 + res.free-type-vars
       tv2 + eff.free-type-vars
     TCon -> tvs/empty
     TVar(tv) -> LinearSet([tv])
-    TApp(t, args) -> t.free-type-vars + args.map(fn(a) a.free-type-vars).unions
+    TApp(t, args) -> t.free-type-vars + args.map(free-type-vars).unions
     TSyn(_, xs, t) -> t.free-type-vars + xs.map(free-type-vars).unions
 
 fun exp/free-type-vars(e0: expr): div tvs
@@ -298,11 +298,11 @@ fun expr/substitute(s: sub, e: expr): pure expr
     Con(tn, repr) -> Con(s |-> tn, repr)
     ELit(l) -> ELit(l)
     Let(defGroups, e) -> Let(defGroups.map(fn(dg) s |-> dg), s |-> e)
-    Case(es, bs) -> Case(s |-> es, bs.map(fn(b) s |-> b))
+    Case(es, bs) -> Case(s |-> es, bs.map(s |-> _))
 
 fun dg/substitute(s: sub, dg: defGroup): pure defGroup
   match dg
-    DefRec(defs) -> DefRec(defs.map(fn(d) s |-> d))
+    DefRec(defs) -> DefRec(defs.map(s |-> _))
     DefNonRec(e) -> DefNonRec(s |-> e)
 
 fun def/substitute(s: sub, Def(name, scheme, expr, vis, isVal, inl, nameRng, doc): def): pure def

@@ -21,7 +21,7 @@ fun pos/before(p: pos)
 fun strip-parens(s: sslice)
   match s.string.list.reverse
     Cons(')', cs) -> 
-      match cs.span(fn(c) { c != '(' })
+      match cs.span(_ != '(')
         (op, Cons('(', qual)) -> (op ++ qual).reverse.string
         _ -> s.string
     _ -> s.string
@@ -135,7 +135,7 @@ val special-names = [ "{", "}"
 //               , "|"]
 
 // fun is-reserved(name: string)
-//   reserved-names.any(fn(n) n == name)
+//   reserved-names.any(_ == name)
 
 val reserved-names = 
       delay({
@@ -205,7 +205,7 @@ val message-malformed
 
 fun newQName(s': string)
   val s = s'.list 
-  val (rname, rsmod) = s.reverse.span(fn(c) { c != '/' })
+  val (rname, rsmod) = s.reverse.span(_ != '/')
   match rsmod // TODO: First case needs condition on rname == Nil
     Cons('/', Cons('/', rmod)) -> new-qualified(rmod.reverse.string, "/")
     Cons('/', rmod) -> new-qualified(rmod.reverse.string, rname.reverse.string)

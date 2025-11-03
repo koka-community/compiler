@@ -36,8 +36,8 @@ fun normalize(n: name)
 
 fun typedef/dependencies(td: userTypeDef): <pure,modname|e> (name, nameSet)
   match td
-    Synonym(_, _, t) -> (td.name, t.free-types.list.map(fn(n) n.normalize).linear-set)
-    DataType(_, _, c) -> (td.name, c.free-types.list.map(fn(n) n.normalize).linear-set)
+    Synonym(_, _, t) -> (td.name, t.free-types.list.map(normalize).linear-set)
+    DataType(_, _, c) -> (td.name, c.free-types.list.map(normalize).linear-set)
 
 // Free type constructors
 fun list/free-types(l: list<t>, ?free-types: (t) -> <pure|e> nameSet): <pure|e> nameSet
@@ -57,7 +57,7 @@ fun vb/free-types(vb: valueBinder<t,e>, ?free-types: (t) -> pure nameSet): pure 
   vb.binderType.free-types
 
 fun uc/free-types(c: userCon<t,u,k>, ?free-types: (t) -> pure nameSet): pure nameSet
-  c.params.map(snd).free-types + c.result.map(fn(r) r.free-types).default(empty)
+  c.params.map(snd).free-types + c.result.map(free-types).default(empty)
 
 // Binding groups in definitions
 fun defgroups/group-bindings(dgs: list<defGroup<t>>): <pure,modname> list<defGroup<t>>
@@ -70,7 +70,7 @@ fun defgroups/group-bindings(dgs: list<defGroup<t>>): <pure,modname> list<defGro
       Just(extra) -> extra
       Nothing -> []
   fun extend(def-name: name, ndeps: nameSet)
-    ndeps.union(ndeps.list.flatmap(fn(d) extend-name(def-name, d)).linear-set)
+    ndeps.union(ndeps.list.flatmap(extend-name(def-name, _)).linear-set)
   val deps = deps1.map(fn(k, v) extend(k, v))
   group-bindings(defs, deps)
 
@@ -82,7 +82,7 @@ fun def-groups/extract(dgs: list<defGroup<t>>): exn extraDeps
 fun defgroup/ee(d0: defGroup<t>): exn extraDeps
   match d0
     DefNonRec(d) -> d.def/ee
-    DefRec(defs) -> defs.map(fn(d) d.def/ee).unions
+    DefRec(defs) -> defs.map(def/ee).unions
 
 fun def/ee(d: def<t>): extraDeps
   val nm = d.binder.name
@@ -98,7 +98,7 @@ fun defgroup/group-bindings(g: defGroup<t>): <pure,modname> (list<def<t>>, deps)
       defs.dependencies
 
 fun udefs/dependencies(defs: list<def<t>>): <pure,modname> (list<def<t>>, deps)
-  val (defDeps, depss) = defs.map(fn(d) d.def/dependencies).unzip
+  val (defDeps, depss) = defs.map(def/dependencies).unzip
   (defDeps, depss.unions)
 
 fun def/dependencies(d: def<t>): <pure,modname> (def<t>, deps)
@@ -115,7 +115,7 @@ fun fv/dependencies(d: def<t>): <pure,modname> (def<t>, nameSet)
 
 fun groupfv/dependencies(dg: defGroup<t>): <pure,modname> (list<defGroup<t>>, nameSet, nameSet)
   val (defs, deps) = dg.group-bindings
-  val names = defs.map(fn(d) d.binder.name).linear-set
+  val names = defs.map(_.binder.name).linear-set
   val free-vars = deps.list.map(snd).unions - names
   (defs.group-bindings(deps), free-vars, names)
 
@@ -149,7 +149,7 @@ fun expr/dependencies(ex: expr<t>): <pure,modname> (expr<t>, nameSet)
     App(f, nargs, rng) ->
       val (depF, fv1) = f.dependencies
       val (argNames, args) = nargs.unzip
-      val (depArgs, fv2s) = args.map(fn(a) a.dependencies).unzip
+      val (depArgs, fv2s) = args.map(dependencies).unzip
       val fv2 = fv2s.unions
       (App(depF, argNames.zip(depArgs), rng), fv1 + fv2)
     Ann(e, t, rng) ->
@@ -157,7 +157,7 @@ fun expr/dependencies(ex: expr<t>): <pure,modname> (expr<t>, nameSet)
       (Ann(depE, t, rng), fv1)
     Case(e, brnches, lzy, rng) ->
       val (depE, fv1) = e.dependencies
-      val (depBranches, fv2) = brnches.map(fn(b) b.dependencies).unzip
+      val (depBranches, fv2) = brnches.map(dependencies).unzip
       (Case(depE, depBranches, lzy, rng), fv1 + fv2.unions)
     Parens(e, nm, pre, rng) ->
       val (depE, fv) = e.dependencies
@@ -166,7 +166,7 @@ fun expr/dependencies(ex: expr<t>): <pure,modname> (expr<t>, nameSet)
       (ex, names/empty)
     Handler(shallow, scoped, over, allowMask, eff, pars, reinit, ret, fin, ops, hrng, rng) ->
       val (depRet, fv1) = ret.dependencies
-      val (depBranches, fv2) = ops.map(fn(b) b.dependencies).unzip
+      val (depBranches, fv2) = ops.map(dependencies).unzip
       val (depReinit, fv3) = reinit.dependencies
       val (depFin, fv4) = fin.dependencies
       val fvs = (fv1 + fv2.unions + fv3 + fv4) - (names/empty + pars.map(name))
@@ -181,7 +181,7 @@ fun handlerBranch/dependencies(h: handlerBranch<t>): <pure,modname> (handlerBran
   (h(branchExpr=depExpr), (fvExpr - h.branchPars.map(name)) + uname)
 
 fun branch/dependencies(Branch(patts, guards): branch<t>): <pure,modname> (branch<t>, nameSet)
-  val (depGuards, fvGuardss) = guards.map(fn(g) g.dependencies).unzip
+  val (depGuards, fvGuardss) = guards.map(dependencies).unzip
   val fvsg : nameSet = fvGuardss.unions
   (Branch(patts, depGuards), fvsg - patts.free-var)
 
@@ -260,7 +260,7 @@ fun dg/free-bound-var(dg: defGroup<t>): pure (nameSet, nameSet)
     DefNonRec(d) -> (names/empty + d.name, d.body.free-var)
     DefRec(defs) ->
       val bound = defs.map(name)
-      val free = defs.map(fn(d) d.body.free-var).unions
+      val free = defs.map(_.body.free-var).unions
       (names/empty + bound, free - bound)
 
 // Dependencies
@@ -301,7 +301,7 @@ fun dfs/group-bindings(defs: list<def<t>>, deps: deps): pure list<defGroup<t>>
   //    and may introduce dependencies that we cannot determine yet. As a programmer, we
   //    can ensure the correct order by putting such implicit dependencies first in the source.
   fun get-line(id: name)
-    defMap.find(id).map(fn(d) d.range.start.line)
+    defMap.find(id).map(_.range.start.line)
   fun line-of(ids: list<name>)
     match ids.flatmap(get-line)
       [] -> 0
@@ -349,7 +349,7 @@ fun typedefs/group(tdefs: list<userTypeDef>, deps: deps)
   fun make-group(ids: list<name>)
     match ids
       [id] ->
-        if typeDeps0.find(fn((k, _)) k == id).map(snd).default([]).any(fn(i) i == id) then
+        if typeDeps0.find(fn((k, _)) k == id).map(snd).default([]).any(_ == id) then
           [TypeDefRec(typeMap.get(id))]
         else
           typeMap.get(id).map(TypeDefNonRec)

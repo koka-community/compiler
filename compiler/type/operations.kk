@@ -13,15 +13,15 @@ pub infixr 5 (|->)
 
 fun requires-implicits(tp: ktype)
   match tp.split-fun-scheme
-    Just((_, _, pars, _, _)) -> pars.filter(fn(p) p.fst.is-implicit-param-name)
+    Just((_, _, pars, _, _)) -> pars.filter(_.fst.is-implicit-param-name)
     _ -> []
 
 fun is-optional-or-implicit(p: (name, ktype))
   p.fst.is-implicit-param-name || p.snd.is-optional
 
 fun split-optional-implicit(pars: list<(name, ktype)>)
-  val (fixed, rst) = pars.span(fn(p) !p.is-optional-or-implicit)
-  val (opts, nameds) = rst.span(fn(p) p.snd.is-optional)
+  val (fixed, rst) = pars.span(!_.is-optional-or-implicit)
+  val (opts, nameds) = rst.span(_.snd.is-optional)
   (fixed, opts, nameds)
 
 fun has-optional-or-implicits(pars: list<(name, ktype)>)
@@ -97,9 +97,9 @@ fun instantiate-exfl(tp: ktype, fl: flavour, r: range): <uniquePhase, comp-flags
     (vars, preds, rho) ->
       val (tvars, sub) = fresh-subx(TVar, fl, vars, rho.all-tv())
       val srho = sub |-> rho
-      val spreds = preds.map(fn(p) sub |-> p)
+      val spreds = preds.map(sub |-> _)
       val pnames = spreds.map(pred-name)
-      val corevars = pnames.map(fn(n) Var(n, InfoNone))
+      val corevars = pnames.map(Var(_, InfoNone))
       val evidence = pnames.zip(spreds).map(fn((n, p)) Ev(n, p, r))
       (tvars, evidence, srho, if corevars.is-nil then id else id)
 

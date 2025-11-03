@@ -40,10 +40,10 @@ fun is-lex-error(x)
     _ -> False
 
 fun remove-white(lexemes: list<lexeme>): list<lexeme>
-  lexemes.filter(fn(x) !is-white(x))
+  lexemes.filter(!is-white(_))
 
 fun remove-whitespace(lexemes: list<lexeme>): list<lexeme>
-  lexemes.filter(fn(x) !is-whitespace(x))
+  lexemes.filter(!is-whitespace(_))
 
 // Helpers
 fun end-line(r)
@@ -71,7 +71,7 @@ val doc-keywords = ["fun","val","ctl","final","raw"
                     ,"external","function"]
 
 fun is-doc-keyword(lex: string)
-  doc-keywords.find(fn(x) x == lex).bool
+  doc-keywords.find(_ == lex).bool
 
 fun comment-line(r: range, comment: string)
   if comment.ends-with("\n").bool then r.end.line else r.end.line + 1
@@ -81,7 +81,7 @@ fun is-valid-prefix(l: lex): bool
     LexKeyword -> True // pub
     LexId -> True // inline
     LexInt -> True // fip(1)
-    LexSpecial(s) -> ["(", ")", "{", "}", ","].any(fn(x) x == s)
+    LexSpecial(s) -> ["(", ")", "{", "}", ","].any(_ == s)
     _ -> False
 
 fun scan-doc-keyword(doc: string, dline: int, acc: ctx<list<lexeme>>, ls: list<lexeme>): maybe<(list<lexeme>, list<lexeme>)>
@@ -143,12 +143,12 @@ fun combine-line-comments(lexs: list<lexeme>): list<lexeme>
 fun check-ids(lexs: list<lexeme>): list<lexeme>
   match lexs
     Nil -> Nil
-    Cons(lex1 as Lexeme(_, LexKeyword(keyw)), Cons(lex2 as Lexeme(_, LexId), lexes)) | ["fun", "val", "extern"].any(fn(n) n == keyw) ->
+    Cons(lex1 as Lexeme(_, LexKeyword(keyw)), Cons(lex2 as Lexeme(_, LexId), lexes)) | ["fun", "val", "extern"].any(_ == keyw) ->
       // Ok to define @ functions
       Cons(lex1, Cons(lex2, lexes.check-ids))
     Cons(l as Lexeme(rng, lex), lexes) ->
       fun check-id(idn: name)
-        if idn.nameStem.list.any(fn(c) c == '@') then
+        if idn.nameStem.list.any(_ == '@') then
           Cons(Lexeme(rng, LexError("\"@\": identifiers cannot contain '@' characters (in '" ++ idn.show ++ "')")), lexes.check-ids)
         else
           lexes
@@ -257,8 +257,8 @@ fun is-expr-continuation(prev-lex, lex)
 
 fun is-start-continuation-token(lex)
   match lex
-    LexSpecial(s) -> [")",">","]",",","{","}"].any(fn(c) c == s)
-    LexKeyword(k, _) -> ["then","else","elif","->","=","|",":",".",":="].any(fn(c) c == k)
+    LexSpecial(s) -> [")",">","]",",","{","}"].any(_ == s)
+    LexKeyword(k, _) -> ["then","else","elif","->","=","|",":",".",":="].any(_ == k)
     LexOp(op) -> op.local != "<"
     LexInsLCurly -> True
     LexInsRCurly -> True
@@ -266,7 +266,7 @@ fun is-start-continuation-token(lex)
 
 fun is-end-continuation-token(lex)
   match lex
-    LexSpecial(s) -> ["(","<","[",",","{"].any(fn(c) c == s)
+    LexSpecial(s) -> ["(","<","[",",","{"].any(_ == s)
     LexKeyword(k, _) -> k == "."
     LexInsLCurly -> True
     LexOp(op) -> op.local != ">"

@@ -127,7 +127,7 @@ fun syn-copycon(di: dataInfo, ci: conInfo)
   fun app(x, xs)
     match xs 
       Nil -> x 
-      _ -> App(x, xs.map(fn(y) (Nothing, y)), rc)
+      _ -> App(x, xs.map((Nothing, _)), rc)
   val params0 = ci.params.map(fn((fldname, t)) ValueBinder(fldname, Nothing, if !ci.has-accessor(fldname, t) then Nothing else Just(app(vvar(type-qualified-name-of(di.name, fldname)), [vvar(argName)])), rc, rc))
   val body = app(vvar(ci.name), ci.params.map(fn((nm, _)) vvar(nm)))
   val expr = Lam([ValueBinder(argName, Nothing, Nothing, rc, rc)] ++ params0, True, body, rc)
@@ -139,7 +139,7 @@ fun has-accessor(ci: conInfo, nm: name, tp: ktype)
 
 fun nub-by(xs: list<a>, f: (a, a) -> bool): list<a>
   match xs
-    Cons(x1, rst) -> Cons(x1, rst.filter(fn(y) !f(x1, y)))
+    Cons(x1, rst) -> Cons(x1, rst.filter(!f(x1, _)))
     Nil -> Nil
 
 fun is-alphanum(c: char)
@@ -162,7 +162,7 @@ fun syn-accessors(di: dataInfo)
     val dataTp = TApp(TCon(TypeCon(di.name, di.kind)), di.params.map(TVar))
     fun make-branch(ci: conInfo)
       val r = ci.range
-      match zip(ci.params.map(fst), list(0, ci.params.length)).lookup(fn(n) n == nm)
+      match zip(ci.params.map(fst), list(0, ci.params.length)).lookup(_ == nm)
         Just(i) ->
           val patterns = list(0, i - 1).map(fn(_) (Nothing, PatWild(r))) ++ [(Nothing, PatVar(ValueBinder(fld, Nothing, PatWild(r), r, r)))] ++ list(i+1, ci.params.length - 1).map(fn(_) (Nothing, PatWild(r)))
           [(ci.vis, Branch(PatCon(ci.name, patterns, r, r), [Guard(guardTrue, Var(fld, False, r))]))]
@@ -241,7 +241,7 @@ fun syn-lazy-eval(di: dataInfo, lazyExprs: list<lazyExpr>)
   val lazyConstrs = di.constrs.filter(fn(ci) ci.coninfo/is-lazy).rotate // indirect match comes last
 
   fun branch-expr(ci: conInfo)
-    match lazyExprs.lookup(fn(n) n == ci.name)
+    match lazyExprs.lookup(_ == ci.name)
       Just(lazyExpr) -> lazy-add-update(di, ci, defName, arg, lazyExpr)
       Nothing -> fail("kind/infer/syn-lazy-eval/branch-expr: cannot find expression for lazy constructor " ++ ci.name.show)
   // generate branch
@@ -287,7 +287,7 @@ fun add-guard(di: dataInfo, ci: conInfo, evalName, g, arg)
 
 fun add-branch(di: dataInfo, ci: conInfo, evalName, b, arg)
   match b
-    syntax/syntax/Branch(patt, guards) -> Branch(patt, guards.map(fn(g) add-guard(di, ci, evalName, g, arg)))
+    syntax/syntax/Branch(patt, guards) -> Branch(patt, guards.map(add-guard(di, ci, evalName, _, arg)))
 
 fun is-whnf-con(di, cname: name)
   val (_, whnfConstrs) = di.constrs.partition(fn(ci) ci.coninfo/is-lazy)
@@ -312,9 +312,9 @@ fun add(di: dataInfo, ci: conInfo, evalName, e, arg)
     Bind(def, expr, rng) -> Bind(def, add(di, ci, evalName, expr, arg), rng)
     Ann(expr, tp, rng) -> Ann(add(di, ci, evalName, expr, arg), tp, rng)
     Case(expr, brs, lzy, rng) ->
-      val brs' = brs.map(fn(b) add-branch(di, ci, evalName, b, arg))
+      val brs' = brs.map(add-branch(di, ci, evalName, _, arg))
       val forceName = di.lazy-name("force")
-      val exprForce = if !lzy && brs.any(fn(b) di.is-whnf-con-branch(b)) then
+      val exprForce = if !lzy && brs.any(di.is-whnf-con-branch(_)) then
                         App(Var(forceName, False, rng), [(Nothing, expr)], rng)
                       else
                         expr
@@ -520,7 +520,7 @@ fun tdl/kinfer(isRec: bool, tdefs0: list<syntax/syntax/typeDef<userType, userTyp
   with extend-infgamma(infgamma) // extend inference gamma, also checks for duplicates
   val names = infgamma.map(name)
   val tdefs1 = xinfgamma.map(fst).zip(tdefs).map(fn((a, b)) kinfer(a, b))
-  val ctdefs' = tdefs1.map(fn(d) resolve-typedef(isRec, names, d))
+  val ctdefs' = tdefs1.map(resolve-typedef(isRec, names, _))
   check-recursion(tdefs) // check for recursive type synonym definitions rather late so we spot duplicate definitions first
   val (ctdefs, lazyExprss) = ctdefs'.unzip
   (ctdefs, lazyExprss.concat)
@@ -581,7 +581,7 @@ fun external/kinfer(ex: syntax/syntax/external, names: list<name>)
       else
         add-range-info(nameRng, RIId(qname, NIValue("extern", tp', doc, True), [], True))
         add-range-info(rng, RIDecl("extern", qname, cname.mangle(tp'), Just(tp')))
-      (core/core/External(cname, tp', pinfos, calls.map(fn(c) c.format-call(tp')), vis, fipT, nameRng, doc), Cons(qname, names))
+      (core/core/External(cname, tp', pinfos, calls.map(_.format-call(tp')), vis, fipT, nameRng, doc), Cons(qname, names))
     syntax/syntax/ExternalImport(imps, rng) -> (core/core/ExternalImport(imps, rng), names)
 
 fun format-call((target, externalCall): (target, externalCall), tp: ktype)
@@ -592,9 +592,9 @@ fun format-call((target, externalCall): (target, externalCall), tp: ktype)
       val argumentCount = match rho.split-fun-type
         Just((args, _, _)) -> args.length
         _ -> 0
-      val arguments = "(" ++ list(1, argumentCount).map(fn(i) "#" ++ i.show).join(",") ++ ")"
-      val argumentsC = "(" ++ list(1, argumentCount).map(fn(i) "#" ++ i.show).join(",") ++ (if fname.starts-with("kk_").is-just then "kk_context()" else "") ++ ")"
-      val typeArguments = if foralls.is-nil then "" else "<" ++ list(1, foralls.length).map(fn(v) "##" ++ v.show).join(",") ++ ">"
+      val arguments = "(" ++ list(1, argumentCount).map("#" ++ _.show).join(",") ++ ")"
+      val argumentsC = "(" ++ list(1, argumentCount).map("#" ++ _.show).join(",") ++ (if fname.starts-with("kk_").is-just then "kk_context()" else "") ++ ")"
+      val typeArguments = if foralls.is-nil then "" else "<" ++ list(1, foralls.length).map("##" ++ _.show).join(",") ++ ">"
       match target
         CS -> (target, fname ++ typeArguments ++ arguments)
         JS -> (target, fname ++ arguments)
@@ -617,7 +617,7 @@ fun inf-resolvex(tp: userType, rng: range)
   val (kargs, kres) = skind.inf-extract-kind-fun
   if kargs.length > 2 || kargs.is-cons && kres.is-infkind-label then
     // either user defined, or a primitive like `:local`
-    val vars = list(1, kargs.length - (if kres.is-infkind-label then 0 else 2)).map(fn(i) new-name("_" ++ i.show))
+    val vars = list(1, kargs.length - (if kres.is-infkind-label then 0 else 2)).map(new-name("_" ++ _.show))
     val quals = vars.map(fn(nm) TypeBinder(nm, KindNone, rng, rng))
     val tpvars = vars.map(fn(nm) TpVar(nm, rng))
     val newTp = quals.foldr(TpApp(tp, tpvars, rng), fn(q, t) TpQuan(QSome, q, t, rng))
@@ -798,7 +798,7 @@ fun usertp/kinfer(expected: infKind, userType: userType)
     TpFun(args, eff, tp, r) ->
       unify(r, expected, infKindStar)
       with check-arg(r)
-      val args' = args.map(fn(a) kinfer(infKindStar, a))
+      val args' = args.map(kinfer(infKindStar, _))
       // somewhat involved since we auto-wrap labels L into effects E here
       val ekind = fresh-kind()
       with check-eff(r)
@@ -975,8 +975,8 @@ fun resolve-typedef(isRec: bool, recNames: list<name>, td: syntax/syntax/typeDef
   match td
     Synonym(syn, params, tp, rng, vis, doc) ->
       val syn' = syn.resolve-typebinder-def(doc)
-      val params' = params.map(fn(p) resolve-typebinder(p, ""))
-      val typeVars = params'.map(fn(p) fresh-typevar(p, Bound))
+      val params' = params.map(_.resolve-typebinder(""))
+      val typeVars = params'.map(_.fresh-typevar(Bound))
       val tvarMap = LinearMap([]) + params'.map(name).zip(typeVars)
       val tp' = resolve-type(tvarMap, True, tp)
       // eta-expand type synonyms
@@ -987,7 +987,7 @@ fun resolve-typedef(isRec: bool, recNames: list<name>, td: syntax/syntax/typeDef
         if etaKinds.is-nil then
           (tp', typeVars)
         else
-          val etaVars = etaKinds.map(fn(k) TypeVar(unique-id("eta"), k, Bound))
+          val etaVars = etaKinds.map(TypeVar(unique-id("eta"), _, Bound))
           (TApp(tp', etaVars.map(TVar)), typeVars ++ etaVars)
       add-range-info(rng, RIDecl("alias", syn'.name, syn.name.mangle-type-name, Just(tp')))
       (Synonym(SynInfo(syn'.name, syn'.tb/kind, etaParams, etaTp, etaTp.max-synonym-rank + 1, rng, vis, doc)), [])
@@ -1006,7 +1006,7 @@ fun resolve-typedef(isRec: bool, recNames: list<name>, td: syntax/syntax/typeDef
         if params.is-nil && !kargs.is-nil then
           kargs.map(fn(karg) TypeVar(unique-id("k"), karg, Bound)) // invent parameters if they are not given (and it has an arrow kind)
         else
-          params'.map(fn(p) fresh-typevar(p, Bound))
+          params'.map(_.fresh-typevar(Bound))
       val tvarMap = LinearMap([]) + params'.map(name).zip(typeVars)
       val qname = newtp'.name
       val fname = qname.unqualify
@@ -1052,7 +1052,7 @@ fun resolve-typedef(isRec: bool, recNames: list<name>, td: syntax/syntax/typeDef
 fun occurs-negative-con(names: list<name>, ci: conInfo)
   val (_, rho) = ci.typeScheme.split-type-scheme
   match rho.split-fun-type
-    Just((pars, _, res)) -> pars.map(snd).any(fn(p) p.occurs-negative(names)) || res.occurs-negative(names)
+    Just((pars, _, res)) -> pars.map(snd).any(_.occurs-negative(names)) || res.occurs-negative(names)
     _ -> False
 
 fun occurs-negative(tp: ktype, names: list<name>)
@@ -1061,10 +1061,10 @@ fun occurs-negative(tp: ktype, names: list<name>)
 fun occurs(tp: ktype, names: list<name>, isNeg: bool)
   match tp
     TForAll(_, tp) -> tp.occurs(names, isNeg)
-    TFun(args, eff, res) -> args.map(snd).any(fn(p) p.occurs(names, !isNeg)) || eff.occurs(names, !isNeg) || res.occurs(names, isNeg)
-    TCon(tcon) -> if names.any(fn(n) n == tcon.name) then isNeg else False
+    TFun(args, eff, res) -> args.map(snd).any(_.occurs(names, !isNeg)) || eff.occurs(names, !isNeg) || res.occurs(names, isNeg)
+    TCon(tcon) -> if names.any(_ == tcon.name) then isNeg else False
     TVar -> False
-    TApp(tp, args) -> Cons(tp, args).any(fn(t) t.occurs(names, isNeg))
+    TApp(tp, args) -> Cons(tp, args).any(_.occurs(names, isNeg))
     TSyn(_, _, t) -> t.occurs(names, isNeg)
 
 fun typebinder/show(TypeBinder(name, kind, _, _): typeBinder<kind>)
@@ -1095,10 +1095,10 @@ val nameTVMapEmpty = LinearMap([])
 fun resolve-constructor(typeName: name, typeSort: dataKind, isSingleton: bool, typeResult: ktype, typeParams: list<typeVar>,
   idmap: name-map<typeVar>, UserCon(cname, exists0, params, mbResult, mblazy, rngName, rng, vis, doc): userCon<kUserType<infKind>, userType, infKind>, tag)
   val qname = cname.qualify-def
-  val exists' = exists0.map(fn(e) e.resolve-typebinder(""))
-  val existsVars = exists'.map(fn(e) fresh-typevar(e, Bound))
+  val exists' = exists0.map(_.resolve-typebinder(""))
+  val existsVars = exists'.map(fresh-typevar(_, Bound))
   val idmap' = (nameTVMapEmpty + exists'.map(name).zip(existsVars)) // assume left biased union 
-  val params' = params.map(fn(p) resolve-con-param(idmap', p))
+  val params' = params.map(resolve-con-param(idmap', _))
   val result = match mbResult
     Nothing -> TApp(typeResult, typeParams.map(TVar))
     Just(tp) -> resolve-type(idmap', False, tp)
@@ -1179,7 +1179,7 @@ fun resolve-app(idmap: name-map<typeVar>, partialSyn: bool, (tp, args): (kUserTy
         Just(tvar) -> (TVar(tvar), tvar.kind)
       if !name.is-implicit-typevar-name then
         add-range-info(r, RIId(name, NITypeVar(kind), [], False))
-      val args' = args.map(fn(a) resolve-type(idmap, False, a))
+      val args' = args.map(resolve-type(idmap, False, _))
       TApp(tp', args')
     (TpCon(name), [fixed, ext]) | name == nameEffectAppend ->
       val fixed' = resolve-type(idmap, False, fixed)
@@ -1203,13 +1203,13 @@ fun resolve-app(idmap: name-map<typeVar>, partialSyn: bool, (tp, args): (kUserTy
             add-error(rng, "Type alias".text |+| name.pretty.color(colors.colorType) |+| "is over-applied".text |-|
               " hint: remove some type arguments".text)
           else ()
-          val args' = args.map(fn(a) resolve-type(idmap, False, a)) // partially applied synonyms are allowed in synonym applications
+          val args' = args.map(resolve-type(idmap, False, _)) // partially applied synonyms are allowed in synonym applications
           val tsyn = TSyn(TypeSyn(name, kind, rank, Just(syn)), args', params.zip(args').sub |-> tp')
           tsyn
           // NOTE: on partially applied type synonyms, we geet a funky body type with free parameters but this
           // is only inside synonyms arguments so we are ok
         Nothing ->
-          TApp(TCon(TypeCon(nm, k)), args.map(fn(a) resolve-type(idmap, False, a)))
+          TApp(TCon(TypeCon(nm, k)), args.map(resolve-type(idmap, False, _)))
     _ -> fail("kind/kinfer resolve-app: this case should never occur after kind checking")
 
 fun make-effect-append(fixed, ext)

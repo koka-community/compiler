@@ -59,7 +59,7 @@ fun expr(e: expr)
     _ -> emit-ctx-errs([])
 
 fun make-con(cName: tName, cRepr: conRepr, targs: list<ktype>, args: list<expr>)
-  match args.span(fn(a) !a.is-hole)
+  match args.span(!_.is-hole)
     (pre, Cons(h, post)) ->
       con-final(cName, cRepr, targs, pre, h, post)
     _ -> con-recurse(cName, cRepr, targs, args)
@@ -178,7 +178,7 @@ fun lookup(cName: tName, fieldIdx: int)
       if drepr.is-value then
         Left("contexts cannot go through a value type (" ++ cName.get-name.show ++ ")")
       else
-        match dinfo.constrs.filter(fn(c) c.name == cName.get-name)
+        match dinfo.constrs.filter(_.name == cName.get-name)
           [c] -> 
             match c.params.drop(fieldIdx - 1)
               Cons((fname, ftp)) -> Right(TName(fname, ftp))

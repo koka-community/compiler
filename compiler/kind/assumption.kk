@@ -47,7 +47,7 @@ fun kgamma/find(kg: kGamma, ctxt: name, name: name)
     Found((qn, TypeNameInfo(k, doc))) -> (qn, k, doc)
     _ -> fail("kind lookup failed")
 fun kgamma/filter(kg: kGamma, modName: name)
-  kg.filter-names(fn(n) n == modName)
+  kg.filter-names(_ == modName)
 
 val kgamma/empty:kGamma = LinearMap([])
 

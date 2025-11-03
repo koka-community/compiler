@@ -141,8 +141,8 @@ fun is-id-end-char(c: char): bool
 fun is-symbol-id(s: string): bool
   s != "" && 
     // The default cases shouldn't happen because of the check above
-    (s.head-char.map(fn(c) !c.is-id-start-char).default(False) ||
-     s.last(1).next.map(fn((c,_)) !c.is-id-end-char).default(False))
+    (s.head-char.map(!_.is-id-start-char).default(False) ||
+     s.last(1).next.map(!_.fst.is-id-end-char).default(False))
 
 fun wrap-id(s: string): string
   if is-symbol-id(s) then "(" ++ s ++ ")" else s
@@ -235,12 +235,12 @@ fun read-qualified-name(s0: string): <div,exn> name
   if s0.starts-with("?").bool then s0.slice.drop(1).string.read-qualified-name.requalify-locally.to-implicit-param-name
   else
     fun split-qual-id-rev(rs: list<char>): (string, string)
-      val (rid, rqual) = rs.span(fn(c) c != '/')
+      val (rid, rqual) = rs.span(_ != '/')
       match rqual
         Cons('/', rs1) -> (rid.string, rs1.string) // qualifier
         _ -> ("", rid.string)
     fun split-id-name-rev(rs: list<char>): <exn> (string, string, string)
-      val (rid, rest) = rs.span(fn(c) c != '#')
+      val (rid, rest) = rs.span(_ != '#')
       match rest
         Cons('#', Cons('/', rs2)) -> // local qualifier
           val (lqual,id) = rid.split-qual-id-rev
@@ -251,7 +251,7 @@ fun read-qualified-name(s0: string): <div,exn> name
         _ -> fail("Name split-id-name-rev: illegal locally qualified name: " ++ rs.string)
     fun split-name(s: string): <exn> (string, string, string)
       if s.ends-with(")").bool then // operator
-        val (rop, rest) = s.list.reverse.span(fn(c) c != '(')
+        val (rop, rest) = s.list.reverse.span(_ != '(')
         match rest
           Cons('(', rs2) ->
             val (qual, lqual, id) = rs2.split-id-name-rev
@@ -284,8 +284,8 @@ fun is-constructor-name(n: name): bool
 
 fun un-wildcard(n: name, post: string): name
   match n.nameStem.list
-    Cons('_')  -> n.name-map-stem(fn(s) s.tail ++ post)
-    Cons('@',Cons('_')) -> n.name-map-stem(fn(s) "@" ++ s.list.drop(2).string ++ post)
+    Cons('_')  -> n.name-map-stem(_.tail ++ post)
+    Cons('@',Cons('_')) -> n.name-map-stem("@" ++ _.list.drop(2).string ++ post)
     _           -> n
 
 fun is-wildcard(n: name): bool
@@ -368,7 +368,7 @@ fun merge-common-path(n1: name, n2: name): name
   fun merge(l1: list<string>, l2: list<string>): list<string>
     match (l1, l2)
       (Cons(m, ms), Cons(n, ns)) -> 
-        if m == n && ms.zipwith(ns, fn(i, j) -> i == j).all(fn(i) -> i) then
+        if m == n && ms.zipwith(ns, _ == _).all(id) then
           Cons(m, ms) ++ ns.drop(ms.length)
         else
           Cons(m, merge(pretend-decreasing(ms), Cons(n, ns)))
@@ -417,7 +417,7 @@ fun prepend(s: string, n: name): name
 fun postpend(n: name, post: string): name
   if n.is-symbol-name then // we must always end in symbols for operators so postpend inserts before the symbols
     n.name-map-stem fn(stem)
-      val (rsyms, rid) = stem.list.reverse.span(fn(c) !c.is-id-char)
+      val (rsyms, rid) = stem.list.reverse.span(!_.is-id-char)
       val start = if rid.is-empty || rid.string == "@" then "@x" else rid.reverse.string // ensure it becomes a valid lowerid
       start ++ post ++ rsyms.reverse.string
   else n.name-map-stem fn(stem)

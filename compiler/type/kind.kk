@@ -34,7 +34,7 @@ fun label-is-affine(eff: keffect): exn bool
 // has effects that are reflected in the evidence vector
 fun contains-handled-effect(exclude: list<name>, eff: keffect): pure bool
   // val (ls,_) = eff.extract-effect-extend
-  // ls.any(fn(e) e.get-handled-effect(exclude).is-just)
+  // ls.any(_.get-handled-effect(exclude).is-just)
   !eff.extract-handled-effect.fst.is-empty
 
 // Get the effects that are reflected in the evidence vector
@@ -67,21 +67,21 @@ fun get-operation-effectx(tp: ktype, exclude: list<name>): pure maybe<(handledSo
       | name == nameTpHandled || name == nameTpNHandled -> get-operation-effect-of(ResumeMany, exclude, t)
       | name == nameTpHandled1 || name == nameTpNHandled1 -> get-operation-effect-of(ResumeOnce, exclude, t)
     // TApp(TCon(TypeCon(hxName)))
-    //   -> if tp.kind == kindHandled && exclude.find(fn(t) t == hxName).is-nothing then Just((ResumeMany, hxName))
-    //      elif tp.kind == kindHandled1 && exclude.find(fn(t) t == hxName).is-nothing then Just((ResumeOnce, hxName))
-    //      elif hxName == nameTpScope && exclude.find(fn(t) t == hxName).is-nothing then Just((ResumeMany, hxName))
+    //   -> if tp.kind == kindHandled && exclude.find(_ == hxName).is-nothing then Just((ResumeMany, hxName))
+    //      elif tp.kind == kindHandled1 && exclude.find(_ == hxName).is-nothing then Just((ResumeOnce, hxName))
+    //      elif hxName == nameTpScope && exclude.find(_ == hxName).is-nothing then Just((ResumeMany, hxName))
     //      else Nothing
     // TCon(TypeCon(hxName, kind))
-    //   | kind == kindHandled && exclude.find(fn(t) t == hxName).is-nothing -> Just((ResumeMany, hxName))
-    //   | kind == kindHandled1 && exclude.find(fn(t) t == hxName).is-nothing -> Just((ResumeOnce, hxName))
+    //   | kind == kindHandled && exclude.find(_ == hxName).is-nothing -> Just((ResumeMany, hxName))
+    //   | kind == kindHandled1 && exclude.find(_ == hxName).is-nothing -> Just((ResumeOnce, hxName))
     _ -> Nothing
 
 fun get-operation-effect-of(hsort: handledSort, exclude: list<name>, tp: ktype)
   match tp.expand-syn
     TCon(TypeCon(hxName)) -> 
-      if !exclude.any(fn(h) h == hxName) then Just((hsort, hxName)) else Nothing
+      if !exclude.any(_ == hxName) then Just((hsort, hxName)) else Nothing
     TApp(TCon(TypeCon(hxName))) ->
-      if !exclude.any(fn(h) h == hxName) then Just((hsort, hxName)) else Nothing
+      if !exclude.any(_ == hxName) then Just((hsort, hxName)) else Nothing
     _ -> Nothing
 
 fun kind(tp: ktype): exn kind

@@ -82,11 +82,11 @@ fun resolve-open(eopen: expr, effFrom: ktype, effTo: ktype, tpFrom: ktype, tpTo:
         fun wrapper-thunk(openExpr: expr, evExprs: list<expr>)
           expr-app(Lam(params, effTo, 
             App(TypeApp(openExpr, [tres, effFrom, effTo]), 
-              evExprs ++ [Lam([], effTo, App(exprVar, params.map(fn(p) Var(p, InfoNone))))])))
+              evExprs ++ [Lam([], effTo, App(exprVar, params.map(Var(_, InfoNone))))])))
         fun wrapper(openExpr: expr, evExprs: list<expr>)
           expr-app(Lam(params, effTo, 
             App(TypeApp(openExpr, targs.map(snd) ++ [tres, effFrom, effTo]), 
-              evExprs ++ [exprVar] ++ params.map(fn(p) Var(p, InfoNone)))))
+              evExprs ++ [exprVar] ++ params.map(Var(_, InfoNone)))))
         fun ev-index-of(l: ktype)
           val (htagTp, hndTp) = 
             val (name, _, tpArgs) = l.label-name-ex

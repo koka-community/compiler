@@ -50,5 +50,5 @@ fun resolve-path(imp: importmap, basename: name, rpath: list<string>): exn eithe
       val qname = qualify(modName, basename)
       val aliased = ralias.take(rpath.length).unsplit-module-name
       Right((qname, aliased))
-    amb -> Left(amb.map(fn(x) x.fst.reverse.unsplit-module-name))
+    amb -> Left(amb.map(_.fst.reverse.unsplit-module-name))
 

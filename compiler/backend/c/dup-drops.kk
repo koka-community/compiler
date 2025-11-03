@@ -96,7 +96,7 @@ fun gen-dup-dropX(isDup: bool, nm: name, info: dataInfo, drepr: dataRepr, conInf
     elif conInfos.all(fn((_, cr, _, _)) cr.is-conSingleton) then ret
     elif drepr.is-dataIso then [gen-dup-drop-iso(isDup, conInfos.head.unjust)] ++ ret
     elif drepr.isDataStructOrLess then
-      conInfos.map(fn(d) gen-dup-drop-tests(isDup, drepr, d)).gen-dup-drop-match ++ ret
+      conInfos.map(gen-dup-drop-tests(isDup, drepr, _)).gen-dup-drop-match ++ ret
     else
       if isDup then ["return".text |+| (
         if drepr.data-repr-may-have-singletons then "kk_datatype_dup".text |.| arguments(["_x".text]) 
@@ -110,7 +110,7 @@ fun gen-dup-dropX(isDup: bool, nm: name, info: dataInfo, drepr: dataRepr, conInf
 
 fun gen-dup-drop-iso(isDup: bool, (_, _, tnames, _): (conInfo, conRepr, list<(name, ktype)>, int))
   match tnames
-    [(name, tp)] -> gen-dup-drop-call(isDup, tp, "_x.".text |.| name.cpp-name).map(fn(x) x |.| semi).hcat
+    [(name, tp)] -> gen-dup-drop-call(isDup, tp, "_x.".text |.| name.cpp-name).map(_ |.| semi).hcat
     _ -> fail("backend/c/gen-dup-drop-iso: invalid arguments")
 
 // coninfos are sorted with singletons first
@@ -121,7 +121,7 @@ fun gen-dup-drop-maybe(isDup: bool, l: list<(conInfo, conRepr, list<(name, ktype
       block(vcat(gen-dup-drop-call(isDup, ftp, "_x._cons.".text |.| conJust.name.ppDefName |.| dot |.| fname.cpp-name)) |.| semi)
 
 fun gen-dup-drop-match(branches0: list<(doc, list<doc>)>)
-  val branches = branches0.filter(fn(b) b.snd.is-cons)
+  val branches = branches0.filter(_.snd.is-cons)
   val complete = branches.length == branches0.length
   fun gen-branch(iff0, (test, stats))
     iff0.text |+| test.parens |+| block1(stats)
@@ -146,7 +146,7 @@ fun gen-dup-drop-testsX(isDup: bool, drepr: dataRepr, lastIdx: int, ((ci, _, cfi
     t |+| parens(ci.con-test-name |.| arguments(["_x".text])) |+| (if stats.is-nil then "{ }".text else stats.vcat.block)
 
 fun gen-dup-drop-fields(isDup: bool, drepr: dataRepr, ci: conInfo, cfields: list<(name,ktype)>)
-  cfields.map(fn((nm, tp)) gen-dup-drop-call(isDup, tp, if drepr.needsTagField then "_x._cons.".text |.| ci.name.ppDefName else "_x".text |.| dot |.| nm.cpp-name)).concat.map(fn(d) d |.| semi)
+  cfields.map(fn((nm, tp)) gen-dup-drop-call(isDup, tp, if drepr.needsTagField then "_x._cons.".text |.| ci.name.ppDefName else "_x".text |.| dot |.| nm.cpp-name)).concat.map(_ |.| semi)
 
 fun gen-dup-drop-callx(prim: string, tp: ktype, args: doc)
   match tp.c-type

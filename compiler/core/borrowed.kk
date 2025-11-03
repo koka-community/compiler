@@ -38,12 +38,12 @@ fun externs/extract-borrow(exs: externals)
 fun ext/extract-borrow(ex: external)
   match ex
     External(nm, _, params) ->
-      if params.any(fn(p) p == Borrow) then Just((nm, params)) else Nothing
+      if params.any(_ == Borrow) then Just((nm, params)) else Nothing
     _ -> Nothing
 
 fun dg/extract-borrow(dg: defGroup)
   match dg
-    DefRec(defs) -> defs.map(fn(d) d.extract-borrow(True)).concat-maybe
+    DefRec(defs) -> defs.map(_.extract-borrow(True)).concat-maybe
     DefNonRec(d) -> d.extract-borrow(False).map(fn(d') [d']).default([])
 
 fun def/extract-borrow(d: def, rec: bool)

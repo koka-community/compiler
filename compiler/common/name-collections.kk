@@ -41,7 +41,7 @@ fun lookup/(==)(a: lookup<a>, b: lookup<a>, ?(==): (a,a) -> e bool): e bool
 fun lookup/show(a: lookup<a>, ?show: (a) -> e string): e string
   match a
     Found((name, _)) -> "Found(" ++ name.show ++ ")"
-    Ambiguous(names) -> "Ambiguous(" ++ names.map(fn(n) n.show).list/show ++ ")"
+    Ambiguous(names) -> "Ambiguous(" ++ names.map(show).list/show ++ ")"
     NotFound -> "NotFound"
 
 fun qname-map/single(n: name, a: a): qname-map<a>
@@ -54,7 +54,7 @@ fun qname-map/from-list(l: list<(name,a)>): <comp-flags,pure> qname-map<a>
 // Lookup a fully qualified name
 fun qname-map/lookup-qualified(m: qname-map<a>, n: name): maybe<a>
   match m.lookup(n.unqualify)
-    Just(xs) -> xs.lookup(fn(o) o == n)
+    Just(xs) -> xs.lookup(_ == n)
     _ -> Nothing
 
 // Lookup a potentially unqualified name within a module context. 

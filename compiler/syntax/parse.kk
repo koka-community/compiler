@@ -511,7 +511,7 @@ fun parse-value-operation-decl(vis: visibility): parse opDecl
   parse-keyword(":")
   val (mbTeff, tRes) = parse-tresult()
   if mbTeff.is-just then
-    parse-error("an explicit effect in result type of an operation is not allowed (yet)", mbTeff.map(fn(t) t.range).default(rng0))
+    parse-error("an explicit effect in result type of an operation is not allowed (yet)", mbTeff.map(range).default(rng0))
   val oprng = combine([rng0, idrng, tRes.range])
   OpDecl(doc, id.to-value-operation-name, rng0, idrng, True, OpVal, [], [], idrng, mbTeff, tRes, oprng)
 
@@ -538,7 +538,7 @@ fun parse-fun-operation-decl(lin: bool, vis: visibility): parse opDecl
   parse-keyword(":")
   val (mbTeff, tRes) = parse-tresult()
   if mbTeff.is-just then // TODO: check if declared effect is part of the effect type
-    parse-error("an explicit effect in result type of an operation is not allowed (yet)", mbTeff.map(fn(t) t.range).default(rng0))
+    parse-error("an explicit effect in result type of an operation is not allowed (yet)", mbTeff.map(range).default(rng0))
   val oprng = combine([rng0, idrng, tRes.range])
   OpDecl(doc, id, rng0, idrng, False, sort, exists0, pars, prng, mbTeff, tRes, oprng)
 
@@ -642,7 +642,7 @@ fun parse-parameter-normal(allowDefaults: bool)
     PatVar(binder) -> binder.expr.range
     _ -> pat.range
   fun binder(name: name, nameRng: range)
-    ValueBinder(name, mtp, opt, nameRng, combine([rng, drng, mtp.map(fn(t) t.range).default(drng)]))
+    ValueBinder(name, mtp, opt, nameRng, combine([rng, drng, mtp.map(range).default(drng)]))
   match pat
     // Treat PatVar and PatWild as special cases to avoid unnecessary match expressions
     PatVar(ValueBinder(name, Nothing, PatWild, nameRng, _)) -> (binder(name, nameRng), fn(x) x)
@@ -667,7 +667,7 @@ fun parse-parameter-implicit()
   val tp = parse-maybe-nb("", parse-type-annot)
   val unpackExpr = if unpack then Just(Parens(Var(qname.unqualify-full, False, rng), nil, "", rng)) // Encode .? as a default value assuming it is a type name
                    else Nothing
-  (ValueBinder(qname, tp, unpackExpr, combine([rng, tp.map(fn(t) t.range).default(rng)]), rng), id)
+  (ValueBinder(qname, tp, unpackExpr, combine([rng, tp.map(range).default(rng)]), rng), id)
 
 fun parse-default-expr()
   parse-maybe-nb("default", {val krng = parse-keyword("="); val e = parse-expression(); (Just(e), krng.combine(e.range))}).default((Nothing, null))
@@ -685,7 +685,7 @@ fun parse-block(): parse userExpr
   val rng2 = parse-right-curly()
   val localize = 
     match stmts1.any-statement-var
-      Just(def) -> [StatFun(fn(e) local-scope(def, e))]; 
+      Just(def) -> [StatFun(local-scope(def, _))]; 
       Nothing -> []
   val stats = localize ++ stmts1 ++ stmts2
   match stats.reverse
@@ -807,7 +807,7 @@ fun parse-if-expr(): parse userExpr
       {
         val tExpr = parse-then-expr(rng)
         val eExprs = parse-many("", parse-elif-expr)
-        val eExpr = parse-maybe-nb("", {parse-keyword("else"); parse-block-expr()}).default(Var(nameUnit, False, (tExpr.range).combine(eExprs.map(fn(e) e.snd.range).combine).after))
+        val eExpr = parse-maybe-nb("", {parse-keyword("else"); parse-block-expr()}).default(Var(nameUnit, False, (tExpr.range).combine(eExprs.map(_.snd.range).combine).after))
         (tExpr, eExprs, eExpr)
       }
     ])
@@ -932,7 +932,7 @@ fun parse-handler-opx(): parse (clause, maybe<(userExpr -> userExpr)>)
           (new-name("_"), rng, Nothing)
         }])
       val expr = parse-body-expr()
-      (ClauseInitially(Lam([ValueBinder(name, tp, Nothing, prng, rng.combine(tp.map(fn(t) t.range).default(rng)))], expr, False, rng.combine(expr.range))), Nothing)
+      (ClauseInitially(Lam([ValueBinder(name, tp, Nothing, prng, rng.combine(tp.map(range).default(rng)))], expr, False, rng.combine(expr.range))), Nothing)
     }, parse-handler-op
   ])
 
@@ -953,7 +953,7 @@ fun parse-handler-op(): parse (clause, maybe<(userExpr -> userExpr)>)
         }
       ])
       val expr = parse-body-expr()
-      (ClauseRet(Parens(Lam([ValueBinder(name, tp, Nothing, prng, prng.combine(tp.map(fn(t) t.range).default(prng)))], expr, False, rng.combine(expr.range)), "return".new-name, "", rng)), Nothing)
+      (ClauseRet(Parens(Lam([ValueBinder(name, tp, Nothing, prng, prng.combine(tp.map(range).default(prng)))], expr, False, rng.combine(expr.range)), "return".new-name, "", rng)), Nothing)
     },{ // TODO: is "raw" needed for value definitions?
       parse-keyword("val")
       val (name, nameRng) = parse-qualified-identifier()
@@ -987,12 +987,12 @@ fun parse-op-params()
 fun parse-op-param()
   val (name, rng) = parse-param-id()
   val tp = parse-maybe-nb("", parse-type-annot)
-  ValueBinder(name, tp, (), rng, rng.combine(tp.map(fn(t) t.range).default(rng)))
+  ValueBinder(name, tp, (), rng, rng.combine(tp.map(range).default(rng)))
 
 fun parse-handler-param()
   val (name, rng) = parse-identifier()
   val tp = parse-maybe-nb("", parse-type-annot)
-  ValueBinder(name, tp, (), rng, rng.combine(tp.map(fn(t) t.range).default(rng)))
+  ValueBinder(name, tp, (), rng, rng.combine(tp.map(range).default(rng)))
 
 fun parse-branch(): parse userBranch
   val pat = parse-pattern()
@@ -1044,7 +1044,7 @@ fun parse-op-exprx(allowTrailingLam: bool): parse userExpr
                                   // trace("Parsed expression2 " ++ e2.show ++ "\n")
                                   [op, e2]})
       App(Var(nameOpExpr, True, null), 
-          Cons(e1, ess.concat).map(fn(e) (Nothing, e)), 
+          Cons(e1, ess.concat).map((Nothing, _)), 
           combine(Cons(e1.range, ess.concat.map(range))))
     }, {e1}
   ])
@@ -1097,7 +1097,7 @@ fun parse-indexer(): parse (userExpr -> userExpr)
     {
       val idxs = parse-sep-by1("", parse-expression, parse-comma)
       val rng1 = parse-right-bracket()
-      fn(e) App(Var(nameIndex, False, rng0.combine(rng1)), Cons(e, idxs).map(fn(a) (Nothing, a)), rng0.combine(rng1))
+      fn(e) App(Var(nameIndex, False, rng0.combine(rng1)), Cons(e, idxs).map((Nothing, _)), rng0.combine(rng1))
     }
   ])
 
@@ -1119,10 +1119,10 @@ fun parse-func-applications(allowTrailingLam: bool): parse (userExpr -> userExpr
         val nfargs = fs.map(fn(e') (Nothing, e'))
         match e
           App(f, args, rng) -> 
-            val positional = args.filter(fn(a) a.fst.is-nothing) ++ nfargs
-            val namedargs = args.filter(fn(a) a.fst.is-just)
+            val positional = args.filter(_.fst.is-nothing) ++ nfargs
+            val namedargs = args.filter(_.fst.is-just)
             App(f, positional ++ namedargs, rng)
-          _ -> App(e, nfargs, combine(Cons(e.range, fs.map(fn(a) a.range))))
+          _ -> App(e, nfargs, combine(Cons(e.range, fs.map(range))))
   val fs = parse-many1("", {parse-func-application(allowTrailingLam)})
   fn(arg0)
     inject-apply(arg0, fs)
@@ -1180,7 +1180,7 @@ fun parse-tuple-expression(): parse userExpr
   match es
     Nil -> Var(nameUnit, False, rng)
     [e] -> Parens(e, nil, "", rng)
-    _ -> App(Var(name-tuple(es.length), False, rng), es.map(fn(e) (Nothing, e)), rng)
+    _ -> App(Var(name-tuple(es.length), False, rng), es.map((Nothing, _)), rng)
 
 fun parse-list-expr(): parse userExpr
   val rng1 = parse-special("[")

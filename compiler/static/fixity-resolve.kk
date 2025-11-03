@@ -134,7 +134,7 @@ fun fixities-compose(fix1: fixities, fix2: fixities): fixities
       _ -> acc.add(name, fixity)
 
 fun fixities-new(fs: list<(name, fixity)>): fixities
-  fixitiesEmpty + fs.filter(fn(f) f.snd.is-fixInfix)
+  fixitiesEmpty + fs.filter(_.snd.is-fixInfix)
 
 effect fixityEff
   fun add-fix-error(s: doc, r: range): ()
@@ -168,7 +168,7 @@ alias opStack = list<op>
 
 fun fixities/resolve(exprs: list<userExpr>): fixEff userExpr
   val fixMap = get-fixities()
-  terms/resolve([], [], exprs.map(fn(e) e.to-term(fixMap)))
+  terms/resolve([], [], exprs.map(_.to-term(fixMap)))
 
 // Find out if this is an operator
 fun to-term(expr: userExpr, fixities: fixities): term
