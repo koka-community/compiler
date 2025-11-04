@@ -30,13 +30,13 @@ fun (==)(ni1: nameInfo, ni2: nameInfo)
 
 fun scope-depth(ni: nameInfo): int
   match ni 
-    InfoVal(scopeDepth = depth) -> depth
-    InfoFun(scopeDepth = depth) -> scopeDepth
+    InfoVal(scopeDepthX = depth) -> depth
+    InfoFun(scopeDepthX = depth) -> depth
     _ -> 0
 
 fun allow-implicit-mask(ni: nameInfo): bool
   match ni
-    InfoVal(allowImplicitMask = allow) -> allow
+    InfoVal(allowImplicitMaskX = allow) -> allow
     _ -> False
 
 fun show(ni: nameInfo): div string
@@ -71,15 +71,15 @@ fun cname(info: nameInfo)
 
 fun is-info-val-fun-ext(info)
   match info
-    InfoVal() -> True
-    InfoFun() -> True
-    assumption/InfoExternal() -> True
+    InfoVal(_) -> True
+    InfoFun(_) -> True
+    assumption/InfoExternal(_) -> True
     _ -> False
 
 fun is-info-fun-or-external(info)
   match info
-    InfoFun() -> True
-    assumption/InfoExternal() -> True
+    InfoFun(_) -> True
+    assumption/InfoExternal(_) -> True
     _ -> False
 
 fun doc(info)
@@ -137,7 +137,7 @@ fun gamma-extends(g: gamma, ls: list<(name,nameInfo)>): gamma
   ls.foldl(g, fn(m, (name,tp)) m.gamma-extend(name, tp))
 
 fun gamma-extend(g: gamma, name: name, ni: nameInfo)
-  g.update(name.unqualify-full, [(name, ni)], fn(old, new) old ++ new) // TODO: Check for overlapping type schemes?
+  g.update(name.unqualify-full, [(name, ni)], fn(old:list<_>, new) old ++ new) // TODO: Check for overlapping type schemes?
 
 fun gamma-lookup-canonical(g: gamma, name: name)
   g.gamma-lookupQ(name).filter(_.canonical-name(nil) == name)
@@ -210,7 +210,7 @@ fun gamma-remove(g: gamma, name: name)
   g.remove(name.unqualify)
 
 fun gamma-union(g1: gamma, g2: gamma)
-  g2.union-with(g1, fn(xs1, xs2) xs1 ++ xs2)
+  g2.union-with(g1, fn(xs1: list<_>, xs2) xs1 ++ xs2)
 
 fun gamma-unions(gs: list<gamma>)
   gs.foldl(compiler/type/assumption/empty, gamma-union)
@@ -264,17 +264,25 @@ fun extract-def(d: def, update-vis)
   qname-map/single(d.def-name, create-name-infoX(update-vis(d.vis), d.def-name, 0, d.sort, d.nameRange, d.ktype, d.doc)) // specials since we cannot call isTopLevel as in coreDefInfo
 
 fun core-def-info(d: def)
-  (d.def-name, create-name-infoX(d.vis, d.def-name, 0, if d.sort.is-defFun && !d.is-top-level then DefVal else d.sort, False, d.nameRange, d.ktype, d.doc))
+  (d.def-name, create-name-infoX(d.vis, d.def-name, 0, if d.sort.is-defFun && !d.is-top-level then DefVal else d.sort, d.nameRange, d.ktype, d.doc))
 // since we use coreDefInfo also for local definitions, we need to be careful to to use DefFun for
 // things that do not get lifted to toplevel due to free type/variables. test: codegen/rec5
 
 fun create-name-info(name, depth, is-val, rng, tp, doc)
-  create-name-infoX(Public, name, depth, if is-val then DefVal else defFun([]), rng, tp, doc)
+  create-name-infoX(Public, name, depth, if is-val then DefVal else DefFun([]), rng, tp, doc)
 
-fun create-name-infoX(vis, name, depth: int, sort, allowImplicitMask, rng, tp, doc)
+fun create-name-infoX(vis, name, depth: int, sort, rng, tp, doc)
+  create-name-infoEX(vis, name, depth, sort, False, rng, tp, doc)
+
+fun create-name-infoEX(vis, name, depth: int, sort, allowImplicitMask, rng, tp, doc)
+  fun is-default(nm: name)
+    match nm.split-local-qual-name
+      Cons("default") -> True 
+      _ -> False
+  val d = if depth == 0 && name.is-default then -1 else depth 
   match sort
     DefFun(_, fipT) -> InfoFun(vis, name, tp, depth, tp.arity, fipT, rng, doc)
-    DefVar -> InfoVal(vis, name, tp, depth, rng, True, doc)
+    DefVar -> InfoVal(vis, name, tp, depth, rng, True, False, doc)
     _ -> InfoVal(vis, name, tp, depth, rng, False, allowImplicitMask, doc)
 
 fun arity(tp: ktype): <comp-flags, exn> (int, int)
@@ -314,10 +322,10 @@ fun ni/bound-type-vars(info: nameInfo): pure tvs
 
 fun map-type(ni: nameInfo, f: (ktype) -> e ktype): e nameInfo
   match ni
-    InfoVal(vis, cname, typ, range, isVar, d) -> InfoVal(vis, cname, f(typ), range, isVar, d)
-    InfoFun(vis, cname, typ, arity, fipt, range, d) -> InfoFun(vis, cname, f(typ), arity, fipt, range, d)
-    InfoCon(vis, typ, repr, conInfo, range, d) -> InfoCon(vis, f(typ), repr, conInfo, range, d)
-    assumption/InfoExternal(vis, cname, typ, format, fipt, range, d) -> assumption/InfoExternal(vis, cname, f(typ), format, fipt, range, d)
+    InfoVal(vis, cname, typ, depth, range, isVar, allowMask, doc) -> InfoVal(vis, cname, f(typ), depth, range, isVar, allowMask, doc)
+    InfoFun(vis, cname, typ, depth, arity, fipt, range, doc) -> InfoFun(vis, cname, f(typ), depth, arity, fipt, range, doc)
+    InfoCon(vis, typ, repr, conInfo, range, doc) -> InfoCon(vis, f(typ), repr, conInfo, range, doc)
+    assumption/InfoExternal(vis, cname, typ, format, fipt, range, doc) -> assumption/InfoExternal(vis, cname, f(typ), format, fipt, range, doc)
     InfoImport(vis, typ, nameAlias, fullName, range) -> InfoImport(vis, f(typ), nameAlias, fullName, range)
 
 fun pp-gamma-internal(g: gamma, showHidden: bool)

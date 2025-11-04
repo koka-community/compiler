@@ -130,7 +130,7 @@ fun syn-copycon(di: dataInfo, ci: conInfo)
       _ -> App(x, xs.map((Nothing, _)), rc)
   val params0 = ci.params.map(fn((fldname, t)) ValueBinder(fldname, Nothing, if !ci.has-accessor(fldname, t) then Nothing else Just(app(vvar(type-qualified-name-of(di.name, fldname)), [vvar(argName)])), rc, rc))
   val body = app(vvar(ci.name), ci.params.map(fn((nm, _)) vvar(nm)))
-  val expr = Lam([ValueBinder(argName, Nothing, Nothing, rc, rc)] ++ params0, True, body, rc)
+  val expr = Lam([ValueBinder(argName, Nothing, Nothing, rc, rc)] ++ params0, body, True, rc)
   DefNonRec(Def(ValueBinder(defName, (), Ann(expr, fullTp, rc), rc, rc), rc, di.vis, def-fun([]), InlineAuto, ""))
 
 fun has-accessor(ci: conInfo, nm: name, tp: ktype)
@@ -176,7 +176,7 @@ fun syn-accessors(di: dataInfo)
     val doc = "// Automatically generated. Retrieves the `" ++ nm.show ++ "` constructor field of the `" ++ di.name.nameLocalQual ++ "` type.\n"
     val defaultBranch = if isPartial then [Branch(PatWild(rng), [Guard(guardTrue, App(Var(namePatternMatchError, False, rng), messages.map(fn(msg) (Nothing, msg)), rng))])] else []
     val caseExpr = Case(Var(arg, False, rng), branches.map(snd) ++ defaultBranch, False, rng)
-    val expr = Ann(Lam([ValueBinder(arg, Nothing, Nothing, rng, rng)], caseExpr, rng), fullTp, xrng)
+    val expr = Ann(Lam([ValueBinder(arg, Nothing, Nothing, rng, rng)], caseExpr, True, rng), fullTp, xrng)
     DefNonRec(Def(ValueBinder(defName, (), expr, xrng, xrng), rng, visibility, def-fun-ex([Borrow], noFip), InlineAlways, doc))
   fields.map(syn-accessor)
 
@@ -190,7 +190,7 @@ fun syn-tester(di: dataInfo, ci: conInfo)
     val branch1 = Branch(PatCon(ci.name, patterns, rc, rc), [Guard(guardTrue, Var(nameTrue, False, rc))])
     val branch2 = Branch(PatWild(rc), [Guard(guardTrue, Var(nameFalse, False, rc))])
     val caseExpr = Case(Var(arg, False, rc), [branch1, branch2], ci.coninfo/is-lazy, rc)
-    val expr = Lam([ValueBinder(arg, Nothing, Nothing, rc, rc)], caseExpr, rc)
+    val expr = Lam([ValueBinder(arg, Nothing, Nothing, rc, rc)], caseExpr, True, rc)
     val doc = "// Automatically generated. Tests for the `" ++ ci.name.nameLocalQual ++ "` constructor of the `:" ++ di.name.nameLocalQual ++ "` type.\n"
     [DefNonRec(Def(ValueBinder(def-name, (), expr, rc, rc), rc, ci.vis, def-fun-ex([Borrow], Fip(AllocAtMost(0))), InlineAlways, doc))]
 
@@ -327,13 +327,13 @@ fun add(di: dataInfo, ci: conInfo, evalName, e, arg)
 fun unknown-update(di: dataInfo, ci: conInfo, evalName, expr, arg)
   val rng = expr.expr/range.hide
   update-warning(di, ci, rng, fn(_) "in-place as the result constructor is not statically known -- using an indirection instead".text)
-  lazy-update(expr)
+  lazy-update(expr, arg)
 
 fun recursive-update(di: dataInfo, ci: conInfo, ci': conInfo, evalName, expr, arg)
-  val rng = expr.expr/range.hide
+  val r0 = expr.expr/range.hide
   // No need to warn anymore as we don't force recursively here
-  warn-udpate(di, ci, expr.rng, ci')
-  lazy-update(expr)
+  warn-update(di, ci, expr.range, ci')
+  lazy-update(expr, arg)
 
 fun warn-update(di: dataInfo, ci: conInfo, rng: range, resultCon)
   val lazySize = alloc-size(con-repr(di, ci), platform)
@@ -348,12 +348,12 @@ fun lazy-update-con(di: dataInfo, ci: conInfo, cname: name, evalName, expr, arg)
       Nothing -> unknown-update(di, ci, evalName, expr, arg)
       Just(ci') -> recursive-update(di, ci, ci', evalName, expr, arg)
     Just(whnf) ->
-      warn-update(di, ci, expr.rng, whnf)
+      warn-update(di, ci, expr.range, whnf)
       lazy-update(expr, arg)
 
 fun lazy-update(expr, arg)
   val rng = expr.expr/range.hide
-  App(Var(nameLazyUpdate, False, rng), [(Nothing, arg), (Nothing, expr)], rng)
+  App(Var(nameLazyMemoize, False, rng), [(Nothing, arg), (Nothing, expr)], rng)
 
 fun update-warning(di: dataInfo, ci: conInfo, rng: range, fdoc: (name -> doc) -> doc)
   val cs = colors
@@ -588,7 +588,7 @@ fun format-call((target, externalCall): (target, externalCall), tp: ktype)
   match externalCall
     ExternalInline(inl) -> (target, inl)
     ExternalCall(fname) ->
-      val (foralls, _, rho) = tp.split-type-scheme
+      val (foralls, rho) = tp.split-type-scheme
       val argumentCount = match rho.split-fun-type
         Just((args, _, _)) -> args.length
         _ -> 0
@@ -914,7 +914,7 @@ fun add-lazy-indirect(dt)
       val fipT = match ddef
         DataDefLazy(NoFip(False)) -> defaultFip
         DataDefLazy(fipT) ->
-          if fipT < defaultFip then // annotated
+          if !fipT.subsumes(defaultFip) then // annotated
             add-error(rng, "The datatype".text |+| fipT.show.text |+| "annotation cannot be more restrictive than the fip annotations of the lazy constructors".text)
             defaultFip
           else fipT

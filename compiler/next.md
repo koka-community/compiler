@@ -5,7 +5,7 @@ Work on Syntax, Parsing, and Formatter
 // syntax / highlight 11/11/24
 
 - [x] lib/ updated: 2/10/25
-- [x] common/ updated: 7/14/25 (except file)
+- [x] common/ updated: 11/3/25 (except file)
 - [x] syntax/ updated 7/14/25 (pretty, format are new)
 - [x] static/ updated 7/12/25 
 - [ ] kind/ updated 7/12/25 (other than kind/infer..lazy)

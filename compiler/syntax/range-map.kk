@@ -171,15 +171,15 @@ fun merge-implicits(rm: range-map, for-inlay: bool)
       Nil -> Nil
       Cons((rng, rinfo), rinfos) ->
         match rinfo
-          RIImplicits -> merge(rinfos)
+          RIImplicits(_) -> merge(rinfos)
           RIId(nm, info, docs, isDef) -> Cons((rng, RIId(nm, info, (if for-inlay then [] else docs) ++ find-docs(rng), isDef)), merge(rinfos))
           _ -> Cons((rng, rinfo), merge(rinfos))
   merge(rm)
 
 fun lookup(rm: range-map, r: range)  
   val pos = r.start
-  fun is-before((rng, _)) rng.start < pos
-  fun starts-at((rng, _)) rng.start == pos
+  fun is-before((rng, _)) rng.range/start < pos
+  fun starts-at((rng, _)) rng.range/start == pos
   val (rinfos, rm') = rm.drop-while(is-before).span(starts-at)
   (rinfos.prioritize, rm')
 

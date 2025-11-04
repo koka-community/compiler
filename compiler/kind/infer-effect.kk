@@ -119,7 +119,7 @@ fun extend-kgamma(rngs: list<range>, dg: compiler/core/core/typeDefGroup, f)
   val kNewtypes = tdefs.map(name-newtype).concat.new
   with override
     val infKindEnv = infKindEnv( 
-      kGamma = infKindEnv.kGamma.union(newkGamma), 
+      kGamma = infKindEnv.kGamma.qname-map/union(newkGamma), 
       synonyms = infKindEnv.synonyms.compose(kSyns), 
       newtypesExtended = infKindEnv.newtypesExtended.compose(kNewtypes))  
   f()

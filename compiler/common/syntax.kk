@@ -6,7 +6,7 @@
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
 module compiler/common/syntax
-// Updated as of 2/10/25: Commit 56f22b9
+// Updated as of 11/3/25: Commit 486ef0d
 
 pub type jsTarget
   JsDefault
@@ -210,7 +210,7 @@ pub fun datadef/(==)(d1: dataDef, d2: dataDef): bool
   match (d1, d2)
     (DataDefValue(r1), DataDefValue(r2)) -> r1 == r2
     (DataDefNormal, DataDefNormal) -> True
-    (DataDefLazy(f1), DataDefLazy(f2)) -> f1.cmp(f2) == Eq
+    (DataDefLazy(f1), DataDefLazy(f2)) -> f1 == f2
     (DataDefOpen, DataDefOpen) -> True
     (DataDefAuto, DataDefAuto) -> True
     _ -> False
@@ -382,19 +382,22 @@ pub fun fipt/show(f: fipT): string
     Fbip(a, t) -> "fbip(" ++ a.show ++ ", " ++ t.show ++ ")"
     NoFip(t) -> "NoFip(" ++ t.show ++ ")"
 
-pub fun fipt/cmp(f1: fipT, f2: fipT): order
+pub fun fipt/(==)(f1: fipT, f2: fipT): bool
+  match (f1, f2) 
+    (Fip(a1), Fip(a2)) -> a1 == a2
+    (Fbip(a1, t1), Fbip(a2, t2)) -> a1 == a2 && t1 == t2
+    (NoFip(t1), NoFip(t2)) -> t1 == t2
+    _ -> False
+
+// Note that "fbip" and "fip(1)" are incomparable so this cannot have an `cmp` function
+pub fun subsumes(f1: fipT, f2: fipT): bool
   match (f1, f2)
-    (Fip(a1), Fip(a2)) -> fipa/cmp(a1, a2)
-    (Fbip(a1, True), Fbip(a2, True)) -> fipa/cmp(a1, a2)
-    (Fbip(a1, False), Fbip(a2, False)) -> fipa/cmp(a1, a2)
-    (Fbip(_, True), Fbip(_, _)) -> Gt
-    (Fbip(_, False), Fbip(_, _)) -> Lt
-    (NoFip(t1), NoFip(t2)) -> t1.cmp(t2)
-    (Fip(_), _) -> Lt
-    (_, Fip(_)) -> Gt
-    (Fbip(_, _), _) -> Lt
-    (_, Fbip(_, _)) -> Gt
-    _ -> Lt
+    (NoFip, Fip) -> True
+    (NoFip(t1), f2) -> !t1 || f2.is-tail
+    (Fbip(a1, t1), Fbip(a2, t2)) -> a1 >= a2 && (!t1 || t2)
+    (Fbip(a1), Fip(a2)) -> a1 >= a2
+    (Fip(a1), Fip(a2)) -> a1 >= a2
+    _ -> False
 
 pub value type fipAlloc
   AllocAtMost(i: int)
@@ -411,6 +414,13 @@ pub fun fipa/cmp(f1: fipAlloc, f2: fipAlloc): order
     (AllocUnlimited, AllocUnlimited) -> Eq
     (_, AllocUnlimited) -> Lt
     _ -> Lt
+
+pub fun fipa/(==)(f1: fipAlloc, f2: fipAlloc): bool
+  match (f1, f2)
+    (AllocAtMost(n1), AllocAtMost(n2)) -> n1 == n2
+    (AllocFinitely, AllocFinitely) -> True
+    (AllocUnlimited, AllocUnlimited) -> True
+    _ -> False
 
 pub fun combine(f1: fipAlloc, f2: fipAlloc)
   match (f1, f2)
