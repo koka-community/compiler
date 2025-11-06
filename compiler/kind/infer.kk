@@ -61,13 +61,13 @@ fun inferKinds(
   inf-imports(modName, nmrng, importdefs)
 
   val (_, dataInfos) = tdgroups.extract-infos.unzip-either
-  val conInfos = dataInfos.map(constrs).concat
+  val conInfos = dataInfos.flatmap(constrs)
   val cons1 = conInfos.constructors-from-list
   val gamma1 = dataInfos.constructor-gamma(data/is-value)
   conInfos.constructor-check-duplicates
   // Now order and group definitions including newly synthesized definitions for type definitions
   val dgroups = (synDefs ++ defs1).group-bindings
-  (dgroups ++ defs1, kgamma1, (syns1, data1, cons1), Core(modName, [], [], tdgroups, [], externals1, doc))
+  (dgroups, kgamma1, (syns1, data1, cons1), Core(modName, [], [], tdgroups, [], externals1, doc))
   
 fun unzip-either(xs: list<either<a, b>>): (list<a>, list<b>)
   fun loop(ys: list<either<a, b>>, las: ctx<list<a>>, lbs: ctx<list<b>>): (list<a>, list<b>)
@@ -90,7 +90,7 @@ fun extract-infos(groups: list<core/core/typeDefGroup>): list<either<synInfo, da
 alias lazyExpr = (name, syntax/syntax/expr<ktype>)
 
 fun syn-typedef-groups(tdgs: list<core/core/typeDefGroup>, lazyExprs: list<lazyExpr>)
-  tdgs.flatmap(fn(tdg) tdg.syn-typedef-group(lazyExprs))
+  tdgs.flatmap(_.syn-typedef-group(lazyExprs))
 
 fun syn-typedef-group(tdg: core/core/typeDefGroup, lazyExprs: list<lazyExpr>): _ syntax/syntax/defGroups<ktype>
   tdg.flatmap(_.syn-typedef(lazyExprs))
@@ -108,8 +108,9 @@ fun syn-typedef(td: core/core/typeDef, lazyExprs: list<lazyExpr>): _ list<syntax
                       di.constrs.flatmap(syn-tester(di, _))
                     else []
       val contag = if di.is-open then di.constrs.map(syn-constr-tag) else []
-      val synLazy = if di.di/is-lazy then 
-                      [di.syn-lazy-tag, di.syn-lazy-eval(lazyExprs), di.syn-lazy-step, di.syn-lazy-whnf, di.syn-lazy-force]
+      val synLazy = if di.di/is-lazy then // TODO: Update this
+                      [di.syn-lazy-tag, // di.syn-lazy-eval(lazyExprs), 
+                        di.syn-lazy-step, di.syn-lazy-whnf, di.syn-lazy-force]
                     else [] 
       accessors ++ testers ++ copycon ++ contag ++ synLazy
 
@@ -122,8 +123,7 @@ fun syn-copycon(di: dataInfo, ci: conInfo)
     match rho.split-fun-type
       Just((args, eff, res)) -> TForAll(vars, TFun([(argName, res)] ++ args.map(fn((nm, t)) (nm, if !ci.has-accessor(nm, t) then t else t.make-optional)), eff, res))
       Nothing -> TForAll(vars, TFun([(argName, rho)], typeTotal, rho))
-  fun vvar(n)
-    Var(n, False, rc)
+  fun vvar(n) Var(n, False, rc)
   fun app(x, xs)
     match xs 
       Nil -> x 
@@ -150,15 +150,15 @@ fun syn-accessors(di: dataInfo)
     (nm, (tp, rng, pvis, ci))
   )
   fun occurs-on-all-constrs((nm, (tp, _, _, _)))
-    paramss.all(_.any(fn((n, (t, _, _, _))) n == nm && t.eq-type(tp))) // TODO: Change this to eqType
-  val fields = paramss.concat.filter(fn((nm, (tp, _, _, cinfo))) cinfo.has-accessor(nm, tp)).nub-by(fn(x, y) x.fst == y.fst).filter(occurs-on-all-constrs)
+    nm != nil && paramss.all(_.any(fn((n, (t, _, _, _))) n == nm && t.eq-type(tp)))
+  val fields = paramss.concat.filter(fn((nm, (tp, _, _, cinfo))) cinfo.has-accessor(nm, tp)).nub-by(_.fst == _.fst).filter(occurs-on-all-constrs)
   fun syn-accessor((nm, (tp, xrng, visibility, _)))
     val rng = xrng.hide
     val defName = type-qualified-name-of(di.name, nm).unqualify
     val arg = 
       val dataName = di.name.unqualify
       if dataName.show.list.all(is-alphanum) then dataName else "@this".new-name
-    val fld = "@x".new-name
+    val fld = "x".new-hidden-name
     val dataTp = TApp(TCon(TypeCon(di.name, di.kind)), di.params.map(TVar))
     fun make-branch(ci: conInfo)
       val r = ci.range
@@ -173,8 +173,8 @@ fun syn-accessors(di: dataInfo)
       val (foralls, rho) = tp.split-type-scheme
       TForAll(di.params ++ foralls, TFun([(arg, dataTp)], if isPartial then typePartial else typeTotal, rho))
     val messages = [Literal(LitString(rng.start.source.name ++ rng.show, rng)), Literal(LitString(nm.show, rng))]
-    val doc = "// Automatically generated. Retrieves the `" ++ nm.show ++ "` constructor field of the `" ++ di.name.nameLocalQual ++ "` type.\n"
-    val defaultBranch = if isPartial then [Branch(PatWild(rng), [Guard(guardTrue, App(Var(namePatternMatchError, False, rng), messages.map(fn(msg) (Nothing, msg)), rng))])] else []
+    val doc = "// Automatically generated. Retrieves the `" ++ nm.show ++ "` constructor field of the `:" ++ di.name.nameLocalQual ++ "` type.\n"
+    val defaultBranch = if isPartial then [Branch(PatWild(rng), [Guard(guardTrue, App(Var(namePatternMatchError, False, rng), messages.map((Nothing, _)), rng))])] else []
     val caseExpr = Case(Var(arg, False, rng), branches.map(snd) ++ defaultBranch, False, rng)
     val expr = Ann(Lam([ValueBinder(arg, Nothing, Nothing, rng, rng)], caseExpr, True, rng), fullTp, xrng)
     DefNonRec(Def(ValueBinder(defName, (), expr, xrng, xrng), rng, visibility, def-fun-ex([Borrow], noFip), InlineAlways, doc))
@@ -200,6 +200,22 @@ fun syn-constr-tag(ci: conInfo)
   val expr = Literal(LitString(ci.name.show, rc))
   DefNonRec(Def(ValueBinder(nm, (), expr, rc, rc), rc, ci.vis, DefVal, InlineNever, ""))
 
+// Lazy types and constructors 
+/* 
+add a lazy tag
+```koka
+lazy type stream<a>
+  SNil
+  SCons(head: a, tail: stream<a>)
+  lazy SAppRev(pre: stream<a>, post:list<a>) -> 
+    match pre 
+      SNil -> sreverse(post)
+      SCons(x,xx) -> SCons(x, SAppRev(xx,post))
+  
+val stream/lazy-tag = 3
+```
+*/
+
 fun syn-lazy-tag(di: dataInfo)
   val xrng = di.range
   val rng = xrng.hide
@@ -211,64 +227,134 @@ fun syn-lazy-tag(di: dataInfo)
   val expr = App(Var(nameInternalInt32, False, rng), [(Nothing, Literal(syntax/syntax/LitInt(lazyTag, rng)))], rng)
   DefNonRec(Def(ValueBinder(defName, (), expr, rng, rng), rng, di.vis, DefVal, InlineAlways, "// Automatically generated tag value of lazy indirection"))
 
-// Add lazy evaluation step:
-// ```
-// noinline fbip fun stream/lazy-eval( s : stream<a> ) : _ stream<a>
-//   lazy-whnf-target(s)
-//   match s
-//     SAppRev( pre, post )
-//       -> match pre
-//           SNil        -> lazy-update(s,sreverse(post))
-//           SCons(x,xx) -> lazy-update(s,SCons(x,SAppRev(xx,post)))
-//     SIndirect(ind)
-//       -> ind
-//     _ -> s
-// ```
-
-fun syn-lazy-eval(di: dataInfo, lazyExprs: list<lazyExpr>)
+/*
+force is a one step unfolding of whnf and is inlined at call sites.
+inline fun stream/lazy-force(s: stream<a>): div stream<a>
+  if lazy/datatype-is-whnf(s,stream/lazy-tag)
+    then s 
+    else stream/lazy-whnf(s)
+*/
+fun syn-lazy-force(di: dataInfo)
   val xrng = di.range
   val rng = xrng.hide
+  val defName = di.lazy-name("force")
+  val dataTp = TApp(TCon(TypeCon(di.name, di.kind)), di.params.map(TVar))
+  val fullTp = TForAll(di.params, TFun([(nil, dataTp)], typeDivergent, dataTp))
+  val nameIsWhnf = 
+    if di.constrs.all(fn(ci: conInfo) ci.params.length > 0)
+    then nameLazyPtrIsWhnf else nameLazyIsWhnf
   
-  val defName = di.lazy-name("eval")
   val argName = "lazy".new-hidden-name
   val arg = Var(argName, False, rng)
-  
-  fun rotate(xs)
-    match xs
-      Cons(x, xs) -> xs ++ [x]
-      _ -> xs
-  
-  val lazyConstrs = di.constrs.filter(coninfo/is-lazy).rotate // indirect match comes last
+  val tst = App(Var(nameIsWhnf, False, rng), [(Nothing, arg), (Nothing, Var(di.lazy-name("tag"), False, rng))], rng)
+  val whnf = App(Var(di.lazy-name("whnf"), False, rng), [(Nothing, arg)], rng)
+  val body = Case(tst, [Branch(PatCon(nameTrue, [], rng, rng), [Guard(guardTrue, arg)]), 
+                        Branch(PatCon(nameFalse, [], rng, rng), [Guard(guardTrue, whnf)])], False, rng)
+  val expr = Ann(Lam([ValueBinder(argName, Nothing, Nothing, rng, rng)], body, True, xrng), fullTp, rng)
+  DefNonRec(Def(ValueBinder(defName, (), expr, rng, rng), rng, di.vis, DefFun([], di.lazy-fip), InlineAlways, ""))
 
-  fun branch-expr(ci: conInfo)
-    match lazyExprs.lookup(_ == ci.name)
-      Just(lazyExpr) -> lazy-add-update(di, ci, defName, arg, lazyExpr)
-      Nothing -> fail("kind/infer/syn-lazy-eval/branch-expr: cannot find expression for lazy constructor " ++ ci.name.show)
-  // generate branch
-  fun make-branch(ci: conInfo)
-    if ci.name.is-lazy-indirect-con-name then
-      val [(par, _)] = ci.params
-      Branch(PatCon(ci.name, 
-                   [(Nothing, PatVar(ValueBinder(par, Nothing, PatWild(rng), rng, rng)))], 
-                   rng, rng), 
-        [Guard(guardTrue, Var(par, False, rng))])
-    else
-      fun make-pat(par, rng)
-        if par.is-wildcard then PatWild(rng)
-        else PatVar(ValueBinder(par, Nothing, PatWild(rng), rng, rng))
-      Branch(PatCon(ci.name,
-                   ci.params.map(fn((par, _)) (Nothing, make-pat(par, rng))),
-                   rng, rng),
-            [Guard(guardTrue, ci.branch-expr)]
-            )
-  val branches = lazyConstrs.map(make-branch)
-  val mark = syntax/syntax/Def(ValueBinder(nil, (), App(Var(nameLazyTarget, False, rng), [(Nothing, arg)], rng), rng, rng), rng, Private, DefVal, InlineNever, "")
-  val body = Case(arg, branches ++ [Branch(PatWild(rng), [Guard(guardTrue, arg)])], True, rng)
-  val expr = syntax/syntax/Lam([ValueBinder(argName, Nothing, Nothing, rng, rng)], Bind(mark, body, rng), xrng)
-  val defbinder = ValueBinder(defName, (), expr, rng, rng)
-  val def = syntax/syntax/Def(defbinder, rng, di.vis, DefFun([], di.lazy-fip), InlineNever, "")
-  DefNonRec(def)
+// recursive force:
+// noinline fun stream/lazy-whnf(s: stream<a>): div stream<a>
+//   val x = stream/lazy-eval(s,True)
+//   if lazy/datatype-is-whnf(x, stream/lazy-tag) then x else stream/lazy-whnf(x)
 
+fun syn-lazy-whnf(di: dataInfo)
+  val xrng = di.range
+  val rng = xrng.hide
+  val defName = di.lazy-name("whnf")
+  val dataTp = TApp(TCon(TypeCon(di.name, di.kind)), di.params.map(TVar))
+  val nameIsWhnf = 
+    if di.constrs.all(fn(ci: conInfo) ci.params.length > 0)
+    then nameLazyPtrIsWhnf else nameLazyIsWhnf
+
+  val valName = "val".new-hidden-name
+  val vl = Var(valName, False, rng)
+
+  val argName = "lazy".new-hidden-name
+  val arg = Var(argName, False, rng)
+
+  val nameEval = di.lazy-name("eval")
+  val evalExpr = App(Var(nameEval, False, rng), [(Nothing, arg), (Nothing, Var(nameTrue, False, rng))], rng)
+  val valDef = Def(ValueBinder(valName, (), evalExpr, rng, rng), rng, Private, DefVal, InlineNever, "")
+  val tst = App(Var(nameIsWhnf, False, rng), [(Nothing, vl), (Nothing, Var(di.lazy-name("tag"), False, rng))], rng)
+  val whnf = App(Var(di.lazy-name("whnf"), False, rng), [(Nothing, vl)], rng)
+  val body = Bind(valDef, Case(tst, [Branch(PatCon(nameTrue, [], rng, rng), [Guard(guardTrue, vl)]), 
+                                     Branch(PatCon(nameFalse, [], rng, rng), [Guard(guardTrue, whnf)])], False, rng), rng)
+  val expr = Lam([ValueBinder(argName, Nothing, Nothing, rng, rng)], body, True, xrng)
+  DefRec([Def(ValueBinder(defName, (), expr, rng, rng), rng, di.vis, DefFun([], di.lazy-fip), InlineNever, "")])
+
+
+// Add lazy evaluation step:
+// ```
+// inline fun stream/lazy-step( @lazy : stream<a> ) : _ stream<a>
+//   if lazy/datatype-is-whnf(@lazy,stream/lazy-tag)
+//       then s
+//       else stream/lazy-eval(@lazy,False)
+// ```
+fun syn-lazy-step(di: dataInfo)
+  val xrng = di.range
+  val rng = xrng.hide
+  val defName = di.lazy-name("step")
+  val dataTp = TApp(TCon(TypeCon(di.name, di.kind)), di.params.map(TVar))
+  // val fullTp = TForAll(di.params, TFun([(nil, dataTp)], typePure, dataTp))
+  val nameIsWhnf = 
+    if di.constrs.all(fn(ci: conInfo) ci.params.length > 0)
+    then nameLazyPtrIsWhnf else nameLazyIsWhnf
+  val argName = "lazy".new-hidden-name
+  val arg = Var(argName, False, rng)
+  val tst = App(Var(nameIsWhnf, False, rng), [(Nothing, arg), (Nothing, Var(di.lazy-name("tag"), False, rng))], rng)
+  val eval = App(Var(di.lazy-name("eval"), False, rng), [(Nothing, arg), (Nothing, Var(nameFalse, False, rng))], rng)
+  val body = Case(tst, [Branch(PatCon(nameTrue, [], rng, rng), [Guard(guardTrue, arg)]),
+                        Branch(PatCon(nameFalse, [], rng, rng), [Guard(guardTrue, eval)])], 
+                        False, rng)
+  val expr = Lam([ValueBinder(argName, Nothing, Nothing, rng, rng)], body, True, xrng)
+  DefNonRec(Def(ValueBinder(defName, (), expr, rng, rng), rng, di.vis, DefFun([], di.lazy-fip), InlineNever, ""))
+
+/*
+noinline fun stream/lazy-eval(s : stream<a>, recurse : bool ) : _ stream<a>
+  if lazy/datatype-ptr-is-unique || !lazy/atomic-enter(s,stream/lazy-tag) then
+    stream/lazy-eval-locked(s,recurse)
+  else
+    val v = stream/lazy-eval-locked(s,recurse)
+    lazy/atomic-leave(s)
+    v
+*/
+fun syn-lazy-eval(di: dataInfo)
+  val xrng = di.range
+  val rng = xrng.hide
+  val defName = di.lazy-name("eval")
+  val dataTp = TApp(TCon(TypeCon(di.name, di.kind)), di.params.map(TVar))
+  val fullTp = TForAll(di.params, TFun([(nil, typeBool), (nil, dataTp)], typePure, dataTp))
+  val recName = "recurse".new-hidden-name
+  val argName = "lazy".new-hidden-name
+  val recurse = Var(recName, False, rng)
+  val arg = Var(argName, False, rng)
+  val tst = App(Var(nameOr, False, rng), [(Nothing, App(Var(nameDataTypePtrIsUnique, False, rng), [(Nothing, arg)], rng)),
+                                          (Nothing, App(Var("std/core/types".new-qualified("not"), False, rng), 
+                                                        [(Nothing, App(Var(nameLazyEnter, False, rng), 
+                                                                       [(Nothing, arg),(Nothing,Var(di.lazy-name("tag"), False, rng))], rng))], rng))], rng)
+  val eval = App(Var(di.lazy-name("eval-locked"), False, rng), [(Nothing, arg), (Nothing, recurse)], rng)
+  val atomic = 
+    val v = "v".new-name 
+    val vdef = Def(ValueBinder(v, (), eval, rng, rng), rng, Private, DefVal, InlineNever, "")
+    val bdef = Def(ValueBinder(nil, (), App(Var(nameLazyLeave, False, rng), [(Nothing, arg)], rng), rng, rng), rng, Private, DefVal, InlineNever, "")
+    Bind(vdef, Bind(bdef, Var(v, False, rng), rng), rng)
+  val body = Case(tst, [Branch(PatCon(nameTrue, [], rng, rng), [Guard(guardTrue, eval)]), 
+                        Branch(PatCon(nameFalse, [], rng, rng), [Guard(guardTrue, atomic)])], False, rng)
+  val expr = Lam([ValueBinder(argName, Nothing, Nothing, rng, rng), ValueBinder(recName, Just(typeBool), Nothing, rng, rng)], body, True, xrng)
+  DefNonRec(Def(ValueBinder(defName, (), expr, rng, rng), rng, di.vis, DefFun([], di.lazy-fip), InlineNever, ""))
+/*
+Add lazy evaluation:
+```koka
+noinline fbip fun stream/lazy-eval-locked( s : stream<a>,recurse : bool ) : _ stream<a>
+  lazy-whnf-target(s)
+  match s
+    SAppRev(pre, post) -> stream/lazy-SAppRev( s, recurse, pre, post )
+    SIndirect(ind)     -> ind
+    _                  -> s
+```
+*/
+// TODO: HERE
 
 // Add `lazy-update(s,...)` to tail positions
 // SAppRev( pre, post )
@@ -369,95 +455,10 @@ fun lookup-con(di: dataInfo, constrs, cname: name)
 fun lazy-add-update(di: dataInfo, ci: conInfo, evalName: name, arg, topExpr)
   di.add(ci, evalName, topExpr, arg)
 
-// noinline fun stream/lazy-step( s : stream<a> ) : _ stream<a>
-//   if kk-datatype-ptr-is-unique || !lazy-atomic-enter(s,stream/lazy-tag) then
-//     stream/lazy-eval(s)
-//   else
-//     val v = stream/lazy-eval(s)
-//     lazy-atomic-leave(s)
-//     v
-
-fun syn-lazy-step(di: dataInfo)
-  val xrng = di.range
-  val rng = xrng.hide
-  val defName = di.lazy-name("step")
-  val dataTp = TApp(TCon(TypeCon(di.name, di.kind)), di.params.map(TVar))
-  val fullTp = TForAll(di.params, [], TFun([(nil, dataTp)], typePure, dataTp))
-
-  val argName = "lazy".new-hidden-name
-  val arg = Var(argName, False, rng)
-  val tst = App(Var(nameOr, False, rng), 
-      [(Nothing, App(Var(nameDataTypePtrIsUnique, False, rng), [(Nothing, arg)], rng)),
-       (Nothing, App(Var("std/core/types".new-qualified("not"), False, rng), 
-           [(Nothing, App(Var(nameLazyEnter, False, rng), 
-              [(Nothing, arg), 
-               (Nothing, Var(di.lazy-name("tag"), False, rng))], rng))], rng))], rng)
-  val eval = App(Var(di.lazy-name("eval"), False, rng), [(Nothing, arg)], rng)
-  val atomic = 
-    val v = "v".new-name
-    val vdef = Def(ValueBinder(v, (), eval, rng, rng), rng, Private, DefVal, InlineNever, "")
-    val bdef = Def(ValueBinder(nil, (), App(Var(nameLazyLeave, False, rng), [(Nothing, arg)], rng), rng, rng), rng, Private, DefVal, InlineNever, "")
-    Bind(vdef, Bind(bdef, Var(v, False, rng), rng), rng)
-  val body = Case(tst, [Branch(PatCon(nameTrue, [], rng, rng), [Guard(guardTrue, eval)]),
-                        Branch(PatCon(nameFalse, [], rng, rng), [Guard(guardTrue, atomic)])], 
-                        False, rng)
-  val expr = Lam([ValueBinder(argName, Nothing, Nothing, rng, rng)], body, xrng)
-  DefNonRec(Def(ValueBinder(defName, (), expr, rng, rng), rng, di.vis, DefFun([], di.lazy-fip), InlineNever, ""))
-
-// recursive force:
-// noinline fun stream/lazy-whnf(s: stream<a>): div stream<a>
-//   val x = stream/step(s)
-//   if lazy/datatype-is-whnf(x, stream/lazy-tag) then x else stream/lazy-whnf(x)
-
-fun syn-lazy-whnf(di: dataInfo)
-  val xrng = di.range
-  val rng = xrng.hide
-  val defName = di.lazy-name("whnf")
-  val dataTp = TApp(TCon(TypeCon(di.name, di.kind)), di.params.map(TVar))
-  val nameIsWhnf = 
-    if di.constrs.all(fn(ci: conInfo) ci.params.length > 0)
-    then nameLazyPtrIsWhnf else nameLazyIsWhnf
-
-  val valName = "val".new-hidden-name
-  val vl = Var(valName, False, rng)
-
-  val argName = "lazy".new-hidden-name
-  val arg = Var(argName, False, rng)
-
-  val nameStep = di.lazy-name("step")
-  val stepExpr = App(Var(nameStep, False, rng), [(Nothing, arg)], rng)
-  val valDef = Def(ValueBinder(valName, (), stepExpr, rng, rng), rng, Private, DefVal, InlineNever, "")
-  val tst = App(Var(nameIsWhnf, False, rng), [(Nothing, vl), (Nothing, Var(di.lazy-name("lazy-tag"), False, rng))], rng)
-  val whnf = App(Var(di.lazy-name("whnf"), False, rng), [(Nothing, vl)], rng)
-  val body = Let(DefNonRec(valDef), Case(tst, [Branch(PatCon(nameTrue, [], rng, rng), [Guard(guardTrue, vl)]), Branch(PatCon(nameFalse, [], rng, rng), [Guard(guardTrue, whnf)])], False, rng), rng)
-  val expr = Lam([ValueBinder(argName, Nothing, Nothing, rng, rng)], body, xrng)
-  DefRec([Def(ValueBinder(defName, (), expr, rng, rng), rng, di.vis, DefFun([], di.lazy-fip), InlineNever, "")])
-
-// force is a one step unfolding of whnf and is inlined at call sites.
-// inline fun stream/lazy-force(s: stream<a>): div stream<a>
-//   if kk-datatype-is-whnf(s,stream/lazy-tag) then s else stream/lazy-whnf(s)
-fun syn-lazy-force(di: dataInfo)
-  val xrng = di.range
-  val rng = xrng.hide
-  val defName = di.lazy-name("force")
-  val dataTp = TApp(TCon(TypeCon(di.name, di.kind)), di.params.map(TVar))
-  val nameIsWhnf = 
-    if di.constrs.all(fn(ci: conInfo) ci.params.length > 0)
-    then nameLazyPtrIsWhnf else nameLazyIsWhnf
-  
-  val argName = "lazy".new-hidden-name
-  val arg = Var(argName, False, rng)
-  val tst = App(Var(nameIsWhnf, False, rng), [(Nothing, arg), (Nothing, Var(di.lazy-name("tag"), False, rng))], rng)
-  val whnf = App(Var(di.lazy-name("whnf"), False, rng), [(Nothing, arg)], rng)
-  val body = Case(tst, [Branch(PatCon(nameTrue, [], rng, rng), [Guard(guardTrue, arg)]), 
-                        Branch(PatCon(nameFalse, [], rng, rng), [Guard(guardTrue, whnf)])], False, rng)
-  val expr = Lam([ValueBinder(argName, Nothing, Nothing, rng, rng)], body, xrng)
-  DefNonRec(Def(ValueBinder(defName, (), expr, rng, rng), rng, di.vis, DefFun([], di.lazy-fip), InlineAlways, ""))
-
 fun lazy-fip(di: dataInfo)
   match di.def
     DataDefLazy(fip) -> fip
-    _ -> fail("kint/infer/lazy-fip: not a lazy data type? " ++ di.name.show)
+    _ -> fail("kind/infer/lazy-fip: not a lazy data type? " ++ di.name.show)
 
 // Types for constructors
 fun constructor-gamma(dis: list<dataInfo>, is-value: (dataInfo) -> bool): exn gamma
@@ -617,7 +618,7 @@ fun inf-resolvex(tp: userType, rng: range)
   val (kargs, kres) = skind.inf-extract-kind-fun
   if kargs.length > 2 || kargs.is-cons && kres.is-infkind-label then
     // either user defined, or a primitive like `:local`
-    val vars = list(1, kargs.length - (if kres.is-infkind-label then 0 else 2)).map(new-name("_" ++ _.show))
+    val vars = list(1, kargs.length - (if kres.is-infkind-label then 0 else 2)).map(("_" ++ _.show).new-name)
     val quals = vars.map(TypeBinder(_, KindNone, rng, rng))
     val tpvars = vars.map(TpVar(_, rng))
     val newTp = quals.foldr(TpApp(tp, tpvars, rng), fn(q, t) TpQuan(QSome, q, t, rng))
