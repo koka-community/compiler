@@ -343,6 +343,7 @@ fun syn-lazy-eval(di: dataInfo)
                         Branch(PatCon(nameFalse, [], rng, rng), [Guard(guardTrue, atomic)])], False, rng)
   val expr = Lam([ValueBinder(argName, Nothing, Nothing, rng, rng), ValueBinder(recName, Just(typeBool), Nothing, rng, rng)], body, True, xrng)
   DefNonRec(Def(ValueBinder(defName, (), expr, rng, rng), rng, di.vis, DefFun([], di.lazy-fip), InlineNever, ""))
+
 /*
 Add lazy evaluation:
 ```koka
@@ -354,18 +355,59 @@ noinline fbip fun stream/lazy-eval-locked( s : stream<a>,recurse : bool ) : _ st
     _                  -> s
 ```
 */
-// TODO: HERE
+fun syn-lazy-eval-locked(les : list<lazyExpr>, di: dataInfo): _ list<compiler/syntax/syntax/defGroup<ktype>>
+  val xrng = di.range 
+  val rng = xrng.hide
+  val def-name = di.lazy-name("eval-locked")
+  val rec-name = "recurse".new-hidden-name
+  val arg-name = "lazy".new-hidden-name
+  val rec = Var(rec-name, False, rng)
+  val arg = Var(arg-name, False, rng)
+  fun rotate(xs)
+    match xs 
+      Nil -> Nil
+      Cons(x, xs) -> xs ++ [x]
+  val lazy-cons = di.constrs.filter(coninfo/is-lazy).rotate // indirect match comes last
+  fun branch-expr(ci: conInfo, par-names: list<name>)
+    match les.lookup(ci.name)
+      Just(lazyExpr) -> lazyConDefCall(di, ci, par-names, rec, arg, lazyExpr) 
+      Nothing -> fail("kind/infer/syn-lazy-eval-locked/branch-expr: cannot find expression for lazy constructor " ++ ci.name.show)
+  fun branch(ci: conInfo)
+    if ci.name.is-lazy-indirect-con-name then 
+      val [(par, _)] = ci.params
+      val compress = App(Var(nameLazyIndirectCompress, False, rng), [(Nothing, Var(par, False, rng)), (Nothing, Var(di.lazy-name("tag"), False, rng))], rng)
+      ([],Branch(PatCon(ci.name, [(Nothing, PatVar(ValueBinder(par, Nothing, PatWild(rng), rng, rng)))], rng, rng), [Guard(guardTrue, compress)]))
+    else 
+      val par-names = ci.params.map-indexed(fn(i: int, (par, _)) un-wildcard(par, (i + 1).int/show))
+      val (def, body) = ci.branch-expr(par-names)
+      fun make-pat(p, rng)
+        if p.is-wildcard then PatWild(rng)
+        else PatVar(ValueBinder(p, Nothing, PatWild(rng), rng, rng))
+      ([def], Branch(PatCon(ci.name, par-names.map(fn(par) (Nothing, make-pat(par, rng))), rng, rng), [Guard(guardTrue, body)]))
+  val (defss, branches) = lazy-cons.map(branch).unzip
+  val body = Case(arg, branches ++ [Branch(PatWild(rng), [Guard(guardTrue, arg)])], True, rng)
+  val lam = Lam([ValueBinder(arg-name, Nothing, Nothing, rng, rng), ValueBinder(rec-name, Just(typeBool), Nothing, rng, rng)], body, True, xrng)
+  val def = Def(ValueBinder(def-name, (), lam, rng, rng), rng, di.vis, DefFun([], di.lazy-fip), InlineNever, "")
+  defss.flatmap(DefNonRec) ++ [DefNonRec(def)]
 
-// Add `lazy-update(s,...)` to tail positions
+// Lazy constructor
+//  ```
 // SAppRev( pre, post )
-//       -> match pre
-//            SNil        -> sreverse(post)
-//            SCons(x,xx) -> SCons(x,SAppRev(xx,post))
+//     -> match pre
+//          SNil        -> sreverse(post)
+//          SCons(x,xx) -> SCons(x,SAppRev(xx,post))
+// ```
 // ~>
-// SAppRev( pre, post )
-//       -> match pre
-//            SNil        -> lazy-update(s,sreverse(post))
-//            SCons(x,xx) -> lazy-update(s,SCons(x,SAppRev(xx,post)))
+// ```
+// fun stream/lazy-SAppRev(  @lazy : stream<a>, recurse : bool, pre : stream<a>, post : stream<a> ) : stream<a>
+//   lazy/memoize-target(@lazy)
+//   match pre
+//     SNil        -> lazy/memoize(@lazy,sreverse(post))
+//                 or: if recurse then lazy-SAppRev(s,recurse,...) else lazy/memoize(@lazy,SAppRev(...))
+//     SCons(x,xx) -> lazy/memoize(@lazy,SCons(x,SAppRev(xx,post)))
+// ```
+
+// TODO: HERE
 
 fun add-guard(di: dataInfo, ci: conInfo, evalName, g, arg)
   match g
