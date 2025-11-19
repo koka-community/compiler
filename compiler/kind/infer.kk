@@ -121,16 +121,20 @@ effect data-info
   val lazy-constructors: list<conInfo>
   val whnf-constructors: list<conInfo>
   fun lazy-name(str: string): name
+  fun alloc-size-scan(conInfo: conInfo): (int, int)
 effect con-info 
   val con-info : conInfo
   val con-range: range
   val con-name: name
-fun with-data(di: dataInfo, action: () -> <data-info,exn|e> a): <exn|e> a
+fun with-data(di: dataInfo, action: () -> <inferKindEffect,data-info,exn|e> a): <inferKindEffect,exn|e> a
   val (lazy-cons, whnf-cons) = di.constrs.partition(coninfo/is-lazy)
+  val p = platform
   with handler 
     val data-info = di 
     val data-def-name = di.name
     fun lazy-name(n) di.lazy-name(n)
+    fun alloc-size-scan(ci)
+      alloc-size-scan(di.con-repr(ci), p)
     val lazy-constructors = lazy-cons
     val whnf-constructors = whnf-cons
   action()
@@ -479,27 +483,26 @@ fun memoize-unknown(expr: compiler/syntax/syntax/expr<ktype>)
   val rng = expr.range.hide
   memoize-warning(rng, fn(_) "in-place as the result constructor is not statically known -- using an indirection instead".text)
   expr.simple/memoize 
-fun memoize-con(c : name, con-expr: compiler/syntax/syntax/expr<ktype>, nargs: list<(maybe<(name,range)>,compiler/syntax/syntax/expr<ktype>)>, range: range)
-  match lookup-con(cname, whnf-constructors)
+fun memoize-con(cname : name, con-expr: compiler/syntax/syntax/expr<ktype>, nargs: list<(maybe<(name,range)>,compiler/syntax/syntax/expr<ktype>)>, range: range)
+  match whnf-constructors.lookup-con(cname)
     // strict constructor result
     Just(whnf-con) -> 
       memoize-check-can-fit(range, whnf-con)
       make-app(con-expr, nargs, range).simple/memoize
     // lazy constructor
     Nothing -> 
-      match lookup-con(cname, lazy-constructors)
+      match lazy-constructors.lookup-con(cname)
         // Unknown constructors
         Nothing -> make-app(con-expr, nargs, range).memoize-unknown
         // Known lazy constructor
         Just(cinfo) -> 
-          val p = platform
-          val (target-size, target-scan) = alloc-size-scan(con-info.con-repr, p)
-          val (result-size, result-scan) = alloc-size-scan(cinfo.con-repr, p)
+          val (target-size, target-scan) = alloc-size-scan(con-info)
+          val (result-size, result-scan) = alloc-size-scan(cinfo)
           if target-size >= result-size && target-scan >= result-scan then 
             val rec-call = // Recursively call a lazy constructor function directly
               val con-fun-name = lazy-name(cinfo.name.unqualify.show)
               App(Var(con-fun-name, False, range), 
-                   [(Nothing, Var(name-lazy-memo, False, range)), 
+                   [(Nothing, Var(nameLazyMemo, False, range)), 
                     (Nothing, Var(nameRecurse, False, range))] ++ nargs, range)
             val step-call = // step function; return the lazy constructor
               make-app(con-expr, nargs, range).simple/memoize
@@ -508,21 +511,20 @@ fun memoize-con(c : name, con-expr: compiler/syntax/syntax/expr<ktype>, nargs: l
                  Branch(PatCon(nameFalse, [], range, range), [Guard(guardTrue, step-call)])], False, range)
             if-expr
           else // memoize and return; whnf does the recursion
-            memoize-warning(rng, fn(_) "in-place as the result constructor does not have the same size as the lazy target".text |.| target-size.pretty |+| "vs".text |+| result-size.pretty |+| "bytes) -- using an indirection instead".text)
-            make-app(con-expr, nargs, range).simple/memoize 
+            memoize-warning(range, fn(_) "in-place as the result constructor does not have the same size as the lazy target".text |.| target-size.pretty |+| "vs".text |+| result-size.pretty |+| "bytes) -- using an indirection instead".text)
+            make-app(con-expr, nargs, range).simple/memoize
 
-
-
+val nameRecurse = "recurse".new-hidden-name
 val nameLazyMemo = "lazy".new-hidden-name
 
 fun memoize-check-can-fit(range, result-con)
-  val di = data-info
-  val ci = con-info
-  val p = platform 
-  val (target-size, _) = alloc-size-scan(di.con-repr(ci), p)
-  val (result-size, _) = alloc-size-scan(di.con-repr(result-con), p)
+  val (target-size, _) = alloc-size-scan(con-info)
+  val (result-size, _) = alloc-size-scan(result-con)
   if target-size < result-size then 
-    memoize-warning(range, fn(_) "in-place as the result constructor is larger (".text |.| target-size.pretty |+| "vs".text |+| result-size.pretty |+| "bytes) -- using an indirection instead".text)
+    memoize-warning(range, 
+      fn(_) "in-place as the result constructor is larger (".text 
+        |.| target-size.pretty |+| "vs".text |+| result-size.pretty 
+        |+| "bytes) -- using an indirection instead".text)
   
 fun simple/memoize(expr: compiler/syntax/syntax/expr<ktype>)
   val rng = expr.range.hide 
@@ -534,10 +536,8 @@ fun make-app(c, nargs, range)
     Cons(_, _) -> App(c, nargs, range)
 
 fun lazy-con-def-call(di: dataInfo, ci: conInfo, par-names: list<name>, recurse-arg: compiler/syntax/syntax/expr<ktype>, memo-target: compiler/syntax/syntax/expr<ktype>, top-expr: compiler/syntax/syntax/expr<ktype>): _ (compiler/syntax/syntax/def<ktype>, compiler/syntax/syntax/expr<ktype>)
-  val p = platform
   val rng = ci.range 
   val nameLazyCon = lazy-name(ci.name.unqualify.show)// lazy-SAppRev
-  val nameRecurse = "recurse".new-hidden-name
   val modName = di.name.qualifier
   fun memoize-con(cname, c, nargs, range)
     match whnf-constructors.lookup-con(cname)
@@ -549,8 +549,8 @@ fun lazy-con-def-call(di: dataInfo, ci: conInfo, par-names: list<name>, recurse-
           Nothing -> // unknown constructor
             memoize-unknown(make-app(c, nargs, range))
           Just(cinfo) -> // known lazy constructor 
-            val (target-size, target-scan) = alloc-size-scan(di.con-repr(ci), p)
-            val (result-size, result-scan) = alloc-size-scan(di.con-repr(cinfo), p)
+            val (target-size, target-scan) = alloc-size-scan(ci)
+            val (result-size, result-scan) = alloc-size-scan(cinfo)
             if target-size >= result-size && target-scan >= result-scan then 
               // recursively call a lazy constructor function directly
               val rec-call = 
@@ -571,11 +571,11 @@ fun lazy-con-def-call(di: dataInfo, ci: conInfo, par-names: list<name>, recurse-
   val user-data-tp = if user-tp-var-names.is-nil then user-tp-con else TpApp(user-tp-con, user-tp-var-names.map(TpVar(_, rng)), rng)
   val user-con-tps = ci.params.map-indexed fn(i, (par, _)) 
     (par, TpVar(("_" ++ (i + 1).show).new-name, rng))
-  val user-full-tp = TpFun([(nil, user-data-tp), (nil, TpCon(nameTpbool, rng))] ++ user-con-tps, TpVar("_eff".new-name, rng), user-data-tp, rng)
+  val user-full-tp = TpFun([(nil, user-data-tp), (nil, TpCon(nameTpBool, rng))] ++ user-con-tps, TpVar("_eff".new-name, rng), user-data-tp, rng)
   val full-tp = 
     with val uctx = Infer(rng)
     user-full-tp.promote.inf-resolve-type
-  val (target-size, target-scan) = alloc-size-scan(con-repr(di, ci), p)
+  val (target-size, target-scan) = alloc-size-scan(ci)
   val target = Def(ValueBinder(nil, (), App(Var(nameLazyMemoizeTarget, False, rng), 
                   [(Nothing, Var(nameLazyMemo, False, rng)),
                    (Nothing, Lit(LitInt(target-size, rng))),
@@ -589,13 +589,13 @@ fun lazy-con-def-call(di: dataInfo, ci: conInfo, par-names: list<name>, recurse-
   (def, call-expr)
 
 // TODO: HERE
-fun add-guard(di: dataInfo, ci: conInfo, evalName, g, arg)
+fun add-guard(evalName, g, arg)
   match g
-    syntax/syntax/Guard(test, expr) -> Guard(test, add(di, ci, evalName, expr, arg))
+    syntax/syntax/Guard(test, expr) -> Guard(test, add(evalName, expr, arg))
 
-fun add-branch(di: dataInfo, ci: conInfo, evalName, b, arg)
+fun add-branch(evalName, b, arg)
   match b
-    syntax/syntax/Branch(patt, guards) -> Branch(patt, guards.map(add-guard(di, ci, evalName, _, arg)))
+    syntax/syntax/Branch(patt, guards) -> Branch(patt, guards.map(add-guard(evalName, _, arg)))
 
 fun is-whnf-con(cname: name)
   lookup-con(whnf-constructors, cname).is-just
@@ -612,68 +612,71 @@ fun is-whnf-con-branch(b)
   match b
     syntax/syntax/Branch(p) -> is-whnf-con-pat(p)
 
-fun add(di: dataInfo, ci: conInfo, evalName, e, arg)
+fun add(evalName, e, arg)
   match e
-    syntax/syntax/Lam(binds, expr, tl, rng) -> syntax/syntax/Lam(binds, add(di, ci, evalName, expr, arg), tl, rng)
-    Let(defs, expr, rng) -> Let(defs, add(di, ci, evalName, expr, arg), rng)
-    Bind(def, expr, rng) -> Bind(def, add(di, ci, evalName, expr, arg), rng)
-    Ann(expr, tp, rng) -> Ann(add(di, ci, evalName, expr, arg), tp, rng)
+    syntax/syntax/Lam(binds, expr, tl, rng) -> syntax/syntax/Lam(binds, add(evalName, expr, arg), tl, rng)
+    Let(defs, expr, rng) -> Let(defs, add(evalName, expr, arg), rng)
+    Bind(def, expr, rng) -> Bind(def, add(evalName, expr, arg), rng)
+    Ann(expr, tp, rng) -> Ann(add(evalName, expr, arg), tp, rng)
     Case(expr, brs, lzy, rng) ->
-      val brs' = brs.map(add-branch(di, ci, evalName, _, arg))
+      val brs' = brs.map(add-branch(evalName, _, arg))
       val forceName = lazy-name("force")
       val exprForce = if !lzy && brs.any(is-whnf-con-branch(_)) then
                         App(Var(forceName, False, rng), [(Nothing, expr)], rng)
                       else
                         expr
       Case(exprForce, brs', lzy, rng)
-    Parens(expr, name, pre, rng) -> Parens(add(di, ci, evalName, expr, arg), name, pre, rng)
-    App(syntax/syntax/Var(cname), _, _) -> di.lazy-update-con(ci, cname, evalName, e, arg)
-    syntax/syntax/Var(cname) -> di.lazy-update-con(ci, cname, evalName, e, arg)
-    _ -> unknown-update(di, ci, evalName, e, arg)
+    Parens(expr, name, pre, rng) -> Parens(add(evalName, expr, arg), name, pre, rng)
+    App(syntax/syntax/Var(cname), _, _) -> lazy-update-con(cname, evalName, e, arg)
+    syntax/syntax/Var(cname) -> lazy-update-con(cname, evalName, e, arg)
+    _ -> unknown-update(evalName, e, arg)
 
-fun unknown-update(di: dataInfo, ci: conInfo, evalName, expr, arg)
+fun unknown-update(evalName, expr, arg)
   val rng = expr.expr/range.hide
-  update-warning(di, ci, rng, fn(_) "in-place as the result constructor is not statically known -- using an indirection instead".text)
+  update-warning(rng, fn(_) "in-place as the result constructor is not statically known -- using an indirection instead".text)
   lazy-update(expr, arg)
 
-fun recursive-update(di: dataInfo, ci: conInfo, ci': conInfo, evalName, expr, arg)
+fun recursive-update(ci': conInfo, evalName, expr, arg)
   val r0 = expr.expr/range.hide
   // No need to warn anymore as we don't force recursively here
-  warn-update(di, ci, expr.range, ci')
+  warn-update(expr.range, ci')
   lazy-update(expr, arg)
 
-fun warn-update(di: dataInfo, ci: conInfo, rng: range, resultCon)
+fun warn-update(rng: range, resultCon)
+  val di = data-info
+  val ci = con-info
   val lazySize = alloc-size(con-repr(di, ci), platform)
   val whnfSize = alloc-size(con-repr(di, resultCon), platform)
   if lazySize <= whnfSize then
-    update-warning(di, resultCon, rng, fn(_) "in-place as the result constructor is larger(".text |.| lazySize.pretty |+| "vs".text |+| whnfSize.pretty |+| "bytes".text)
+    with with-con(resultCon)
+    update-warning(rng, fn(_) "in-place as the result constructor is larger(".text |.| lazySize.pretty |+| "vs".text |+| whnfSize.pretty |+| "bytes".text)
 
-fun lazy-update-con(ci: conInfo, cname: name, evalName, expr, arg)
+fun lazy-update-con(cname: name, evalName, expr, arg)
   match lookup-con(whnf-constructors, cname)
     Nothing -> match lookup-con(lazy-constructors, cname)
-      Nothing -> unknown-update(di, ci, evalName, expr, arg)
-      Just(ci') -> recursive-update(di, ci, ci', evalName, expr, arg)
+      Nothing -> unknown-update(evalName, expr, arg)
+      Just(ci') -> recursive-update(ci', evalName, expr, arg)
     Just(whnf) ->
-      warn-update(di, ci, expr.range, whnf)
+      warn-update(expr.range, whnf)
       lazy-update(expr, arg)
 
 fun lazy-update(expr, arg)
   val rng = expr.expr/range.hide
   App(Var(nameLazyMemoize, False, rng), [(Nothing, arg), (Nothing, expr)], rng)
 
-fun update-warning(di: dataInfo, ci: conInfo, rng: range, fdoc: (name -> doc) -> doc)
+fun update-warning(rng: range, fdoc: (name -> doc) -> doc)
   val cs = colors
   fun show-con-name(nm: name)
     nm.unqualify.pretty.color(cs.colorCons)
-  add-warning(rng, "Cannot update the lazy constructor".text |+| ci.name.show-con-name |+| fdoc(show-con-name))
+  add-warning(rng, "Cannot update the lazy constructor".text |+| con-info.name.show-con-name |+| fdoc(show-con-name))
 
 fun lookup-con(constrs: list<conInfo>, cname: name)
   val modName = data-info.name.qualifier
   constrs.find fn(ci: conInfo)
     ci.name == (if cname.is-qualified then cname else qualify(modName, cname))
 
-fun lazy-add-update(di: dataInfo, ci: conInfo, evalName: name, arg, topExpr)
-  di.add(ci, evalName, topExpr, arg)
+fun lazy-add-update(evalName: name, arg, topExpr)
+  data-info.add(con-info, evalName, topExpr, arg)
 
 fun lazy-fip(di: dataInfo)
   match di.def
@@ -1245,7 +1248,7 @@ fun resolve-typedef(isRec: bool, recNames: list<name>, td: syntax/syntax/typeDef
         val effNames = recNames.map(from-ops-name).concat
         if conInfos0.any(occurs-negative-con(recNames ++ effNames, _)) then
           add-error(rng, "Type".text |+| nameDoc |+| "is declared as being".text |-| "(co)inductive but it occurs recursively in a negative position.".text |-|
-            " hint: declare it as a divergent (or retractive) type using 'div type' (or 'effect rec)' to allow negative occurences".text)
+            " hint: declare it as a divergent (or retractive) type using 'div type' (or 'effect rec)' to allow negative occurrences".text)
         else ()
       // create datadef and coninfos with correct ValueRepr and ordered fields
       fun emit-error(d)
@@ -1427,7 +1430,7 @@ fun resolve-app(idmap: name-map<typeVar>, partialSyn: bool, (tp, args): (kUserTy
           val args' = args.map(resolve-type(idmap, False, _)) // partially applied synonyms are allowed in synonym applications
           val tsyn = TSyn(TypeSyn(name, kind, rank, Just(syn)), args', params.zip(args').sub |-> tp')
           tsyn
-          // NOTE: on partially applied type synonyms, we geet a funky body type with free parameters but this
+          // NOTE: on partially applied type synonyms, we get a funky body type with free parameters but this
           // is only inside synonyms arguments so we are ok
         Nothing ->
           TApp(TCon(TypeCon(nm, k)), args.map(resolve-type(idmap, False, _)))
