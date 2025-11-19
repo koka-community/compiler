@@ -450,7 +450,6 @@ fun syn-lazy-eval-locked(les : list<lazyExpr>): _ list<compiler/syntax/syntax/de
 //                 or: if recurse then lazy-SAppRev(s,recurse,...) else lazy/memoize(@lazy,SAppRev(...))
 //     SCons(x,xx) -> lazy/memoize(@lazy,SCons(x,SAppRev(xx,post)))
 // ```
-// TODO: Here, needs to lift more free variables / use an effect.
 fun expr/memoize(e)
   match e
     Lam(binds, expr, tl, rng) -> Lam(binds, expr.expr/memoize, tl, rng)
@@ -460,7 +459,7 @@ fun expr/memoize(e)
     Case(expr, brs, lazy-match, rng) -> 
       // specialize force insertion here so the dependency is known
       // for all other matches, this is done during type inference
-      val brs' = brs.map(memoize)
+      val brs' = brs.map(branch/memoize)
       val force-name = lazy-name("force")
       val expr-force = if !lazy-match && brs.any(is-whnf-con-branch) then 
           val r = expr.range.hide 
@@ -534,6 +533,7 @@ fun make-app(c, nargs, range)
   match nargs
     Nil -> c
     Cons(_, _) -> App(c, nargs, range)
+// TODO: Here, needs to lift more free variables / use an effect.
 
 fun lazy-con-def-call(di: dataInfo, ci: conInfo, par-names: list<name>, recurse-arg: compiler/syntax/syntax/expr<ktype>, memo-target: compiler/syntax/syntax/expr<ktype>, top-expr: compiler/syntax/syntax/expr<ktype>): _ (compiler/syntax/syntax/def<ktype>, compiler/syntax/syntax/expr<ktype>)
   val rng = ci.range 
@@ -542,7 +542,7 @@ fun lazy-con-def-call(di: dataInfo, ci: conInfo, par-names: list<name>, recurse-
   fun memoize-con(cname, c, nargs, range)
     match whnf-constructors.lookup-con(cname)
       Just(whnfCon) -> // strict constructor result
-        memoize-check-can-fit(di, ci, rng, whnfCon)
+        memoize-check-can-fit(rng, whnfCon)
         make-app(c, nargs, range).simple/memoize
       Nothing -> // lazy constructor
         match lazy-constructors.lookup-con(cname)
