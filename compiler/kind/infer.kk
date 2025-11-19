@@ -5,7 +5,7 @@
 // - Expand all synonyms (i.e., replace @id(int)@ by @id(int) == int@)
 // - Translate type definition groups and externals to Core.
 
-// Updated to 7083c02 on 7/13/25 (other than lazy)
+// Updated to 486ef0d on 11/18/25
 import compiler/lib/pprint
 import compiler/common/failure
 import compiler/common/color-scheme
@@ -17,6 +17,7 @@ import compiler/common/name-collections
 import compiler/common/file
 import compiler/common/error
 import compiler/syntax/syntax
+import compiler/syntax/promote
 import compiler/syntax/range-map
 import compiler/core/core
 import compiler/kind/importmap
@@ -424,15 +425,35 @@ fun syn-lazy-eval-locked(les : list<lazyExpr>): _ list<compiler/syntax/syntax/de
     else 
       val par-names = ci.params.map-indexed(fn(i: int, (par, _)) un-wildcard(par, (i + 1).int/show))
       val (def, body) = ci.branch-expr(par-names)
-      fun make-pat(p, rng)
-        if p.is-wildcard then PatWild(rng)
-        else PatVar(ValueBinder(p, Nothing, PatWild(rng), rng, rng))
+      fun make-pat(p, r)
+        if p.is-wildcard then PatWild(r)
+        else PatVar(ValueBinder(p, Nothing, PatWild(r), r, r))
       ([def], Branch(PatCon(ci.name, par-names.map(fn(par) (Nothing, make-pat(par, rng))), rng, rng), [Guard(guardTrue, body)]))
   val (defss, branches) = lazy-cons.map(branch).unzip
   val body = Case(arg, branches ++ [Branch(PatWild(rng), [Guard(guardTrue, arg)])], True, rng)
   val lam = Lam([ValueBinder(arg-name, Nothing, Nothing, rng, rng), ValueBinder(rec-name, Just(typeBool), Nothing, rng, rng)], body, True, xrng)
   val def = Def(ValueBinder(def-name, (), lam, rng, rng), rng, di.vis, DefFun([], di.lazy-fip), InlineNever, "")
-  defss.flatmap(DefNonRec) ++ [DefNonRec(def)]
+  defss.concat.map(DefNonRec) ++ [DefNonRec(def)]
+
+fun lookup-con(constrs: list<conInfo>, cname: name)
+  val modName = data-info.name.qualifier
+  constrs.find fn(ci: conInfo)
+    ci.name == (if cname.is-qualified then cname else qualify(modName, cname))
+
+fun is-whnf-con(cname: name)
+  lookup-con(whnf-constructors, cname).is-just
+
+fun is-whnf-con-pat(p)
+  match p
+    PatParens(pat) -> is-whnf-con-pat(pat)
+    PatAnn(pat) -> is-whnf-con-pat(pat)
+    syntax/syntax/PatVar(v) -> is-whnf-con-pat(v.expr)
+    syntax/syntax/PatCon(cname) -> is-whnf-con(cname)
+    _ -> False
+
+fun is-whnf-con-branch(b)
+  match b
+    syntax/syntax/Branch(p) -> is-whnf-con-pat(p)
 
 // Lazy constructor
 //  ```
@@ -450,6 +471,61 @@ fun syn-lazy-eval-locked(les : list<lazyExpr>): _ list<compiler/syntax/syntax/de
 //                 or: if recurse then lazy-SAppRev(s,recurse,...) else lazy/memoize(@lazy,SAppRev(...))
 //     SCons(x,xx) -> lazy/memoize(@lazy,SCons(x,SAppRev(xx,post)))
 // ```
+
+
+fun lazy-con-def-call(di: dataInfo, ci: conInfo, par-names: list<name>, recurse-arg: compiler/syntax/syntax/expr<ktype>, memo-target: compiler/syntax/syntax/expr<ktype>, top-expr: compiler/syntax/syntax/expr<ktype>): _ (compiler/syntax/syntax/def<ktype>, compiler/syntax/syntax/expr<ktype>)
+  val rng = ci.range 
+  val nameLazyCon = lazy-name(ci.name.unqualify.show)// lazy-SAppRev
+  val modName = di.name.qualifier
+  fun memoize-con(cname, c, nargs, range)
+    match whnf-constructors.lookup-con(cname)
+      Just(whnfCon) -> // strict constructor result
+        memoize-check-can-fit(rng, whnfCon)
+        make-app(c, nargs, range).simple/memoize
+      Nothing -> // lazy constructor
+        match lazy-constructors.lookup-con(cname)
+          Nothing -> // unknown constructor
+            memoize-unknown(make-app(c, nargs, range))
+          Just(cinfo) -> // known lazy constructor 
+            val (target-size, target-scan) = alloc-size-scan(ci)
+            val (result-size, result-scan) = alloc-size-scan(cinfo)
+            if target-size >= result-size && target-scan >= result-scan then 
+              // recursively call a lazy constructor function directly
+              val rec-call = 
+                val con-fun-name = lazy-name(cinfo.name.unqualify.show)
+                App(Var(con-fun-name, False, range), [(Nothing, Var(nameLazyMemo, False, range)), (Nothing, Var(nameRecurse, False, range))] ++ nargs, range)
+              val step-call = make-app(c, nargs, range).simple/memoize
+              Case(Var(nameRecurse, False, range), [Branch(PatCon(nameTrue, [], range, range), [Guard(guardTrue, rec-call)]), 
+                                                    Branch(PatCon(nameFalse, [], range, range), [Guard(guardTrue, step-call)])], False, range)
+            else // memoize and return; whnf does the recursion
+              memoize-warning(range, fn(_) "in-place as the result constructor does not have the same size as the lazy target ".text |.| target-size.pretty |+| "vs".text |+| result-size.pretty |+| "bytes".text)
+              make-app(c, nargs, range).simple/memoize
+
+  // lazy-SAppRev(@recurse,@lazy,pre,post)
+  val call-expr = App(Var(nameLazyCon, False, rng), [(Nothing, memo-target), (Nothing, recurse-arg)] ++ par-names.map((Nothing, Var(_, False, rng))), rng)
+  val branch-expr = top-expr.expr/memoize
+  val user-tp-con = TpCon(di.name, rng)
+  val user-tp-var-names = di.params.map(("_" ++ _.show).new-name)
+  val user-data-tp = if user-tp-var-names.is-nil then user-tp-con else TpApp(user-tp-con, user-tp-var-names.map(TpVar(_, rng)), rng)
+  val user-con-tps = ci.params.map-indexed fn(i, (par, _)) 
+    (par, TpVar(("_" ++ (i + 1).show).new-name, rng))
+  val user-full-tp = TpFun([(nil, user-data-tp), (nil, TpCon(nameTpBool, rng))] ++ user-con-tps, TpVar("_eff".new-name, rng), user-data-tp, rng)
+  val full-tp = 
+    with val uctx = Infer(rng)
+    user-full-tp.promote-type.inf-resolve-type
+  val (target-size, target-scan) = alloc-size-scan(ci)
+  val target = Def(ValueBinder(nil, (), App(Var(nameLazyMemoizeTarget, False, rng), 
+                  [(Nothing, Var(nameLazyMemo, False, rng)),
+                   (Nothing, Literal(LitInt(target-size, rng))),
+                   (Nothing, Literal(LitInt(target-scan, rng)))], rng), rng, rng), rng, Private, DefVal, InlineNever, "")
+  val lam = Lam([ValueBinder(nameLazyMemo, Nothing, Nothing, rng, rng), ValueBinder(nameRecurse, Just(typeBool), Nothing, rng, rng)] ++ 
+                 par-names.map(ValueBinder(_, Nothing, Nothing, rng, rng)), Bind(target, branch-expr, rng), True, rng)
+  // fun lazy-SAppRev(@memo,recurse,pre,post)
+  //   lazy/memoize-target(@memo)
+  //   <memoize topExpr>
+  val def = Def(ValueBinder(nameLazyCon, (), Ann(lam, full-tp, rng), rng, rng), rng, Private, DefFun([], ci.lazy-fip), InlineAuto, "")
+  (def, call-expr)
+
 fun expr/memoize(e)
   match e
     Lam(binds, expr, tl, rng) -> Lam(binds, expr.expr/memoize, tl, rng)
@@ -533,110 +609,59 @@ fun make-app(c, nargs, range)
   match nargs
     Nil -> c
     Cons(_, _) -> App(c, nargs, range)
-// TODO: Here, needs to lift more free variables / use an effect.
 
-fun lazy-con-def-call(di: dataInfo, ci: conInfo, par-names: list<name>, recurse-arg: compiler/syntax/syntax/expr<ktype>, memo-target: compiler/syntax/syntax/expr<ktype>, top-expr: compiler/syntax/syntax/expr<ktype>): _ (compiler/syntax/syntax/def<ktype>, compiler/syntax/syntax/expr<ktype>)
-  val rng = ci.range 
-  val nameLazyCon = lazy-name(ci.name.unqualify.show)// lazy-SAppRev
-  val modName = di.name.qualifier
-  fun memoize-con(cname, c, nargs, range)
-    match whnf-constructors.lookup-con(cname)
-      Just(whnfCon) -> // strict constructor result
-        memoize-check-can-fit(rng, whnfCon)
-        make-app(c, nargs, range).simple/memoize
-      Nothing -> // lazy constructor
-        match lazy-constructors.lookup-con(cname)
-          Nothing -> // unknown constructor
-            memoize-unknown(make-app(c, nargs, range))
-          Just(cinfo) -> // known lazy constructor 
-            val (target-size, target-scan) = alloc-size-scan(ci)
-            val (result-size, result-scan) = alloc-size-scan(cinfo)
-            if target-size >= result-size && target-scan >= result-scan then 
-              // recursively call a lazy constructor function directly
-              val rec-call = 
-                val con-fun-name = lazy-name(cinfo.name.unqualify.show)
-                App(Var(con-fun-name, False, range), [(Nothing, Var(nameLazyMemo, False, range)), (Nothing, Var(nameRecurse, False, range))] ++ nargs, range)
-              val step-call = make-app(c, nargs, range).simple/memoize
-              Case(Var(nameRecurse, False, range), [Branch(PatCon(nameTrue, [], range, range), [Guard(guardTrue, rec-call)]), 
-                                                    Branch(PatCon(nameFalse, [], range, range), [Guard(guardTrue, step-call)])], False, range)
-            else // memoize and return; whnf does the recursion
-              memoize-warning(range, fn(_) "in-place as the result constructor does not have the same size as the lazy target ".text |.| target-size.pretty |+| "vs".text |+| result-size |+| "bytes".text)
-              make-app(c, nargs, range).simple/memoize
+fun lazy-add-update(evalName: name, arg, topExpr)
+  update/add(topExpr, arg)
 
-  // lazy-SAppRev(@recurse,@lazy,pre,post)
-  val call-expr = App(Var(nameLazyCon, False, rng), [(Nothing, memo-target), (Nothing, recurse-arg)] ++ par-names.map((Nothing, Var(_, False, rng))), rng)
-  val branch-expr = top-expr.memoize
-  val user-tp-con = TpCon(di.name, rng)
-  val user-tp-var-names = di.params.map(("_" ++ _.show).new-name)
-  val user-data-tp = if user-tp-var-names.is-nil then user-tp-con else TpApp(user-tp-con, user-tp-var-names.map(TpVar(_, rng)), rng)
-  val user-con-tps = ci.params.map-indexed fn(i, (par, _)) 
-    (par, TpVar(("_" ++ (i + 1).show).new-name, rng))
-  val user-full-tp = TpFun([(nil, user-data-tp), (nil, TpCon(nameTpBool, rng))] ++ user-con-tps, TpVar("_eff".new-name, rng), user-data-tp, rng)
-  val full-tp = 
-    with val uctx = Infer(rng)
-    user-full-tp.promote.inf-resolve-type
-  val (target-size, target-scan) = alloc-size-scan(ci)
-  val target = Def(ValueBinder(nil, (), App(Var(nameLazyMemoizeTarget, False, rng), 
-                  [(Nothing, Var(nameLazyMemo, False, rng)),
-                   (Nothing, Lit(LitInt(target-size, rng))),
-                   (Nothing, Lit(LitInt(target-scan, rng)))])))
-  val lam = Lam([ValueBinder(nameLazyMemo, Nothing, Nothing, rng, rng), ValueBinder(name-recurse, Just(typeBool), Nothing, rng, rng)] ++ 
-                 par-names.map(ValueBinder(_, Nothing, Nothing, rng, rng)), Bind(target, branch-expr, rng), True, rng)
-  // fun lazy-SAppRev(@memo,recurse,pre,post)
-  //   lazy/memoize-target(@memo)
-  //   <memoize topExpr>
-  val def = Def(ValueBinder(nameLazyCon, (), Ann(lam, full-tp, rng), rng, rng), rng, Private, DefFun([], ci.lazy-fip), InlineAuto, "")
-  (def, call-expr)
-
-// TODO: HERE
-fun add-guard(evalName, g, arg)
+fun add-guard(g, arg)
   match g
-    syntax/syntax/Guard(test, expr) -> Guard(test, add(evalName, expr, arg))
+    syntax/syntax/Guard(test, expr) -> Guard(test, add(expr, arg))
 
-fun add-branch(evalName, b, arg)
+fun add-branch(b, arg)
   match b
-    syntax/syntax/Branch(patt, guards) -> Branch(patt, guards.map(add-guard(evalName, _, arg)))
+    syntax/syntax/Branch(patt, guards) -> Branch(patt, guards.map(add-guard(_, arg)))
 
-fun is-whnf-con(cname: name)
-  lookup-con(whnf-constructors, cname).is-just
-
-fun is-whnf-con-pat(p)
-  match p
-    PatParens(pat) -> is-whnf-con-pat(pat)
-    PatAnn(pat) -> is-whnf-con-pat(pat)
-    syntax/syntax/PatVar(v) -> is-whnf-con-pat(v.expr)
-    syntax/syntax/PatCon(cname) -> is-whnf-con(cname)
-    _ -> False
-
-fun is-whnf-con-branch(b)
-  match b
-    syntax/syntax/Branch(p) -> is-whnf-con-pat(p)
-
-fun add(evalName, e, arg)
+fun update/add(e: syntax/syntax/expr<t>, arg: syntax/syntax/expr<t>): _ syntax/syntax/expr<t>
   match e
-    syntax/syntax/Lam(binds, expr, tl, rng) -> syntax/syntax/Lam(binds, add(evalName, expr, arg), tl, rng)
-    Let(defs, expr, rng) -> Let(defs, add(evalName, expr, arg), rng)
-    Bind(def, expr, rng) -> Bind(def, add(evalName, expr, arg), rng)
-    Ann(expr, tp, rng) -> Ann(add(evalName, expr, arg), tp, rng)
+    syntax/syntax/Lam(binds, expr, tl, rng) -> syntax/syntax/Lam(binds, add(expr, arg), tl, rng)
+    Let(defs, expr, rng) -> Let(defs, add(expr, arg), rng)
+    Bind(def, expr, rng) -> Bind(def, add(expr, arg), rng)
+    Ann(expr, tp, rng) -> Ann(add(expr, arg), tp, rng)
     Case(expr, brs, lzy, rng) ->
-      val brs' = brs.map(add-branch(evalName, _, arg))
+      val brs' = brs.map(add-branch(_, arg))
       val forceName = lazy-name("force")
-      val exprForce = if !lzy && brs.any(is-whnf-con-branch(_)) then
-                        App(Var(forceName, False, rng), [(Nothing, expr)], rng)
+      val r = expr.range.hide
+      val exprForce = if !lzy && brs.any(is-whnf-con-branch) then
+                        App(Var(forceName, False, r), [(Nothing, expr)], r)
                       else
                         expr
       Case(exprForce, brs', lzy, rng)
-    Parens(expr, name, pre, rng) -> Parens(add(evalName, expr, arg), name, pre, rng)
-    App(syntax/syntax/Var(cname), _, _) -> lazy-update-con(cname, evalName, e, arg)
-    syntax/syntax/Var(cname) -> lazy-update-con(cname, evalName, e, arg)
-    _ -> unknown-update(evalName, e, arg)
+    Parens(expr, name, pre, rng) -> Parens(add(expr, arg), name, pre, rng)
+    App(syntax/syntax/Var(cname), _, _) -> lazy-update-con(cname, e, arg)
+    syntax/syntax/Var(cname) -> lazy-update-con(cname, e, arg)
+    _ -> unknown-update(e, arg)
 
-fun unknown-update(evalName, expr, arg)
+fun update-warning(rng: range, fdoc: (name -> doc) -> doc)
+  val cs = colors
+  fun show-con-name(nm: name)
+    nm.unqualify.pretty.color(cs.colorCons)
+  add-warning(rng, "Cannot update the lazy constructor".text |+| con-info.name.show-con-name |+| fdoc(show-con-name))
+
+fun lazy-update-con(cname: name, expr, arg)
+  match whnf-constructors.lookup-con(cname)
+    Nothing -> match lazy-constructors.lookup-con(cname)
+      Nothing -> unknown-update(expr, arg)
+      Just(ci') -> recursive-update(ci', expr, arg)
+    Just(whnf) ->
+      warn-update(expr.range, whnf)
+      lazy-update(expr, arg)
+
+fun unknown-update(expr, arg)
   val rng = expr.expr/range.hide
   update-warning(rng, fn(_) "in-place as the result constructor is not statically known -- using an indirection instead".text)
   lazy-update(expr, arg)
 
-fun recursive-update(ci': conInfo, evalName, expr, arg)
+fun recursive-update(ci': conInfo, expr, arg)
   val r0 = expr.expr/range.hide
   // No need to warn anymore as we don't force recursively here
   warn-update(expr.range, ci')
@@ -647,36 +672,13 @@ fun warn-update(rng: range, resultCon)
   val ci = con-info
   val lazySize = alloc-size(con-repr(di, ci), platform)
   val whnfSize = alloc-size(con-repr(di, resultCon), platform)
-  if lazySize <= whnfSize then
+  if lazySize < whnfSize then
     with with-con(resultCon)
     update-warning(rng, fn(_) "in-place as the result constructor is larger(".text |.| lazySize.pretty |+| "vs".text |+| whnfSize.pretty |+| "bytes".text)
-
-fun lazy-update-con(cname: name, evalName, expr, arg)
-  match lookup-con(whnf-constructors, cname)
-    Nothing -> match lookup-con(lazy-constructors, cname)
-      Nothing -> unknown-update(evalName, expr, arg)
-      Just(ci') -> recursive-update(ci', evalName, expr, arg)
-    Just(whnf) ->
-      warn-update(expr.range, whnf)
-      lazy-update(expr, arg)
 
 fun lazy-update(expr, arg)
   val rng = expr.expr/range.hide
   App(Var(nameLazyMemoize, False, rng), [(Nothing, arg), (Nothing, expr)], rng)
-
-fun update-warning(rng: range, fdoc: (name -> doc) -> doc)
-  val cs = colors
-  fun show-con-name(nm: name)
-    nm.unqualify.pretty.color(cs.colorCons)
-  add-warning(rng, "Cannot update the lazy constructor".text |+| con-info.name.show-con-name |+| fdoc(show-con-name))
-
-fun lookup-con(constrs: list<conInfo>, cname: name)
-  val modName = data-info.name.qualifier
-  constrs.find fn(ci: conInfo)
-    ci.name == (if cname.is-qualified then cname else qualify(modName, cname))
-
-fun lazy-add-update(evalName: name, arg, topExpr)
-  data-info.add(con-info, evalName, topExpr, arg)
 
 fun lazy-fip(di: dataInfo)
   match di.def
@@ -885,19 +887,15 @@ fun lam-valuebinder/kinfer(ValueBinder(lamnm, mbTp, mbExpr, nmRng, rng): valueBi
   ValueBinder(lamnm, mbTp', mbExpr', nmRng, rng)
 
 fun pat-valuebinder/kinfer(ValueBinder(nm, mbTp, pat, nmRng, rng): valueBinder<maybe<userType>, syntax/syntax/pattern<userType>>)
-  val mbTp' = mbTp.map(
-    fn(t)
-      with override val uctx = Check("Matched expressions must be values", rng)
-      t.inf-resolve-type()
-  )
+  val mbTp' = mbTp.map fn(t)
+    with override val uctx = Check("Matched expressions must be values", rng)
+    t.inf-resolve-type()
   ValueBinder(nm, mbTp', pat.kinfer, nmRng, rng)
 
 fun handler-valuebinder/kinfer(ValueBinder(nm, mbTp, u, nmRng, rng): valueBinder<maybe<userType>, ()>)
-  val mbTp' = mbTp.map(
-    fn(t)
-      with override val uctx = Check("Handler parameters must be values", rng)
-      inf-resolve-type(t)
-  )
+  val mbTp' = mbTp.map fn(t)
+    with override val uctx = Check("Handler parameters must be values", rng)
+    inf-resolve-type(t)
   ValueBinder(nm, mbTp', u, nmRng, rng)
 
 fun expr/kinfer(ex: syntax/syntax/expr<userType>)
@@ -909,25 +907,22 @@ fun expr/kinfer(ex: syntax/syntax/expr<userType>)
     syntax/syntax/Var(nm, isOp, rng) -> syntax/syntax/Var(nm, isOp, rng) // resolve qualified term identifiers during type inference
     Literal(l) -> Literal(l)
     Ann(expr, tp, rng) -> 
-      val expr' = expr.kinfer
       val tp' = 
         with override val uctx = Check("Expressions must be values", rng) 
         tp.inf-resolve-type()
-      Ann(expr', tp', rng)
+      Ann(expr.kinfer, tp', rng)
     syntax/syntax/Case(expr, brs, lzy, rng) -> syntax/syntax/Case(expr.kinfer, brs.map(kinfer), lzy, rng)
     syntax/syntax/Parens(expr, nm, pre, rng) -> syntax/syntax/Parens(expr.kinfer, nm, pre, rng)
     Handler(hsort, scoped, over, allowMask, meff, pars, reinit, ret, fin, ops, hrng, rng) ->
-      val pars' = pars.map(kinfer)
-      val meff' = meff.map() fn(eff)
+      val meff' = meff.map fn(eff)
         with override val uctx = Check("Handler effects must be effect constants (of kind X)", hrng)
         eff.inf-resolvex(rng)
-      Handler(hsort, scoped, over, allowMask, meff', pars', reinit.map(kinfer), ret.map(kinfer), fin.map(kinfer), ops.map(kinfer), hrng, rng)
+      Handler(hsort, scoped, over, allowMask, meff', pars.map(kinfer), reinit.map(kinfer), ret.map(kinfer), fin.map(kinfer), ops.map(kinfer), hrng, rng)
     Inject(tp, expr, b, rng) ->
-      val expr' = expr.kinfer
       val tp' =
         with override val uctx = Check("Can only inject effect constants (of kind X)", tp.range)
         tp.inf-resolvex(rng)
-      Inject(tp', expr', b, rng)
+      Inject(tp', expr.kinfer, b, rng)
 
 fun pat/kinfer(p: syntax/syntax/pattern<userType>)
   match p
@@ -935,28 +930,21 @@ fun pat/kinfer(p: syntax/syntax/pattern<userType>)
     syntax/syntax/PatLit(l) -> syntax/syntax/PatLit(l)
     syntax/syntax/PatVar(binder) -> syntax/syntax/PatVar(binder.kinfer)
     syntax/syntax/PatAnn(pat, tp, rng) ->
-      val pat' = pat.kinfer
       val tp' = 
         with override val uctx = Check("Patterns must be values", rng)
         tp.inf-resolve-type()
-      syntax/syntax/PatAnn(pat', tp', rng)
+      syntax/syntax/PatAnn(pat.kinfer, tp', rng)
     syntax/syntax/PatCon(name, args, r1, r2) -> syntax/syntax/PatCon(name, args.map(fn((mbNm, p')) (mbNm, p'.kinfer)), r1, r2)
     syntax/syntax/PatParens(pat, rng) -> syntax/syntax/PatParens(pat.kinfer, rng)
 
 fun handlerbranch/kinfer(HandlerBranch(name, pars, expr, opSort, nmRng, rng): handlerBranch<userType>)
-  val pars' = pars.map(kinfer)
-  val expr' = expr.kinfer
-  HandlerBranch(name, pars', expr', opSort, nmRng, rng)
+  HandlerBranch(name, pars.map(kinfer), expr.kinfer, opSort, nmRng, rng)
 
 fun branch/kinfer(syntax/syntax/Branch(pat, guards): syntax/syntax/branch<userType>)
-  val pat' = pat.kinfer
-  val guards' = guards.map(kinfer)
-  syntax/syntax/Branch(pat', guards')
+  syntax/syntax/Branch(pat.kinfer, guards.map(kinfer))
 
 fun guard/kinfer(syntax/syntax/Guard(test, body): syntax/syntax/guard<userType>)
-  val test' = test.kinfer
-  val body' = body.kinfer
-  syntax/syntax/Guard(test', body')
+  syntax/syntax/Guard(test.kinfer, body.kinfer)
 
 // Infer the kinds for a type definition
 fun typedef/kinfer(tb: typeBinder<infKind>, td: syntax/syntax/typeDef<userType, userType, userKind>)
@@ -966,14 +954,12 @@ fun typedef/kinfer(tb: typeBinder<infKind>, td: syntax/syntax/typeDef<userType, 
       val k = fresh-kind()
       with extend-infgamma(infgamma)
       with override val uctx = Infer(rng)
-      val tp' = kinfer(k, tp)
       val tbinder = unify-binder(tb, rng, infgamma, k)
-      syntax/syntax/Synonym(tbinder, infgamma, tp', rng, vis, doc)
+      syntax/syntax/Synonym(tbinder, infgamma, kinfer(k, tp), rng, vis, doc)
     DataType(newTp, args, constrs, rng, vis, sort, ddef, dataEff, doc) ->
       val infgamma = args.map(bind-typebinder)
       with extend-infgamma(infgamma)
       val constrs' = constrs.map(kinfer)
-      // TODO: unify extended datatype kind with original
       val resKind = if ddef.is-open then infKindStar else fresh-kind()
       val tbinder' = unify-binder(tb, rng, infgamma, resKind)
       if !ddef.is-extend then ()
@@ -1003,8 +989,7 @@ fun constr/kinfer(UserCon(name, exists0, params, mbresult, mblazy, rngName, rng,
 
 fun con-valuebinder/kinfer((vis,ValueBinder(name, tp, mbExpr, nameRng, rng)): (visibility, valueBinder<userType, maybe<syntax/syntax/expr<userType>>>))
   with override val uctx = Check("Constructor parameters must be values", rng)
-  val tp' = kinfer(infKindStar, tp)
-  (vis, ValueBinder(name, tp', mbExpr, nameRng, rng))
+  (vis, ValueBinder(name, kinfer(infKindStar, tp), mbExpr, nameRng, rng))
 
 fun usertp/kinfer(expected: infKind, userType: userType)
   match userType
@@ -1016,17 +1001,20 @@ fun usertp/kinfer(expected: infKind, userType: userType)
           expected
       val tname' = tname.bind-typebinder
       with extend-infgamma([tname'])
-      with check-quant(r)
-      val tp' = kinfer(ikind, tp)
+      val tp' = 
+        with check-quant(r)
+        kinfer(ikind, tp)
       TpQuan(quant, tname', tp', r)
     TpFun(args, eff, tp, r) ->
       unify(r, expected, infKindStar)
-      with check-arg(r)
-      val args' = args.map(kinfer(infKindStar, _))
+      val args' = 
+        with check-arg(r)
+        args.map(kinfer(infKindStar, _))
       // somewhat involved since we auto-wrap labels L into effects E here
       val ekind = fresh-kind()
-      with check-eff(r)
-      val etp = kinfer(ekind, eff)
+      val etp = 
+        with check-eff(r)
+        kinfer(ekind, eff)
       val skind = subst(ekind)
       val eff' = match skind
         KICon(k) | k == kindLabel -> make-effect-extend(etp, make-effect-empty)
@@ -1036,19 +1024,23 @@ fun usertp/kinfer(expected: infKind, userType: userType)
           with check-eff(r)
           unify(r, KICon(kindEffect), skind)
           etp
-      with check-res(r)
-      val tp' = kinfer(infKindStar, tp)
+      val tp' = 
+        with check-res(r)
+        kinfer(infKindStar, tp)
       TpFun(args', eff', tp', r)
     TpApp(tp as TpCon(nm), [lab, tl], r) | nm == nameEffectExtend ->
-      with check-app(r)
-      val tp' = kinfer(inf-kind-funN([KICon(kindLabel), KICon(kindEffect)], expected), tp)
-      with check-extend-tail(r)
-      val tl' = kinfer(KICon(kindEffect), tl)
+      val tp' = 
+        with check-app(r)
+        kinfer(inf-kind-funN([KICon(kindLabel), KICon(kindEffect)], expected), tp)
+      val tl' = 
+        with check-extend-tail(r)
+        kinfer(KICon(kindEffect), tl)
       // somewhat involved since we allow fixed effects to be used as labels
       // the append nodes are just used temporarily (see resolve-app in this file)
       val lkind = fresh-kind()
-      with override val uctx = Infer(r)
-      val ltp = kinfer(lkind, lab)
+      val ltp = 
+        with override val uctx = Infer(r)
+        kinfer(lkind, lab)
       val skind = subst(lkind)
       match skind
         KICon(kind) | kind == kindEffect -> make-effect-append(ltp, tl')
@@ -1063,11 +1055,12 @@ fun usertp/kinfer(expected: infKind, userType: userType)
           TpApp(tp', [ltp, tl'], r)
     TpApp(tp, args, rng) ->
       val kinds = args.map(fn(_) fresh-kind())
-      with check-app(rng)
-      val tp' = kinfer(inf-kind-funN(kinds, expected), tp)
-      val args' = args.zip(kinds).map fn((arg, kind)) 
+      val tp' = 
+        with check-app(rng)
+        kinfer(inf-kind-funN(kinds, expected), tp)
+      val args' = 
         with override val uctx = Infer(rng)
-        kinfer(kind, arg)
+        kinds.zipwith(args, kinfer)
       TpApp(tp', args', rng)
     TpVar(nm, rng) ->
       val (qname, kind, _) = find-infkind(nm, rng)
@@ -1077,15 +1070,14 @@ fun usertp/kinfer(expected: infKind, userType: userType)
       val (qname, kind, _) = find-infkind(nm, rng)
       unify(rng, expected, kind)
       TpCon(qname, rng)
-    TpParens(tp, rng) ->
-      val tp' = kinfer(expected, tp)
-      TpParens(tp', rng)
+    TpParens(tp, rng) -> TpParens(kinfer(expected, tp), rng)
     TpAnn(tp, userKind) ->
-      val rng = userType.range
       val kind = userKind.to-kind
+      val rng = userType.range
       unify(rng, expected, kind)
-      with check-annot(rng)
-      val tp' = kinfer(kind, tp)
+      val tp' = 
+        with check-annot(rng)
+        kinfer(kind, tp)
       TpAnn(tp', kind)
 
 fun get-effect-lift(utp: kUserType<infKind>): inferKindEnvEffect (forall<k> (kUserType<k>, range) -> kUserType<k>)
@@ -1114,9 +1106,14 @@ fun add-lazy-indirect(dt)
       val indirectName = "indirect".new-hidden-name
       fun make-tp-app(t: kUserType<k>, targs': list<kUserType<k>>): kUserType<k>
         if targs'.is-nil then t else TpApp(t, targs', rng)
-      val indirectPar = ValueBinder(indirectName, make-tp-app(TpCon(newtp.name, rng), targs.map(fn(targ) TpVar(targ.name, targ.name-range))), Nothing, rng, rng)
-      val indirectCon = UserCon(newtp.name.to-lazy-indirect-con-name, [], [(Private, indirectPar)], Nothing, Just((fipNoAlloc, Var(indirectName, False, rng))), 
-                        rng, rng, Public, "// automatically generated lazy indirection constructor")
+      val indirectPar = ValueBinder(indirectName, 
+        make-tp-app(TpCon(newtp.name, rng), 
+          targs.map(fn(targ) TpVar(targ.name, targ.name-range))), 
+          Nothing, rng, rng)
+      val indirectCon = UserCon(newtp.name.to-lazy-indirect-con-name, [], 
+           [(Private, indirectPar)], Nothing, 
+           Just((fipNoAlloc, Var(indirectName, False, rng))), 
+           rng, rng, Public, "// automatically generated lazy indirection constructor")
       
       // order with lazy last (so we can check quickly at runtime)
       val new-cons = strictCons ++ [indirectCon] ++ lazyCons
@@ -1213,8 +1210,10 @@ fun resolve-typedef(isRec: bool, recNames: list<name>, td: syntax/syntax/typeDef
         else
           val etaVars = etaKinds.map(TypeVar(unique-id("eta"), _, Bound))
           (TApp(tp', etaVars.map(TVar)), typeVars ++ etaVars)
-      add-range-info(rng, RIDecl("alias", syn'.name, syn.name.mangle-type-name, Just(tp')))
-      (Synonym(SynInfo(syn'.name, syn'.tb/kind, etaParams, etaTp, etaTp.max-synonym-rank + 1, rng, vis, doc)), [])
+      add-range-info(rng, RIDecl("alias", syn'.name, syn'.name.mangle-type-name, Just(tp')))
+      val synInfo = SynInfo(syn'.name, syn'.tb/kind, etaParams, etaTp, etaTp.max-synonym-rank + 1, rng, vis, doc)
+      add-synonym(synInfo)
+      (Synonym(synInfo), [])
     DataType(newtp, params, constrs, rng, vis, sort, ddef, dataEff, doc) ->
       val newtp' = 
         if ddef.is-extend then
@@ -1228,7 +1227,7 @@ fun resolve-typedef(isRec: bool, recNames: list<name>, td: syntax/syntax/typeDef
       val typeVars =
         val (kargs, _kres) = extract-kind-fun(newtp'.tb/kind)
         if params.is-nil && !kargs.is-nil then
-          kargs.map(fn(karg) TypeVar(unique-id("k"), karg, Bound)) // invent parameters if they are not given (and it has an arrow kind)
+          kargs.map(TypeVar(unique-id("k"), _, Bound)) // invent parameters if they are not given (and it has an arrow kind)
         else
           params'.map(_.fresh-typevar(Bound))
       val tvarMap = LinearMap([]) + params'.map(name).zip(typeVars)

@@ -8,7 +8,7 @@ Work on Syntax, Parsing, and Formatter
 - [x] common/ updated: 11/3/25 (except file)
 - [x] syntax/ updated 7/14/25 (pretty, format are new)
 - [x] static/ updated 7/12/25 
-- [ ] kind/ updated 7/12/25 (other than kind/infer..lazy)
+- [x] kind/ updated 11/18/25
 - [ ] type/type, type/kind type/operations, type/pretty, updated 1/8/25, assumption possibly updated to 7/14/25
 - [ ] syntax/ needs debugging / tests
 
