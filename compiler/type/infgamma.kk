@@ -75,27 +75,25 @@ fun inf-gamma-eff/extend-x(name: name, cname: name, tp: ktype, scope-depth, rng:
 fun inf-gamma/list(ig: infGamma): pure list<(name, ktype)>
   ig.linearmap/list.flatmap(fn((_, infos)) infos.map(fn(info) (info.cname, info.typ)))
     
-
 fun inf-gamma-list()
   gamma-get().inf-gamma/list
 
 val inf-gamma/empty: infGamma = LinearMap([])
 
-fun (|->)(sub: sub, inf: infGamma): pure infGamma
-  inf.map(fn(k, ni) (k, sub |-> ni))
-
-fun ppgamma(ig: infGamma)
-  val nameSchemes = ig.gammaList()
-  val maxWidth = nameSchemes.map(fn((n, _)) n.show.count).maximum(0).min(12)
+fun pp-inf-gamma(ig: infGamma)
+  val name-schemes = ig.inf-gamma/list()
+  val max-width = name-schemes.map(fn((name, _)) name.show.count).maximum(0).min(12)
   fun nice(scheme: ktype)
     align(nice-types([scheme]).head.unjust)
-  vcat(nameSchemes.map(fn((n, s))
-    fill(n.showPlain.text |.| type-colon().color(colors.colorSep) |+| align(nice(s)), maxWidth)
+  vcat(name-schemes.map(fn((name, scheme))
+    fill(name.show-plain.text |.| type-colon().color(colors.colorSep) |+| align(nice(scheme)), max-width)
   ))
 
-fun pretty(ig: infGamma)
-  // TODO: Add default env to pretty definitions?
-  ppgamma(ig)
+fun infgamma/free-type-vars(ig: infGamma): pure tvs
+  ig.inf-gamma/list().map(snd).free-type-vars
 
-fun showgamma(ig: infGamma)
-  pretty(ig).show
+fun infgamma/bound-type-vars(ig: infGamma): pure tvs
+  ig.inf-gamma/list().map(snd).bound-type-vars
+
+// fun infgamma/free-type-cons(ig: infGamma): pure tvs
+//   ig.inf-gamma/list().map(snd).free-type-cons
