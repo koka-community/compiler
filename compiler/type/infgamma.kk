@@ -24,16 +24,16 @@ alias infGamma = name-map<list<nameInfo>>
 effect infGammaEff
   fun gamma-extend(name: name, ni: nameInfo): ()
   fun gamma-lookupx(name: name): maybe<nameInfo>
-  fun gamma-set(inf: gamma): ()
-  fun gamma-get(): gamma
+  fun gamma-set(inf: infGamma): ()
+  fun gamma-get(): infGamma
 
-fun inf-gamma(ig0: gamma, f: () -> <infGammaEff,exn,comp-flags|e> a): <exn,comp-flags|e> a
+fun inf-gamma(ig0: infGamma, f: () -> <infGammaEff,exn,comp-flags|e> a): <exn,comp-flags|e> a
   var ig := ig0
   with handler
-    fun gamma-extend(name: name, ni: nameInfo) ig := ig.extend(name, ni)
+    fun gamma-extend(name: name, ni: nameInfo) ig := ig.inf-gamma/extend(name, ni)
     fun gamma-lookupx(name: name) Nothing // ig.lookup(name)
-    fun gamma-set(inf: gamma) ig := inf
-    fun gammaGet() ig
+    fun gamma-set(inf: infGamma) ig := inf
+    fun gamma-get() ig
   f()
 
 fun ni/combine(nis: list<nameInfo>, nis2: list<nameInfo>): exn list<nameInfo>
@@ -49,21 +49,21 @@ fun inf-gamma/delete(ig: infGamma, n : name): infGamma
 // during inference by inserting fully qualified expressions (in resolveApp-name)
 // (if isQualified name then trace ("gamma-extend: insert qualified: " ++ show name) else id) $
 // overwrite previous names
-fun inf-gamma/extend(ig: gamma, name: name, ni: nameInfo): <exn> gamma
-  ig.update(name.unqualify, [ni], ni/combine)
+fun inf-gamma/extend(ig: infGamma, name: name, ni: nameInfo): <exn> infGamma
+  ig.update(name.unqualify-full, [ni], ni/combine)
 
-fun inf-gamma-eff/extends(tnames: list<(name,ktype,string)>)
-  tnames.foreach(fn((name,tp,doc)) extend-tp(name, name, tp, doc))
+fun inf-gamma-eff/extends(tnames: list<(name,ktype,int,string)>)
+  tnames.foreach(fn((name,tp,scope-depth,doc)) extend-tp(name, name, tp, scope-depth, doc))
 // fun inf-gamma/extends(ig: gamma, tnames: list<(name,ktype,string)>)
 //   tnames.foldl(ig, fn(ig', (name,tp,doc)) ig'.extend-tp(name, name, tp, doc))
 
-fun inf-gamma-eff/extend-tp(name: name, cname: name, tp: ktype, doc: string)
-  extend-x(name, cname, tp, range/range/null, False, doc)
+fun inf-gamma-eff/extend-tp(name: name, cname: name, tp: ktype, scope-depth: int, doc: string)
+  extend-x(name, cname, tp, scope-depth, range/null, False, doc)
 // fun inf-gamma/extend-tp(ig: gamma, name: name, cname: name, tp: ktype, doc: string)
 //   ig.extend-x(name, cname, tp, range/range/null, False, doc)
 
-fun inf-gamma-eff/extend-x(name: name, cname: name, tp: ktype, rng: range, isVar: bool, doc: string)
-  gamma-extend(name, InfoVal(Public, cname, tp, rng, isVar, False, doc))
+fun inf-gamma-eff/extend-x(name: name, cname: name, tp: ktype, scope-depth, rng: range, isVar: bool, doc: string)
+  gamma-extend(name, InfoVal(Public, cname, tp, scope-depth, rng, isVar, False, doc))
 // fun inf-gamma/extend-x(ig: gamma, name: name, cname: name, tp: ktype, rng: range, isVar: bool, doc: string)
 //   ig.set(name, [InfoVal(Public, cname, tp, rng, isVar, doc)])
 
@@ -72,18 +72,19 @@ fun inf-gamma-eff/extend-x(name: name, cname: name, tp: ktype, rng: range, isVar
 // fun inf-gamma/lookup(ig: gamma, name: name): exn maybe<(name, ktype)>
 //   ig.lookup(name).map(fn(InfoVal(_, cname, tp, _, _)) (cname, tp))
 
-fun inf-gamma/list(ig: gamma): pure list<(name, ktype)>
-  ig.list.map(fn((name, InfoVal(typ=tp))) (name, tp))
+fun inf-gamma/list(ig: infGamma): pure list<(name, ktype)>
+  ig.linearmap/list.flatmap(fn((_, infos)) infos.map(fn(info) (info.cname, info.typ)))
+    
 
-fun inf-gamma-eff/list()
-  gammaGet().list.map(fn((name, InfoVal(typ=tp))) (name, tp))
+fun inf-gamma-list()
+  gamma-get().inf-gamma/list
 
-val inf-gamma/empty: gamma = LinearMap([])
+val inf-gamma/empty: infGamma = LinearMap([])
 
-fun (|->)(sub: sub, inf: gamma): pure gamma
+fun (|->)(sub: sub, inf: infGamma): pure infGamma
   inf.map(fn(k, ni) (k, sub |-> ni))
 
-fun ppgamma(ig: gamma)
+fun ppgamma(ig: infGamma)
   val nameSchemes = ig.gammaList()
   val maxWidth = nameSchemes.map(fn((n, _)) n.show.count).maximum(0).min(12)
   fun nice(scheme: ktype)
@@ -92,9 +93,9 @@ fun ppgamma(ig: gamma)
     fill(n.showPlain.text |.| type-colon().color(colors.colorSep) |+| align(nice(s)), maxWidth)
   ))
 
-fun pretty(ig: gamma)
+fun pretty(ig: infGamma)
   // TODO: Add default env to pretty definitions?
   ppgamma(ig)
 
-fun showgamma(ig: gamma)
+fun showgamma(ig: infGamma)
   pretty(ig).show

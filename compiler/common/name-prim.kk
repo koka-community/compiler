@@ -10,7 +10,7 @@ import compiler/common/name
 import compiler/common/syntax
 import compiler/common/failure
 import std/core/unsafe
-// Updated as of 7/14/25: Commit #806d168
+// Updated as of 11/19/25: Commit #b6fdf12
 
 //---------------------------------
 // Special
@@ -142,8 +142,8 @@ val nameCCtxComposeExtend = "@cctx-compose-extend".cfield-name
 val nameCCtxSetCtxPath    = "@cctx-setcp".cfield-name
 
 val nameCCtxEmpty         = new-locally-qualified("std/core/types", "cctx", "empty")
-val nameCCtxApply         = new-locally-qualified("std/core/types", "cctx", "(++.)")
-val nameCCtxCompose       = new-locally-qualified("std/core/types", "cctx", "(++)")
+val nameCCtxApply         = new-locally-qualified("std/core/types", "cctx", "++.")
+val nameCCtxCompose       = new-locally-qualified("std/core/types", "cctx", "++")
 
 val nameTpFieldAddr       = "@field-addr".cfield-name
 val nameFieldAddrOf       = "@field-addr-of".cfield-name

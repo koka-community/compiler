@@ -15,7 +15,7 @@ import std/data/linearmap
 import std/data/linearset
 import std/os/path
 import std/data/sort
-// Updated to #752748d on 7/13/25
+// Updated to #ddac17b on 11/19/25
 pub infixr 5 (|->)
 
 type nameInfo
@@ -263,27 +263,27 @@ fun extract-def-group(d: defGroup, update-vis)
 fun extract-def(d: def, update-vis)
   qname-map/single(d.def-name, create-name-infoX(update-vis(d.vis), d.def-name, 0, d.sort, d.nameRange, d.ktype, d.doc)) // specials since we cannot call isTopLevel as in coreDefInfo
 
-fun core-def-info(d: def)
-  (d.def-name, create-name-infoX(d.vis, d.def-name, 0, if d.sort.is-defFun && !d.is-top-level then DefVal else d.sort, d.nameRange, d.ktype, d.doc))
+fun core-def-info(d: def, scopeDepth)
+  (d.def-name, create-name-infoX(d.vis, d.def-name, scopeDepth, if d.sort.is-defFun && !d.is-top-level then DefVal else d.sort, d.nameRange, d.ktype, d.doc))
 // since we use coreDefInfo also for local definitions, we need to be careful to to use DefFun for
 // things that do not get lifted to toplevel due to free type/variables. test: codegen/rec5
 
-fun create-name-info(name, depth, is-val, rng, tp, doc)
-  create-name-infoX(Public, name, depth, if is-val then DefVal else DefFun([]), rng, tp, doc)
+fun create-name-info(name, scopeDepth, is-val, rng, tp, doc)
+  create-name-infoX(Public, name, scopeDepth, if is-val then DefVal else DefFun([]), rng, tp, doc)
 
-fun create-name-infoX(vis, name, depth: int, sort, rng, tp, doc)
-  create-name-infoEX(vis, name, depth, sort, False, rng, tp, doc)
+fun create-name-infoX(vis, name, scopeDepth: int, sort, rng, tp, doc)
+  create-name-infoEX(vis, name, scopeDepth, sort, False, rng, tp, doc)
 
-fun create-name-infoEX(vis, name, depth: int, sort, allowImplicitMask, rng, tp, doc)
+fun create-name-infoEX(vis, name, scopeDepth: int, sort, allowImplicitMask, rng, tp, doc)
   fun is-default(nm: name)
     match nm.split-local-qual-name
       Cons("default") -> True 
       _ -> False
-  val d = if depth == 0 && name.is-default then -1 else depth 
+  val d = if scopeDepth == 0 && name.is-default then -1 else scopeDepth 
   match sort
-    DefFun(_, fipT) -> InfoFun(vis, name, tp, depth, tp.arity, fipT, rng, doc)
-    DefVar -> InfoVal(vis, name, tp, depth, rng, True, False, doc)
-    _ -> InfoVal(vis, name, tp, depth, rng, False, allowImplicitMask, doc)
+    DefFun(_, fipT) -> InfoFun(vis, name, tp, scopeDepth, tp.arity, fipT, rng, doc)
+    DefVar -> InfoVal(vis, name, tp, scopeDepth, rng, True, False, doc)
+    _ -> InfoVal(vis, name, tp, scopeDepth, rng, False, allowImplicitMask, doc)
 
 fun arity(tp: ktype): <comp-flags, exn> (int, int)
   match tp.expand-syn

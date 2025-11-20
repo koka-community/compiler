@@ -18,6 +18,7 @@ import std/data/linearmap
 import std/data/linearset
 import std/core/undiv
 import std/core-extras
+// Updated 11/19/25 to commit #752748d, not fully visually second checked otherwise.
 
 alias prec = int;
 val precTopTop = -1 // most outer level: used to suppress 'forall'
@@ -74,12 +75,19 @@ struct ppEnv
   showIds: bool = False // show id numbers
   showFlavours: bool = True
   expandSynonyms: bool = False
-  fullNames: bool = False
+  fullNames: bool = False // TODO: If True it can lead to .kki parse errors
   alwaysUnqualify: bool = False
   coreIface: bool = False
   coreShowTypes: bool = False // show types in core output
   coreShowVis: bool = True // show visibility
   coreShowDef: bool = False; // show definition body
+
+effect indent 
+  val indent : int
+
+fun default-indent(f)
+  with val indent = 0
+  f()
 
 alias pp-typeEnv = <prettyTypeEff,ppEnvEff,precEff>
 
@@ -265,6 +273,9 @@ fun pp-vis(v: visibility): colorSchemeEffect doc
   match v
     Private -> pprint/empty
     Public -> "pub ".keyword
+
+fun pp-sub(sub: sub): _ doc 
+  sub.list.map(fn((tv, tp)) tv.pp-typevar |+| "|->".text |+| tp.pp-type).list
 
 // Synonym info
 fun syninfo/pretty(s: synInfo): <documentation,ppEnvEff,pure,comp-flags,colorSchemeEffect> doc

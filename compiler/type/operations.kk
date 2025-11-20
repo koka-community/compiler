@@ -8,12 +8,13 @@ import compiler/type/assumption
 import compiler/common/syntax
 import compiler/platform/config
 import std/data/linearset
+// Updated 11/19/25 to commit #7083c02
 
 pub infixr 5 (|->)
 
 fun requires-implicits(tp: ktype)
   match tp.split-fun-scheme
-    Just((_, _, pars, _, _)) -> pars.filter(_.fst.is-implicit-param-name)
+    Just((_, pars, _, _)) -> pars.filter(_.fst.is-implicit-param-name)
     _ -> []
 
 fun is-optional-or-implicit(p: (name, ktype))
@@ -27,41 +28,25 @@ fun split-optional-implicit(pars: list<(name, ktype)>)
 fun has-optional-or-implicits(pars: list<(name, ktype)>)
   pars.any(is-optional-or-implicit)
 
-type evidence
-  Ev(evName: tName, pred: pred, evRange: range)
-
-fun (|->)(s: sub, e: evidence): pure evidence
-  val newPred = (|->)(s, e.pred)
-  e(pred=newPred)
-
-fun free-type-vars(e: evidence)
-  free-type-vars(e.pred)
-
-// fun bound-type-vars(e: evidence)
-//   typevar/bound-type-vars(e.pred)
-
-// TODO: ftc
-
-fun show(e: evidence)
-  show(e.pred)
+// Instantiation
 
 // instantiate a type
 fun instantiate(tp: ktype, r: range)
-  val (_, _, rho, _) = tp.instantiate-noex(r)
+  val (_, rho, _) = tp.instantiate-noex(r)
   rho
 
 // Instantiate a type and return the instantiated quantifiers, name/predicate pairs for evidence,
 // the instantiated type, and a core transformer function (which applies type arguments and evidence)
 fun instantiate-ex(tp: ktype, r: range)
-  val (ids, preds, rho, coref) = tp.instantiate-exfl(Meta, r)
+  val (ids, rho, coref) = tp.instantiate-exfl(Meta, r)
   val (erho, coreg) = rho.extend
-  (ids, preds, erho, fn(e) coreg(coref(e)))
+  (ids, erho, fn(e) coreg(coref(e)))
 
 // Instantiate a type and return the instantiated quantifiers, name/predicate pairs for evidence,
 // the instantiated type, and a core transformer function (which applies type arguments and evidence)
 fun instantiate-noex(tp: ktype, r: range)
-  val (ids, preds, rho, coref) = tp.instantiate-exfl(Meta, r)
-  (ids, preds, rho, fn(e) coref(e))
+  val (ids, rho, coref) = tp.instantiate-exfl(Meta, r)
+  (ids, rho, coref)
 
 //  Ensure the result of function always gets an extensible effect type
 // This is necessary to do on instantiation since we simplify such effect variables
@@ -82,7 +67,7 @@ fun extend(tp: ktype)
 
 // Skolemize a type
 fun skolemize(tp: ktype, r: range)
-  val (_, _, rho, _) = tp.skolemize-ex(r)
+  val (_, rho, _) = tp.skolemize-ex(r)
   rho
 
 // Skolemize a type and return the instantiated quantifiers, name/predicate pairs for evidence,
@@ -91,23 +76,12 @@ fun skolemize-ex(tp: ktype, r: range)
   tp.instantiate-exfl(Skolem, r)
 
 // General instantiation for skolemize and instantiate
-fun instantiate-exfl(tp: ktype, fl: flavour, r: range): <uniquePhase, comp-flags, pure> (list<typeVar>, list<evidence>, ktype, expr -> e expr)
+fun instantiate-exfl(tp: ktype, fl: flavour, r: range): <uniquePhase, comp-flags, pure> (list<typeVar>, ktype, expr -> e expr)
   match tp.split-type-scheme
-    ([], [], rho) -> ([], [], rho, id)
-    (vars, preds, rho) ->
+    ([], rho) -> ([], rho, id)
+    (vars, rho) ->
       val (tvars, sub) = fresh-subx(TVar, fl, vars, rho.all-tv())
-      val srho = sub |-> rho
-      val spreds = preds.map(sub |-> _)
-      val pnames = spreds.map(pred-name)
-      val corevars = pnames.map(Var(_, InfoNone))
-      val evidence = pnames.zip(spreds).map(fn((n, p)) Ev(n, p, r))
-      (tvars, evidence, srho, if corevars.is-nil then id else id)
-
-fun pred-name(p: pred)
-  val name = match p
-    PredSub -> fresh-name("sub")
-    PredIFace(iname) -> fresh-name(iname.show)
-  TName(name, p.pred-type)
+      (tvars, sub |-> rho, fn(e) add-type-apps(tvars,e))
 
 fun fresh-sub(fl: flavour, vars: list<typeVar>)
   val tvars = vars.map(fn(tv) fresh-typevar(tv.kind, fl))
@@ -125,6 +99,8 @@ fun fresh-typevarx(k: kind, fl: flavour, exclude: tvs)
   if exclude.member(tv) then fresh-typevarx(k, fl, exclude) 
   else tv
 
+// Fresh type variables
+// Return fresh skolem variables
 fun fresh-skolems(k: kind, n: int)
   fresh-tvars(k, Skolem, n)
 

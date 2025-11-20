@@ -5,11 +5,12 @@ Work on Syntax, Parsing, and Formatter
 // syntax / highlight 11/11/24
 
 - [x] lib/ updated: 2/10/25
-- [x] common/ updated: 11/3/25 (except file)
+- [x] common/ updated: 11/11/25 (except file)
 - [x] syntax/ updated 7/14/25 (pretty, format are new)
 - [x] static/ updated 7/12/25 
 - [x] kind/ updated 11/18/25
-- [ ] type/type, type/kind type/operations, type/pretty, updated 1/8/25, assumption possibly updated to 7/14/25
+- [x] type/type, type/kind 7/25
+- [x] type/operations, type/pretty, assumption 11/19/25
 - [ ] syntax/ needs debugging / tests
 
 ## 

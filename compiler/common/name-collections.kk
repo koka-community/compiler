@@ -69,6 +69,9 @@ fun qname-map/lookup(m: qname-map<a>, c: name, name: name): lookup<a>
         _ -> Ambiguous(xs.map(fst))
     _ -> NotFound
 
+fun qname-map/insert-with(m: qname-map<a>, c: name, a: list<(name,a)>, combine: (list<(name,a)>, list<(name,a)>) -> e list<(name,a)>): e qname-map<a>
+  m.map/update(c, a, combine)
+
 fun qname-map/filter-names(m: qname-map<a>, p: (name) -> e bool): e qname-map<a>
   m.map fn(k, xs)
     xs.filter(fn((n, _)) p(n))
