@@ -511,7 +511,7 @@ fun parse-value-operation-decl(vis: visibility): parse opDecl
   parse-keyword(":")
   val (mbTeff, tRes) = parse-tresult()
   if mbTeff.is-just then
-    parse-error("an explicit effect in result type of an operation is not allowed (yet)", mbTeff.map(range).default(rng0))
+    parse-error("an explicit effect in result type of an operation is not allowed (yet)", mbTeff.map(kut/range).default(rng0))
   val oprng = combine([rng0, idrng, tRes.range])
   OpDecl(doc, id.to-value-operation-name, rng0, idrng, True, OpVal, [], [], idrng, mbTeff, tRes, oprng)
 
@@ -538,7 +538,7 @@ fun parse-fun-operation-decl(lin: bool, vis: visibility): parse opDecl
   parse-keyword(":")
   val (mbTeff, tRes) = parse-tresult()
   if mbTeff.is-just then // TODO: check if declared effect is part of the effect type
-    parse-error("an explicit effect in result type of an operation is not allowed (yet)", mbTeff.map(range).default(rng0))
+    parse-error("an explicit effect in result type of an operation is not allowed (yet)", mbTeff.map(kut/range).default(rng0))
   val oprng = combine([rng0, idrng, tRes.range])
   OpDecl(doc, id, rng0, idrng, False, sort, exists0, pars, prng, mbTeff, tRes, oprng)
 
@@ -642,7 +642,7 @@ fun parse-parameter-normal(allowDefaults: bool)
     PatVar(binder) -> binder.expr.range
     _ -> pat.range
   fun binder(name: name, nameRng: range)
-    ValueBinder(name, mtp, opt, nameRng, combine([rng, drng, mtp.map(range).default(drng)]))
+    ValueBinder(name, mtp, opt, nameRng, combine([rng, drng, mtp.map(kut/range).default(drng)]))
   match pat
     // Treat PatVar and PatWild as special cases to avoid unnecessary match expressions
     PatVar(ValueBinder(name, Nothing, PatWild, nameRng, _)) -> (binder(name, nameRng), fn(x) x)
@@ -667,7 +667,7 @@ fun parse-parameter-implicit()
   val tp = parse-maybe-nb("", parse-type-annot)
   val unpackExpr = if unpack then Just(Parens(Var(qname.unqualify-full, False, rng), nil, "", rng)) // Encode .? as a default value assuming it is a type name
                    else Nothing
-  (ValueBinder(qname, tp, unpackExpr, combine([rng, tp.map(range).default(rng)]), rng), id)
+  (ValueBinder(qname, tp, unpackExpr, combine([rng, tp.map(kut/range).default(rng)]), rng), id)
 
 fun parse-default-expr()
   parse-maybe-nb("default", {val krng = parse-keyword("="); val e = parse-expression(); (Just(e), krng.combine(e.range))}).default((Nothing, null))
@@ -932,7 +932,7 @@ fun parse-handler-opx(): parse (clause, maybe<(userExpr -> userExpr)>)
           (new-name("_"), rng, Nothing)
         }])
       val expr = parse-body-expr()
-      (ClauseInitially(Lam([ValueBinder(name, tp, Nothing, prng, rng.combine(tp.map(range).default(rng)))], expr, False, rng.combine(expr.range))), Nothing)
+      (ClauseInitially(Lam([ValueBinder(name, tp, Nothing, prng, rng.combine(tp.map(kut/range).default(rng)))], expr, False, rng.combine(expr.range))), Nothing)
     }, parse-handler-op
   ])
 
@@ -953,7 +953,7 @@ fun parse-handler-op(): parse (clause, maybe<(userExpr -> userExpr)>)
         }
       ])
       val expr = parse-body-expr()
-      (ClauseRet(Parens(Lam([ValueBinder(name, tp, Nothing, prng, prng.combine(tp.map(range).default(prng)))], expr, False, rng.combine(expr.range)), "return".new-name, "", rng)), Nothing)
+      (ClauseRet(Parens(Lam([ValueBinder(name, tp, Nothing, prng, prng.combine(tp.map(kut/range).default(prng)))], expr, False, rng.combine(expr.range)), "return".new-name, "", rng)), Nothing)
     },{ // TODO: is "raw" needed for value definitions?
       parse-keyword("val")
       val (name, nameRng) = parse-qualified-identifier()
@@ -987,12 +987,12 @@ fun parse-op-params()
 fun parse-op-param()
   val (name, rng) = parse-param-id()
   val tp = parse-maybe-nb("", parse-type-annot)
-  ValueBinder(name, tp, (), rng, rng.combine(tp.map(range).default(rng)))
+  ValueBinder(name, tp, (), rng, rng.combine(tp.map(kut/range).default(rng)))
 
 fun parse-handler-param()
   val (name, rng) = parse-identifier()
   val tp = parse-maybe-nb("", parse-type-annot)
-  ValueBinder(name, tp, (), rng, rng.combine(tp.map(range).default(rng)))
+  ValueBinder(name, tp, (), rng, rng.combine(tp.map(kut/range).default(rng)))
 
 fun parse-branch(): parse userBranch
   val pat = parse-pattern()
