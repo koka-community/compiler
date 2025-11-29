@@ -5,7 +5,7 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
-// Updated as of 7/14/25 Commit: 806d168
+// Updated as of 9/29/25 Commit: 0554632
 
 import compiler/common/color-scheme
 import compiler/common/range
@@ -401,6 +401,9 @@ fun to-var-name(n: name): name
 
 fun to-handler-con-name(n: name): name
   make-hidden-name("Hnd", n)
+
+fun is-handler-con-name(n: name): bool
+  n.hidden/starts-with("Hnd")
 
 fun name/starts-with(n: name, s: string): bool
   n.nameStem.starts-with(s).bool

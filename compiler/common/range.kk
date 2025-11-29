@@ -5,7 +5,7 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
-// Updated as of 7/23/24: Commit 5edd7ce -- missing utfDecode, readInput, extractLiterate
+// Updated as of 11/29/25: Commit ae11c17 -- missing utfDecode, readInput, extractLiterate
 
 import std/os/path
 import std/pretty/pprint
@@ -184,6 +184,10 @@ fun pos/max(p1: pos, p2: pos): pos
 fun extend(r: range, off: int): range
   val e = r.end
   Range(r.start, e(col = e.col + off), r.hidden)
+
+// Create a range for the first character in the range
+fun start-of-range(r: range): range
+  Range(r.start, r.start, r.hidden)
 
 // Create a range for the final character in the range
 fun end-of-range(r: range): range

@@ -5,7 +5,7 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
-// Updated as of 8/6/24: Commit 7d99cb0
+// Updated as of 11/29/25: Commit ae11c17
 
 import compiler/common/failure
 import compiler/lib/pprint
@@ -61,6 +61,7 @@ type rangeInfo
   RIWarning(d: doc)
   RIId(name: name, ninfo: nameInfo, docs: list<doc>, isDefinition: bool) // qualified name, info, extra doc (from implicits), is this the definition?
   RIImplicits(shorten: (bool) -> doc) // inferred implicit arguments and (implicit) resume arguments
+  RIInlayHint(append: bool, doc: doc) // Inlay hint in the editor, append after the range (or before it)
 
 type nameInfo
   NIValue(sort: string, tp: ktype, comment: string, isAnnotated: bool) // sort is fun, val, etc.
@@ -89,15 +90,17 @@ fun ri/show(ri: rangeInfo): <comp-flags,pure> string
     RIId(name, info, docs, isDefinition) -> 
       "Id " ++ show(name) ++ (if isDefinition then " (def)" else "") ++ docs.show ++ ", info: " ++ info.show
     RIImplicits(shorten) -> "Implicits " ++ shorten(False).show
+    RIInlayHint(after, doc) -> "InlayHint " ++ (if after then "" else ("(before) ")) ++ doc.show
 
 fun ri/int(ri: rangeInfo)
   match ri
     RIDecl -> 0
     RIBlock -> 10
     RIId -> 20
-    RIImplicits -> 25
-    RIWarning -> 40
-    RIError -> 50
+    RIImplicits -> 30
+    RIInlayHint -> 40
+    RIWarning -> 50
+    RIError -> 60
 
 fun penalty(nm: name)
   if nm.nameModule == "std/core/hnd" then 10 else 0
@@ -110,6 +113,12 @@ fun ni/int(ni: nameInfo)
     NITypeVar -> 4
     NIModule -> 5
     NIKind -> 6
+
+fun is-virtual(ri: rangeInfo): bool
+  match ri
+    RIImplicits() -> True 
+    RIInlayHint() -> True 
+    _ -> False
 
 fun is-hidden(ri: rangeInfo)
   match ri
@@ -138,11 +147,11 @@ fun append(rm1: range-map, rm2: range-map)
 fun sort(rm: range-map)
   rm.sort(?(<) = fn((r1, _), (r2, _)) r1.cmp(r2).is-lt)
 
-// select the best matching range infos from a selection
+// select the best matching range infos from a selection (for hover info etc.)
 fun prioritize(rm: range-map)
   fun this-cmp((_, ri1: rangeInfo), (_, ri2: rangeInfo)) ri1.int.cmp(ri2.int).is-lt
   fun eq((_, ri1: rangeInfo), (_, ri2: rangeInfo)) ri1.int / 10 == ri2.int / 10
-  val sorted = rm.filter(fn((_, ri)) !ri.is-rIimplicits).sort(?(<)=this-cmp)
+  val sorted = rm.filter(fn((_, ri)) !ri.is-virtual).sort(?(<)=this-cmp)
   // Merge implicit documentation into identifiers
   val idocs = 
         rm.map fn((_, rinfo))
@@ -157,6 +166,7 @@ fun prioritize(rm: range-map)
       _ -> (rng, ri)
   sorted.group(?(==)=eq).map(_.last.unjust.merge-docs())
 
+// remove Implicit info and put it in Id info for convenience
 fun merge-implicits(rm: range-map, for-inlay: bool)
   val idocs = 
         rm.map fn((rng, rinfo))
@@ -241,6 +251,8 @@ fun get-function-name-reverse(xs0: list<lexeme>)
       // x.partial, x().partial etc
       Cons(f as Lexeme(_, LexId), Cons(Lexeme(_, LexKeyword(".")), xs')) ->
         chain(f, xs'.go)
+      // with x...
+      Cons(f as Lexeme(_, LexId), _) -> FnValue(f) // Whitespace is removed, if there is any id, just give our best guess that we are just starting with that id
       _ -> FnNotFound(xs)
   xs0.drop-auto-gen-closing.get-current-statement-reverse.go
 
