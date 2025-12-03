@@ -284,7 +284,7 @@ type paramInfo
   Own
 
 fun def-fun-ex(pinfos: list<paramInfo>, fipKind: fipT)
-  if pinfos.all(fn(p) p.is-own) then DefFun([], fipKind) else DefFun(pinfos, fipKind)
+  if pinfos.all(_.is-own) then DefFun([], fipKind) else DefFun(pinfos, fipKind)
 
 fun def-fun(pinfos: list<paramInfo>)
   def-fun-ex(pinfos, no-fip)

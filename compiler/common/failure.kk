@@ -10,8 +10,6 @@
 module compiler/common/failure
 pub import compiler/platform/config
 
-import std/core-extras
-
 // ------------------------------------------
 // Internal errors and assertions
 // ------------------------------------------

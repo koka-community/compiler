@@ -27,36 +27,24 @@ fun pos/(==)(p1: pos, p2: pos): bool
   p1.line == p2.line && p1.col == p2.col
 
 fun pos/(<)(p1: pos, p2: pos): bool
-  if p1.line < p2.line then
-    True
-  elif p1.line > p2.line then
-    False 
-  else
-    p1.col < p2.col
+  if p1.line < p2.line then True
+  elif p1.line > p2.line then False 
+  else p1.col < p2.col
 
 fun pos/(<=)(p1: pos, p2: pos): bool
-  if p1.line < p2.line then
-    True
-  elif p1.line > p2.line then
-    False 
-  else
-    p1.col <= p2.col
+  if p1.line < p2.line then True
+  elif p1.line > p2.line then False 
+  else p1.col <= p2.col
 
 fun pos/(>)(p1: pos, p2: pos): bool
-  if p1.line > p2.line then
-    True
-  elif p1.line < p2.line then
-    False 
-  else
-    p1.col > p2.col
+  if p1.line > p2.line then True
+  elif p1.line < p2.line then False 
+  else p1.col > p2.col
 
 fun pos/(>=)(p1: pos, p2: pos): bool
-  if p1.line > p2.line then
-    True
-  elif p1.line < p2.line then
-    False 
-  else
-    p1.col >= p2.col
+  if p1.line > p2.line then True
+  elif p1.line < p2.line then False 
+  else p1.col >= p2.col
 
 fun pos/cmp(p1: pos, p2: pos): order
   match p1.line.cmp(p2.line)
@@ -162,20 +150,14 @@ fun range/hide(r: range)
   Range(r.start, r.end, True)
 
 fun pos/min(p1: pos, p2: pos): pos
-  if p1.line <= 0 then // for combining nullRanges sensibly
-    p2
-  elif p2.line <= 0 then
-    p1
-  elif (p1 < p2) then
-    p1
-  else
-    p2
+  if p1.line <= 0 then p2 // for combining nullRanges sensibly
+  elif p2.line <= 0 then p1
+  elif (p1 < p2) then p1
+  else p2
 
 fun pos/max(p1: pos, p2: pos): pos
-  if (p1 < p2) then
-    p2
-  else
-    p1
+  if (p1 < p2) then p2
+  else p1
 
 fun extend(r: range, off: int): range
   val e = r.end
