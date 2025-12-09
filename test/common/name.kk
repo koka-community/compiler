@@ -3,15 +3,17 @@ import std/pretty/pprint
 import std/pretty/printer
 import std/test
 
+// Common test names
+val name-int = new-qualified("std/core", "int")
+val name-int-local = new-locally-qualified("std/core", "types", "int")
+val name-foo = "foo".new-name
+
 fun suite()
   group("Name construction")
     test("new-name creates a simple name")
-      expect("foo") fn()
-        "foo".new-name.nameStem
-      expect("") fn()
-        "foo".new-name.nameModule
-      expect("") fn()
-        "foo".new-name.nameLocalQual
+      expect("foo") fn() name-foo.nameStem
+      expect("") fn() name-foo.nameModule
+      expect("") fn() name-foo.nameLocalQual
 
     test("new-module-name creates a module name")
       expect("") fn()
@@ -22,41 +24,30 @@ fun suite()
         "std/core".new-module-name.nameLocalQual
 
     test("new-qualified creates a module-qualified name")
-      expect("int") fn()
-        new-qualified("std/core", "int").nameStem
-      expect("std/core") fn()
-        new-qualified("std/core", "int").nameModule
-      expect("") fn()
-        new-qualified("std/core", "int").nameLocalQual
+      expect("int") fn() name-int.nameStem
+      expect("std/core") fn() name-int.nameModule
+      expect("") fn() name-int.nameLocalQual
 
     test("new-locally-qualified creates a fully qualified name")
-      expect("int") fn()
-        new-locally-qualified("std/core", "types", "int").nameStem
-      expect("std/core") fn()
-        new-locally-qualified("std/core", "types", "int").nameModule
-      expect("types") fn()
-        new-locally-qualified("std/core", "types", "int").nameLocalQual
+      expect("int") fn() name-int-local.nameStem
+      expect("std/core") fn() name-int-local.nameModule
+      expect("types") fn() name-int-local.nameLocalQual
 
   group("Name string conversion")
     test("show-plain shows full path")
-      expect("std/core/types/int") fn()
-        new-locally-qualified("std/core", "types", "int").show-plain
+      expect("std/core/types/int") fn() name-int-local.show-plain
 
     test("show-name without explicit local qualifier")
-      expect("std/core/types/int") fn()
-        new-locally-qualified("std/core", "types", "int").show-name(False)
+      expect("std/core/types/int") fn() name-int-local.show-name(False)
 
     test("show-name with explicit local qualifier")
-      expect("std/core/#types/int") fn()
-        new-locally-qualified("std/core", "types", "int").show-name(True)
+      expect("std/core/#types/int") fn() name-int-local.show-name(True)
 
     test("show-fully-explicit with local qualifier")
-      expect("std/core/#types/int") fn()
-        new-locally-qualified("std/core", "types", "int").show-fully-explicit
+      expect("std/core/#types/int") fn() name-int-local.show-fully-explicit
 
     test("show-fully-explicit without local qualifier")
-      expect("std/core/#int") fn()
-        new-qualified("std/core", "int").show-fully-explicit
+      expect("std/core/#int") fn() name-int.show-fully-explicit
 
     test("show with empty module")
       expect("int") fn()
