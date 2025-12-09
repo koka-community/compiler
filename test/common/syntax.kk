@@ -2,504 +2,250 @@ import compiler/common/syntax
 import std/test
 
 fun suite()
-  group("jsTarget equality")
-    test("same jsTarget values are equal")
+  group("equality")
+    test("jsTarget, cTarget, target equality")
       expect(True)
-        JsDefault == JsDefault
+        JsDefault == JsDefault && !(JsDefault == JsNode) && JsWeb == JsWeb &&
+        CDefault == CDefault && LibC == LibC && !(Wasm == WasmJs) &&
+        CS == CS && JS(JsWeb) == JS(JsWeb) && !(JS(JsNode) == JS(JsWeb)) && 
+        C(Wasm) == C(Wasm) && DefaultTarget == DefaultTarget && !(CS == DefaultTarget)
 
-    test("different jsTarget values are unequal")
+    test("platform equality")
       expect(True)
-        !(JsDefault == JsNode)
+        platform32 == Platform(4, 4, 4, 8) && platform64 == platform64 && !(platform32 == platform64)
 
-    test("JsWeb equals itself")
+    test("visibility equality")
       expect(True)
-        JsWeb == JsWeb
+        Public == Public && Private == Private && !(Public == Private)
 
-  group("cTarget equality")
-    test("same cTarget values are equal")
+    test("paramInfo equality")
       expect(True)
-        CDefault == CDefault
+        Borrow == Borrow && Own == Own && !(Borrow == Own)
 
-    test("LibC equals itself")
+    test("fixity equality")
       expect(True)
-        LibC == LibC
+        FixInfix(10, AssocLeft) == FixInfix(10, AssocLeft) && FixPrefix == FixPrefix && 
+        FixPostfix == FixPostfix && !(FixInfix(10, AssocLeft) == FixInfix(10, AssocRight))
 
-    test("different cTarget values are unequal")
+    test("assoc equality")
       expect(True)
-        !(Wasm == WasmJs)
+        AssocLeft == AssocLeft && AssocRight == AssocRight && !(AssocLeft == AssocRight)
 
-  group("target equality")
-    test("CS targets are equal")
+    test("fipT equality")
       expect(True)
-        CS == CS
+        Fip(AllocAtMost(10)) == Fip(AllocAtMost(10)) && NoFip(True) == NoFip(True) && 
+        !(Fip(AllocAtMost(10)) == NoFip(False)) && fipTop != fipBot
 
-    test("JS targets with same jsTarget are equal")
+    test("dataDef equality")
+      val r = ValueRepr(10, 2, 4)
       expect(True)
-        JS(JsWeb) == JS(JsWeb)
+        DataDefNormal == DataDefNormal && DataDefValue(r) == DataDefValue(r) && 
+        DataDefLazy(fipTop) == DataDefLazy(fipTop) && !(DataDefNormal == DataDefValue(valuerepr/zero))
 
-    test("JS targets with different jsTarget are unequal")
+    test("valueRepr equality")
+      val v1 = ValueRepr(8, 2, 4)
+      val v2 = ValueRepr(8, 2, 4)
+      val v3 = ValueRepr(8, 2, 8)
       expect(True)
-        !(JS(JsNode) == JS(JsWeb))
+        v1 == v2 && !(v1 == v3)
 
-    test("C targets with same cTarget are equal")
+  group("wasm target detection")
+    test("wasm targets")
       expect(True)
-        C(Wasm) == C(Wasm)
-
-    test("DefaultTarget equals itself")
-      expect(True)
-        DefaultTarget == DefaultTarget
-
-    test("different target variants are unequal")
-      expect(True)
-        !(CS == DefaultTarget)
-
-  group("is-target-wasm")
-    test("C(Wasm) is wasm target")
-      expect(True)
-        C(Wasm).is-target-wasm
-
-    test("C(WasmJs) is wasm target")
-      expect(True)
-        C(WasmJs).is-target-wasm
-
-    test("C(WasmWeb) is wasm target")
-      expect(True)
-        C(WasmWeb).is-target-wasm
-
-    test("C(LibC) is not wasm target")
-      expect(False)
-        C(LibC).is-target-wasm
-
-    test("CS is not wasm target")
-      expect(False)
-        CS.is-target-wasm
+        C(Wasm).is-target-wasm && C(WasmJs).is-target-wasm && C(WasmWeb).is-target-wasm && 
+        !C(LibC).is-target-wasm && !CS.is-target-wasm
 
   group("target/show")
-    test("CS shows as 'cs'")
+    test("basic targets show correctly")
       expect(True)
-        CS.target/show == "cs"
+        CS.target/show == "cs" && JS(JsNode).target/show == "jsnode" && 
+        JS(JsWeb).target/show == "jsweb" && JS(JsDefault).target/show == "js"
 
-    test("JS with JsNode shows as 'jsnode'")
+    test("C targets show correctly")
       expect(True)
-        JS(JsNode).target/show == "jsnode"
-
-    test("JS with JsWeb shows as 'jsweb'")
-      expect(True)
-        JS(JsWeb).target/show == "jsweb"
-
-    test("JS with JsDefault shows as 'js'")
-      expect(True)
-        JS(JsDefault).target/show == "js"
-
-    test("C with Wasm shows as 'wasm'")
-      expect(True)
-        C(Wasm).target/show == "wasm"
-
-    test("C with WasmJs shows as 'wasmjs'")
-      expect(True)
-        C(WasmJs).target/show == "wasmjs"
-
-    test("C with LibC shows as 'libc'")
-      expect(True)
-        C(LibC).target/show == "libc"
-
-    test("DefaultTarget shows as empty string")
-      expect(True)
+        C(Wasm).target/show == "wasm" && C(WasmJs).target/show == "wasmjs" && 
+        C(WasmWeb).target/show == "wasmweb" && C(LibC).target/show == "libc" && 
         DefaultTarget.target/show == ""
 
-  group("platform equality")
-    test("same platform values are equal")
-      expect(True)
-        platform32 == Platform(4, 4, 4, 8)
-
-    test("platform64 equals itself")
-      expect(True)
-        platform64 == platform64
-
-    test("different platform values are unequal")
-      expect(True)
-        !(platform32 == platform64)
-
   group("platform definitions")
-    test("platform32 has 4-byte ptr")
+    test("platform sizes")
       expect(True)
-        platform32.ptrSize == 4
-
-    test("platform64 has 8-byte ptr")
-      expect(True)
-        platform64.ptrSize == 8
-
-    test("platform64c has 4-byte fieldSize")
-      expect(True)
-        platform64c.fieldSize == 4
-
-    test("platformJS has 4-byte sizeSize")
-      expect(True)
-        platformJS.sizeSize == 4
+        platform32.ptrSize == 4 && platform64.ptrSize == 8 && 
+        platform64c.fieldSize == 4 && platformJS.sizeSize == 4
 
   group("has-compressed-fields")
-    test("platform32 has no compressed fields")
-      expect(False)
-        platform32.has-compressed-fields
-
-    test("platform64 has no compressed fields")
-      expect(False)
-        platform64.has-compressed-fields
-
-    test("platform64c has compressed fields")
+    test("compression detection")
       expect(True)
+        !platform32.has-compressed-fields && !platform64.has-compressed-fields && 
         platform64c.has-compressed-fields
 
   group("platform/show")
-    test("platform32 shows correctly")
+    test("platform display")
       expect(True)
-        platform32.platform/show.contains("4")
-
-    test("platform64 shows correctly")
-      expect(True)
-        platform64.platform/show.contains("8")
-
-  group("visibility equality")
-    test("Public equals Public")
-      expect(True)
-        Public == Public
-
-    test("Private equals Private")
-      expect(True)
-        Private == Private
-
-    test("Public and Private are unequal")
-      expect(True)
-        !(Public == Private)
+        platform32.platform/show.contains("4") && platform64.platform/show.contains("8")
 
   group("visibility/show")
-    test("Public shows as 'Public'")
+    test("visibility display")
       expect(True)
-        Public.visibility/show == "Public"
-
-    test("Private shows as 'Private'")
-      expect(True)
-        Private.visibility/show == "Private"
+        Public.visibility/show == "Public" && Private.visibility/show == "Private"
 
   group("buildType display")
-    test("DebugFull shows as 'debugfull'")
+    test("build type display")
       expect(True)
-        DebugFull.build-type/show == "debugfull"
-
-    test("Debug shows as 'debug'")
-      expect(True)
-        Debug.build-type/show == "debug"
-
-    test("Release shows as 'release'")
-      expect(True)
-        Release.build-type/show == "release"
+        DebugFull.build-type/show == "debugfull" && Debug.build-type/show == "debug" && 
+        Release.build-type/show == "release" && RelWithDebInfo.build-type/show == "drelease"
 
   group("handlerSort display")
-    test("HandlerNormal shows as 'normal'")
+    test("handler sort display")
       expect(True)
-        HandlerNormal.handler-sort/show == "normal"
-
-    test("HandlerInstance shows as 'named'")
-      expect(True)
-        HandlerInstance.handler-sort/show == "named"
+        HandlerNormal.handler-sort/show == "normal" && HandlerInstance.handler-sort/show == "named"
 
   group("operationSort display and parsing")
-    test("OpVal shows as 'val'")
+    test("operation sort display")
       expect(True)
-        OpVal.op-sort/show == "val"
+        OpVal.op-sort/show == "val" && OpFun.op-sort/show == "fun" && 
+        OpControl.op-sort/show == "ctl" && OpExcept.op-sort/show == "final ctl"
 
-    test("OpFun shows as 'fun'")
+    test("read-op-sort parsing")
+      val r1 = match read-op-sort("val") { Just(OpVal) -> True; _ -> False }
+      val r2 = match read-op-sort("ctl") { Just(OpControl) -> True; _ -> False }
+      val r3 = match read-op-sort("brk") { Just(OpExcept) -> True; _ -> False }
+      val r4 = match read-op-sort("invalid") { Nothing -> True; _ -> False }
       expect(True)
-        OpFun.op-sort/show == "fun"
-
-    test("OpControl shows as 'ctl'")
-      expect(True)
-        OpControl.op-sort/show == "ctl"
-
-    test("OpExcept shows as 'final ctl'")
-      expect(True)
-        OpExcept.op-sort/show == "final ctl"
-
-    test("read-op-sort parses 'val'")
-      expect(True)
-        match read-op-sort("val")
-          Just(OpVal) -> True
-          _ -> False
-
-    test("read-op-sort parses 'ctl'")
-      expect(True)
-        match read-op-sort("ctl")
-          Just(OpControl) -> True
-          _ -> False
-
-    test("read-op-sort parses 'brk' as OpExcept")
-      expect(True)
-        match read-op-sort("brk")
-          Just(OpExcept) -> True
-          _ -> False
-
-    test("read-op-sort returns Nothing for invalid")
-      expect(True)
-        match read-op-sort("invalid")
-          Nothing -> True
-          _ -> False
+        r1 && r2 && r3 && r4
 
   group("dataeffect display")
-    test("DataNoEffect shows as 'noeffect'")
-      expect(True)
-        DataNoEffect.dataeffect/show == "noeffect"
-
-    test("DataEffect with both flags shows both")
+    test("dataeffect display")
       val de = DataEffect(True, True)
       expect(True)
+        DataNoEffect.dataeffect/show == "noeffect" && 
         de.dataeffect/show.contains("named") && de.dataeffect/show.contains("linear")
 
   group("dataKind display")
-    test("Inductive shows as 'type'")
+    test("data kind display")
       expect(True)
-        Inductive.datakind/show == "type"
-
-    test("CoInductive shows as 'co type'")
-      expect(True)
-        CoInductive.datakind/show == "co type"
-
-    test("Retractive shows as 'div type'")
-      expect(True)
+        Inductive.datakind/show == "type" && CoInductive.datakind/show == "co type" && 
         Retractive.datakind/show == "div type"
 
-  group("dataDef equality")
-    test("DataDefNormal equals itself")
-      expect(True)
-        DataDefNormal == DataDefNormal
-
-    test("DataDefValue with same repr are equal")
-      val r = ValueRepr(10, 2, 4)
-      expect(True)
-        DataDefValue(r) == DataDefValue(r)
-
-    test("DataDefLazy with same fipT are equal")
-      expect(True)
-        DataDefLazy(fipTop) == DataDefLazy(fipTop)
-
-    test("different dataDef are unequal")
-      expect(True)
-        !(DataDefNormal == DataDefValue(valuerepr/zero))
-
   group("dataDef predicates")
-    test("is-extend returns True for DataDefOpen(True)")
+    test("dataDef predicates")
       expect(True)
-        DataDefOpen(True).is-extend
-
-    test("is-extend returns False for DataDefOpen(False)")
-      expect(False)
-        DataDefOpen(False).is-extend
-
-    test("is-value returns True for DataDefValue")
-      expect(True)
-        DataDefValue(valuerepr/zero).is-value
-
-    test("is-value returns False for DataDefNormal")
-      expect(False)
-        DataDefNormal.is-value
-
-    test("is-normal returns True for DataDefNormal")
-      expect(True)
-        DataDefNormal.is-normal
-
-    test("is-lazy returns True for DataDefLazy")
-      expect(True)
-        DataDefLazy(fipTop).datadef/is-lazy
-
-  group("valueRepr equality")
-    test("same valueRepr are equal")
-      val v1 = ValueRepr(8, 2, 4)
-      val v2 = ValueRepr(8, 2, 4)
-      expect(True)
-        v1 == v2
-
-    test("different valueRepr are unequal")
-      val v1 = ValueRepr(8, 2, 4)
-      val v2 = ValueRepr(8, 2, 8)
-      expect(True)
-        !(v1 == v2)
+        DataDefOpen(True).is-extend && !DataDefOpen(False).is-extend && 
+        DataDefValue(valuerepr/zero).is-value && !DataDefNormal.is-value && 
+        DataDefNormal.is-normal && DataDefLazy(fipTop).datadef/is-lazy
 
   group("valueRepr helpers")
-    test("valuerepr/zero has all zeros")
+    test("valueRepr creation")
+      val vraw = value-repr-raw(16)
+      val vscan = value-repr-scan(3)
       expect(True)
-        valuerepr/zero.rawSize == 0 && valuerepr/zero.scan-count == 0
+        valuerepr/zero.rawSize == 0 && valuerepr/zero.scan-count == 0 &&
+        vraw.rawSize == 16 && vraw.scan-count == 0 &&
+        vscan.rawSize == 0 && vscan.scan-count == 3
 
-    test("value-repr-raw creates raw repr")
-      val v = value-repr-raw(16)
+    test("valueRepr predicates")
       expect(True)
-        v.rawSize == 16 && v.scan-count == 0
-
-    test("value-repr-scan creates scan repr")
-      val v = value-repr-scan(3)
-      expect(True)
-        v.rawSize == 0 && v.scan-count == 3
-
-    test("is-mixed detects mixed repr")
-      expect(True)
-        ValueRepr(8, 2, 4).is-mixed
-
-    test("is-raw detects raw repr")
-      expect(True)
-        ValueRepr(16, 0, 16).is-raw
-
-  group("paramInfo equality")
-    test("Borrow equals Borrow")
-      expect(True)
-        Borrow == Borrow
-
-    test("Own equals Own")
-      expect(True)
-        Own == Own
-
-    test("Borrow and Own are unequal")
-      expect(True)
-        !(Borrow == Own)
+        ValueRepr(8, 2, 4).is-mixed && ValueRepr(16, 0, 16).is-raw
 
   group("paramInfo display")
-    test("Borrow shows as 'Borrow'")
+    test("paramInfo display")
       expect(True)
-        Borrow.param/show == "Borrow"
-
-    test("Own shows as 'Own'")
-      expect(True)
-        Own.param/show == "Own"
+        Borrow.param/show == "Borrow" && Own.param/show == "Own"
 
   group("defSort display and creation")
-    test("DefFun shows as 'fun'")
+    test("defSort display")
       expect(True)
-        DefFun([]).defsort/show == "fun"
-
-    test("DefVal shows as 'val'")
-      expect(True)
-        DefVal.defsort/show == "val"
-
-    test("DefVar shows as 'var'")
-      expect(True)
+        DefFun([]).defsort/show == "fun" && DefVal.defsort/show == "val" && 
         DefVar.defsort/show == "var"
 
-    test("def-fun creates DefFun")
+    test("def-fun creation")
       expect(True)
-        def-fun([]).is-fun
-
-    test("def-fun with all-own parameters simplifies")
-      expect(True)
-        def-fun([Own, Own]).is-fun
+        def-fun([]).is-fun && def-fun([Own, Own]).is-fun
 
   group("defInline display")
-    test("InlineNever shows as 'noinline'")
+    test("inline display")
       expect(True)
-        InlineNever.definline/show == "noinline"
-
-    test("InlineAlways shows as 'inline'")
-      expect(True)
-        InlineAlways.definline/show == "inline"
-
-    test("InlineAuto shows as 'autoinline'")
-      expect(True)
+        InlineNever.definline/show == "noinline" && InlineAlways.definline/show == "inline" && 
         InlineAuto.definline/show == "autoinline"
 
-  group("fixity equality")
-    test("same FixInfix are equal")
-      expect(True)
-        FixInfix(10, AssocLeft) == FixInfix(10, AssocLeft)
-
-    test("FixPrefix equals itself")
-      expect(True)
-        FixPrefix == FixPrefix
-
-    test("FixPostfix equals itself")
-      expect(True)
-        FixPostfix == FixPostfix
-
-    test("different fixity are unequal")
-      expect(True)
-        !(FixInfix(10, AssocLeft) == FixInfix(10, AssocRight))
-
-  group("assoc equality")
-    test("AssocLeft equals itself")
-      expect(True)
-        AssocLeft == AssocLeft
-
-    test("AssocRight equals itself")
-      expect(True)
-        AssocRight == AssocRight
-
-    test("different assoc are unequal")
-      expect(True)
-        !(AssocLeft == AssocRight)
-
   group("assoc display")
-    test("AssocLeft shows as 'AssocLeft'")
+    test("assoc display")
       expect(True)
-        AssocLeft.assoc/show == "AssocLeft"
-
-    test("AssocRight shows as 'AssocRight'")
-      expect(True)
-        AssocRight.assoc/show == "AssocRight"
-
-  group("fipT equality")
-    test("same Fip are equal")
-      expect(True)
-        Fip(AllocAtMost(10)) == Fip(AllocAtMost(10))
-
-    test("NoFip with same tail flag are equal")
-      expect(True)
-        NoFip(True) == NoFip(True)
-
-    test("different fipT are unequal")
-      expect(True)
-        !(Fip(AllocAtMost(10)) == NoFip(False))
-
-    test("fipTop and fipBot are defined")
-      expect(True)
-        fipTop != fipBot
+        AssocLeft.assoc/show == "AssocLeft" && AssocRight.assoc/show == "AssocRight" && 
+        AssocNone.assoc/show == "AssocNone"
 
   group("fipAlloc comparison")
-    test("AllocAtMost values compare by number")
+    test("fipAlloc comparison")
       expect(True)
-        fipa/cmp(AllocAtMost(5), AllocAtMost(10)) == Lt
-
-    test("AllocAtMost equal to same number")
-      expect(True)
-        fipa/cmp(AllocAtMost(10), AllocAtMost(10)) == Eq
-
-    test("AllocFinitely greater than AllocAtMost")
-      expect(True)
+        fipa/cmp(AllocAtMost(5), AllocAtMost(10)) == Lt && 
+        fipa/cmp(AllocAtMost(10), AllocAtMost(10)) == Eq && 
         fipa/cmp(AllocFinitely, AllocAtMost(10)) == Gt
 
   group("fipAlloc helpers")
-    test("fipa/zero is AllocAtMost(0)")
+    test("fipAlloc operations")
       expect(True)
-        fipa/zero == AllocAtMost(0)
-
-    test("combine AllocAtMost values sums them")
-      expect(True)
-        combine(AllocAtMost(3), AllocAtMost(4)) == AllocAtMost(7)
-
-    test("combine with AllocFinitely returns AllocFinitely")
-      expect(True)
+        fipa/zero == AllocAtMost(0) && 
+        combine(AllocAtMost(3), AllocAtMost(4)) == AllocAtMost(7) && 
         combine(AllocAtMost(5), AllocFinitely) == AllocFinitely
 
   group("fipT helpers")
-    test("is-top detects fipTop")
+    test("fipT operations")
       expect(True)
-        fipTop.is-top
+        fipTop.is-top && !Fip(AllocAtMost(0)).is-top && 
+        Fip(AllocAtMost(0)).is-tail && Fip(AllocAtMost(10)).alloc == AllocAtMost(10)
 
-    test("is-top returns False for others")
-      expect(False)
-        Fip(AllocAtMost(0)).is-top
-
-    test("fipt/is-tail for Fip is True")
+  group("alignment calculation")
+    test("aligned/sum with various sizes")
       expect(True)
-        Fip(AllocAtMost(0)).is-tail
+        aligned/sum(0, [4, 4]) == 8 && aligned/sum(0, [1]) == 1
 
-    test("fipt/alloc gets allocation")
+  group("valueRepr size calculation")
+    test("valuerepr/size with platform")
+      val v = ValueRepr(8, 2, 4)
       expect(True)
-        Fip(AllocAtMost(10)).alloc == AllocAtMost(10)
+        valuerepr/size(platform32, v) == 16 && valuerepr/size(platform64, v) == 24
+
+  group("datadef/show")
+    test("dataDef display")
+      val vr = ValueRepr(10, 2, 4)
+      expect(True)
+        DataDefNormal.datadef/show == "reference" && 
+        DataDefValue(vr).datadef/show.contains("value") &&
+        DataDefOpen(True).datadef/show == "extend" && 
+        DataDefOpen(False).datadef/show == "open"
+
+  group("subsumes relation")
+    test("fipT subsumption")
+      expect(True)
+        subsumes(NoFip(False), Fip(AllocAtMost(5))) && 
+        subsumes(Fip(AllocAtMost(10)), Fip(AllocAtMost(5))) &&
+        !subsumes(Fip(AllocAtMost(5)), Fip(AllocAtMost(10)))
+
+  group("show-fip formatting")
+    test("fipT formatting")
+      val f1 = show-fip(Fip(AllocAtMost(5)))
+      val f2 = show-fip(NoFip(True))
+      expect(True)
+        f1.contains("fip") && f2.contains("tail")
+
+  group("fipt/max operation")
+    test("fipT maximum")
+      expect(True)
+        fipt/max(NoFip(True), NoFip(True)) == NoFip(True) && 
+        fipt/max(Fip(AllocAtMost(5)), Fip(AllocAtMost(10))) == Fip(AllocAtMost(10))
+
+  group("fipa/max operation")
+    test("fipAlloc maximum")
+      expect(True)
+        fipa/max(AllocAtMost(5), AllocAtMost(10)) == AllocAtMost(10) && 
+        fipa/max(AllocAtMost(5), AllocFinitely) == AllocFinitely && 
+        fipa/max(AllocFinitely, AllocUnlimited) == AllocUnlimited
+
+  group("member-doc building")
+    test("documentation generation")
+      val doc = member-doc("", "Members", ["x: int", "y: string"])
+      expect(True)
+        doc.contains("Members") && doc.contains("x: int") && doc.contains("y: string")
 
 fun main()
   run-tests(suite)
