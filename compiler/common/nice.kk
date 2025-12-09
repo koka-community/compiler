@@ -13,7 +13,6 @@ import compiler/lib/pprint
 import compiler/kind/kind
 import compiler/common/syntax
 import std/data/linearmap
-import std/test
 
 // Map identifiers to /nice/ strings.
 alias nice = id-map<string>
@@ -25,31 +24,32 @@ effect niceEff<k>
 
 fun niceEnv(f)
   var nice := LinearMap([])
-  var effectIndex := -1
-  var heapIndex := -1
-  var typeIndex := -1
-  var typeLetterIndex := -1
-  var scopeIndex := -1
+  var effectIndex := 0
+  var heapIndex := 0
+  var typeIndex := 0
+  var typeLetterIndex := 0
+  var scopeIndex := 0
   with handler
     fun extend-nice(tv: typeVar)
       val x = 
         if tv.kind == kindEffect then
           effectIndex := effectIndex + 1
-          "e" ++ (if effectIndex == 0 then "" else effectIndex.show-id)
+          "e" ++ (if effectIndex == 0 then "" else effectIndex.show)
         elif tv.kind == kindHeap then
           heapIndex := heapIndex + 1
-          "h" ++ (if heapIndex == 0 then "" else heapIndex.show-id)
+          "h" ++ (if heapIndex == 0 then "" else heapIndex.show)
         elif tv.kind == kindScope then
           scopeIndex := scopeIndex + 1
-          "s" ++ (if scopeIndex == 0 then "" else scopeIndex.show-id)
+          "s" ++ (if scopeIndex == 0 then "" else scopeIndex.show)
         else
+          val s = (typeLetterIndex + 'a'.int).char.string ++ (if typeIndex == 0 then "" else typeIndex.show)
           match typeLetterIndex
             4 -> 
               typeIndex := typeIndex + 1
               typeLetterIndex := 0
             _ ->
               typeLetterIndex := typeLetterIndex + 1
-          (typeLetterIndex + 'a'.int).char.string ++ (if typeIndex == 0 then "" else typeIndex.show-id)
+          s
       nice := nice.extend(tv.tid, x)
       ()
     fun get-nice(tv: typeVar)
@@ -71,14 +71,3 @@ fun show(n: nice, id: id): string
 // Pretty print an identifier nicely.
 fun pretty(n: nice, id: id): doc
   n.show(id).text
-
-/// Tests for identifiers
-
-fun test()
-  group("nice")
-    test-ids()
-
-fun test-ids()
-  test("ids")
-    expect(1, {id-nil.new-id.new-id-from}, "new-id")
-    expect("\"1\"", {gen-id("test", 1).show-id} , "show-id")

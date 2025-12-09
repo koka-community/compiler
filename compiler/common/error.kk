@@ -30,10 +30,37 @@ struct error-msg
   severity: error-severity
   kind: error-kind
 
+// Automatically generated.
+// Equality comparison of the `error-msg` type.
+pub fun error-msg/(==)(this : error-msg, other : error-msg) : bool
+  match (this, other)
+    (Error-msg(range, message, severity, kind), Error-msg(range', message', severity', kind')) -> range == range' && message == message' && severity == severity' && kind == kind'
+
 type error-severity
   SevInfo
   SevWarning
   SevError
+
+// Automatically generated.
+// Comparison of the `error-severity` type.
+pub fun error-severity/cmp(this : error-severity, other : error-severity) : order
+  match (this, other)
+    (SevInfo, SevInfo) -> Eq
+    (SevInfo, _) -> Lt
+    (_, SevInfo) -> Gt
+    (SevWarning, SevWarning) -> Eq
+    (SevWarning, _) -> Lt
+    (_, SevWarning) -> Gt
+    (SevError, SevError) -> Eq
+
+// Automatically generated.
+// Equality comparison of the `error-severity` type.
+pub fun error-severity/(==)(this : error-severity, other : error-severity) : bool
+  match (this, other)
+    (SevInfo, SevInfo) -> True
+    (SevWarning, SevWarning) -> True
+    (SevError, SevError) -> True
+    (_, _) -> False
 
 type error-kind
   ErrGeneral
@@ -44,6 +71,19 @@ type error-kind
   ErrBuild
   ErrInternal
 
+// Automatically generated.
+// Equality comparison of the `error-kind` type.
+pub fun error-kind/(==)(this : error-kind, other : error-kind) : bool
+  match (this, other)
+    (ErrGeneral, ErrGeneral) -> True
+    (ErrParse, ErrParse) -> True
+    (ErrStatic, ErrStatic) -> True
+    (ErrKind, ErrKind) -> True
+    (ErrType, ErrType) -> True
+    (ErrBuild, ErrBuild) -> True
+    (ErrInternal, ErrInternal) -> True
+    (_, _) -> False
+
 fun range(errs: errors): range
   errs.map(range).combine
 
@@ -52,22 +92,6 @@ fun err/show(err: error-msg): div string
 
 fun errs/show(errs: errors): div string
   errs.errs/pretty.show
-
-fun err-sev/cmp(e1: error-severity, e2: error-severity): order
-  match e1
-    SevInfo ->
-      match e2
-        SevInfo -> Eq
-        _ -> Lt
-    SevWarning ->
-      match e2
-        SevInfo -> Gt
-        SevWarning -> Eq
-        _ -> Lt
-    SevError ->
-      match e2
-        SevError -> Eq
-        _ -> Gt
     
 fun is-warning(e: error-msg): bool
   (<=)(e.severity, SevWarning, ?cmp=cmp)
