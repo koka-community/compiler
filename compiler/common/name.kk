@@ -17,10 +17,10 @@ import std/core-extras
 
 
 // | Names defined by the user.
-// Uses a hash to speed up comparisions. The hash is constructed
+// Uses a hash to speed up comparisons. The hash is constructed
 // such that they can be compared too. (h1 > h2 => name1 > name2)
-// The hash is case-insensitive, just like comparisions on names.
-// Use 'name-case-equal' for case-sensitive comparisions.
+// The hash is case-insensitive, just like comparisons on names.
+// Use 'name-case-equal' for case-sensitive comparisons.
 //
 // Notes:
 // - We use `name/local` for the locally qualified name in the module (`int/show`)
