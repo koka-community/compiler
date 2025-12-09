@@ -237,27 +237,28 @@ fun read-qualified-name(s0: string): <div,exn> name
     fun split-qual-id-rev(rs: list<char>): (string, string)
       val (rid, rqual) = rs.span(_ != '/')
       match rqual
-        Cons('/', rs1) -> (rid.string, rs1.string) // qualifier
-        _ -> ("", rid.string)
+        Cons('/', rs1) -> (rs1.reverse.string, rid.reverse.string)
+        _ -> ("", rid.reverse.string)
     fun split-id-name-rev(rs: list<char>): <exn> (string, string, string)
       val (rid, rest) = rs.span(_ != '#')
       match rest
-        Cons('#', Cons('/', rs2)) -> // local qualifier
-          val (lqual,id) = rid.split-qual-id-rev
-          (rs2.string, lqual, id)
+        Cons('#', Cons('/', rs2)) ->
+          val (qual, id) = rid.split-qual-id-rev
+          (rs2.reverse.string, qual, id)
         Nil ->
           val (qual, id) = rid.split-qual-id-rev
           (qual, "", id)
-        _ -> fail("Name split-id-name-rev: illegal locally qualified name: " ++ rs.string)
+        _ -> fail("Name split-id-name-rev: illegal locally qualified name: " ++ rs.reverse.string)
     fun split-name(s: string): <exn> (string, string, string)
-      if s.ends-with(")").bool then // operator
-        val (rop, rest) = s.list.reverse.span(_ != '(')
-        match rest
-          Cons('(', rs2) ->
-            val (qual, lqual, id) = rs2.split-id-name-rev
-            (qual, lqual, id ++ rop.string)
-          _ -> fail("Name split-name: unmatched parenthesis in name: " ++ s)
-      else s.list.split-id-name-rev
+      match s.list.reverse
+        Cons(')', rest) ->
+          val (rop, rest2) = rest.span(_ != '(')
+          match rest2
+            Cons('(', rs2) ->
+              val (qual, lqual, id) = rs2.split-id-name-rev
+              (qual, lqual, id ++ rop.reverse.string)
+            _ -> fail("Name split-name: unmatched parenthesis in name: " ++ s)
+        rs -> rs.split-id-name-rev
     val (q, lq, id) = s0.split-name
     new-locally-qualified(q,lq,id)
 
@@ -443,7 +444,7 @@ fun make-hidden(n: name): name
   prepend("@", n)
 
 fun make-hidden-name(s: string, n: name): name
-  prepend("." ++ s ++ "-", n)
+  prepend("@" ++ s ++ "-", n)
 
 fun unmake-hidden(n: name, pre: string): <exn> name
   n.name-map-stem fn(stem)
@@ -470,7 +471,7 @@ fun make-fresh-hidden-name(s: string, n: name, r: range)
 
 fun hidden/starts-with(n: name, pre: string): bool
   n.nameStem.starts-with("@" ++ pre).bool ||
-    n.name/name/starts-with("@" ++ pre ++ "-")
+    n.name/starts-with("@" ++ pre ++ "-")
 
 // Various special names
 
