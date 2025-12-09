@@ -5,7 +5,7 @@ pub effect val comp-flags: compilerFlags;
 fun @default-comp-flags(f)
   with handler val comp-flags = CompilerFlags(
     programName = "koka",
-    version = "0.9.0",
+    version = "3.2.3",
     compiler = "koka",
     buildVariant = "release"
   )
