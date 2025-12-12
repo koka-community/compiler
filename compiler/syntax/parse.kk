@@ -253,10 +253,10 @@ fun parse-external-includes(target: target, rng: range, (key, fname): (string, s
   else [(key, fpath.show)]
 
 fun pread-file(fpath: path): <fsys,parse-error> string
-  catch({read-text-file(fpath)}, fn(e) {
+  with catch fn(e)
       trace("Error reading file " ++ fpath.show)
       parse-error("Unable to read external file at path: " ++ fpath.show ++ ": got error " ++ e.message, null)
-    })
+  read-text-file(fpath)
 
 fun parse-external-import-entry() : <parse,fsys> (target, list<(string, string)>)
   val target = parse-external-target()
