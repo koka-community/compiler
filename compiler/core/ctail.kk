@@ -3,7 +3,7 @@ import compiler/core/pretty
 import compiler/type/assumption
 import compiler/kind/newtypes
 import compiler/type/type
-
+import compiler/common/name
 
 /*
  * Reference count tranformation
@@ -53,7 +53,36 @@ fun ctail-def<t>( top-level : bool, def : def<t> ) : <ctail, exn> list<def<t>>
         val always-affine = teff.effect-is-affine
         val cdef-expr = ctail-name.with-context( False, always-affine Just( ctail-tslot ) ctailExpr( True, def.expr.make-cdef-expr( ctail-tslot )))
 
-        val use-context-path = get-env().use-context-path
+        val use-context-path = get-env().useContextPath
+        val cdef = def ( name = ctail-name, ktype = ctail-type, expr = cdef-expr )
+        val needs-multi = !( use-context-path || always-affine )
+        val ctail-multi-slot-type = TFun( [(name/nil, tres)], typeTotal, tres )
+        val ctail-multi-name = "trmcm".make-hidden-name(def.name)
+        val ctail-multi-slot = "accm".new-hidden-name
+        val ctail-multi-type = TForAll( tforall, TFun( targs ++ [(ctail-multi-slot, ctail-multi-slot-type)], teff, tres ) )
+        val ctail-multi-tname = TName( ctail-multi-name, ctail-multi-type )
+        val ctail-multi-tslot = TName( ctail-multi-slot, ctail-multi-slot-type )
+        val ctail-multi-var = Var( ctail-multi-tname, InfoArity( tforall.length, targs.length + 1 ) )
+
+        val wrap-expr = with-context( ctail-multi-name, False, always-affine, Nothing) 
+          val param = if needs-multi then
+            Just( ctail-multi-var )
+          else
+            Nothing
+          ctail-wrapper( ctail-tslot, param, def.expr )
+
+        // todo: check if rec is needed (only if there are non-tail calls left over)
+        if !needs-multi then
+          // for sure, each op resumes at most once
+          [DefRec([cdef, def( expr = wrap-expr )])]
+        else
+          // some ops may resume more than once; specialize for those
+          val cdef-multi-expr = with-context( ctail-multi-name, True /* isMulti */, always-affine, Just( ctail-multi-tslot ) )
+            ctail-expr( True, ctail-multi-tslot.make-cdef-expr( def.expr ) )
+          val cdef-multi = def( name = ctail-multi-name, ktype = ctail-multi-type, expr = cdef-multi-expr )
+          [DefRec([cdef, cdef-multi, def( expr = wrap-expr )])]
+
+
         
 fun make-cdef-expr( expr : expr, slot : TName ) : <exn> expr
   match expr
@@ -75,6 +104,7 @@ fun has-ref-type( tp : ktype ) : <ctail> bool
   match tp.expand-syn
     TApp( t, ts ) -> t.has-ref-type
     TCon( tcon ) -> !( tcon.name.is-value-type )
+    _ -> False
 
 /*
  * CTail Monad
