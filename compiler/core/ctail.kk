@@ -4,7 +4,6 @@ import compiler/type/assumption
 import compiler/kind/newtypes
 import compiler/type/type
 import compiler/common/name
-import compiler/common/unique
 
 /*
  * Reference count tranformation
@@ -14,7 +13,7 @@ import compiler/common/unique
 pub fun ctail-optimize() : corePhase ()
   ()
 
-pub fun uctail-optimize<t>( penv : pretty-env, newtypes : newtypes, gamma : gamma, use-context-path : bool, defs : defGroups<t>) : (int) -> (defGroups<t>, int)
+pub fun uctail-optimize<t>( penv : pretty-env, newtypes : newtypes, gamma : gamma, use-context-path : bool, defs : defGroups<t>) : uniquePhase defGroups<t>
   ctail-run( penv, newtypes, gamma, use-context-path, ctail-def-groups(True, defs) )
 
 
@@ -143,7 +142,23 @@ fun with-env<t, a>( action : () -> <ctail<t>> a, transform: (ctail-env<t>) -> ct
       unique := transform(unique)
   action()
 
-fun ctail-run<t, a>( penv : pretty-env, newtypes : newtypes, gamma : gamma, use-context-path : bool, action : () -> <ctail<t>> a ) : <ctail<t>, unique<a>> a
+fun ctail-run<t, a>( penv : pretty-env, newtypes : newtypes, gamma : gamma, use-context-path : bool, action : () -> <ctail<t>|e> a ) : <ctail<t>, uniquePhase|e> a
+  val env = ctail-env( [], penv, gamma, use-context-path, TName( name/nil, typeUnit ), Nothing, True, use-context-path, False )
+  var state := get-unique()
+  with handler
+    fun get-env() : ctail-env<t>
+      env
+    fun get-state() : int
+      state
+    fun set-state( unique : int ) : ()
+      state := unique
+    fun modify-state( transform : (int) -> int ) : ()
+      state := transform(state)
+  set-unique( state )
+  (action(), stat)
+
+
+
   with-unique() fn ( u )
     val env = ctail-env( [], penv, gamma, use-context-path, TName( name/nil, typeUnit ), Nothing, True, use-context-path, False )
     var state := u
