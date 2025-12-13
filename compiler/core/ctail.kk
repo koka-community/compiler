@@ -6,7 +6,7 @@ import compiler/type/type
 import compiler/common/name
 
 /*
- * Reference count tranformation
+ * Reference count transformation
  */
 
 
@@ -57,7 +57,7 @@ fun ctail-def<t>( top-level : bool, def : def<t> ) : <ctail, exn> list<def<t>>
         val ctail-tslot = TName(ctail-slot, ctail-slot-type)
 
         val always-affine = teff.effect-is-affine
-        val cdef-expr = ctail-name.with-context( False, always-affine Just( ctail-tslot ) ctailExpr( True, def.expr.make-cdef-expr( ctail-tslot )))
+        val cdef-expr = ctail-name.with-context( False, always-affine, Just( ctail-tslot ), ctailExpr( True, def.expr.make-cdef-expr( ctail-tslot )))
 
         val use-context-path = get-env().useContextPath
         val cdef = def ( name = ctail-name, ktype = ctail-type, expr = cdef-expr )
@@ -90,7 +90,7 @@ fun ctail-def<t>( top-level : bool, def : def<t> ) : <ctail, exn> list<def<t>>
 
 
         
-fun make-cdef-expr( expr : expr, slot : TName ) : <exn> expr
+fun make-cdef-expr( expr : expr, slot : tName ) : <exn> expr
   match expr
     TypeLam( targs, body ) -> TypeLam( targs, body.make-cdef-expr( slot ) )
     Lam( args, eff, body ) -> Lam( args ++ [slot], eff, body )
@@ -136,28 +136,20 @@ fun with-env<t, a>( action : () -> <ctail<t>> a, transform: (ctail-env<t>) -> ct
   val env = get-env().transform
   var unique := get-state()
   with handler
-    fun get-env() : ctail-env<t>
-      env
-    fun get-state() : int
-      unique
-    fun set-state( new-unique : int ) : ()
-      unique := new-unique
-    fun modify-state( transform : (int) -> int ) : ()
-      unique := transform(unique)
+    fun get-env() env
+    fun get-state() unique
+    fun set-state( new-unique : int ) unique := new-unique
+    fun modify-state( transform : (int) -> int ) unique := transform(unique)
   action()
 
 fun ctail-run<t, a>( penv : pretty-env, newtypes : newtypes, gamma : gamma, use-context-path : bool, action : () -> <ctail<t>|e> a ) : <ctail<t>, uniquePhase|e> a
   val env = ctail-env( [], penv, gamma, use-context-path, TName( name/nil, typeUnit ), Nothing, True, use-context-path, False )
   var state := get-unique()
   with handler
-    fun get-env() : ctail-env<t>
-      env
-    fun get-state() : int
-      state
-    fun set-state( unique : int ) : ()
-      state := unique
-    fun modify-state( transform : (int) -> int ) : ()
-      state := transform(state)
+    fun get-env() env
+    fun get-state() state
+    fun set-state( unique : int ) state := unique
+    fun modify-state( transform : (int) -> int ) state := transform(state)
   set-unique(state)
   action()
 
@@ -167,14 +159,10 @@ fun ctail-run<t, a>( penv : pretty-env, newtypes : newtypes, gamma : gamma, use-
     val env = ctail-env( [], penv, gamma, use-context-path, TName( name/nil, typeUnit ), Nothing, True, use-context-path, False )
     var state := u
     with handler
-      fun get-env() : ctail-env<t>
-        env
-      fun get-state() : int
-        state
-      fun set-state( unique : int ) : ()
-        state := unique
-      fun modify-state( transform : (int) -> int ) : ()
-        state := transform(state)
+      fun get-env() env
+      fun get-state() state
+      fun set-state( unique : int ) state := unique
+      fun modify-state( transform : (int) -> int ) state := transform(state)
     (action(), set-unique(state))
 
 
