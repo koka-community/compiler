@@ -485,6 +485,7 @@ fun run-unique(start: int, f: () -> <uniquePhase|e> a): e a
   f() 
 
 effect corePhase
+  fun unique() : int
   fun get-core-defs(): defGroups
   fun set-core-defs(dgs: defGroups): ()
   fun phaseError(s: string): a

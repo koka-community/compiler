@@ -10,10 +10,14 @@ import compiler/common/name
  */
 
 
-pub fun ctail-optimize() : corePhase ()
-  ()
+pub fun ctail-optimize( penv : pretty-env, newtypes : newtypes, gamma : gamma, use-context-path : bool ) : <corePhase> ()
+  val defs = get-core-defs()
+  val start = unique()
+  start.run-unique
+    uctail-optimize( penv, newtypes, gamma, use-context-path, defs )
 
-pub fun uctail-optimize<t>( penv : pretty-env, newtypes : newtypes, gamma : gamma, use-context-path : bool, defs : defGroups<t>) : uniquePhase defGroups<t>
+
+pub fun uctail-optimize<t>( penv : pretty-env, newtypes : newtypes, gamma : gamma, use-context-path : bool, defs : defGroups<t>) : <uniquePhase> defGroups<t>
   ctail-run( penv, newtypes, gamma, use-context-path, ctail-def-groups(True, defs) )
 
 
@@ -154,8 +158,8 @@ fun ctail-run<t, a>( penv : pretty-env, newtypes : newtypes, gamma : gamma, use-
       state := unique
     fun modify-state( transform : (int) -> int ) : ()
       state := transform(state)
-  set-unique( state )
-  (action(), stat)
+  set-unique(state)
+  action()
 
 
 
