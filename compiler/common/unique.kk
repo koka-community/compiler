@@ -1,12 +1,11 @@
 import compiler/common/id
 import compiler/common/name
 
-pub effect unique<a>
+pub effect unique
   fun update-unique( f : (int) -> int ) : int
 
-pub fun set-unique( i : int) : unique ()
+pub fun set-unique( i : int) : unique int
   update-unique fn (_) i
-  ()
 
 pub fun get-unique() : unique int
   update-unique fn (x) x + 1
@@ -36,3 +35,12 @@ pub fun with-unique<a>( f : (int) -> (a, int) ) : unique a
   set-unique( u' )
   x
   
+pub fun run-unique<a>( init : int, f : (int) -> <unique|e> a ) : e (a, state)
+  var state := init
+  with handler
+    fun update-unique( g : (int) -> int ) : int
+      val old = state
+      state := g( state )
+      old
+  val result = f( state )
+  (result, state)

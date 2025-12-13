@@ -4,6 +4,7 @@ import compiler/type/assumption
 import compiler/kind/newtypes
 import compiler/type/type
 import compiler/common/name
+import compiler/common/unique
 
 /*
  * Reference count tranformation
@@ -22,7 +23,9 @@ pub fun uctail-optimize<t>( penv : pretty-env, newtypes : newtypes, gamma : gamm
  */
 
 fun ctail-def-groups<t>( top-level : bool, defs : defGroups<t> ) : <ctail> defGroups<t>
-  ()
+  val dss = def.map fn ( def )
+    ctail-def-group( top-level, def )
+  dss.flatten
 
 fun ctail-def-group<t>( top-level : bool, def-group : defGroup<t> ) : <ctail, exn> list<defGroup<t>>
   match def-group
@@ -120,28 +123,41 @@ struct ctail-env<t>
   useContextPath : bool
   alwaysAffine : bool
 
-struct ctail-state
-  uniq : int
-
 effect ctail<t>
   fun get-env() : ctail-env<t>
-  fun get-unique() : int
-  fun set-unique( unique : int ) : ()
-  fun modify-unique( transform : (int) -> int ) : ()
+  fun get-state() : int
+  fun set-state( unique : int ) : ()
+  fun modify-state( transform : (int) -> int ) : ()
 
 fun with-env<t, a>( action : () -> <ctail<t>> a, transform: (ctail-env<t>) -> ctail-env<t> ) : a
   val env = get-env().transform
-  var unique := get-unique()
+  var unique := get-state()
   with handler
     fun get-env() : ctail-env<t>
       env
-    fun get-unique() : int
+    fun get-state() : int
       unique
     fun set-state( new-unique : int ) : ()
       unique := new-unique
-    fun modify-unique( transform : (int) -> int ) : ()
+    fun modify-state( transform : (int) -> int ) : ()
       unique := transform(unique)
   action()
+
+fun ctail-run<t, a>( penv : pretty-env, newtypes : newtypes, gamma : gamma, use-context-path : bool, action : () -> <ctail<t>> a ) : <ctail<t>, unique<a>> a
+  with-unique() fn ( u )
+    val env = ctail-env( [], penv, gamma, use-context-path, TName( name/nil, typeUnit ), Nothing, True, use-context-path, False )
+    var state := u
+    with handler
+      fun get-env() : ctail-env<t>
+        env
+      fun get-state() : int
+        state
+      fun set-state( unique : int ) : ()
+        state := unique
+      fun modify-state( transform : (int) -> int ) : ()
+        state := transform(state)
+    (action(), set-unique(state))
+
 
 fun with-context<t, a>( name: tName, is-multi : bool, always-affine : bool, mb-slot : maybe<tName>, action : () -> <ctail<t>> a ) : a
   action.with-env fn ( env ) 
