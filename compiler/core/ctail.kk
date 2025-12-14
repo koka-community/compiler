@@ -4,33 +4,38 @@ import compiler/type/assumption
 import compiler/kind/newtypes
 import compiler/type/type
 import compiler/common/name
+import compiler/type/pretty
 
 /*
  * Reference count transformation
  */
 
 
-pub fun ctail-optimize( penv : pretty-env, newtypes : newtypes, gamma : gamma, use-context-path : bool ) : <corePhase> ()
+pub fun ctail-optimize( newtypes : newtypes, gamma : gamma, use-context-path : bool ) : <newtypesEff, ppEnvEff, corePhase, div> ()
   val defs = get-core-defs()
   val start = unique()
-  start.run-unique
-    uctail-optimize( penv, newtypes, gamma, use-context-path, defs )
+  val result = error/try()
+    start.run-unique
+      uctail-optimize( newtypes, gamma, use-context-path, defs )
+  match result
+    Ok(_) -> ()
+    Err(e) -> phaseError( e.show )
 
 
-pub fun uctail-optimize<t>( penv : pretty-env, newtypes : newtypes, gamma : gamma, use-context-path : bool, defs : defGroups<t>) : <uniquePhase> defGroups<t>
-  ctail-run( penv, newtypes, gamma, use-context-path, ctail-def-groups(True, defs) )
+pub fun uctail-optimize( newtypes : newtypes, gamma : gamma, use-context-path : bool, defs : defGroups) : <newtypesEff, ppEnvEff, uniquePhase, exn, div> defGroups
+  ctail-run( newtypes, gamma, use-context-path, ctail-def-groups(True, defs) )
 
 
 /*
  * Definition Groups
  */
 
-fun ctail-def-groups<t>( top-level : bool, defs : defGroups<t> ) : <ctail> defGroups<t>
+fun ctail-def-groups( top-level : bool, defs : defGroups ) : <newtypesEff, ctail, exn, div> defGroups
   val dss = def.map fn ( def )
     ctail-def-group( top-level, def )
   dss.flatten
 
-fun ctail-def-group<t>( top-level : bool, def-group : defGroup<t> ) : <ctail, exn> list<defGroup<t>>
+fun ctail-def-group( top-level : bool, def-group : defGroup ) : <newtypesEff, ctail, exn, div> list<defGroup>
   match def-group
     DefRec(Cons(def, Nil)) -> 
       if def.tname.has-ctail-call( True, def.expr ) then
@@ -43,7 +48,7 @@ fun ctail-def-group<t>( top-level : bool, def-group : defGroup<t> ) : <ctail, ex
  * - otherwise, a single definition of the effect is affine for sure (always-affine)
  * - or two definitions for multiple resumptions (is-multi)
  */
-fun ctail-def<t>( top-level : bool, def : def<t> ) : <ctail, exn> list<def<t>>
+fun ctail-def( top-level : bool, def : def ) : <newtypesEff, ctail, exn, div> list<def>
   def.with-current-def
     val res-ref-type = def.ktype.has-result-ref-type
     match res-ref-type
@@ -90,13 +95,13 @@ fun ctail-def<t>( top-level : bool, def : def<t> ) : <ctail, exn> list<def<t>>
 
 
         
-fun make-cdef-expr( expr : expr, slot : tName ) : <exn> expr
+fun make-cdef-expr( expr : expr, slot : tName ) : <exn, div> expr
   match expr
     TypeLam( targs, body ) -> TypeLam( targs, body.make-cdef-expr( slot ) )
     Lam( args, eff, body ) -> Lam( args ++ [slot], eff, body )
     body -> ("core/ctail: illegal ctail function shape: " ++ body.show).throw(ExnError)
 
-fun has-result-ref-type( tp : ktype) : <ctail> maybe<(list<typeVar>, list<(name, ktype)>, keffect, ktype)>
+fun has-result-ref-type( tp : ktype) : <newtypesEff, ctail, exn, div> maybe<(list<typeVar>, list<(name, ktype)>, keffect, ktype)>
   match tp.split-fun-scheme
     Just((foralls, targs, teff, tres)) ->
       val is-r-type = tres.has-ref-type
@@ -106,7 +111,7 @@ fun has-result-ref-type( tp : ktype) : <ctail> maybe<(list<typeVar>, list<(name,
         Nothing
     _ -> Nothing
 
-fun has-ref-type( tp : ktype ) : <ctail> bool
+fun has-ref-type( tp : ktype ) : <newtypesEff, ctail, exn, div> bool
   match tp.expand-syn
     TApp( t, ts ) -> t.has-ref-type
     TCon( tcon ) -> !( tcon.name.is-value-type )
@@ -116,9 +121,8 @@ fun has-ref-type( tp : ktype ) : <ctail> bool
  * CTail Monad
  */
 
-struct ctail-env<t>
-  currentDef : list<def<t>>
-  prettyEnv : pretty-env
+struct ctail-env
+  currentDef : list<def>
   gamma : gamma
   name : tName
   slot : maybe<tName>
@@ -126,13 +130,13 @@ struct ctail-env<t>
   useContextPath : bool
   alwaysAffine : bool
 
-effect ctail<t>
-  fun get-env() : ctail-env<t>
+effect ctail
+  fun get-env() : ctail-env
   fun get-state() : int
   fun set-state( unique : int ) : ()
   fun modify-state( transform : (int) -> int ) : ()
 
-fun with-env<t, a>( action : () -> <ctail<t>> a, transform: (ctail-env<t>) -> ctail-env<t> ) : a
+fun with-env<a>( action : () -> <local<h>, ctail|e> a, transform: (ctail-env) -> e ctail-env ) : <local<h>, ctail|e> a
   val env = get-env().transform
   var unique := get-state()
   with handler
@@ -142,8 +146,8 @@ fun with-env<t, a>( action : () -> <ctail<t>> a, transform: (ctail-env<t>) -> ct
     fun modify-state( transform : (int) -> int ) unique := transform(unique)
   action()
 
-fun ctail-run<t, a>( penv : pretty-env, newtypes : newtypes, gamma : gamma, use-context-path : bool, action : () -> <ctail<t>|e> a ) : <ctail<t>, uniquePhase|e> a
-  val env = ctail-env( [], penv, gamma, use-context-path, TName( name/nil, typeUnit ), Nothing, True, use-context-path, False )
+fun ctail-run<a>( newtypes : newtypes, gamma : gamma, use-context-path : bool, action : () -> <ctail|e> a ) : <ppEnvEff, ctail, uniquePhase|e> a
+  val env = Ctail-env( [], gamma, use-context-path, TName( name/nil, typeUnit ), Nothing, True, use-context-path, False )
   var state := get-unique()
   with handler
     fun get-env() env
@@ -154,19 +158,7 @@ fun ctail-run<t, a>( penv : pretty-env, newtypes : newtypes, gamma : gamma, use-
   action()
 
 
-
-  with-unique() fn ( u )
-    val env = ctail-env( [], penv, gamma, use-context-path, TName( name/nil, typeUnit ), Nothing, True, use-context-path, False )
-    var state := u
-    with handler
-      fun get-env() env
-      fun get-state() state
-      fun set-state( unique : int ) state := unique
-      fun modify-state( transform : (int) -> int ) state := transform(state)
-    (action(), set-unique(state))
-
-
-fun with-context<t, a>( name: tName, is-multi : bool, always-affine : bool, mb-slot : maybe<tName>, action : () -> <ctail<t>> a ) : a
+fun with-context<a>( name: tName, is-multi : bool, always-affine : bool, mb-slot : maybe<tName>, action : () -> <ctail|e> a ) : a
   action.with-env fn ( env ) 
     env( name = name, isMulti = is-multi, alwaysAffine = alwaysAffine, slot = mb-slot )
 
@@ -174,7 +166,7 @@ fun with-context<t, a>( name: tName, is-multi : bool, always-affine : bool, mb-s
  * env accessors
  */
 
-fun with-current-def<t, a>( def : def<t>, action : () -> <ctail<t>> a ) : <ctail<t>> a
+fun with-current-def<a>( def : def, action : () -> <ctail> a ) : <ctail> a
   action.with-env fn ( env ) 
     env( current-def = def )
     
@@ -183,11 +175,10 @@ fun with-current-def<t, a>( def : def<t>, action : () -> <ctail<t>> a ) : <ctail
  * state accessors
  */
 
-fun is-value-type<t>( name : name ) : <ctail<t>> bool
+fun is-value-type( name : name ) : <newtypesEff, ctail, exn> bool
   val env = get-env()
   match name.newtypes-lookup-any
     Just( data-info ) -> 
-      // The parameter passed into data-repr may be the wrong one
-      data-info.data-repr(dataRepr/is-value).fst.dataRepr/is-value
+      data-info.data-repr(data/is-value).fst.dataRepr/is-value
     _ -> False
 
