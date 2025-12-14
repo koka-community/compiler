@@ -55,7 +55,7 @@ fun ctail-def( top-level : bool, def : def ) : <newtypesEff, ctail, exn, div> li
     match res-ref-type
       Nothing -> [DefRec([def])]
       Just((tforall, targs, teff, tres)) ->
-        val ctail-slot-type = tres.type-cc-tx
+        val ctail-slot-type = tres.type-cctx
         val ctail-name = "trmc".make-hidden-name(def.name)
         val ctail-slot = "acc".new-hidden-name
         val ctail-type = TForAll(tforall, TFun(targs ++ [(ctail-slot, ctail-slot-type)], teff, tres))
@@ -118,6 +118,61 @@ fun has-ref-type( tp : ktype ) : <newtypesEff, ctail, exn, div> bool
     TCon( tcon ) -> !( tcon.name.is-value-type )
     _ -> False
 
+
+/*
+ * Primitives
+ */
+
+// Polymorphic hole
+fun make-hole( tp : ktype ) : expr
+  val a = TypeVar( 0, kindStar, Bound )
+  val fun-type = TForAll( [a], TFun( [], typeTotal, TVar( a ) ) )
+  App( TypeApp( Var( TName( name-cctx-hole-create(), fun-type ), InfoExternal( [] ) ), [tp] ), [] )
+
+// Initial empty context (@ctx hole)
+fun make-cctx-empty( tp : ktype ) : expr
+  val a = TypeVar( 0, kindStar, Bound )
+  val fun-type = TForAll( [a], TFun( [], typeTotal, TVar( a ).type-cctx ) )
+  App( TypeApp( Var( TName( name-cctx-empty(), fun-type ),
+    // InfoArity 1 0
+    InfoExternal([(C(CDefault), "kk_cctx_create(#1,#2,kk_context())"), (JS(JsDefault), "$std_core_types._cctx_create(#1,#2)")]),
+    [tp] ) ), [] )
+
+// The address of a field in a constructor (for context holes)
+fun make-field-addr-of( obj-name : tName, con-name : tName, field-name : name, tp : ktype ) : expr
+  val a = TypeVar( 0, kindStar, Bound )
+  val fun-type = TForAll( [a], TFun( [(name/nil, TVar( a )), (name/nil, typeString), (name/nil, typeString)], 
+    typeTotal, TApp( typeFieldAddr, [ TVar( a )] ) ) )
+  App( TypeApp( Var( TName( name-field-addr-of(), funType ), InfoExternal( [] ) ) ), [tp] )
+
+// Extend a context with a non-empty context
+fun make-cctx-extend( slot : tName, res-name : tName, object-name : tName, con-name : tName, field-name : name, tp : ktype, always-affine : bool ) : expr
+  val field-of = make-field-addr-of( object-name, con-name, field-name, tp )
+  val a = TypeVar( 0, kindStar, Bound )
+  val fun-type = TForAll( [a], TFun( [(name/nil, TVar( a )),
+                                      (name/nil, TVar( a )),
+                                      (name/nil, TApp( typeFieldAddr, [TVar( a )] ) )], typeTotal, TVar( a ).type-cctx ) )
+  App( TypeApp( Var( TName( name-cctx-extend(), funType ), 
+    (InfoExternal [
+      (C( CDefault), "kk_cctx_extend" ++ (if always-affine then "_linear" else "") ++ "(#1,#2,#3,kk_context())"),
+      (JS( JsDefault), "$std_core_types._cctx_extend(#1,#2,#3)") 
+    ]), [tp] ) ), [Var( slot, InfoNone ), Var( res-name, InfoNone, field-of )])
+
+fun make-cctx-apply( is-multi : boole, is-always-affine : bool, slot : tName, expr : expr ) : expr
+  match is-multi
+    True ->
+      App( Var( slot, InfoNone ), [expr] )
+    False ->
+      val a = TypeVar( 0, kindStar, Bound )
+      val fun-type = TForAll( [a], TFun( [(name/nil, TVar( a )), (name/nil, TVar( a ))], typeTotal, TVar( a ) ) )
+      val tp = match slot.type-of
+        TApp( _, Cons( t, Nil ) ) -> t
+        TSyn( _, Cons( t, Nil ), _) -> t
+      App( TypeApp( Var( TName( name-cctx-apply(), funType ),
+        InfoExternal [(C( CDefault ), "kk_cctx_apply" ++ (if is-always-affine then "_linear" else "") ++ "(#1,#2,kk_context())"),
+          (JS( JsDefault ), "$std_core_types._cctx_apply(#1,#2)") 
+        ]), [tp] ), [Var( slot, InfoNone ), expr] )
+
 /*
  * CTail Monad
  */
@@ -140,11 +195,7 @@ effect ctail
   fun get-is-multi() : bool
   fun get-use-context-path() : bool
   fun get-always-affine() : bool
-  fun get-unique-state() : int
-  fun modify-unique-state( transform : (int) -> int ) : ()
 
-fun set-unique-state( unique : int ) : ctail ()
-  modify-unique-state() fn ( _ ) unique
 
 
 fun with-env<a>( action : () -> <ctail|e> a, transform: (ctail-env) -> <ctail|e> ctail-env ) : <ctail|e> a
@@ -158,13 +209,10 @@ fun with-env<a>( action : () -> <ctail|e> a, transform: (ctail-env) -> <ctail|e>
     fun get-is-multi() env.isMulti
     fun get-use-context-path() env.useContextPath
     fun get-always-affine() env.alwaysAffine
-    fun get-unique-state() get-unique-state()
-    fun modify-unique-state( transform : (int) -> int ) modify-unique-state( transform)
   action()
 
 fun ctail-run<a>( newtypes : newtypes, gamma : gamma, use-context-path : bool, action : () -> <ctail|e> a ) : <ppEnvEff, ctail, unique|e> a
   val env = Ctail-env( [], gamma, use-context-path, TName( name/nil, typeUnit ), Nothing, True, use-context-path, False )
-  var unique := get-unique()
   with handler
     fun get-env() env
     fun get-current-def() env.currentDef
@@ -174,9 +222,6 @@ fun ctail-run<a>( newtypes : newtypes, gamma : gamma, use-context-path : bool, a
     fun get-is-multi() env.isMulti
     fun get-use-context-path() env.useContextPath
     fun get-always-affine() env.alwaysAffine
-    fun get-unique-state() unique
-    fun modify-unique-state( transform : (int) -> int ) unique := transform(unique)
-  set-unique(unique)
   action()
 
 
