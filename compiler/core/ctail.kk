@@ -56,7 +56,7 @@ fun ctail-def( top-level : bool, def : def ) : <newtypesEff, ctail, exn, div> li
       Nothing -> [DefRec([def])]
       Just((tforall, targs, teff, tres)) ->
         val ctail-slot-type = tres.type-cctx
-        val ctail-name = "trmc".make-hidden-name(def.name)
+        val ctail-name = "trmc".make-hidden-name(def.def-name)
         val ctail-slot = "acc".new-hidden-name
         val ctail-type = TForAll(tforall, TFun(targs ++ [(ctail-slot, ctail-slot-type)], teff, tres))
         val ctail-tname = TName(ctail-name, ctail-type)
@@ -158,7 +158,7 @@ fun make-cctx-extend( slot : tName, res-name : tName, object-name : tName, con-n
       (JS( JsDefault), "$std_core_types._cctx_extend(#1,#2,#3)") 
     ]), [tp] ) ), [Var( slot, InfoNone ), Var( res-name, InfoNone, field-of )])
 
-fun make-cctx-apply( is-multi : boole, is-always-affine : bool, slot : tName, expr : expr ) : expr
+fun make-cctx-apply( is-multi : bool, is-always-affine : bool, slot : tName, expr : expr ) : expr
   match is-multi
     True ->
       App( Var( slot, InfoNone ), [expr] )
