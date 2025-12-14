@@ -5,6 +5,7 @@ import compiler/kind/newtypes
 import compiler/type/type
 import compiler/common/name
 import compiler/type/pretty
+import compiler/common/unique
 
 /*
  * Reference count transformation
@@ -22,7 +23,7 @@ pub fun ctail-optimize( newtypes : newtypes, gamma : gamma, use-context-path : b
     Err(e) -> phaseError( e.show )
 
 
-pub fun uctail-optimize( newtypes : newtypes, gamma : gamma, use-context-path : bool, defs : defGroups) : <newtypesEff, ppEnvEff, uniquePhase, exn, div> defGroups
+pub fun uctail-optimize( newtypes : newtypes, gamma : gamma, use-context-path : bool, defs : defGroups) : <newtypesEff, ppEnvEff, unique, exn, div> defGroups
   ctail-run( newtypes, gamma, use-context-path, ctail-def-groups(True, defs) )
 
 
@@ -48,7 +49,7 @@ fun ctail-def-group( top-level : bool, def-group : defGroup ) : <newtypesEff, ct
  * - otherwise, a single definition of the effect is affine for sure (always-affine)
  * - or two definitions for multiple resumptions (is-multi)
  */
-fun ctail-def( top-level : bool, def : def ) : <newtypesEff, ctail, exn, div> list<def>
+fun ctail-def( top-level : bool, def : def ) : <newtypesEff, ctail, exn, div> list<defGroup>
   def.with-current-def
     val res-ref-type = def.ktype.has-result-ref-type
     match res-ref-type
@@ -132,35 +133,56 @@ struct ctail-env
 
 effect ctail
   fun get-env() : ctail-env
-  fun get-state() : int
-  fun set-state( unique : int ) : ()
-  fun modify-state( transform : (int) -> int ) : ()
+  fun get-current-def() : list<def>
+  fun get-gamma() : gamma
+  fun get-name() : tName
+  fun get-slot() : maybe<tName>
+  fun get-is-multi() : bool
+  fun get-use-context-path() : bool
+  fun get-always-affine() : bool
+  fun get-unique-state() : int
+  fun modify-unique-state( transform : (int) -> int ) : ()
 
-fun with-env<a>( action : () -> <local<h>, ctail|e> a, transform: (ctail-env) -> e ctail-env ) : <local<h>, ctail|e> a
+fun set-unique-state( unique : int ) : ctail ()
+  modify-unique-state() fn ( _ ) unique
+
+
+fun with-env<a>( action : () -> <ctail|e> a, transform: (ctail-env) -> <ctail|e> ctail-env ) : <ctail|e> a
   val env = get-env().transform
-  var unique := get-state()
-  with handler
+  with override
     fun get-env() env
-    fun get-state() unique
-    fun set-state( new-unique : int ) unique := new-unique
-    fun modify-state( transform : (int) -> int ) unique := transform(unique)
+    fun get-current-def() env.currentDef
+    fun get-gamma() env.gamma
+    fun get-name() env.name
+    fun get-slot() env.slot
+    fun get-is-multi() env.isMulti
+    fun get-use-context-path() env.useContextPath
+    fun get-always-affine() env.alwaysAffine
+    fun get-unique-state() get-unique-state()
+    fun modify-unique-state( transform : (int) -> int ) modify-unique-state( transform)
   action()
 
-fun ctail-run<a>( newtypes : newtypes, gamma : gamma, use-context-path : bool, action : () -> <ctail|e> a ) : <ppEnvEff, ctail, uniquePhase|e> a
+fun ctail-run<a>( newtypes : newtypes, gamma : gamma, use-context-path : bool, action : () -> <ctail|e> a ) : <ppEnvEff, ctail, unique|e> a
   val env = Ctail-env( [], gamma, use-context-path, TName( name/nil, typeUnit ), Nothing, True, use-context-path, False )
-  var state := get-unique()
+  var unique := get-unique()
   with handler
     fun get-env() env
-    fun get-state() state
-    fun set-state( unique : int ) state := unique
-    fun modify-state( transform : (int) -> int ) state := transform(state)
-  set-unique(state)
+    fun get-current-def() env.currentDef
+    fun get-gamma() env.gamma
+    fun get-name() env.name
+    fun get-slot() env.slot
+    fun get-is-multi() env.isMulti
+    fun get-use-context-path() env.useContextPath
+    fun get-always-affine() env.alwaysAffine
+    fun get-unique-state() unique
+    fun modify-unique-state( transform : (int) -> int ) unique := transform(unique)
+  set-unique(unique)
   action()
 
 
-fun with-context<a>( name: tName, is-multi : bool, always-affine : bool, mb-slot : maybe<tName>, action : () -> <ctail|e> a ) : a
+fun with-context<a>( name: tName, is-multi : bool, always-affine : bool, mb-slot : maybe<tName>, action : () -> <ctail|e> a ) : <ctail|e> a
   action.with-env fn ( env ) 
-    env( name = name, isMulti = is-multi, alwaysAffine = alwaysAffine, slot = mb-slot )
+    env( name = name, isMulti = is-multi, alwaysAffine = always-affine, slot = mb-slot )
 
 /*
  * env accessors
@@ -168,7 +190,7 @@ fun with-context<a>( name: tName, is-multi : bool, always-affine : bool, mb-slot
 
 fun with-current-def<a>( def : def, action : () -> <ctail> a ) : <ctail> a
   action.with-env fn ( env ) 
-    env( current-def = def )
+    env( currentDef = Cons(def, env.currentDef) )
     
 
 /*
