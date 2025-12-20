@@ -54,23 +54,22 @@ fun inf-gamma/extend(ig: infGamma, name: name, ni: nameInfo): <exn> infGamma
 
 fun inf-gamma-eff/extends(tnames: list<(name,ktype,int,string)>)
   tnames.foreach(fn((name,tp,scope-depth,doc)) extend-tp(name, name, tp, scope-depth, doc))
-// fun inf-gamma/extends(ig: gamma, tnames: list<(name,ktype,string)>)
-//   tnames.foldl(ig, fn(ig', (name,tp,doc)) ig'.extend-tp(name, name, tp, doc))
+fun inf-gamma/extends(ig: infGamma, tnames: list<(name,ktype,int,string)>)
+  tnames.foldl(ig, fn(ig', (name,tp,scope-depth,doc)) ig'.extend-tp(name, name, tp, scope-depth, doc))
 
 fun inf-gamma-eff/extend-tp(name: name, cname: name, tp: ktype, scope-depth: int, doc: string)
   extend-x(name, cname, tp, scope-depth, range/null, False, doc)
-// fun inf-gamma/extend-tp(ig: gamma, name: name, cname: name, tp: ktype, doc: string)
-//   ig.extend-x(name, cname, tp, range/range/null, False, doc)
+fun inf-gamma/extend-tp(ig: infGamma, name: name, cname: name, tp: ktype, scope-depth: int, doc: string)
+  ig.extend-x(name, cname, tp, scope-depth, range/null, False, doc)
 
 fun inf-gamma-eff/extend-x(name: name, cname: name, tp: ktype, scope-depth, rng: range, isVar: bool, doc: string)
   gamma-extend(name, InfoVal(Public, cname, tp, scope-depth, rng, isVar, False, doc))
-// fun inf-gamma/extend-x(ig: gamma, name: name, cname: name, tp: ktype, rng: range, isVar: bool, doc: string)
-//   ig.set(name, [InfoVal(Public, cname, tp, rng, isVar, doc)])
+fun inf-gamma/extend-x(ig: infGamma, name: name, cname: name, tp: ktype, scope-depth, rng: range, isVar: bool, doc: string)
+  ig.extend(name, InfoVal(Public, cname, tp, scope-depth, rng, isVar, False, doc))
 
-// fun inf-gamma-eff/lookup(name: name): <infGammaEff,exn> maybe<(name,ktype)>
-//   gamma-lookupx(name).map(fn(InfoVal(_, cname, tp, _, _)) (cname, tp))
-// fun inf-gamma/lookup(ig: gamma, name: name): exn maybe<(name, ktype)>
-//   ig.lookup(name).map(fn(InfoVal(_, cname, tp, _, _)) (cname, tp))
+// Lookup any exact match in the local scope
+// Note that recursive definitions add the fully qualified name to the infgamma,
+// in that case we also consider it an exact match with just the stem.
 
 fun inf-gamma/list(ig: infGamma): pure list<(name, ktype)>
   ig.linearmap/list.flatmap(fn((_, infos)) infos.map(fn(info) (info.cname, info.typ)))
@@ -95,5 +94,5 @@ fun infgamma/free-type-vars(ig: infGamma): pure tvs
 fun infgamma/bound-type-vars(ig: infGamma): pure tvs
   ig.inf-gamma/list().map(snd).bound-type-vars
 
-// fun infgamma/free-type-cons(ig: infGamma): pure tvs
-//   ig.inf-gamma/list().map(snd).free-type-cons
+fun infgamma/free-type-constructors(ig: infGamma): pure typeCons
+  ig.inf-gamma/list().map(snd).free-type-constructors

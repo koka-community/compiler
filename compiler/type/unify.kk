@@ -111,7 +111,7 @@ fun match-shape(tp1: ktype, tp2: ktype): <pure,unify,unique> ()
     match t 
       TVar(tv) -> tv
       _ -> unify-error(NoMatchType)
-  val codom = codomDup.foldl(LinearSet([]), fn(acc, v) acc.add(v))
+  val codom = codomDup.linear-set
   if dom.length == codom.length then ()
   else unify-error(NoMatchType)
 

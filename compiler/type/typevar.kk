@@ -9,6 +9,7 @@ import compiler/common/unique
 import std/data/linearset
 import std/data/linearmap
 import std/core/undiv
+import std/core-extras // list.contains
 
 pub infixr 5 (|->)
 
@@ -88,9 +89,16 @@ fun sub/single(tvar: typeVar, tau: tau)
     throw("type/typevar: subSingle: kind mismatch " ++ tau.show ++ " " ++ tvar.show)
   Sub(LinearMap([(tvar, tau)]), free-type-vars(tau).add(tvar))
 
-fun sub/lookup(Sub(_): sub, tvar: typeVar): exn maybe<tau>
-  throw("Not implemented")
-  // TODO: Need map lookup with key
+fun sub/lookup(Sub(s): sub, tvar: typeVar): exn maybe<tau>
+  match s.lookup-index(tvar) 
+    Nothing -> Nothing 
+    Just(i) ->
+      val (ktvar, tau) = s.elem-at(i).unjust
+      if !(ktvar.flavour == tvar.flavour) then 
+        throw("type/typevar: subLookup: flavour mismatch " ++ ktvar.show ++ " " ++ tvar.show)
+      if !(ktvar.kind == tvar.kind) then 
+        throw("type/typevar: subLookup: kind mismatch " ++ ktvar.show ++ " " ++ tvar.show)
+      Just(tau)
 
 fun sub/remove(Sub(sub, tvs): sub, tvars: list<typeVar>): sub
   Sub(sub.remove-all(tvars), tvs - tvars)
@@ -152,30 +160,80 @@ fun tvs/max(tvs: tvs): int
 // Entities with type variables
 
 // Return the free unifiable type variables in a particular order
-fun ofuv(x: a, ?oftv: (a) -> e list<typeVar>): e list<typeVar>
+fun ofuv(x: a, ?odftv: (a) -> e list<typeVar>): e list<typeVar>
   x.oftv.filter(is-meta)
 
-// TODO: add nub to standard library
-// fun oftv(x: a, ?odftv: (a) -> e list<typeVar>): list<typeVar>
-//   all-tv(x, odftv, oftv)
+// Return the free type variables in a particular order
+fun oftv(x: a, ?odftv: (a) -> e list<typeVar>): e list<typeVar>
+  val vs = x.odftv.nub 
+  fun is-special(k : kind)
+    k == kindEffect || k == kindHeap || k == kindLabel || k == kind-fun(kindLabel, kindEffect)
+  val (es, ws) = vs.partition(_.kind.is-special)
+  ws ++ es
 
+alias typeCons = linearSet<typeCon>
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+// Utilities for types and expressions
+// Unlike in Haskell these are not in a typeclass
+// As such we don't need to implement (e.g. bound type vars) 
+//  for types is doesn't make sense for, even if the type requires a different type operator
+/////////////////////////////////////////////////////////////////////////////////////////////
+
+// Substitution operator
+fun sub/(|->)(s: sub, a: a, ?substitute: (sub, a) -> e a): e a
+  if s.is-null then a
+  else substitute(s, a)
+
+// Substitute a substitution into another substitution
+fun sub/substitute(sub: sub, Sub(s, tvs2): sub): pure sub
+  val Sub(_, tvs1) = sub
+  Sub(s.map(fn(k, v) sub.substitute(v)), tvs1.union(tvs2))
+
+// Type utilities for lists
 fun list/free-type-vars(ps: list<a>, ?free-type-vars: (a) -> div tvs): div tvs
   ps.map(free-type-vars).unions
+fun list/bound-type-vars(ps: list<a>, ?bound-type-vars: (a) -> div tvs): div tvs
+  ps.map(bound-type-vars).unions
+fun list/free-type-constructors(ps: list<a>, ?free-type-constructors: (a) -> div typeCons): div typeCons
+  ps.map(free-type-constructors).unions
+fun list/substitute(s: sub, ps: list<a>, ?substitute: (sub, a) -> pure a): pure list<a>
+  ps.map(substitute(s, _))
 
+// Type utilities for ktype
 fun ktype/free-type-vars(tp: ktype): div tvs
   match tp
-    TForAll(vars, t) -> 
-      val tv1 :tvs = t.free-type-vars
-      tv1 - vars
-    TFun(args, eff, res) -> 
-      val tv1: tvs = args.map(_.snd.free-type-vars).unions 
-      val tv2: tvs = tv1 + res.free-type-vars
-      tv2 + eff.free-type-vars
+    TForAll(vars, t) -> t.free-type-vars - vars
+    TFun(args, eff, res) -> (args.map(_.snd) ++ [res, eff]).free-type-vars
     TCon -> tvs/empty
     TVar(tv) -> LinearSet([tv])
-    TApp(t, args) -> t.free-type-vars + args.map(free-type-vars).unions
-    TSyn(_, xs, t) -> t.free-type-vars + xs.map(free-type-vars).unions
+    TApp(t, args) -> t.free-type-vars + args.free-type-vars
+    TSyn(_, xs, t) -> t.free-type-vars + xs.free-type-vars
+fun ktype/bound-type-vars(tp: ktype): div tvs
+  match tp
+    TForAll(vars, t) -> t.bound-type-vars + vars
+    TFun(args, eff, res) -> (args.map(_.snd) ++ [res, eff]).bound-type-vars
+    TSyn(_, _, t) -> t.bound-type-vars
+    TApp(t, arg) -> t.bound-type-vars + arg.bound-type-vars
+    _ -> tvs/empty
+fun ktype/free-type-constructors(tp: ktype): div typeCons
+  match tp
+    TForAll(_, t) -> t.free-type-constructors
+    TFun(args, eff, res) -> (args.map(_.snd) ++ [res, eff]).free-type-constructors
+    TCon(c) -> LinearSet([c])
+    TVar(_) -> LinearSet([])
+    TApp(t, args) -> t.free-type-constructors + args.free-type-constructors
+    TSyn(_, xs, t) -> t.free-type-constructors + xs.free-type-constructors
+fun ktype/substitute(s: sub, tp: ktype): pure tau
+  match tp
+    TForAll(vars, t) -> TForAll(vars, s.remove(vars) |-> t) // TODO: Assertion
+    TFun(args, eff, res) -> TFun(args.map(fn(a) (a.fst, s |-> a.snd)), s |-> eff, s |-> res)
+    TCon -> tp
+    TVar(tv) -> s.find(tv)
+    TApp(t, args) -> TApp(s |-> t, args.map(s |-> _))
+    TSyn(syn, xs, t) -> TSyn(syn, s |-> xs, s |-> t)
 
+// Type utilities for expressions
 fun exp/free-type-vars(e0: expr): div tvs
   match e0
     Lam(tn, eff, e) -> 
@@ -189,104 +247,6 @@ fun exp/free-type-vars(e0: expr): div tvs
     ELit -> tvs/empty
     Let(defGroups, e) -> defGroups.map(free-type-vars).unions + e.free-type-vars
     Case(es, bs) -> es.free-type-vars + bs.map(free-type-vars).unions
-
-fun dg/free-type-vars(dg: defGroup): div tvs
-  match dg
-    DefRec(defs) -> defs.map(free-type-vars).unions
-    DefNonRec(e) -> free-type-vars(e)
-
-fun def/free-type-vars(d: def): div tvs
-  d.ktype.free-type-vars + d.defExpr.free-type-vars
-
-fun branch/free-type-vars(bs: branch): div tvs
-  match bs
-    Branch(p, e) -> 
-      e.free-type-vars - p.bound-type-vars + p.free-type-vars
-
-fun pat/free-type-vars(p: pattern): div tvs
-  match p
-    PatVar(tn, pat) -> tn.free-type-vars + pat.free-type-vars
-    PatCon(tn, args, _, targs, exists0, tres) ->
-      val tv1:tvs = tn.free-type-vars + args.free-type-vars
-      val tv2:tvs = tv1 + targs.free-type-vars 
-      val tv3:tvs = tv2 + tres.free-type-vars
-      tv3 - exists0
-    PatWild -> tvs/empty
-    PatLit(_) -> tvs/empty
-
-fun guard/free-type-vars(gd: guard): div tvs
-  match gd
-    Guard(e, e2) -> e.free-type-vars + e2.free-type-vars
-
-fun tn/free-type-vars(TName(_, tp): tName): div tvs
-  tp.free-type-vars
-
-fun list/bound-type-vars(l: list<a>, ?bound-type-vars: (a) -> div tvs): div tvs
-  l.map(bound-type-vars).unions
-
-fun pat/bound-type-vars(p: pattern): div tvs
-  match p
-    PatVar(tn, pat) -> tn.bound-type-vars + pat.bound-type-vars
-    PatCon(tn, args, _, targs, exists0, tres) ->
-      val tv1: tvs = tn.bound-type-vars + args.bound-type-vars
-      val tv2: tvs = tv1 + targs.bound-type-vars
-      val tv3: tvs = tv2 + tres.bound-type-vars
-      tv3 + exists0.tvs
-    PatWild -> tvs/empty
-    PatLit(_) -> tvs/empty
-
-fun ktype/bound-type-vars(tp: ktype): div tvs
-  match tp
-    TForAll(vars, t) -> 
-      val tv1: tvs = t.bound-type-vars
-      tv1 + vars
-    TFun(args, eff, res) -> 
-      val tv1: tvs = args.map(tuple2/snd).bound-type-vars + res.bound-type-vars 
-      tv1 + eff.bound-type-vars
-    TSyn(_, _, t) -> t.bound-type-vars
-    TApp(t, arg) -> t.bound-type-vars + arg.bound-type-vars
-    _ -> tvs/empty
-
-fun tn/bound-type-vars(TName(_, tp): tName): div tvs
-  tp.bound-type-vars
-
-fun sub/(|->)(s: sub, a: a, ?substitute: (sub, a) -> e a): e a
-  if s.is-null then a
-  else substitute(s, a)
-
-
-fun sub/list/substitute(s: sub, l: list<a>, ?substitute: (sub, a) -> <div|e> a): <div|e> list<a>
-  if s.is-null then l
-  else l.map(s.substitute(_))
-
-fun sub/substitute(sub: sub, Sub(s, tvs2): sub): pure sub
-  val Sub(_, tvs1) = sub
-  Sub(s.map(fn(k, v) sub.substitute(v)), tvs1.union(tvs2))
-
-fun ktype/substitute(s: sub, tp: ktype): pure tau
-  match tp
-    TForAll(vars, t) ->
-      val sub' = s.remove(vars)
-      TForAll(vars, sub' |-> t)
-    TFun(args, eff, res) -> TFun(args.map(fn(a) (a.fst, s |-> a.snd)), s |-> eff, s |-> res)
-    TCon -> tp
-    TVar(tv) -> s.find(tv)
-    TApp(t, args) -> TApp(s |-> t, args.map(fn(t') s |-> t'))
-    TSyn(syn, xs, t) -> TSyn(syn, xs, s |-> t)
-
-fun tn/substitute(s: sub, tn: tName): pure tName
-  match tn
-    TName(n, tp) -> TName(n, s |-> tp)
-
-fun pat/substitute(s: sub, p: pattern): pure pattern
-  match p
-    PatVar(tn, pat) -> PatVar(s |-> tn, s |-> pat)
-    PatCon(tn, args, repr, targs, exists0, tres,  conInfo, skip) ->
-      val sub' = s.remove(exists0)
-      PatCon(s |-> tn, sub' |-> args, repr, sub' |-> targs, exists0, sub' |-> tres, conInfo, skip)
-    PatWild -> PatWild
-    PatLit(l) -> PatLit(l)
-
 fun expr/substitute(s: sub, e: expr): pure expr
   match e
     Lam(tn, eff, e) -> Lam(s |-> tn, s |-> eff, s |-> e)
@@ -301,23 +261,109 @@ fun expr/substitute(s: sub, e: expr): pure expr
     Let(defGroups, e) -> Let(defGroups.map(s |-> _), s |-> e)
     Case(es, bs) -> Case(s |-> es, bs.map(s |-> _))
 
+// Type utilities for definition groups
+fun dg/free-type-vars(dg: defGroup): div tvs
+  match dg
+    DefRec(defs) -> defs.map(free-type-vars).unions
+    DefNonRec(e) -> free-type-vars(e)
 fun dg/substitute(s: sub, dg: defGroup): pure defGroup
   match dg
     DefRec(defs) -> DefRec(defs.map(s |-> _))
     DefNonRec(e) -> DefNonRec(s |-> e)
 
+// Type utilities for definitions
+fun def/free-type-vars(d: def): div tvs
+  d.ktype.free-type-vars + d.defExpr.free-type-vars
 fun def/substitute(s: sub, Def(name, scheme, expr, vis, isVal, inl, nameRng, doc): def): pure def
   Def(name, s |-> scheme, s |-> expr, vis, isVal, inl, nameRng, doc)
 
+// Type utilities for branches
+fun branch/free-type-vars(bs: branch): div tvs
+  match bs
+    Branch(p, e) -> 
+      e.free-type-vars - p.bound-type-vars + p.free-type-vars
 fun branch/substitute(s: sub, Branch(p, e): branch): pure branch
   val sub' = s.remove(p.bound-type-vars)
   Branch(s |-> p, sub' |-> e)
 
-fun guard/substitute(s: sub, g: guard): pure guard
-  match g
-    Guard(e, e2) -> Guard(s |-> e, s |-> e2)
+// Type utilities for patterns
+fun pat/free-type-vars(p: pattern): div tvs
+  match p
+    PatVar(tn, pat) -> tn.free-type-vars + pat.free-type-vars
+    PatCon(tn, args, _, targs, exists0, tres) ->
+      val tv1:tvs = tn.free-type-vars + args.free-type-vars
+      val tv2:tvs = tv1 + targs.free-type-vars 
+      val tv3:tvs = tv2 + tres.free-type-vars
+      tv3 - exists0
+    PatWild -> tvs/empty
+    PatLit(_) -> tvs/empty
+fun pat/bound-type-vars(p: pattern): div tvs
+  match p
+    PatVar(tn, pat) -> tn.bound-type-vars + pat.bound-type-vars
+    PatCon(tn, args, _, targs, exists0, tres) ->
+      val tv1: tvs = tn.bound-type-vars + args.bound-type-vars
+      val tv2: tvs = tv1 + targs.bound-type-vars
+      val tv3: tvs = tv2 + tres.bound-type-vars
+      tv3 + exists0.tvs
+    PatWild -> tvs/empty
+    PatLit(_) -> tvs/empty
+fun pat/substitute(s: sub, p: pattern): pure pattern
+  match p
+    PatVar(tn, pat) -> PatVar(s |-> tn, s |-> pat)
+    PatCon(tn, args, repr, targs, exists0, tres,  conInfo, skip) ->
+      val sub' = s.remove(exists0)
+      PatCon(s |-> tn, sub' |-> args, repr, sub' |-> targs, exists0, sub' |-> tres, conInfo, skip)
+    PatWild -> PatWild
+    PatLit(l) -> PatLit(l)
 
-// TODO: More
+// Type utilities for guards
+fun guard/free-type-vars(Guard(e, e2): guard): div tvs
+  e.free-type-vars + e2.free-type-vars
+fun guard/substitute(s: sub, Guard(e, e2): guard): pure guard
+  Guard(s |-> e, s |-> e2)
+
+// Type utilities for type names
+fun tn/free-type-vars(TName(_, tp): tName): div tvs
+  tp.free-type-vars
+fun tn/bound-type-vars(TName(_, tp): tName): div tvs
+  tp.bound-type-vars
+fun tn/substitute(s: sub, TName(n, tp): tName): pure tName
+  TName(n, s |-> tp)
+
+
+fun ordered-free-type-vars(tp: ktype) : list<typeVar>
+  match tp
+    TForAll(vars, tp') -> tp'.ordered-free-type-vars.filter(fn(tv) !vars.contains(tv))
+    TFun(args, eff, res) -> (args.map(snd) ++ [eff, res]).flatmap(_.pretend-decreasing.ordered-free-type-vars)
+    TCon() -> []
+    TVar(tv) -> [tv]
+    TApp(tp', args) -> tp'.ordered-free-type-vars ++ args.flatmap(_.pretend-decreasing.ordered-free-type-vars)
+    TSyn(_, xs, t) -> t.ordered-free-type-vars ++ xs.flatmap(_.pretend-decreasing.ordered-free-type-vars)
+
+// Strictly positive and negative type variables
+fun posneg-effects(tp : ktype)
+  val tvs1 = positive(tp)
+  val tvs2 = negative(tp)
+  val pos = tvs1 - tvs2
+  val neg = tvs2 - tvs1
+  (pos.filter(_.kind == kindEffect), neg.filter(_.kind == kindEffect))
+
+fun positive(tp: ktype): tvs
+  tp.posneg(True)
+fun negative(tp: ktype): tvs
+  tp.posneg(False)
+
+fun posneg(tp: ktype, is-pos: bool): tvs
+  match tp
+    TForAll(vars, tp') -> tp'.posneg(is-pos) - vars
+    TFun(args, eff, res) -> eff.posneg(is-pos) + res.posneg(is-pos) + args.map(_.snd.pretend-decreasing.posneg(!is-pos)).unions
+    TCon() -> tvs/empty
+    TVar(tv) -> if is-pos then linear-set([tv]) else tvs/empty
+    TApp(tp', args) -> tp'.posneg(is-pos) + args.map(_.pretend-decreasing.posneg(is-pos)).unions
+    TSyn(_, _, t) -> t.posneg(is-pos)
+
+// Operations requiring unique
+
 fun fresh-typevar(k: kind, fl: flavour)
   val idbase = match fl
     Meta -> "_v"
@@ -352,14 +398,14 @@ fun match-type(tp1: ktype, tp2: ktype): pure bool
 
 // For debugging purposes since we cannot include type/pretty
 fun show-type-var(tv: typeVar): string
-  tv.name.show ++ "::" ++ tv.kind.show
+  tv.tid.show ++ "::" ++ tv.kind.show
 
 fun show-tp(tp: ktype): string
   match tp
     TVar(tv) -> show-type-var(tv)
     TCon(c) -> c.name.show ++ "::" ++ c.kind.show
     TApp(tp, args) ->
-       show-tp(tp) ++ "<" ++ args.map(show-tp).join(", ") ++ ">"
+       show-tp(tp) ++ "<" ++ args.map(_.pretend-decreasing.show-tp).join(", ") ++ ">"
     TSyn(syn, xs, t) ->
-      "(syn:" ++ syn.name.show ++ " :: " ++ syn.kind.show ++ "<" ++ xs.map(show-tp).join(", ") ++ "> [" ++ show-tp(t) ++ "])"
+      "(syn:" ++ syn.name.show ++ " :: " ++ syn.kind.show ++ "<" ++ xs.map(_.pretend-decreasing.show-tp).join(", ") ++ "> [" ++ show-tp(t) ++ "])"
     _ -> "?"
