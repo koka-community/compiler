@@ -21,7 +21,7 @@ fun requires-implicits(tp: ktype)
 fun is-optional-or-implicit(p: (name, ktype))
   p.fst.is-implicit-param-name || p.snd.is-optional
 
-fun split-optional-implicit(pars: list<(name, ktype)>)
+fun split-optional-implicit(pars: list<(name, ktype)>): (list<(name, ktype)>, list<(name, ktype)>, list<(name, ktype)>)
   val (fixed, rst) = pars.span(!_.is-optional-or-implicit)
   val (opts, nameds) = rst.span(_.snd.is-optional)
   (fixed, opts, nameds)

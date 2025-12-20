@@ -9,8 +9,8 @@ Work on Syntax, Parsing, and Formatter
 - [x] syntax/ updated 11/29/25 (pretty, format are new)
 - [x] static/ updated 11/29/25
 - [x] kind/ updated 11/18/25
-- [x] type/type, type/kind 7/25
-- [x] type/operations, type/pretty, assumption 11/19/25
+- [x] type/unify, type/pretty, type/type, type/kind, type/operations 12/19/25
+- [ ] type/typevar (sub/lookup, tvs, oftv, posneg, etc), type/infgamma, type/infer-monad, type/infer
 - [ ] Before doing more `type` I really should figure out the design of substitutions / type inference
 - [ ] syntax/ needs debugging / tests
 

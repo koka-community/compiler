@@ -348,3 +348,18 @@ fun match-type(tp1: ktype, tp2: ktype): pure bool
     (TVar(v1), TVar(v2)) -> v1 == v2
     (TApp(t1, ts1), TApp(t2, ts2)) -> t1.match-type(t2) && match-types(ts1, ts2)
     _ -> False
+
+
+// For debugging purposes since we cannot include type/pretty
+fun show-type-var(tv: typeVar): string
+  tv.name.show ++ "::" ++ tv.kind.show
+
+fun show-tp(tp: ktype): string
+  match tp
+    TVar(tv) -> show-type-var(tv)
+    TCon(c) -> c.name.show ++ "::" ++ c.kind.show
+    TApp(tp, args) ->
+       show-tp(tp) ++ "<" ++ args.map(show-tp).join(", ") ++ ">"
+    TSyn(syn, xs, t) ->
+      "(syn:" ++ syn.name.show ++ " :: " ++ syn.kind.show ++ "<" ++ xs.map(show-tp).join(", ") ++ "> [" ++ show-tp(t) ++ "])"
+    _ -> "?"

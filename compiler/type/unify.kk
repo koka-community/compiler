@@ -16,13 +16,13 @@ import compiler/type/operations
 import compiler/core/core
 import std/data/linearset
 import std/data/linearmap
-
+// Updated 12/19/25 to commit #f2a9c90
 
 /// Do two types overlap on the argument types? Used to check for overlapping definitions of overloaded identifiers.
 fun overlaps(rng: range, free: tvs, tp1: ktype, tp2: ktype): <unify,pure,comp-flags,unique> ()
   val rho1 = instantiate(tp1, rng)
   val rho2 = instantiate(tp2, rng)
-  match (rho1.split-funType, rho2.split-funType)
+  match (rho1.split-fun-type, rho2.split-fun-type)
     // Values always overlap
     (Nothing, _) -> ()
     (_, Nothing) -> ()
@@ -31,80 +31,130 @@ fun overlaps(rng: range, free: tvs, tp1: ktype, tp2: ktype): <unify,pure,comp-fl
       val (fixed1, optional1, implicit1) = pars1.split-optional-implicit
       val (fixed2, optional2, implicit2) = pars2.split-optional-implicit
       val hi = max(fixed1.length, fixed2.length)
-      val fo1 = (fixed1 ++ optional1.map(unOptional) ++ implicit1.map(snd)).take(hi)
-      val fo2 = (fixed2 ++ optional2.map(unOptional) ++ implicit2.map(snd)).take(hi)
+      val fo1 = (fixed1.map(snd) ++ optional1.map(_.snd.un-optional) ++ implicit1.map(snd)).take(hi)
+      val fo2 = (fixed2.map(snd) ++ optional2.map(_.snd.un-optional) ++ implicit2.map(snd)).take(hi)
       if fo1.length != fo2.length then unify-error(NoMatchType) // one has more fixed arguments than the other can ever get
       else
         unifies(fo1, fo2)
         ()
 
 
-/// Does a type have the given named arguments?
-fun match-named(rng: range, tp: ktype, n: int, namedArgs: list<name>): <unify,pure,comp-flags,unique> ()
+/// Does a type have the given named arguments? Return the instantiated type if successful
+fun match-named(match-some: bool, rng: range, free: tvs, tp: ktype, n: int, namedArgs : list<name>, mb-res-tp: maybe<ktype>): <unify,pure,comp-flags,unique> rho
   val rho1 = instantiate(tp, rng)
-  match rho1.split-funType
+  match rho1.split-fun-type
     Nothing -> unify-error(NoMatchType)
-    Just((pars, _, _)) ->
+    Just((pars, _, res-tp)) ->
       if n + namedArgs.length > pars.length then unify-error(NoMatchType)
       else
         val npars = pars.drop(n)
         val names = npars.map(fst)
         if namedArgs.all(fn(nm) names.any(fn(n') nm == n')) then 
-          val rest = npars.filter(fn((nm, _)) !(namedArgs.any(fn(nm') nm' == nm))).map(snd)
-          if rest.all(isOptional) then ()
+          match mb-res-tp 
+            Nothing -> ()
+            Just(exp-tp) -> 
+              subsume(rng, free, exp-tp, res-tp)
+              ()
+          val rest = npars.filter(fn((nm, _)) !namedArgs.any(_ == nm))
+          if match-some || rest.all(is-optional-or-implicit) then 
+            subst(rho1)
           else unify-error(NoMatchType)
         else unify-error(NoMatchType)
 
-/// Does a function type match the given arguments? if the first argument 'matchSome' is ture,
+/// Does a function type match the given arguments? if the first argument `matchSome` is `True`,
 /// it is considered a match even if not all arguments to the function are supplied
-fun match-arguments(matchSome: bool, rng: range, free: tvs, tp: ktype, fixed: list<ktype>, namedArgs: list<(name,ktype)>): <unify,pure,comp-flags,unique> ()
+fun match-arguments(matchSome: bool, rng: range, free: tvs, tp: ktype, fixed: list<ktype>, namedArgs: list<(name,ktype)>, mb-res-tp: maybe<ktype>): <unify,pure,comp-flags,unique> rho
   val rho1 = instantiate(tp, rng)
-  match rho1.split-funType
-    Nothing -> unify-error(NoMatchType)
-    Just((pars, _, _)) ->
+  match rho1.split-fun-type
+    Nothing -> 
+      val res-tp = match mb-res-tp
+        Nothing -> fresh-star()
+        Just(t) -> t
+      val eff-tp = fresh-effect()
+      val fun-tp = TFun(fixed.map(fn(t) (name/nil, t)) ++ namedArgs, eff-tp, res-tp)
+      subsume(rng, free, tp, fun-tp)
+      subst(fun-tp)
+    Just((pars, _, res-tp)) ->
       if fixed.length + namedArgs.length > pars.length then unify-error(NoMatchType)
-      else // subsume fixed parameters
-        val (fpars, npars) = pars.split(fixed.length)
-        fpars.map(snd).zip(fixed).map(fn((tpar, targ)) subsume(rng, free, tpar.unOptional, targ))
+      else 
+        // subsume fixed parameters
+        val pars-not-named = pars.filter(fn((nm, _)) !(namedArgs.map(fst).any(_ == nm)))
+        val (fpars, rest) = pars-not-named.split(fixed.length)
+        fpars.map(snd).zipwith(fixed) fn(tpar, targ) 
+          subsume(rng, free, tpar.un-optional, targ)
         // subsume named parameters
         namedArgs.map fn((name, targ))
-          match npars.lookup(_ == name)
+          match pars.lookup(_ == name) // TODO: Should this be rest?
             Nothing -> unify-error(NoMatchType)
-            Just(tpar) -> subsume(rng, free, tpar, targ.makeOptional)
-        // check the rest is optional
-        val rest = npars.filter(fn((nm, _)) !(namedArgs.map(fst).any(_ == nm))).map(snd)
-        if matchSome || rest.all(isOptional) then ()
+            Just(tpar) -> subsume(rng, free, tpar.un-optional, targ)
+        // check if the result type matches
+        match mb-res-tp
+          Nothing -> ()
+          Just(exp-tp) -> 
+            subsume(rng, free, exp-tp, res-tp)
+            ()
+        // check the rest is optional or implicit
+        if matchSome || rest.all(is-optional-or-implicit) then 
+          rho1.subst
         else unify-error(NoMatchType)
+
+
+fun subsume-subst(rng: range, free: tvs, tp1: ktype, tp2: ktype): <unify,pure,comp-flags,unique|e> (ktype, rho, expr -> <unify,pure|e> expr)
+  subsume(rng, free, tp1.subst, tp2.subst)
+
+// See if two types match exactly up to renaming of free type variables
+fun match-shape(tp1: ktype, tp2: ktype): <pure,unify,unique> ()
+  unify(tp1, tp2)
+  val s = get-subst()
+  val dom = s.dom.list
+  val codomDup = s.list.map fn((_, t))
+    match t 
+      TVar(tv) -> tv
+      _ -> unify-error(NoMatchType)
+  val codom = codomDup.foldl(LinearSet([]), fn(acc, v) acc.add(v))
+  if dom.length == codom.length then ()
+  else unify-error(NoMatchType)
+
+// fun pure-match-shape(tp1: ktype, tp2: ktype): <pure,unique> bool
+//   with run-unique(0)
+//   val result =  
+//     with run-unify
+//     match-shape(tp1, tp2)
+//   match result
+//     (Right(_), unique) -> True
+//     _ -> False
 
 // Subsumption
 // subsume(free, t1, t2) holds if `t2` can be instantiated to `t1` where
 // `free` are the free type variables in the assumption.
-// Returns under which predicates this holds and a core transformer that needs to be
+// Returns a core transformer that needs to be
 // applied to the expression of type `t2`. Also returns a new type for the expected type `tp1` where 'some'
 // types have been properly substituted (and may be quantified).
-fun subsume(rng: range, free: tvs, tp1: ktype, tp2: ktype): <unify,pure,comp-flags,unique|e> (ktype, list<evidence>, expr -> <unify,pure|e> expr)
+fun subsume(rng: range, free: tvs, tp1: ktype, tp2: ktype): <unify,pure,comp-flags,unique|e> (ktype, rho, expr -> <unify,pure|e> expr)
   // skolemize, instantiate and unify
-  val (sks, evs1, rho1, _) = skolemizeEx(tp1, rng)
-  val (tvs, evs2, rho2, _) = skolemizeEx(tp2, rng)
+  val (sks, rho1, _) = skolemize-ex(tp1, rng)
+  val (tvs, rho2, _) = skolemize-ex(tp2, rng)
   unify(rho2, rho1)
   // escape check: no skolems should escape into the environment
   val sub = get-subst()
   val tvs1 : tvs = (free + tp1.free-type-vars)
   val allfree = tvs1.list
   val escaped = sub.list.filter(fn((tv, _)) allfree.any(_ == tv)).map(snd).free-type-vars.fsv
-  if escaped.disjoint(sks.tvsNew) then ()
+  if escaped.disjoint(sks.new/tvs) then ()
   else unify-error(NoSubsume)
-  val (evsEnt, coreEnt) = entails(sks.tvsNew, sub |-> evs1, sub |-> evs2)
   // final type
-  val (vars, ssub) = freshSub(Bound, sks)
-  val subx = ssub |-> sub
-  val tp = quantify-type(vars, qualify-type(evs1.map(subx |-> _.pred), subx |-> rho1)) // TODO: do rho1 and we get skolem errors: see Prelude.choose
+  val (vars, ssub) = fresh-sub(Bound, sks)
+  val subx = ssub.compose(sub)
+  val tp = quantify-type(vars, subx |-> rho1) // TODO: do rho1 and we get skolem errors: see Prelude.choose
+  fun core-next(expr) 
+    add-type-lambdas(vars, // generalize 
+                subx |-> add-type-apps(tvs, expr))
   // return
-  (tp, subx |-> evsEnt, 
-    fn(expr) add-type-lambdas(vars, // generalize 
-      subx |-> coreEnt( // apply evidence evs2 & abstract evidence evs1
-        add-type-apps(tvs, expr)))) // instantiate
+  (tp, subx |-> rho2, core-next) // instantiate
 
+/////////////////
+// Unification
+/////////////////
 
 // Unify two types
 fun unify(t1: ktype, t2: ktype): <pure,unify,unique> ()
@@ -146,30 +196,21 @@ fun unify(t1: ktype, t2: ktype): <pure,unify,unique> ()
       with with-err(effErr)
       unify(eff1, eff2)
     // quantified types
-    (TForAll(vars1, preds1, tp1), (TForAll(vars2, preds2, tp2))) | vars1.length == vars2.length && preds1.length == preds2.length ->
+    (TForAll(vars1, tp1), (TForAll(vars2, tp2))) | vars1.length == vars2.length ->
       // match kinds of quanitifers
       val kinds1 = vars1.map(kind)
       match-kinds(kinds1, vars2.map(kind))
       // replace with shared bound variables in both types
       // note: assumes ordered quantifiers and ordered predicates
       // note: we don't use Skolem as a Meta variable can unify with a Skolem but not with a Bound one
-      val vars = kinds1.map(freshTVar(_, Bound))
-      val sub1 = vars1.zip(vars).subNew
-      val sub2 = vars2.zip(vars).subNew
+      val vars = kinds1.map(fresh-tvar(_, Bound))
+      val sub1 = vars1.zip(vars).new/sub
+      val sub2 = vars2.zip(vars).new/sub
       val stp1 = sub1 |-> tp1
       val stp2 = sub2 |-> tp2
-      val spreds1 = sub1 |-> preds1
-      val spreds2 = sub2 |-> preds2
       // and unify the results
       unify(stp1, stp2)
-      unify-preds(spreds1, spreds2)
       // No need to check for escaping skolems as we don't unify to bound variables
-    // Special unsafe(!) handling of continuations; just for cps translation :-( 
-    (TSyn(syn1, args1, _), TSyn(syn2, args2, _)) | syn1.name == nameTpCont && syn2.name == nameTpCont ->
-      val n = args1.length
-      unifies(args1.take(n - 1), args2.take(n - 1))
-    (TSyn(syn1, args1, _), TFun([(_, tpar)], teff, _)) | syn1.name == nameTpCont ->
-      unifies(args1.take(2), [tpar, teff])
     // synonyms
     (TSyn(syn1, _, tp1), TSyn(syn2, _, tp2)) ->
       if syn1.rank > syn2.rank then unify(tp1, t2) else unify(t1, tp2)
@@ -195,7 +236,7 @@ fun unify-tvar(tv: typeVar, tp: ktype): <pure,unify> ()
           TVar(tv2 as TypeVar(id2, _, Meta)) | id <= id2 ->
             if id < id2 then unify-tvar(tv2, TVar(tv)) else () // TODO: Kind Check?
           _ ->
-            if !matchKind(k, tp.kind) then
+            if !match-kind(k, tp.kind) then
               trace("unify-tvar: kinds: typevar var:\n" ++ k.show ++ "\nand:\n" ++ tp.kind.show ++ "\ntype:\n" ++ tp.show)
               unify-error(NoMatchKind)
             else
@@ -222,13 +263,13 @@ fun unify-effect(tp1: ktype, tp2: ktype): <unify,pure,unique> ()
       unify-error(Infinite)
     _ ->
       val tail1 = if ds1.is-empty then tl1 else
-        val tv1 = freshTVar(kindEffect, Meta)
-        unify(tl1, ds1.effectExtends(tv1))
+        val tv1 = fresh-effect()
+        unify(tl1, ds1.effect-extends(tv1))
         tv1
       val stl2 = tl2.subst
       val tail2 = if ds2.is-empty then stl2 else
-        val tv2 = freshTVar(kindEffect, Meta)
-        unify(stl2, ds2.effectExtends(tv2))
+        val tv2 = fresh-effect()
+        unify(stl2, ds2.effect-extends(tv2))
         tv2
       val stail1 = tail1.subst
       unify(stail1, tail2)
@@ -237,8 +278,7 @@ fun unify-effect(tp1: ktype, tp2: ktype): <unify,pure,unique> ()
       ()
 
 fun extract-normalize-effect(tp: ktype): <pure,unify> (list<ktype>, ktype)
-  val tp' = tp.subst
-  tp'.extract-ordered-effect
+  tp.subst.extract-ordered-effect
 
 fun unify-effect-var(tv1: typeVar, tp2: ktype): <pure,unify,unique> ()
   val (ls2, tl2) = tp2.extract-ordered-effect // ls2 must be non-empty
@@ -246,23 +286,23 @@ fun unify-effect-var(tv1: typeVar, tp2: ktype): <pure,unify,unique> ()
     // e ~ <div,exn|e> ~> e := <div,exn|e'>
     TVar(tv2) | tv1 == tv2 -> unify-error(Infinite)
     _ ->
-      val tv = freshTVar(kindEffect, Meta)
-      unify-tvar(tv1, effectExtends(ls2, tl2))
+      unify-tvar(tv1, effect-extends(ls2, tl2))
 
+// Unify lists of ordered labels; return the difference
 fun unify-labels(ls1: list<ktype>, ls2: list<ktype>, closed1: bool, closed2: bool): <unify,pure,unique> (list<ktype>, list<ktype>)
   match (ls1, ls2)
     (Nil, Nil) -> (Nil, Nil)
-    (Cons, Nil) -> ([], [])
-    (Nil, Cons) -> ([], [])
+    (Cons, Nil) -> ([], ls1)
+    (Nil, Cons) -> (ls2, [])
     (Cons(l1, ll1), Cons(l2, ll2)) ->
       val (name1, _, args1) = l1.label-name-ex
       val (name2, _, args2) = l2.label-name-ex
-      match name1.label-name-compare(name2)
+      match name1.label-name/cmp(name2)
         Lt -> 
           val (ds1, ds2) = unify-labels(ll1, ls2, closed1, closed2)
           (ds1, Cons(l1, ds2))
         Gt ->
-          val (ds1, ds2) = unify-labels(ls1, ll2, closed1, closed2)
+          val (ds1, ds2) = unify-labels(ls1, ll2, closed1, closed2) // TODO: In Haskell it uses closed2 in both places!
           (Cons(l2, ds1), ds2)
         Eq -> // labels are equal
           match (args1, args2)
@@ -272,19 +312,18 @@ fun unify-labels(ls1: list<ktype>, ls2: list<ktype>, closed1: bool, closed2: boo
                   val (ds1, ds2) = unify-labels(ll1, ls2, closed1, closed2)
                   (ds1, Cons(l1, ds2))
                 else
-                  val (ds1, ds2) = unify-labels(ls1, ll2, closed1, closed2)
+                  val (ds1, ds2) = unify-labels(ls1, ll2, closed1, closed2) // TODO: In Haskell it uses ls2!
                   (Cons(l2, ds1), ds2)
             _ ->
               unify(l1, l2) // for heap effects and kind checks
-              val ll1' = ll1.subst
-              val ll2' = ll2.subst
-              unify-labels(ll1', ll2', closed1, closed2)
+              unify-labels(ll1.subst, ll2.subst, closed1, closed2)
 
 fun compare-label(l1: ktype, l2: ktype)
   val name1 = l1.label-name-ex.fst
   val name2 = l2.label-name-ex.fst
-  name1.label-name-compare(name2)
+  name1.label-name/cmp(name2)
 
+// Match a list of kinds
 fun match-kinds(kinds1: list<kind>, kinds2: list<kind>): <div,unify> ()
   match (kinds1, kinds2)
     (Nil, Nil) -> ()
@@ -307,14 +346,22 @@ fun with-err(e: unifyErr -> unifyErr, f: () -> <unify|e> a): <unify|e> a
     fun get-subst() get-subst() 
   f()
 
+fun run-unify(action: () -> <pure,unique,unify|e> a): <pure,unique|e> (either<unifyErr, ()>, sub)
+  var subst := sub/null
+  with handler
+    return(x) (Right(()), subst)
+    final ctl unify-error(e) (Left(e), subst)
+    fun extend-sub(tv, t) 
+      subst := subst.extend(tv, t)
+    fun get-subst() subst
+  action()
+
 fun type/subst(x: ktype): <pure,unify> ktype
   get-subst() |-> x
 
-fun list/subst(x: list<ktype>): <pure,unify> list<ktype>
-  get-subst() |-> x
-
-fun pred/subst(x: pred): <pure,unify> pred
-  get-subst() |-> x
+fun list/subst(xs: list<ktype>): <pure,unify> list<ktype>
+  xs.map() fn(x)
+    get-subst() |-> x
 
 type unifyErr
   NoMatchType
@@ -324,6 +371,3 @@ type unifyErr
   NoSubsume
   Infinite
   NoArgMatch(i1: int, i2: int)
-
-fun test0()
-  "".println

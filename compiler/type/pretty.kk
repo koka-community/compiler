@@ -355,11 +355,6 @@ fun pp-type(tp: ktype)
       overridePrec(precTop, {tp.pp-type}).pp-synonym(syn, args)
   t.color(colors.colorType)
 
-fun pp-predicates(preds: list<pred>)
-  if preds.is-nil then pprint/empty
-  else
-    " with".keyword |+| preds.map(pp-pred).hcat.align
-
 fun pp-fun(arrow, args, eff, result)
   args.map(fn(p) overridePrec(precTypeTop, {p.pp-param})).punctuate(comma).hsep.parens.pparens(prec, precTypeArrow) |+|
   (if eff.is-type-total then arrow else arrow |+| overridePrec(precTypeArrow, {eff.pp-type})) |+|
@@ -388,15 +383,6 @@ fun pp-name-plain(n: name)
     n.shorten-system-core-name.pretty
   else
     importsMap.get-alias(n).pretty
-
-// Predicates
-fun pp-pred(pred: pred)
-  val nm = match pred
-    PredSub(tp1, tp2) ->
-      overridePrec(precPred, {tp1.pp-type}) |+| "<=".text |+| overridePrec(precPred, {tp2.pp-type})
-    PredIFace(nm, args) ->
-      nm.pp-type-name |.| angled(args.map(fn(tp) overridePrec(precTypeTop, {tp.pp-type})))
-  nm.pparens(prec, precPred)
 
 fun pp-synonym(tpdoc: doc, ts: typeSyn, args: list<ktype>)
   val nm = overridePrec(precTypeTop, {TApp(TCon(TypeCon(ts.name, ts.kind)), args).pp-type}) |.| 
