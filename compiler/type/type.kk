@@ -1,3 +1,5 @@
+module compiler/type/type
+
 import compiler/common/syntax
 import compiler/common/name
 import compiler/common/name-prim
@@ -30,7 +32,7 @@ pub type ktype
   // final `ktype` is the "real" type (expanded)
   TSyn(syn: typeSyn, args: list<ktype>, t: ktype)
 
-fun ktype/show(tp: ktype): div string
+pub fun ktype/show(tp: ktype): div string
   match tp
     TForAll(vars, t) -> "forall " ++ vars.show-list(show) ++ " => " ++ t.show
     TFun(args, eff, t) -> "(" ++ args.show-list(fn((name, tp1)) name.name/name/show ++ tp1.pretend-decreasing.show) ++ " -> " ++ eff.show ++ " " ++ t.show ++ ")"
@@ -51,18 +53,18 @@ pub alias keffect = tau
 
 // Variables in a type which have an identifier and kind
 // One can ask for the free type variables in a type, and substitute them with 'Tau' types.
-pub value struct typeVar
+pub struct typeVar
   tid: id
   kind: kind
   flavour: flavour;
 
-fun show(t: typeVar): string
+pub fun show(t: typeVar): string
   t.tid.show-id ++ "::" ++ t.kind.show
 
-fun tv/(==)(t1: typeVar, t2: typeVar): bool
+pub fun tv/(==)(t1: typeVar, t2: typeVar): bool
   t1.tid == t2.tid // also flavours?
 
-fun tv/cmp(t1: typeVar, t2: typeVar)
+pub fun tv/cmp(t1: typeVar, t2: typeVar)
   cmp(t1.tid, t2.tid) // also flavours?
 
 // The flavour of a type variable. Types in a "Type.Assumption" (Gamma) and inferred types in "Core.Core"
@@ -70,12 +72,12 @@ fun tv/cmp(t1: typeVar, t2: typeVar)
 // Kind and Type variables come in three flavours: 'Unifiable'
 // variables can be unified, 'Skolem's are non-unifiable (fresh)
 // variables, and 'Bound' variables are bound by a quantifier.
-type flavour
+pub type flavour
   Bound
   Skolem
   Meta 
 
-fun flavour/(==)(f1: flavour, f2: flavour): bool
+pub fun flavour/(==)(f1: flavour, f2: flavour): bool
   match (f1, f2)
     (Meta, Meta) -> True
     (Skolem, Skolem) -> True
@@ -83,14 +85,14 @@ fun flavour/(==)(f1: flavour, f2: flavour): bool
     _ -> False
 
 // Type constants have a name and a kind
-value struct typeCon
+pub struct typeCon
   name: name
   kind: kind;
 
-fun typecon/(==)(t1: typeCon, t2: typeCon): bool
+pub fun typecon/(==)(t1: typeCon, t2: typeCon): bool
   name/(==)(t1.name, t2.name)
 
-fun typecon/cmp(t1: typeCon, t2: typeCon): order
+pub fun typecon/cmp(t1: typeCon, t2: typeCon): order
   t1.name.name/name/cmp(t2.name)
 
 // Type synonyms have an identifier, kind, and rank (= partial ordering among type synonyms)
@@ -100,10 +102,10 @@ pub struct typeSyn
   rank: synonymRank
   info: maybe<synInfo>
 
-fun typesyn/(==)(t1: typeSyn, t2: typeSyn): bool
+pub fun typesyn/(==)(t1: typeSyn, t2: typeSyn): bool
   name/(==)(t1.name, t2.name)
 
-fun typesyn/cmp(t1: typeSyn, t2: typeSyn): order
+pub fun typesyn/cmp(t1: typeSyn, t2: typeSyn): order
   t1.name.name/name/cmp(t2.name)
 
 // The rank of a type synonym gives a relative ordering among them. This is used
@@ -138,10 +140,10 @@ pub struct dataInfo
   vis: visibility
   doc: string
 
-fun datainfo/(==)(d1: dataInfo, d2: dataInfo): bool
+pub fun datainfo/(==)(d1: dataInfo, d2: dataInfo): bool
   name/(==)(d1.name, d2.name)
 
-fun datainfo/show(d: dataInfo): string
+pub fun datainfo/show(d: dataInfo): string
   d.name.name/name/show
 
 pub fun is-extend(d: dataInfo): bool
@@ -157,7 +159,7 @@ pub fun is-literal(d: dataInfo): bool
 pub fun di/is-lazy(d: dataInfo): bool
   d.def.datadef/is-lazy
 
-fun lazy-name(di: dataInfo, stem: string): exn name
+pub fun lazy-name(di: dataInfo, stem: string): exn name
   type-qualified-name(di.name, "lazy-" ++ stem).unqualify
 
 // Constructor information: constructor name, name of the newtype, field types, and the full type of the constructor
@@ -181,22 +183,22 @@ pub struct conInfo
   vis: visibility
   doc: string;
 
-fun coninfo/(==)(c1: conInfo, c2: conInfo): bool
+pub fun coninfo/(==)(c1: conInfo, c2: conInfo): bool
   name/(==)(c1.name, c2.name)
 
-fun coninfo/show(c: conInfo): string
+pub fun coninfo/show(c: conInfo): string
   c.name.name/name/show
 
-fun coninfo/size(c: conInfo, p: platform)
+pub fun coninfo/size(c: conInfo, p: platform)
   p.size(c.valueRepr)
 
-fun coninfo/scan-count(c: conInfo)
+pub fun coninfo/scan-count(c: conInfo)
   c.valueRepr.scan-count
 
-fun coninfo/is-lazy(c: conInfo): bool
+pub fun coninfo/is-lazy(c: conInfo): bool
   c.mblazy.is-just
 
-fun coninfo/lazy-fip(c: conInfo): fipT
+pub fun coninfo/lazy-fip(c: conInfo): fipT
   match c.mblazy
     Just(fp) -> fp
     Nothing -> noFip
@@ -212,25 +214,25 @@ pub struct synInfo
   pub vis: visibility
   doc: string;
 
-fun syninfo/(==)(s1: synInfo, s2: synInfo): bool
+pub fun syninfo/(==)(s1: synInfo, s2: synInfo): bool
   name/(==)(s1.name, s2.name)
 
-fun syninfo/show(s: synInfo): string
+pub fun syninfo/show(s: synInfo): string
   s.name.name/name/show
 
 // Is a type variable 'Bound'
-fun tv/is-bound(t: typeVar): bool
+pub fun tv/is-bound(t: typeVar): bool
   t.flavour == Bound
 
 // Is a type variable 'Meta' (e.g. unifiable)
-fun tv/is-meta(t: typeVar): bool
+pub fun tv/is-meta(t: typeVar): bool
   t.flavour == Meta
 
 // Is a type variable a 'Skolem' (e.g. not unifiable)
-fun tv/is-skolem(t: typeVar): bool
+pub fun tv/is-skolem(t: typeVar): bool
   t.flavour == Skolem
 
-fun is-mono-type(tp: ktype): bool
+pub fun is-mono-type(tp: ktype): bool
   match tp.expand-syn
     TForAll -> False
     _ -> True
@@ -239,7 +241,7 @@ fun is-mono-type(tp: ktype): bool
 // Split / add quantifiers
 
 // Split type into a list of universally quantified type variables and a rho type
-fun split-type-scheme(tp: ktype): (list<typeVar>, rho)
+pub fun split-type-scheme(tp: ktype): (list<typeVar>, rho)
   // We must split a synonym if its expansion includes further quantifiers
   fun must-split(tp': ktype)
     match tp'
@@ -256,13 +258,13 @@ fun shallow-split-vars(tp: ktype)
     TForAll(vars, t) -> (vars, t)
     _ -> ([], tp)
 
-fun expand-syn(tp: ktype): ktype
+pub fun expand-syn(tp: ktype): ktype
   match tp
     TSyn(_, _, t) -> expand-syn(t)
     _ -> tp
 
 // A type in canonical form has no type synonyms and expanded effect types.
-fun canonical-form(tp: ktype): pure ktype
+pub fun canonical-form(tp: ktype): pure ktype
   match tp
     TSyn(_, _, t) -> canonical-form(t)
     TForAll(vars, t) -> TForAll(vars, canonical-form(t))
@@ -271,7 +273,7 @@ fun canonical-form(tp: ktype): pure ktype
     _ -> tp
 
 // A type in minimal form is canonical and has no named function arguments
-fun minimal-form(tp: ktype): pure ktype
+pub fun minimal-form(tp: ktype): pure ktype
   match tp
     TSyn -> tp.canonical-form
     TForAll(vars, t) -> TForAll(vars, t.canonical-form)
@@ -279,11 +281,11 @@ fun minimal-form(tp: ktype): pure ktype
     TFun(args, eff, res) -> TFun(args.map(fn((_, t)) (name/nil, t.canonical-form)), order-effect(eff.canonical-form), res.canonical-form)
 
 // Create a type scheme from a list of quantifiers
-fun make-scheme(vars: list<typeVar>, rho: rho): scheme
+pub fun make-scheme(vars: list<typeVar>, rho: rho): scheme
   val (vars0, _) = rho.split-type-scheme
   tForall(vars ++ vars0, rho)
 
-fun quantify-type(vars: list<typeVar>, tp: scheme): scheme
+pub fun quantify-type(vars: list<typeVar>, tp: scheme): scheme
   val (vars0, rho) = tp.split-type-scheme
   tForall(vars ++ vars0, rho)
 
@@ -292,7 +294,7 @@ fun tForall(vars: list<typeVar>, rho: rho): scheme
     Nil -> rho
     _ -> TForAll(vars, rho)
 
-fun apply-type(tp1: ktype, tp2: ktype): ktype
+pub fun apply-type(tp1: ktype, tp2: ktype): ktype
   fun must-split(tp: ktype): bool
     match tp
       TApp -> True
@@ -303,12 +305,12 @@ fun apply-type(tp1: ktype, tp2: ktype): ktype
     TSyn(_, _, tp) | tp.must-split -> apply-type(tp, tp2)
     _ -> TApp(tp1, [tp2])
 
-fun type-arities(tp: ktype): (int, int)
+pub fun type-arities(tp: ktype): (int, int)
   match tp.split-fun-scheme
     Just((tvars, pars, _, _)) -> (tvars.length, pars.length)
     Nothing -> (0, 0)
 
-fun split-fun-scheme(tp: scheme): maybe<(list<typeVar>, list<(name, tau)>, keffect, tau)>
+pub fun split-fun-scheme(tp: scheme): maybe<(list<typeVar>, list<(name, tau)>, keffect, tau)>
   val (tvars, rho) = tp.split-type-scheme
   match rho.split-fun-type
     Just((pars, eff, res)) -> Just((tvars, pars, eff, res))
@@ -316,28 +318,28 @@ fun split-fun-scheme(tp: scheme): maybe<(list<typeVar>, list<(name, tau)>, keffe
 
 // Assertions
 // Is this a type variable?
-fun tp/is-tvar(tp: ktype): bool
+pub fun tp/is-tvar(tp: ktype): bool
   match tp
     TVar -> True
     TSyn(_, _, t) -> t.tp/is-tvar
     _ -> False
 
 // Is this a type constant?
-fun tp/is-tcon(tp: ktype): bool
+pub fun tp/is-tcon(tp: ktype): bool
   match tp
     TCon -> True
     TSyn(_, _, t) -> t.tp/is-tcon
     _ -> False
 
 // Is this a rho type? (i.e. no outermost quantifiers)
-fun is-rho(tp: ktype): bool
+pub fun is-rho(tp: ktype): bool
   match tp
     TForAll -> False
     TSyn(_, _, t) -> t.is-rho
     _ -> True
 
 // Is this a tau type? (i.e. no quantifiers anywhere)
-fun is-tau(tp: ktype): bool
+pub fun is-tau(tp: ktype): bool
   match tp
     TForAll -> False
     TFun(xs, e, r) -> xs.all(_.snd.pretend-decreasing.is-tau) && e.is-tau && r.is-tau
@@ -347,70 +349,70 @@ fun is-tau(tp: ktype): bool
     TSyn(_, _, t) -> t.is-tau
 
 // Is this a function type?
-fun is-fun(tp: ktype): bool
+pub fun is-fun(tp: ktype): bool
   match split-fun-type(tp)
     Just(_) -> True
     Nothing -> False
 
 // Split function type into argument list, effect type, and result type
-fun split-fun-type(tp: ktype): maybe<(list<(name, ktype)>, ktype, ktype)>
+pub fun split-fun-type(tp: ktype): maybe<(list<(name, ktype)>, ktype, ktype)>
   match tp
     TFun(args, eff, res) -> Just((args, eff, res))
     TSyn(_, _, t) -> t.split-fun-type
     _ -> Nothing
 
 // Primitive types
-val typeInt = TCon(tconInt)
-val tconInt = TypeCon(nameTpInt, kindStar)
-fun is-type-int(t: ktype): bool
+pub val typeInt = TCon(tconInt)
+pub val tconInt = TypeCon(nameTpInt, kindStar)
+pub fun is-type-int(t: ktype): bool
   match t
     TCon(c) -> c == tconInt
     _ -> False
 
-val typeInt32 = TCon(TypeCon(nameTpInt32, kindStar))
-val typeEvIndex = TSyn(TypeSyn(nameTpEvIndex, kindStar, 0, Nothing), [], typeSSizeT)
-val typeSSizeT = TCon(TypeCon(nameTpSSizeT, kindStar))
-val typeFloat = TCon(TypeCon(nameTpFloat, kindStar))
-val typeChar = TCon(tconChar)
-val tconChar = TypeCon(nameTpChar, kindStar)
-fun is-type-char(t: ktype): bool
+pub val typeInt32 = TCon(TypeCon(nameTpInt32, kindStar))
+pub val typeEvIndex = TSyn(TypeSyn(nameTpEvIndex, kindStar, 0, Nothing), [], typeSSizeT)
+pub val typeSSizeT = TCon(TypeCon(nameTpSSizeT, kindStar))
+pub val typeFloat = TCon(TypeCon(nameTpFloat, kindStar))
+pub val typeChar = TCon(tconChar)
+pub val tconChar = TypeCon(nameTpChar, kindStar)
+pub fun is-type-char(t: ktype): bool
   match t
     TCon(c) -> c == tconChar
     _ -> False
 
-val typeString = TCon(tconString)
-val tconString = TypeCon(nameTpString, kindStar)
-fun is-type-string(t: ktype): bool
+pub val typeString = TCon(tconString)
+pub val tconString = TypeCon(nameTpString, kindStar)
+pub fun is-type-string(t: ktype): bool
   match t
     TCon(c) -> c == tconString
     _ -> False
 
-fun type-resume-context(b: tau, e: keffect, e0: keffect, r: tau): tau
+pub fun type-resume-context(b: tau, e: keffect, e0: keffect, r: tau): tau
   val tcon = TypeCon(nameTpResumeContext, kind-fun(kindStar, kind-fun(kindEffect, kind-fun(kindEffect, kind-fun(kindStar, kindStar)))))
   TApp(TCon(tcon), [b, e, e0, r])
 
-val typeRef = TCon(TypeCon(nameTpRef, kind-fun(kindHeap, kind-fun(kindStar, kindStar))))
-val tconLocalVar = TypeCon(nameTpLocalVar, kind-fun(kindHeap, kind-fun(kindStar, kindStar)))
-fun is-type-localvar(tp: ktype): bool
+pub val typeRef = TCon(TypeCon(nameTpRef, kind-fun(kindHeap, kind-fun(kindStar, kindStar))))
+pub val tconLocalVar = TypeCon(nameTpLocalVar, kind-fun(kindHeap, kind-fun(kindStar, kindStar)))
+pub fun is-type-localvar(tp: ktype): bool
   match tp.expand-syn
     TApp(TCon(TypeCon(name)), [_, _]) -> name == nameTpLocalVar
     _ -> False
 
-fun is-value-operation(tp: ktype): bool
+pub fun is-value-operation(tp: ktype): bool
   match tp.split-type-scheme
     // TSyn(syn, [_]) -> syn.name == nameTpValueOp
     (_, TApp(TCon(TypeCon(nm)), [_, _])) -> nm == nameTpValueOp
     _ -> False
 
-fun make-value-operation(eff: ktype, tp: ktype)
+pub fun make-value-operation(eff: ktype, tp: ktype)
   val k = kind-fun(kindEffect, kind-fun(kindStar, kindStar))
   TApp(TCon(TypeCon(nameTpValueOp, k)), [eff, tp])
 
-fun order-effect(tp: tau): <exn,div> tau
+pub fun order-effect(tp: tau): <exn,div> tau
   val (ls, tl) = extract-ordered-effect(tp)
   ls.foldr(tl, effect-extend)
 
-fun extract-ordered-effect(tp: tau): pure (list<tau>, tau)
+pub fun extract-ordered-effect(tp: tau): pure (list<tau>, tau)
   val (labs, tl) = extract-effect-extend(tp)
   fun expand(l)
     val (ls, tl') = extract-effect-extend(l)
@@ -421,10 +423,10 @@ fun extract-ordered-effect(tp: tau): pure (list<tau>, tau)
   val slabs = labss.sort()
   (slabs, tl)
 
-fun label-name(tp: tau): exn name
+pub fun label-name(tp: tau): exn name
   tp.label-name-ex.fst
 
-fun label-name-full(tp: tau): pure name
+pub fun label-name-full(tp: tau): pure name
   val (name, i, _) = tp.label-name-ex
   val ids = i.show-id
   postpend(name, "$" ++ ids)
@@ -443,17 +445,17 @@ fun label-name-ex(tp: tau): exn (name, int, list<tau>)
       else (tc.name, 0, targs)
     _ -> throw("type/type labelNameEx: label is not a constant")
 
-val typePartial = TApp(tconHandled, [TCon(TypeCon(nameTpPartial, kindHandled))])
-val typeLocal = TCon(TypeCon(nameTpLocal, kindLocal))
-fun is-type-local(tp: ktype): bool
+pub val typePartial = TApp(tconHandled, [TCon(TypeCon(nameTpPartial, kindHandled))])
+pub val typeLocal = TCon(TypeCon(nameTpLocal, kindLocal))
+pub fun is-type-local(tp: ktype): bool
   match tp.expand-syn
     TApp(TCon(c)) -> c.name == nameTpLocal
     _ -> False
 
-val tconHandled = TCon(TypeCon(nameTpHandled, kind-fun(kindHandled, kindLabel)))
-val tconHandled1 = TCon(TypeCon(nameTpHandled1, kind-fun(kindHandled1, kindLabel)))
+pub val tconHandled = TCon(TypeCon(nameTpHandled, kind-fun(kindHandled, kindLabel)))
+pub val tconHandled1 = TCon(TypeCon(nameTpHandled1, kind-fun(kindHandled1, kindLabel)))
 
-fun wrap-handled-from-data-effect(de: dataEffect, eff: ktype)
+pub fun wrap-handled-from-data-effect(de: dataEffect, eff: ktype)
   match de
     DataEffect(is-named, is-linear) ->
       val name = make-tp-handled(is-named, is-linear)
@@ -477,18 +479,18 @@ fun is-effect-async(tp: tau): div bool
     TCon(TypeCon(hxName)) -> hxName == nameTpAsync
     _ -> False
 
-fun is-effect-tyvar(tp: tau): bool
+pub fun is-effect-tyvar(tp: tau): bool
   match tp
     TVar(v) -> v.kind == kindEffect
     _ -> False
 
-val effectEmpty = TCon(TypeCon(nameEffectEmpty, kindEffect))
-fun is-effect-empty(tp: tau): bool
+pub val effectEmpty = TCon(TypeCon(nameEffectEmpty, kindEffect))
+pub fun is-effect-empty(tp: tau): bool
   match tp.expand-syn
     TCon(tc) -> tc.name == nameEffectEmpty
     _ -> False
 
-fun effect-extend-no-dup(label: tau, eff: tau): pure tau
+pub fun effect-extend-no-dup(label: tau, eff: tau): pure tau
   val (ls, _) = label.extract-effect-extend
   match ls
     Nil ->
@@ -497,10 +499,10 @@ fun effect-extend-no-dup(label: tau, eff: tau): pure tau
       else app-effect-extend(label, eff)
     _ -> ls.effect-extend-no-dups(eff)
 
-fun effect-extend-no-dups(labels: list<tau>, eff: tau): pure tau
+pub fun effect-extend-no-dups(labels: list<tau>, eff: tau): pure tau
   labels.foldr(eff, effect-extend-no-dup)
 
-fun effect-extend(label: tau, eff: tau): pure tau
+pub fun effect-extend(label: tau, eff: tau): pure tau
   val (ls, _) = label.extract-effect-extend
   match ls
     Nil -> app-effect-extend(label, eff)
@@ -508,19 +510,19 @@ fun effect-extend(label: tau, eff: tau): pure tau
 
 val tconEffectExtend = TypeCon(nameEffectExtend, kind-fun(kindLabel, kind-fun(kindEffect, kindEffect)))
 
-fun effect-extends(labels: list<tau>, eff: tau): pure tau
+pub fun effect-extends(labels: list<tau>, eff: tau): pure tau
   // prevent over expansion of type synonyms here (see also: core/parse/teffect)
   match labels
     Cons(lab as TSyn(TypeSyn(_, kind)), _) | eff.is-effect-empty && kind == kindEffect -> lab
     _ -> labels.foldr(eff, effect-extend)
 
-fun effect-fixed(labels: list<tau>): pure tau
+pub fun effect-fixed(labels: list<tau>): pure tau
   effect-extends(labels, effectEmpty)
 
-fun is-effect-fixed(tp: tau): pure bool
+pub fun is-effect-fixed(tp: tau): pure bool
   tp.extract-effect-extend.snd.is-effect-empty
 
-fun extract-effect-extend(t: tau): pure (list<tau>, tau)
+pub fun extract-effect-extend(t: tau): pure (list<tau>, tau)
   fun extractLabel(l: tau): pure list<tau>
     match l.expand-syn
       TApp(TCon(tc), [_, _]) | tc.name == nameEffectExtend ->
@@ -534,14 +536,14 @@ fun extract-effect-extend(t: tau): pure (list<tau>, tau)
       (l.extractLabel ++ ls, tl)
     _ -> ([], t)
 
-fun shallow-extract-effect-extend(t: tau): (list<tau>, tau)
+pub fun shallow-extract-effect-extend(t: tau): (list<tau>, tau)
   match t
     TApp(TCon(tc), [l,e]) | tc.name == nameEffectExtend ->
       val (ls, tl) = e.shallow-extract-effect-extend
       (Cons(l, ls), tl)
     _ -> ([], t)
 
-fun shallow-effect-extend(label: tau, eff: tau): pure tau
+pub fun shallow-effect-extend(label: tau, eff: tau): pure tau
   // We do not expand type synonyms in the label here by using the 'shallow' version of extract
   // this means that type synonyms of kind E (ie. a fixed effect row) could stay around in
   // the label (which should have kind X).
@@ -552,7 +554,7 @@ fun shallow-effect-extend(label: tau, eff: tau): pure tau
     Nil -> app-effect-extend(label, eff)
     _ -> effect-extends(ls, eff)
 
-fun app-effect-extend(label: ktype, eff: ktype)
+pub fun app-effect-extend(label: ktype, eff: ktype)
   fun has-kind-label(l)
     val k = l.expand-syn.kind-of
     k == kindLabel || k == kindEffect
@@ -560,7 +562,7 @@ fun app-effect-extend(label: ktype, eff: ktype)
     throw("label has not kind X: " ++ label.show ++ " " ++ eff.show ++ " " ++ label.expand-syn.kind-of.show)
   TApp(TCon(tconEffectExtend), [label, eff])
 
-fun kind-of(tau: ktype)
+pub fun kind-of(tau: ktype)
   fun kind-apply(args: list<ktype>, k: kind)
     match (args, k)
       (Nil, k') -> k'
@@ -579,48 +581,47 @@ fun unsafe-type(f: () -> pure tau): tau
     try(f) fn(e) // TODO: Replace this with exit
       TCon(TypeCon("error".new-name, kindStar))
 
-val typeDivergent = unsafe-type({single-eff(nameTpDiv)})
+pub val typeDivergent = unsafe-type({single-eff(nameTpDiv)})
 fun single-eff(nm:name)
   effect-extend(TCon(TypeCon(nm, kindLabel)), effectEmpty)
-val typeTotal = effectEmpty
-val tconTotal = TypeCon(nameEffectEmpty, kindEffect)
+pub val typeTotal = effectEmpty
+pub val tconTotal = TypeCon(nameEffectEmpty, kindEffect)
 
-fun is-type-total(t: tau): bool
+pub fun is-type-total(t: tau): bool
   match t
     TCon(c) -> c == tconTotal
     _ -> False
 
-val typePure = unsafe-type({effect-fixed([typePartial, typeDivergent])})
-val typeBool = TCon(tconBool)
-fun is-type-bool(t: tau): bool
+pub val typePure = unsafe-type({effect-fixed([typePartial, typeDivergent])})
+pub val typeBool = TCon(tconBool)
+pub fun is-type-bool(t: tau): bool
   match t
     TCon(c) -> c == tconBool
     _ -> False
-val tconBool = TypeCon(nameTpBool, kindStar)
-fun is-type-unit(t: tau): bool
+pub val tconBool = TypeCon(nameTpBool, kindStar)
+pub fun is-type-unit(t: tau): bool
   match t
     TCon(c) -> c == tconUnit
     _ -> False
 // Type of ctail
-fun type-cctx(tp: tau)
+pub fun type-cctx(tp: tau)
   TSyn(tsynCCtx, [tp], TApp(typeCCtxx, [tp, tp]))
-val tsynCCtx = TypeSyn(nameTpCCtx, kind-fun(kindStar, kindStar), 0, Nothing)
-val typeCCtxx = TCon(tconCCtxx)
-val tconCCtxx = TypeCon(nameTpCCtxx, kind-fun(kindStar, kind-fun(kindStar, kindStar)))
+pub val tsynCCtx = TypeSyn(nameTpCCtx, kind-fun(kindStar, kindStar), 0, Nothing)
+pub val typeCCtxx = TCon(tconCCtxx)
+pub val tconCCtxx = TypeCon(nameTpCCtxx, kind-fun(kindStar, kind-fun(kindStar, kindStar)))
 // Type of cfield
-val typeFieldAddr = TCon(tconFieldAddr)
-val tconFieldAddr = TypeCon(nameTpFieldAddr, kind-fun(kindStar, kindStar))
-val typeVector = TCon(TypeCon(nameTpVector, kind-fun(kindStar, kindStar)))
-val typeList = TCon(tconList)
-val tconList = TypeCon(nameTpList, kind-fun(kindStar, kindStar))
-
-val typeEv = TCon(tconEv)
-val tconEv = TypeCon(nameTpEv, kind-fun(kindStar, kindStar))
-fun is-ev-type(tp: tau): bool
+pub val typeFieldAddr = TCon(tconFieldAddr)
+pub val tconFieldAddr = TypeCon(nameTpFieldAddr, kind-fun(kindStar, kindStar))
+pub val typeVector = TCon(TypeCon(nameTpVector, kind-fun(kindStar, kindStar)))
+pub val typeList = TCon(tconList)
+pub val tconList = TypeCon(nameTpList, kind-fun(kindStar, kindStar))
+pub val typeEv = TCon(tconEv)
+pub val tconEv = TypeCon(nameTpEv, kind-fun(kindStar, kindStar))
+pub fun is-ev-type(tp: tau): bool
   match tp
     TCon(c) -> c == tconEv
     _ -> False
-fun make-ev-type(arg: tau): tau
+pub fun make-ev-type(arg: tau): tau
   type-app(typeEv, [arg])
 // Create an application (reduced form)
 fun type-app(tau: tau, args: list<tau>): tau
@@ -630,29 +631,29 @@ fun type-app(tau: tau, args: list<tau>): tau
       TApp(tau', ts0) -> TApp(tau', ts0 ++ args)
       _ -> TApp(tau, args)
 
-val typeUnit = TCon(tconUnit)
-val tconUnit = TypeCon(nameTpUnit, kindStar)
-val typeVoid = TCon(TypeCon(nameTpVoid, kindStar))
-val typeReuse = TCon(TypeCon(nameTpReuse, kindStar))
-val typeAny = TCon(TypeCon(nameTpAny, kindStar))
-fun type-make-tuple(tps)
+pub val typeUnit = TCon(tconUnit)
+pub val tconUnit = TypeCon(nameTpUnit, kindStar)
+pub val typeVoid = TCon(TypeCon(nameTpVoid, kindStar))
+pub val typeReuse = TCon(TypeCon(nameTpReuse, kindStar))
+pub val typeAny = TCon(TypeCon(nameTpAny, kindStar))
+pub fun type-make-tuple(tps)
   match tps
     Nil -> typeUnit
     [tp] -> tp
     _ -> type-app(type-tuple(tps.length), tps)
 
-fun type-tuple(n: int)
+pub fun type-tuple(n: int)
   TCon(TypeCon(name-tuple(n), kind-fun-n(kindStar.replicate(n), kindStar)))
-val typeOptional = TCon(tconOptional)
-val tconOptional = TypeCon(nameTpOptional, kind-fun(kindStar, kindStar))
-fun is-optional(tp: ktype): bool
+pub val typeOptional = TCon(tconOptional)
+pub val tconOptional = TypeCon(nameTpOptional, kind-fun(kindStar, kindStar))
+pub fun is-optional(tp: ktype): bool
   match tp.expand-syn
     TApp(TCon(tc), [_]) -> tc == tconOptional
     _ -> False
-fun make-optional(tp: ktype): ktype
+pub fun make-optional(tp: ktype): ktype
   TApp(typeOptional, [tp])
 
-fun un-optional(tp: ktype): ktype
+pub fun un-optional(tp: ktype): ktype
   match tp.expand-syn
     TApp(TCon(tc), [t]) | tc == tconOptional -> t
     _ -> tp
@@ -676,7 +677,7 @@ fun tcon/to-type(c: typeCon)
 fun elem-type(t: ktype, ts: list<ktype>)
   ts.any(fn(t1) t.eq-type(t1))
 
-fun eq-type(tp1: ktype, tp2: ktype)
+pub fun eq-type(tp1: ktype, tp2: ktype)
   match (tp1.expand-syn, tp2.expand-syn)
     (TForAll(vs1, t1), TForAll(vs2, t2)) -> 
       vs1 == vs2 && eq-type(t1, t2)

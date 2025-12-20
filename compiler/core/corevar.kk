@@ -64,7 +64,7 @@ fun def/free-vars(Def(_, _, e): def): div linearSet<tName>
   e.free-vars
 
 // Term substitutions
-fun list/(|->)(sub: list<(tName, expr)>, l: list<a>, ?(|->): (list<(tName, expr)>, a) -> pure a): pure list<a>
+noinline fun list/(|->)(sub: list<(tName, expr)>, l: list<a>, ?(|->): (list<(tName, expr)>, a) -> pure a): pure list<a>
   l.map(sub |-> _)
 
 fun dg/(|->)(sub: list<(tName, expr)>, dg: defGroup): pure defGroup
@@ -94,10 +94,10 @@ fun expr/(|->)(sub: list<(tName, expr)>, ex: expr): pure expr
       Let(sub' |-> dgs, sub' |-> e)
     Case(exprs, bs) -> Case(sub |-> exprs, sub |-> bs)
 
-fun branch/(|->)(sub: list<(tName, expr)>, Branch(patts, guards): branch): pure branch
+noinline fun branch/(|->)(sub: list<(tName, expr)>, Branch(patts, guards): branch): pure branch
   val bvpat = patts.map(bound-vars).unions
   val sub' = sub.filter(fn((nm, _)) !bvpat.member(nm))
   Branch(patts, sub' |-> guards)
 
-fun guard/(|->)(sub: list<(tName, expr)>, Guard(test, expr): guard): pure guard
+noinline fun guard/(|->)(sub: list<(tName, expr)>, Guard(test, expr): guard): pure guard
   Guard(sub |-> test, sub |-> expr)

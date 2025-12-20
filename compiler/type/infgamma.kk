@@ -23,7 +23,7 @@ alias infGamma = name-map<list<nameInfo>>
 
 effect infGammaEff
   fun gamma-extend(name: name, ni: nameInfo): ()
-  fun gamma-lookupx(name: name): maybe<nameInfo>
+  fun gamma-lookup-ex(guard: (nameInfo) -> bool, name: name): either<list<(name, nameInfo)>, (name, nameInfo)>
   fun gamma-set(inf: infGamma): ()
   fun gamma-get(): infGamma
 
@@ -31,7 +31,7 @@ fun inf-gamma(ig0: infGamma, f: () -> <infGammaEff,exn,comp-flags|e> a): <exn,co
   var ig := ig0
   with handler
     fun gamma-extend(name: name, ni: nameInfo) ig := ig.inf-gamma/extend(name, ni)
-    fun gamma-lookupx(name: name) Nothing // ig.lookup(name)
+    fun gamma-lookup-ex(guard, name) ig.inf-gamma/lookup-ex(guard, name)
     fun gamma-set(inf: infGamma) ig := inf
     fun gamma-get() ig
   f()
@@ -67,9 +67,52 @@ fun inf-gamma-eff/extend-x(name: name, cname: name, tp: ktype, scope-depth, rng:
 fun inf-gamma/extend-x(ig: infGamma, name: name, cname: name, tp: ktype, scope-depth, rng: range, isVar: bool, doc: string)
   ig.extend(name, InfoVal(Public, cname, tp, scope-depth, rng, isVar, False, doc))
 
-// Lookup any exact match in the local scope
-// Note that recursive definitions add the fully qualified name to the infgamma,
+// lookup any exact match in the local scope
+// note that recursive definitions add the fully qualified name to the infgamma,
 // in that case we also consider it an exact match with just the stem.
+fun inf-gamma/lookup(ig: infGamma, name: name): either<list<(name, nameInfo)>, (name, nameInfo)>
+  match ig.lookup-ex(fn(_) True, name)
+    Left([(name', info)]) -> Right((name', info))
+    other -> other
+
+fun inf-gamma-eff/lookup(name: name): <infGammaEff> either<list<(name, nameInfo)>, (name, nameInfo)>
+  match gamma-lookup-ex(fn(_) True, name)
+    Left([(name', info)]) -> Right((name', info))
+    other -> other
+
+// lookup a local name: return either a list of possibly matching (locally qualified) names, or an exact match
+fun inf-gamma/lookup-ex(ig: infGamma, guard: (nameInfo) -> bool, name: name): either<list<(name, nameInfo)>, (name, nameInfo)>
+  val mbinfos = ig.lookup(name.unqualify-full)
+  match mbinfos
+    Nothing -> Left([])
+    Just(infos) ->
+      val lqname = name.requalify-locally
+      match infos.filter(fn(info) guard(info) && info.cname == lqname)
+        Cons(info, _) -> Right((info.cname, info))
+        [] ->
+          val matches = infos.filter(fn(info) guard(info) && match-qualifiers(name, info.cname))
+          Left(matches.map(fn(info) (info.cname, info)))
+
+fun inf-gamma-eff/lookup-ex(guard: (nameInfo) -> bool, name: name): <infGammaEff> either<list<(name, nameInfo)>, (name, nameInfo)>
+  gamma-lookup-ex(guard, name)
+
+fun inf-gamma/map(ig: infGamma, f: (ktype) -> ktype): infGamma
+  ig.map(fn(_, infos) infos.map(fn(i : nameInfo) i(typ = f(i.typ))))
+
+fun inf-gamma/union(ig1: infGamma, ig2: infGamma): <exn> infGamma
+  ig1.union-with(ig2, fn(nis1, nis2) ni/combine(nis2, nis1)) // right-biased
+
+fun inf-gamma/unions(igs: list<infGamma>): <exn> infGamma
+  igs.foldr(inf-gamma/empty, inf-gamma/union)
+
+fun inf-gamma/is-empty(ig: infGamma): bool
+  ig.internal.is-nil
+
+fun inf-gamma/single(name: name, tp: ktype, scope-depth: int, doc: string): <exn> infGamma
+  inf-gamma/empty.extend-tp(name, name, tp, scope-depth, doc)
+
+fun inf-gamma/new(tnames: list<(name,ktype,int,string)>): <exn> infGamma
+  inf-gamma/empty.extends(tnames)
 
 fun inf-gamma/list(ig: infGamma): pure list<(name, ktype)>
   ig.linearmap/list.flatmap(fn((_, infos)) infos.map(fn(info) (info.cname, info.typ)))

@@ -1,16 +1,18 @@
+module compiler/type/assumption
+
 import compiler/common/syntax
 import compiler/common/name
 import compiler/common/range
 import compiler/common/color-scheme
-import compiler/type/type
-import compiler/type/pretty
-import compiler/core/core
 import compiler/common/name-collections
-import compiler/lib/pprint
 import compiler/common/failure
 import compiler/platform/config
-import compiler/core/corevar
+import compiler/type/type
 import compiler/type/typevar
+import compiler/core/core
+import compiler/core/corevar
+import compiler/type/pretty
+import compiler/lib/pprint
 import std/data/linearmap
 import std/data/linearset
 import std/os/path
@@ -18,28 +20,28 @@ import std/data/sort
 // Updated to #ddac17b on 11/19/25
 pub infixr 5 (|->)
 
-type nameInfo
+pub type nameInfo
   InfoVal(vis: visibility, cname: name, typ: scheme, scopeDepthX: int, range: range, isVar: bool, allowImplicitMaskX: bool, doc: string)
   InfoFun(vis: visibility, cname: name, typ: scheme, scopeDepthX: int, arity: (int, int), fipt: fipT, range: range, doc: string)
   InfoCon(vis: visibility, typ: scheme, repr: conRepr, conInfo: conInfo, range: range, doc: string)
   InfoExternal(vis: visibility, cname: name, typ: scheme, format: list<(target, string)>, fipt: fipT, range: range, doc: string)
   InfoImport(vis: visibility, typ: scheme, nameAlias: name, fullName: name, range: range)
 
-fun (==)(ni1: nameInfo, ni2: nameInfo)
+pub fun (==)(ni1: nameInfo, ni2: nameInfo)
   range/(==)(ni1.range, ni2.range)
 
-fun scope-depth(ni: nameInfo): int
+pub fun scope-depth(ni: nameInfo): int
   match ni 
     InfoVal(scopeDepthX = depth) -> depth
     InfoFun(scopeDepthX = depth) -> depth
     _ -> 0
 
-fun allow-implicit-mask(ni: nameInfo): bool
+pub fun allow-implicit-mask(ni: nameInfo): bool
   match ni
     InfoVal(allowImplicitMaskX = allow) -> allow
     _ -> False
 
-fun show(ni: nameInfo): div string
+pub fun show(ni: nameInfo): div string
   match ni
     InfoVal(vis, cname, typ, scope, range, isVar, allowImplicitMask, doc) -> "InfoVal(" ++ show(vis) ++ ", " ++ show(cname) ++ ", " ++ show(typ) ++ ", " ++ show(scope) ++ ", " ++ show-full-range(range, "".path) ++ ", " ++ show(isVar) ++ "," ++ show(allowImplicitMask) ++ "," ++  show(doc) ++ ")"
     InfoFun(vis, cname, typ, scope, arity, fipt, range, doc) -> "InfoFun(" ++ show(vis) ++ ", " ++ show(cname) ++ ", " ++ show(typ) ++ ", " ++ show(scope) ++ ", " ++ show-tuple(arity, show, show) ++ ", " ++ show(fipt) ++ ", " ++ show-full-range(range, "".path) ++ "," ++ show(doc) ++ ")"
@@ -47,7 +49,7 @@ fun show(ni: nameInfo): div string
     assumption/InfoExternal(vis, cname, typ, format, fipt, range, doc) -> "InfoExternal(" ++ show(vis) ++ ", " ++ show(cname) ++ ", " ++ show(typ) ++ ", " ++ show-list(format, _.show-tuple(show, id)) ++ ", " ++ show(fipt) ++ ", " ++ show-full-range(range, "".path) ++ "," ++ show(doc) ++ ")"
     InfoImport(vis, typ, nameAlias, fullName, range) -> "InfoImport(" ++ show(vis) ++ ", " ++ show(typ) ++ ", " ++ show(nameAlias) ++ ", " ++ show(fullName) ++ ", " ++ show-full-range(range, "".path) ++ ")"
 
-fun info-sort(ni: nameInfo)
+pub fun info-sort(ni: nameInfo)
   match ni
     InfoVal -> "val"
     InfoFun -> "fun"
@@ -55,34 +57,34 @@ fun info-sort(ni: nameInfo)
     InfoCon -> "con"
     InfoImport -> "module"
 
-fun canonical-name(info: nameInfo, name: name)
+pub fun canonical-name(info: nameInfo, name: name)
   match info
     InfoVal(cname=c) -> c
     InfoFun(cname=c) -> c
     assumption/InfoExternal(cname=c) -> c
     _ -> name
 
-fun cname(info: nameInfo)
+pub fun cname(info: nameInfo)
   match info
     InfoVal(cname=c) -> c
     InfoFun(cname=c) -> c
     assumption/InfoExternal(cname=c) -> c
     _ -> throw("type/assumption cname")
 
-fun is-info-val-fun-ext(info)
+pub fun is-info-val-fun-ext(info)
   match info
     InfoVal(_) -> True
     InfoFun(_) -> True
     assumption/InfoExternal(_) -> True
     _ -> False
 
-fun is-info-fun-or-external(info)
+pub fun is-info-fun-or-external(info)
   match info
     InfoFun(_) -> True
     assumption/InfoExternal(_) -> True
     _ -> False
 
-fun doc(info)
+pub fun doc(info)
   match info
     InfoVal(doc=d) -> d
     InfoFun(doc=d) -> d
@@ -90,28 +92,28 @@ fun doc(info)
     assumption/InfoExternal(doc=d) -> d
     _ -> ""
 
-fun fipT(info: nameInfo)
+pub fun fipT(info: nameInfo)
   match info
     InfoFun(fipt=fipt) -> fipt
     assumption/InfoExternal(fipt=fipt) -> fipt
     _ -> noFip
 
-fun element(info: nameInfo)
+pub fun element(info: nameInfo)
   match info
     InfoCon() -> "constructor"
     InfoImport() -> "import"
     _ -> "identifier"
 
-fun is-visible(info: nameInfo)
+pub fun is-visible(info: nameInfo)
   info.vis.is-public
 
-fun core-var-info(info: nameInfo)
+pub fun core-var-info(info: nameInfo)
   match info
     InfoVal -> InfoNone
     InfoFun(arity=(m,n)) -> InfoArity(m, n)
     assumption/InfoExternal(format=f) -> compiler/core/core/InfoExternal(f)
 
-fun core-expr(info: nameInfo, qname: name)
+pub fun core-expr(info: nameInfo, qname: name)
   match info
     InfoVal(_, cname, tp) -> Var(TName(cname, tp), InfoNone)
     InfoFun(_, cname, tp, _, (m, n), _) -> Var(TName(cname, tp), InfoArity(m ,n))
@@ -121,38 +123,38 @@ fun core-expr(info: nameInfo, qname: name)
 // Names to type schemes.
 // Due to overloading there may be multiple entries for the same qualified name
 
-alias gamma = name-map<list<(name, nameInfo)>>
-val empty:gamma = LinearMap([])
+pub alias gamma = name-map<list<(name, nameInfo)>>
+pub val empty:gamma = LinearMap([])
 
-fun schemes(g: gamma): list<scheme>
+pub fun schemes(g: gamma): list<scheme>
   g.gamma-list.map(_.snd.typ)
 
-fun single(name: name, ni: nameInfo)
+pub fun single(name: name, ni: nameInfo)
   assumption/empty.set(name, [(name, ni)])
 
-fun gamma/new(xs: list<(name, nameInfo)>): gamma
+pub fun gamma/new(xs: list<(name, nameInfo)>): gamma
   gamma-extends(empty, xs)
 
-fun gamma-extends(g: gamma, ls: list<(name,nameInfo)>): gamma
+pub fun gamma-extends(g: gamma, ls: list<(name,nameInfo)>): gamma
   ls.foldl(g, fn(m, (name,tp)) m.gamma-extend(name, tp))
 
-fun gamma-extend(g: gamma, name: name, ni: nameInfo)
+pub fun gamma-extend(g: gamma, name: name, ni: nameInfo)
   g.update(name.unqualify-full, [(name, ni)], fn(old:list<_>, new) old ++ new) // TODO: Check for overlapping type schemes?
 
-fun gamma-lookup-canonical(g: gamma, name: name)
+pub fun gamma-lookup-canonical(g: gamma, name: name)
   g.gamma-lookupQ(name).filter(_.canonical-name(nil) == name)
 
-fun gamma-lookup-exact-con(g: gamma, name: name)
+pub fun gamma-lookup-exact-con(g: gamma, name: name)
   g.gamma-lookupQ(name).filter(is-infoCon)
 
 // Return exactly matching qualified names
-fun gamma-lookupQ(g: gamma, name: name)
+pub fun gamma-lookupQ(g: gamma, name: name)
   match g.lookup(name.unqualify-full)
     Nothing -> []
     Just(xs) -> xs.filter(_.fst == name).map(snd)
 
 // @gamma-lookup name gamma@ looks up a potentially (partially) qualified name and returns all matches.
-fun gamma-lookup(g: gamma, name: name)
+pub fun gamma-lookup(g: gamma, name: name)
   val stem-name = name.unqualify-full
   match g.lookup(stem-name)
     Nothing -> []
@@ -168,13 +170,13 @@ fun gamma-lookup(g: gamma, name: name)
 // Note that the user qualified name might not distinguish local qualification from module qualification,
 // e.g. `std/core/int/show` vs  `std/core/#int/show`.
 // ambiguities may occur, where `std/num/float32/foo` should match both `std/num/#float32/foo` and `std/num/float32/#foo`
-fun match-qualifiers(uname: name, name: name)
+pub fun match-qualifiers(uname: name, name: name)
   match-rev-qualifier-paths(uname.split-rev-qualifiers, name.split-rev-qualifiers)
 
-fun is-prefix-of(u: list<string>, p: list<string>)
+pub fun is-prefix-of(u: list<string>, p: list<string>)
   u.length <= p.length && u.zip(p).all(fn((a, b)) a == b)
 
-fun match-rev-qualifier-paths(upaths: (list<string>,list<string>), paths: (list<string>,list<string>)): bool
+pub fun match-rev-qualifier-paths(upaths: (list<string>,list<string>), paths: (list<string>,list<string>)): bool
   match (upaths, paths)
     (([], []), (Cons, Cons)) -> True // not qualified
     ((umpath, []), (mpath, [])) -> umpath.is-prefix-of(mpath) // no user specified local path
@@ -189,52 +191,52 @@ fun match-rev-qualifier-paths(upaths: (list<string>,list<string>), paths: (list<
 
 // Split out the module and local qualifier as a _reverse_ list of components
 // e.g. `std/core/#int/show` -> (["core","std"],["int"])
-fun split-rev-qualifiers(name: name): (list<string>, list<string>)
+pub fun split-rev-qualifiers(name: name): (list<string>, list<string>)
   val mpath = name.split-module-name.reverse
   val lpath = name.split-local-qual-name.reverse
   (mpath, lpath)
 
-fun gamma-lookup-prefix(g: gamma, name: name): list<(name, nameInfo)>
+pub fun gamma-lookup-prefix(g: gamma, name: name): list<(name, nameInfo)>
   val pre = name.unqualify.show-plain ++ "_"
   fun is-prefix(nm: name)
     nm == name || nm.name/name/starts-with(pre)
   g.filter(fn(n, ni) n.is-prefix).values.concat.filter(fn((_, ni)) ni.is-visible)
 
-fun gamma-map(g: gamma, f: (nameInfo -> nameInfo)): gamma
+pub fun gamma-map(g: gamma, f: (nameInfo -> nameInfo)): gamma
   g.map(fn(k, xs) xs.map(fn((n, ni)) (n, f(ni))))
 
-fun gamma-list(g: gamma): list<(name, nameInfo)>
+pub fun gamma-list(g: gamma): list<(name, nameInfo)>
   g.list.map(snd).concat.sort(?(<)=fn((n, _), (n2, _)) n.name/name/cmp(n2).is-lt)
 
-fun gamma-remove(g: gamma, name: name)
+pub fun gamma-remove(g: gamma, name: name)
   g.remove(name.unqualify)
 
-fun gamma-union(g1: gamma, g2: gamma)
+pub fun gamma-union(g1: gamma, g2: gamma)
   g2.union-with(g1, fn(xs1: list<_>, xs2) xs1 ++ xs2)
 
-fun gamma-unions(gs: list<gamma>)
+pub fun gamma-unions(gs: list<gamma>)
   gs.foldl(compiler/type/assumption/empty, gamma-union)
 
 // Filter out signature belonging to a module
-fun gamma-filter(g: gamma, mod: name)
+pub fun gamma-filter(g: gamma, mod: name)
   g.filter(fn(k, _) k.qualifier == mod)
 
-fun gamma-names(g: gamma)
+pub fun gamma-names(g: gamma)
   g.keys
 
-fun gamma-public-names(g: gamma)
+pub fun gamma-public-names(g: gamma)
   g.filter(fn(n, nis) !n.is-hidden-name && nis.all(fn((_, ni)) ni.is-visible)).keys
 
 // Extract from core
-fun extract-gamma-imports(imports: list<(name,name)>, modName: name): gamma
+pub fun extract-gamma-imports(imports: list<(name,name)>, modName: name): gamma
   val modAlias = modName //.nameStem.list.reverse.take-while(_ != '.').reverse.string.new-name
   imports.map(extract-import).gamma-unions.gamma-extend(modAlias, InfoImport(Private, typeVoid, modAlias, modName, null))
 
-fun extract-import((name, qname))
+pub fun extract-import((name, qname))
   qname-map/single(name, InfoImport(Private, typeVoid, name, qname, null))
 
 // Extract a Gamma from a Core module
-fun extract-gamma(isValue: (dataInfo -> bool), privateAsPublic: bool, c: core): <exn, comp-flags> gamma
+pub fun extract-gamma(isValue: (dataInfo -> bool), privateAsPublic: bool, c: core): <exn, comp-flags> gamma
   fun update-vis(vis)
     match vis
       Public -> Public
@@ -263,15 +265,15 @@ fun extract-def-group(d: defGroup, update-vis)
 fun extract-def(d: def, update-vis)
   qname-map/single(d.def-name, create-name-infoX(update-vis(d.vis), d.def-name, 0, d.sort, d.nameRange, d.ktype, d.doc)) // specials since we cannot call isTopLevel as in coreDefInfo
 
-fun core-def-info(d: def, scopeDepth)
+pub fun core-def-info(d: def, scopeDepth)
   (d.def-name, create-name-infoX(d.vis, d.def-name, scopeDepth, if d.sort.is-defFun && !d.is-top-level then DefVal else d.sort, d.nameRange, d.ktype, d.doc))
 // since we use coreDefInfo also for local definitions, we need to be careful to to use DefFun for
 // things that do not get lifted to toplevel due to free type/variables. test: codegen/rec5
 
-fun create-name-info(name, scopeDepth, is-val, rng, tp, doc)
+pub fun create-name-info(name, scopeDepth, is-val, rng, tp, doc)
   create-name-infoX(Public, name, scopeDepth, if is-val then DefVal else DefFun([]), rng, tp, doc)
 
-fun create-name-infoX(vis, name, scopeDepth: int, sort, rng, tp, doc)
+pub fun create-name-infoX(vis, name, scopeDepth: int, sort, rng, tp, doc)
   create-name-infoEX(vis, name, scopeDepth, sort, False, rng, tp, doc)
 
 fun create-name-infoEX(vis, name, scopeDepth: int, sort, allowImplicitMask, rng, tp, doc)
@@ -285,7 +287,7 @@ fun create-name-infoEX(vis, name, scopeDepth: int, sort, allowImplicitMask, rng,
     DefVar -> InfoVal(vis, name, tp, scopeDepth, rng, True, False, doc)
     _ -> InfoVal(vis, name, tp, scopeDepth, rng, False, allowImplicitMask, doc)
 
-fun arity(tp: ktype): <comp-flags, exn> (int, int)
+pub fun arity(tp: ktype): <comp-flags, exn> (int, int)
   match tp.expand-syn
     TForAll(tvars, t) ->
       match t.expand-syn
@@ -293,7 +295,7 @@ fun arity(tp: ktype): <comp-flags, exn> (int, int)
         _ -> (tvars.length, -1)
     TFun(pars) -> (0, pars.length)
 
-fun extract-external(external: external, update-vis)
+pub fun extract-external(external: external, update-vis)
   match external
     External(name, tp, _, body, vis, fipT, nameRng, doc) ->
       qname-map/single(name, InfoExternal(update-vis(vis), name, tp, body, fipT, nameRng, doc))
@@ -302,25 +304,25 @@ fun extract-external(external: external, update-vis)
 // TODO: ftc
 // Instances
 
-fun gamma/(|->)(sub: sub, g: gamma): pure gamma
+pub fun gamma/(|->)(sub: sub, g: gamma): pure gamma
   g.map(fn(n, nis) nis.map(fn((n1, ni)) (n1, sub |-> ni)))
 
-fun gamma/free-type-vars(g: gamma): pure tvs
+pub fun gamma/free-type-vars(g: gamma): pure tvs
   g.schemes.map(free-type-vars).unions
 
-fun gamma/bound-type-vars(g: gamma): pure tvs
+pub fun gamma/bound-type-vars(g: gamma): pure tvs
   g.schemes.map(bound-type-vars).unions
 
-fun ni/(|->)(sub: sub, ni: nameInfo): pure nameInfo
+pub fun ni/(|->)(sub: sub, ni: nameInfo): pure nameInfo
   ni.map-type(sub |-> _)
 
-fun ni/free-type-vars(info: nameInfo): pure tvs
+pub fun ni/free-type-vars(info: nameInfo): pure tvs
   info.typ.free-type-vars
 
-fun ni/bound-type-vars(info: nameInfo): pure tvs
+pub fun ni/bound-type-vars(info: nameInfo): pure tvs
   info.typ.bound-type-vars
 
-fun map-type(ni: nameInfo, f: (ktype) -> e ktype): e nameInfo
+pub fun map-type(ni: nameInfo, f: (ktype) -> e ktype): e nameInfo
   match ni
     InfoVal(vis, cname, typ, depth, range, isVar, allowMask, doc) -> InfoVal(vis, cname, f(typ), depth, range, isVar, allowMask, doc)
     InfoFun(vis, cname, typ, depth, arity, fipt, range, doc) -> InfoFun(vis, cname, f(typ), depth, arity, fipt, range, doc)
@@ -337,14 +339,14 @@ fun pp-gamma-internal(g: gamma, showHidden: bool)
     fill(n.show-plain.text |.| type-colon().color(colors.colorSep) |+| align(nice(s)), maxWidth) // TODO: Tim new color?
   ))
 
-fun pp-gamma(g: gamma)
+pub fun pp-gamma(g: gamma)
   pp-gamma-internal(g, False)
 
-fun pp-gamma-hidden(g: gamma)
+pub fun pp-gamma-hidden(g: gamma)
   pp-gamma-internal(g, True)
 
-fun pretty(g: gamma): <pp-typeEff> doc
+pub fun pretty(g: gamma): <pp-typeEff> doc
   pp-gamma(g)
 
-fun show-gamma(g: gamma): pp-typeEff string
+pub fun show-gamma(g: gamma): pp-typeEff string
   pretty(g).show
