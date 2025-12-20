@@ -4,6 +4,7 @@ import compiler/common/failure
 import compiler/common/name
 import compiler/common/nice
 import compiler/common/name-prim
+import compiler/common/unique
 import compiler/core/corevar
 import compiler/core/borrowed
 import compiler/type/type
@@ -20,7 +21,7 @@ import std/os/path
 import std/num/float64
 import std/core/undiv
 
-alias asmEff = <pure,asm,comp-flags,uniquePhase,colorSchemeEffect,newtypesEff,printer,subst,documentation,niceEff<typeVar>,ppEnvEff,precEff,prettyTypeEff>
+alias asmEff = <pure,asm,comp-flags,unique,colorSchemeEffect,newtypesEff,printer,subst,documentation,niceEff<typeVar>,ppEnvEff,precEff,prettyTypeEff>
 
 // Put the things that need overriding in here
 effect subst

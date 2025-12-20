@@ -5,6 +5,7 @@ import compiler/kind/kind
 import compiler/common/syntax
 import compiler/common/name
 import compiler/common/range
+import compiler/common/unique
 import std/data/linearset
 import std/data/linearmap
 import std/core/undiv

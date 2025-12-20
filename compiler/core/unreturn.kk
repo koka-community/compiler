@@ -6,6 +6,7 @@ import compiler/common/failure
 import compiler/type/type
 import compiler/common/syntax
 import compiler/common/range
+import compiler/common/unique
 
 value type kexpr
   U(e: expr) // unchanged
@@ -36,7 +37,7 @@ fun urTopDef(d: def): ureff def
 effect ur
   val currentEff: maybe<keffect>
 
-alias ureff = <ur,comp-flags,pure,corePhase,uniquePhase>
+alias ureff = <ur,comp-flags,pure,corePhase,unique>
 
 fun currentEffect(eff: keffect, k: () -> <ur|e> a): <ur|e> a
   with override
@@ -47,7 +48,7 @@ fun urDef(d: def)
   val kexpr = d.defExpr.urExpr
   (fn(e) d(defExpr = e), kexpr)
 
-fun urExpr(e: expr): <comp-flags,corePhase,div,exn,ur,uniquePhase> kexpr
+fun urExpr(e: expr): <comp-flags,corePhase,div,exn,ur,unique> kexpr
   match e
     // lambdas and type lambdas use UnK to contain returns inside their body
     Lam(pars, eff, body) ->
@@ -55,7 +56,7 @@ fun urExpr(e: expr): <comp-flags,corePhase,div,exn,ur,uniquePhase> kexpr
       e.emapUnK(fn(b) Lam(pars, eff, b), body.urExpr)
     TypeLam(tvars, body) ->
       e.emapUnK(fn(b) TypeLam(tvars, b), body.urExpr)
-    // Type applicatoins may contain return (? todo check this)
+    // Type applications may contain return (? todo check this)
     TypeApp(body, targs) ->
       Just(e).emapK(fn(b) TypeApp(b, targs), body.urExpr)
     // bindings
@@ -114,7 +115,7 @@ fun urLet(org: expr, defgroups: list<defGroup>, kbody: kexpr): ureff kexpr
     Just(org).emapK(fn(e) make-let(defgroups, e), kbody)
   else kdefgs.reverse.fold(kbody)
 
-fun urCase(org: expr, scruts: list<expr>, branches: list<branch>): <div,exn,uniquePhase,ur,comp-flags,corePhase> kexpr
+fun urCase(org: expr, scruts: list<expr>, branches: list<branch>): <div,exn,unique,ur,comp-flags,corePhase> kexpr
   val (mkBranches, kexprss) = branches.map(urBranch).unzip
   val ks = kexprss.concat
   if ks.all(is-u) then U(org)

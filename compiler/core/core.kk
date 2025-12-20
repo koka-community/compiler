@@ -469,43 +469,11 @@ fun paramInfos(d: def)
 fun isSpecialize(inl: inlineDef)
   inl.paramSpecialize.is-cons
 
-effect uniquePhase
-  fun get-unique(): int
-  fun set-unique(i: int): ()
-  fun update-unique(f: (int) -> int): int
-
-fun run-unique(start: int, f: () -> <uniquePhase|e> a): e a 
-  var u := start
-  with handler
-    fun get-unique() u
-    fun set-unique(i) u := i
-    fun update-unique(g) 
-        u := g(u) 
-        u
-  f() 
 
 effect corePhase
   fun get-core-defs(): defGroups
   fun set-core-defs(dgs: defGroups): ()
   fun phaseError(s: string): a
-
-fun new-unique(): <uniquePhase> int 
-  update-unique(_ + 1)
-
-fun uniques(n: int): <uniquePhase> list<int>
-  list(1, n).map(fn(_) new-unique())
-
-fun unique-id(s: string): <uniquePhase> id
-  gen-id(s, new-unique())
-
-fun unique-ids(s: string, n: int): <uniquePhase> list<id>
-  uniques(n).map(gen-id(s, _))
-
-fun unique-name(s: string): <uniquePhase> name
-  new-hidden-name(s ++ "." ++ new-unique().int/show)
-
-fun unique-name-from(nm: name): <uniquePhase> name
-  new-unique().to-unique-name(nm)
 
 // Expressions
 // Since this is System-F, all binding sites are annotated with their type.
@@ -696,10 +664,10 @@ fun has-total-effect(tp: ktype): bool
     Nothing -> False
     Just((_, _, eff, _)) -> eff.is-type-total
 
-fun isMonType(tp: ktype): pure bool
+fun is-mon-type(tp: ktype): pure bool
   if tp.kind == kindEffect then tp.is-mon-effect
   else match tp.expand-syn
-    TForAll(_, t) -> t.isMonType
+    TForAll(_, t) -> t.is-mon-type
     TFun(_, eff, _) -> eff.is-mon-effect
     _ -> False
 
@@ -858,9 +826,6 @@ fun add-core-def(c: core, d: def): core
 
 fun core/null(n: name)
   Core(n)
-
-fun fresh-name(pfx: string)
-  new-name(pfx ++ "." ++ get-unique().int/show)
 
 fun has-no-effect(e: expr)
   match e

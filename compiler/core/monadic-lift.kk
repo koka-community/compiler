@@ -10,6 +10,7 @@ import compiler/core/corevar
 import compiler/type/typevar
 import std/data/linearset
 import compiler/platform/config
+import compiler/common/unique
 
 fun monadicLift()
   with runLifted()
@@ -19,7 +20,7 @@ fun monadicLift()
 fun lift-defgroups(dgs: defGroups, topLevel: bool)
   dgs.map(_.lift-defgroup(topLevel)).concat
 
-alias liftedEff = <lifted, uniquePhase, pure, comp-flags>
+alias liftedEff = <lifted, unique, pure, comp-flags>
 effect lifted
   fun emit(dg: defGroup): ()
   fun collect(): list<defGroup>

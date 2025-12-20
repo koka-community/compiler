@@ -1,5 +1,6 @@
 import compiler/common/name
 import compiler/common/name-collections
+import compiler/common/unique
 import compiler/core/core
 import compiler/core/corevar
 import compiler/type/type
@@ -27,13 +28,13 @@ fun localized(f)
   set-renaming(ren)
   r
 
-fun run-unique(start: int, f: () -> <uniquePhase,uniquefy|e> a): e a
-  with run-unique(start)
+fun start/run-unique(start: int, f: () -> <unique,uniquefy|e> a): e a
+  with common/unique/run-unique(start)
   with run-unique()
   f()
 
 val eqName = fn(n1: name, n2: name) n1 == n2
-fun fun/run-unique(f: () -> <uniquePhase,uniquefy|e> a): <uniquePhase|e> a
+fun fun/run-unique(f: () -> <unique,uniquefy|e> a): <unique|e> a
   var locals := names/empty
   var renaming := LinearMap([])
   with handler
@@ -48,7 +49,7 @@ fun expr/uniquefy(e: expr): pure expr
 
 fun free/uniquefy(e: expr, free: linearSet<tName>): pure expr
   val locals = LinearSet(free.union(e.free-locals).list.map(get-name))
-  with run-unique(0)
+  with start/run-unique(0)
   set-locals(locals)
   e.uniquefyx
 
@@ -61,7 +62,7 @@ fun core/uniquefy(c: core): pure core
   c(defs=uniquefy(c.defs))
 
 fun dgs/uniquefy(dgs: defGroups): pure defGroups
-  with run-unique(0)
+  with start/run-unique(0)
   val locals = get-locals()
   val topLevelDefs = dgs.flatten.map(def-name).filter(fn(n:name) !n.is-nil)
   set-locals(topLevelDefs.foldl(locals, fn(acc, n) acc.add(n.unqualify)))
@@ -73,7 +74,7 @@ fun dg/uniquefyDG(dg: defGroup)
     DefRec(ds) -> DefRec(ds.map(fn(d) d(defExpr=d.defExpr.uniquefyx)))
 
 fun dg/uniquefy(dg: defGroup): pure defGroup
-  with run-unique(0)
+  with start/run-unique(0)
   match dg
     DefNonRec(d) -> DefNonRec(d.uniquefy)
     DefRec(defs) ->
@@ -118,9 +119,9 @@ fun expr/uniquefyx(e: expr)
       Case(exprs.map(uniquefyx), localized({branches.map(_.uniquefy(exprs.map(type-of)))}))
 
 fun branch/uniquefy(b: branch, patTps: list<ktype>)
-  val patts = b.patterns.zip(patTps).map(fn((p, t)) p.uniquefy(t))
+  val pats = b.patterns.zip(patTps).map(fn((p, t)) p.uniquefy(t))
   val guards = b.guards.map(uniquefy)
-  Branch(patts, guards)
+  Branch(pats, guards)
 
 fun guard/uniquefy(g: guard)
   Guard(g.test.uniquefyx, g.body.uniquefyx)

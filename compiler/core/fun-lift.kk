@@ -3,6 +3,7 @@ import compiler/common/failure
 import compiler/common/name
 import compiler/common/range
 import compiler/common/syntax
+import compiler/common/unique
 import compiler/kind/kind
 import compiler/type/type
 import compiler/type/kind
@@ -26,7 +27,7 @@ effect funLiftEffect
 effect currentDefEffect
   val currentDef: list<def>
 
-alias liftDefEff = <funLiftEffect, currentDefEffect, pure, uniquePhase, comp-flags>
+alias liftDefEff = <funLiftEffect, currentDefEffect, pure, unique, comp-flags>
 
 fun current-def-names()
   currentDef.map(def-name)

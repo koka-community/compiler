@@ -4,6 +4,7 @@ import compiler/common/failure
 import compiler/common/name
 import compiler/common/name-prim
 import compiler/common/nice
+import compiler/common/unique
 import compiler/core/corevar
 import compiler/core/borrowed
 import compiler/type/type
@@ -29,7 +30,7 @@ fun cFromCore(cTarget: cTarget, b: buildType, sourceDir: path,
               platform: platform, borrowed: borrowed, enableReuse: bool, 
               enableSpecialize: bool, enableReuseSpecialize: bool, enableBorrowInference: bool, 
               eagerPatBind: bool, stackSize: int, mbMain: maybe<(name, bool)>, 
-              core: core): <pure,comp-flags,uniquePhase,newtypes,printer,documentation,niceEff<typeVar>,prettyTypeEff,precEff> (doc, doc, core)
+              core: core): <pure,comp-flags,unique,newtypes,printer,documentation,niceEff<typeVar>,prettyTypeEff,precEff> (doc, doc, core)
   with handler
     val cdefToHeader = False
     val substEnv = []

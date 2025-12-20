@@ -2,6 +2,7 @@ import compiler/core/core
 import compiler/common/range
 import compiler/common/name
 import compiler/common/name-prim
+import compiler/common/unique
 import compiler/lib/pprint
 import compiler/common/syntax
 import compiler/type/type
@@ -14,7 +15,7 @@ import compiler/common/color-scheme
 import std/core/undiv
 
 // Box / unbox transformation
-alias boxEff = <uniquePhase,comp-flags,documentation,pure,colorSchemeEffect,ppEnvEff>
+alias boxEff = <unique,comp-flags,documentation,pure,colorSchemeEffect,ppEnvEff>
 
 fun box-core(c: core): boxEff core
   c(defs=box-def-groups(c.defs))
@@ -173,7 +174,7 @@ fun box-var-at-tp(tp: ktype)
 fun unbox-var-at-tp(tp: ktype)
   Var(TName(nameUnbox, tp), InfoExternal([(C(CDefault), "unbox(#1)")]))
 
-fun box-coerce-fun(toParTps: list<(name, ktype)>, toEffTp: ktype, toResTp: ktype, fromParTps: list<(name, ktype)>, fromEffTp: ktype, fromResTp: ktype, ex: expr): <colorSchemeEffect,comp-flags,pure,documentation,ppEnvEff,uniquePhase> expr
+fun box-coerce-fun(toParTps: list<(name, ktype)>, toEffTp: ktype, toResTp: ktype, fromParTps: list<(name, ktype)>, fromEffTp: ktype, fromResTp: ktype, ex: expr): <colorSchemeEffect,comp-flags,pure,documentation,ppEnvEff,unique> expr
   val names = toParTps.map(fn(_) unique-name("b"))
   val pars = names.zipwith(toParTps.map(snd), fn(n, t) TName(n,t))
   val args = pars.map(Var(_, InfoNone))

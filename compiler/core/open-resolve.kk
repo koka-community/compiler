@@ -2,6 +2,7 @@ import compiler/common/name
 import compiler/common/range
 import compiler/common/name-prim
 import compiler/common/failure
+import compiler/common/unique
 import compiler/platform/config
 import compiler/common/syntax
 import compiler/core/core
@@ -13,7 +14,7 @@ import compiler/type/kind
 import compiler/kind/kind
 import compiler/lib/pprint
 
-alias openEff = <openEffect, comp-flags, uniquePhase, pure, documentation>
+alias openEff = <openEffect, comp-flags, unique, pure, documentation>
 
 effect openEffect
   fun get-gamma(): gamma
@@ -135,5 +136,5 @@ fun is-handler-free(ex: expr)
 
 fun handler-free-fun-type(tp: ktype)
   match tp.split-fun-scheme
-    Just((_, _, _, eff, _)) -> Just(!contains-handled-evidence([], eff))
+    Just((_, _, eff, _)) -> Just(!contains-handled-evidence([], eff))
     _ -> Nothing

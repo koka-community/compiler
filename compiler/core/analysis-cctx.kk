@@ -3,6 +3,7 @@ import compiler/common/name
 import compiler/common/name-prim
 import compiler/common/range
 import compiler/common/failure
+import compiler/common/unique
 import compiler/common/syntax
 import compiler/kind/newtypes
 import compiler/kind/kind
@@ -13,7 +14,7 @@ import compiler/core/core
 import compiler/platform/config
 
 // take a context and check if it is well-formed and return a well-typed context expression
-fun analyze(rng: range, expr: expr): <comp-flags, uniquePhase, pure, newtypesEff> (expr, list<doc>)
+fun analyze(rng: range, expr: expr): <comp-flags, unique, pure, newtypesEff> (expr, list<doc>)
   with handler
     return(x) (x, [])
     final ctl emit-ctx-err(e) (expr.type-of.make-empty, [e])
@@ -110,14 +111,14 @@ fun is-hole(e: expr)
 // Initial empty context (ctx hole)
 fun make-empty(tp: ktype)
   val a = TypeVar(0, kindStar, Bound)
-  val funType = TForAll([a], [], TFun([], typeTotal, typeCCtx(TVar(a))))
+  val funType = TForAll([a], TFun([], typeTotal, type-cctx(TVar(a))))
   App(TypeApp(Var(TName(nameCCtxEmpty, funType), InfoExternal([(C(CDefault), "kk_cctx_empty(kk_context())"), (JS(JsDefault), "$std_core_types._cctx_empty()")])), [tp]), [])
 
 // Create a context (ctx Cons(e, Cons(2, hole)))
 fun make-create(tp: ktype, holetp: ktype, top: expr, holeaddr: expr)
   val a = TypeVar(0, kindStar, Bound)
   val b = TypeVar(1, kindStar, Bound)
-  val funType = TForAll([a, b], [], 
+  val funType = TForAll([a, b], 
     TFun([(nil, TVar(a)), (nil, TApp(typeFieldAddr, [TVar(a)]))], 
       typeTotal, TApp(typeCCtxx, [TVar(a), TVar(b)])))
   App(TypeApp(Var(TName(nameCCtxCreate, funType), 
@@ -127,7 +128,7 @@ fun make-create(tp: ktype, holetp: ktype, top: expr, holeaddr: expr)
 // The address of a field in a constructor (for context holes)
 fun make-field-addr-of(obj: expr, cName: tName, fieldName: name, fieldTp: ktype)
   val a = TypeVar(0, kindStar, Bound)
-  val funType = TForAll([a], [], TFun([(nil, TVar(a)), (nil, typeString), (nil, typeString)], typeTotal, TApp(typeFieldAddr, [TVar(a)])))
+  val funType = TForAll([a], TFun([(nil, TVar(a)), (nil, typeString), (nil, typeString)], typeTotal, TApp(typeFieldAddr, [TVar(a)])))
   App(TypeApp(Var(TName(nameFieldAddrOf, funType), InfoExternal([])), [fieldTp]), [obj, ELit(LitString(show-tupled(cName.get-name))), ELit(LitString(show-tupled(fieldName)))])
 
 // Set the index of the field in a constructor to follow the path to the hole at runtime.
@@ -150,7 +151,7 @@ fun ensure-valid-hole-type(tp: ktype)
     Right(nm) -> 
       match newtypes-lookup-any(nm)
         Just(dataInfo) ->
-          val (drepr, _) = dataInfo.dataRepr(is-value)
+          val (drepr, _) = dataInfo.data-repr(is-value)
           if dataInfo.def.is-value || drepr.is-value then
             emit-ctx-err("the hole in a constructor context cannot be a value type".text)
           ()
@@ -167,14 +168,14 @@ fun data-type-name-res(tp: ktype)
     Left(t) -> fail("core/ctail data-type-name-res: illegal result type: " ++ t.show)
 
 fun data-type-name(cName: tName)
-  match cName.type-of.split-funScheme
-    Just((_, _, _, _, tres)) -> tres.data-type-name-res
+  match cName.type-of.split-fun-scheme
+    Just((_, _, _, tres)) -> tres.data-type-name-res
     _ -> fail("core/ctail get-data-type-name: illegal constructor type: " ++ cName.show)
 
 fun lookup(cName: tName, fieldIdx: int)
   match newtypes-lookup-any(cName.data-type-name)
     Just(dinfo) ->
-      val (drepr, _) = dinfo.dataRepr(is-value)
+      val (drepr, _) = dinfo.data-repr(is-value)
       if drepr.is-value then
         Left("contexts cannot go through a value type (" ++ cName.get-name.show ++ ")")
       else

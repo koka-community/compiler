@@ -4,6 +4,7 @@ import compiler/common/color-scheme
 import compiler/common/name
 import compiler/common/name-collections
 import compiler/common/failure
+import compiler/common/unique
 import compiler/platform/config
 import compiler/lib/pprint
 import compiler/kind/kind
@@ -46,7 +47,7 @@ effect inferKindEffect
 fun allnewtypes(infKindEnv: inferKindEnv)
   infKindEnv.newtypesImported.compose(infKindEnv.newtypesExtended)
 
-fun runKindInfer(platform: platform, moduleName: name, imports: importmap, kgamma: kGamma, syns: synonyms, datas: newtypes, f: () -> <inferKindEff,pure,colorSchemeEffect,uniquePhase,koka-error|e> a): <pure,colorSchemeEffect,uniquePhase,comp-error|e> a
+fun runKindInfer(platform: platform, moduleName: name, imports: importmap, kgamma: kGamma, syns: synonyms, datas: newtypes, f: () -> <inferKindEff,pure,colorSchemeEffect,unique,koka-error|e> a): <pure,colorSchemeEffect,unique,comp-error|e> a
   with val current-error-kind = ErrKind
   val imports' = match imports.extend(moduleName, moduleName)
     Just(imp) -> imp

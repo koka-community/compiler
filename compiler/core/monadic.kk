@@ -10,8 +10,11 @@ import compiler/common/name-prim
 import compiler/common/name
 import compiler/common/range
 import compiler/platform/config
+import compiler/common/unique
+import std/core/unsafe
+import std/core/undiv
 
-alias monadicEff = <comp-flags,monadic,uniquePhase,pure>
+alias monadicEff = <comp-flags,monadic,unique,pure>
 
 effect monadic
   val currentDef: list<def>
@@ -22,20 +25,20 @@ fun runMon(f)
     val currentDef = Nil
     val isInBind = False
 
-fun mon-transform()
+fun top/mon-transform()
   with runMon()
-  set-core-defs(monDefGroups(get-core-defs()))
+  set-core-defs(mon-transform(get-core-defs()))
 
-// tansform definition groups
-fun monDefGroups(dgs: defGroups)
-  dgs.map(monDefGroup)
+// transform definition groups
+fun def-group/mon-transform(dgs: defGroups)
+  dgs.map(mon-transform)
 
-fun monDefGroup(dg): monadicEff defGroup
+fun dg/mon-transform(dg): monadicEff defGroup
   match dg
     DefRec(defs) -> DefRec(defs.map(fn(d) d.monDef(True)))
     DefNonRec(d) -> DefNonRec(d.monDef(False))
 
-fun setCurrentDef(d, f)
+fun set-current-def(d, f)
   with override
     val currentDef = Cons(d, currentDef)
     val isInBind = isInBind
@@ -46,16 +49,16 @@ fun monDef(d: def, isRecursive: bool)
   if !d.is-mon-def then
     d
   else
-    with setCurrentDef(d)
-    d(defExpr = d.defExpr.mon-expr(True)(id))
+    with set-current-def(d)
+    d(defExpr = d.defExpr.mon-expr'(True)(id))
 
 alias trans<a> = transX<a, a>
 alias transX<a, b> = (a -> monadicEff b) -> monadicEff b
 
 fun mon-expr(e: expr): monadicEff trans<expr>
-  e.mon-expr(False)
+  e.mon-expr'(False)
 
-fun mon-expr(expr: expr, topLevel: bool): monadicEff trans<expr>
+fun mon-expr'(expr: expr, topLevel: bool): monadicEff trans<expr>
   match expr
     // Optimized open binding
     // note: we cannot just check for `effFrom.is-mon-effect` as the effFrom
@@ -78,18 +81,18 @@ fun mon-expr(expr: expr, topLevel: bool): monadicEff trans<expr>
     App(f, args) ->
       val f' = f.mon-expr
       val args' = args.map(mon-expr)
-      val ftp = f.typeOf
+      val ftp = f.type-of
       val feff =
-        val (_, _, rho) = ftp.split-type-scheme
-        match rho.split-funType
+        val (_, rho) = ftp.split-type-scheme
+        match rho.split-fun-type
           Just((_, feff, _)) -> feff
           _ -> fail("core/monadic app: illegal application")
-      if (f.is-never-mon || !(ftp.isMonType || f.is-always-mon)) then
+      if (f.is-never-mon || !(ftp.is-mon-type || f.is-always-mon)) then
         fn(k) f'(fn(ff) applies(args', fn(argss) k(App(ff, argss))))
       else
         val namey = "y".unique-name
         fn(k)
-          val resTp = expr.typeOf
+          val resTp = expr.type-of
           val tnamey = TName(namey, resTp)
           val contBody = k(Var(tnamey, InfoNone))
           val cont = match contBody
@@ -98,7 +101,7 @@ fun mon-expr(expr: expr, topLevel: bool): monadicEff trans<expr>
               Lam([TName(d.def-name, d.ktype)], feff, body)
             // TODO: optimize (fun (y) {lift(expr)})?
             body -> Lam([tnamey], feff, body)
-          f'(fn(ff) applies(args', fn(argss) app-bind(resTp, feff, contBody.typeOf, ff, argss, cont)))
+          f'(fn(ff) applies(args', fn(argss) app-bind(resTp, feff, contBody.type-of, ff, argss, cont)))
     Let(defgs, body) ->
       defgs.mon-let-groups(body)
     Case(exprs, bs) ->
@@ -108,21 +111,21 @@ fun mon-expr(expr: expr, topLevel: bool): monadicEff trans<expr>
         fn(k) exprs'(fn(xss) k(Case(xss, bs')))
       else
         val nameC = "c".unique-name
-        val resTp = expr.typeOf
+        val resTp = expr.type-of
         val tnameC = TName(nameC, resTp)
         fn(k)
           val effTp = typeTotal
           val contBody = k(Var(tnameC, InfoNone))
           val cont = Lam([tnameC], effTp, contBody)
-          exprs'(fn(xss) apply-bind(resTp, effTp, contBody.typeOf, Case(xss, bs'), cont))
+          exprs'(fn(xss) apply-bind(resTp, effTp, contBody.type-of, Case(xss, bs'), cont))
     v as Var ->
       fn(k) k(v)
     // type application and abstraction
     TypeLam(tvars, body) ->
-      val body' = body.mon-expr(topLevel)
+      val body' = body.mon-expr'(topLevel)
       fn(k) body'(fn(xx) k(TypeLam(tvars, xx)))
     TypeApp(body, tps) ->
-      val body' = body.mon-expr(topLevel)
+      val body' = body.mon-expr'(topLevel)
       fn(k) body'(fn(xx) k(TypeApp(xx, tps)))
     _ -> fn(k) k(expr)
 
@@ -150,8 +153,8 @@ fun mon-let-group(dg: defGroup)
       fn(k) ldef(fn((xds, yds, nds)) k([xds,yds,nds].concat.map(DefNonRec)))
 
 fun mon-let-def(isRec: bool, d: def): monadicEff transX<(list<def>, list<def>, list<def>), expr>
-  with setCurrentDef(d)
-  val expr' = d.defExpr.mon-expr(True)
+  with set-current-def(d)
+  val expr' = d.defExpr.mon-expr'(True)
   fn(k) expr'(fn(xx:expr) k(([d(defExpr=xx)], [], [])))
 
 fun mon-trans(f: (a -> monadicEff transX<b, c>), xs: list<a>): monadicEff transX<list<b>,c>
@@ -178,7 +181,7 @@ fun apply-bind(tpArg, tpEff, tpRes, expr, cont)
 fun mon-make-bind(tpArg, tpEff, tpRes, arg, next)
   App(TypeApp(Var(TName(nameBind, typeBind), InfoArity(2, 3)), [tpArg, tpRes, tpEff]), [arg, next])
 
-val typeBind = TForAll([tvarA, tvarB, tvarE], [], 
+val typeBind = TForAll([tvarA, tvarB, tvarE], 
     TFun([
       (nil, type-yld(TVar(tvarA))), 
       (nil, TFun([(nil, TVar(tvarA))], TVar(tvarE), type-yld(TVar(tvarB))))], TVar(tvarE), type-yld(TVar(tvarB))))
@@ -206,15 +209,15 @@ fun is-never-mon(e: expr)
       effFrom.is-type-total // TODO: more cases? generally handler free
     TypeApp(e') -> e'.is-never-mon
     Var(v) -> v.get-name == nameDeref // TODO: remove special case?
-    _ -> e.isTotal
+    _ -> e.is-total
 
 // Does this definition need any mon translation (sometimes deeper inside)
 fun is-mon-def(d: def)
-  d.defExpr.is-mon-expr' || d.ktype.isMonType
+  d.defExpr.is-mon-expr' || d.ktype.is-mon-type
 
 fun is-mon-expr(e: expr): bool
   unsafe-total
-    unsafe-no-div
+    pretend-no-div
       e.is-mon-expr'
 
 fun is-mon-expr'(e: expr)
@@ -223,15 +226,15 @@ fun is-mon-expr'(e: expr)
       effTo.is-mon-effect || f.is-mon-expr'
     App(f, args) -> Cons(f, args).any(is-mon-expr')
     Lam(_, eff, body) -> eff.is-mon-effect || body.is-mon-expr'
-    TypeApp(TypeLam(_, body), targs) -> targs.any(isMonType) || body.is-mon-expr'
-    TypeApp(Var, targs) -> targs.any(isMonType) || e.typeOf.isMonType
-    TypeApp(body, targs) -> targs.any(isMonType) || body.is-mon-expr'
+    TypeApp(TypeLam(_, body), targs) -> targs.any(is-mon-type) || body.is-mon-expr'
+    TypeApp(Var, targs) -> targs.any(is-mon-type) || e.type-of.is-mon-type
+    TypeApp(body, targs) -> targs.any(is-mon-type) || body.is-mon-expr'
     TypeLam(_, body) -> body.is-mon-expr'
-    Let(defs, body) -> defs.any(is-mon-defGroup) || body.is-mon-expr'
+    Let(defs, body) -> defs.any(is-mon-def-group) || body.is-mon-expr'
     Case(exprs, bs) -> exprs.any(is-mon-expr') || bs.any(is-mon-branch)
-    _ -> e.typeOf.isMonType
+    _ -> e.type-of.is-mon-type
 
-fun is-mon-defGroup(dg: defGroup)
+fun is-mon-def-group(dg: defGroup)
   match dg
     DefRec(defs) -> defs.any(is-mon-def)
     DefNonRec(d) -> is-mon-def(d)

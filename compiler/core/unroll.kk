@@ -2,6 +2,7 @@ import compiler/core/core
 import compiler/type/type
 import compiler/common/name
 import compiler/common/syntax
+import compiler/common/unique
 import compiler/core/corevar
 import std/core/undiv
 import std/data/linearset
@@ -97,5 +98,5 @@ fun dontSkip(Branch(pats, guards): branch)
       _ -> pat 
   Branch(pats.map(noSkip), guards)
 
-fun unique-tnameFrom(tn: tName): <ndet,uniquePhase> tName
+fun unique-tnameFrom(tn: tName): <ndet,unique> tName
   TName(to-hidden-unique-name(unique(), "unroll", tn.get-name), tn.type-of)

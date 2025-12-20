@@ -4,6 +4,7 @@ import compiler/common/failure
 import compiler/common/name
 import compiler/common/name-prim
 import compiler/common/syntax
+import compiler/common/unique
 import compiler/platform/config
 import compiler/kind/kind
 import compiler/kind/unify
@@ -63,7 +64,7 @@ fun compare-label(l1: ktype, l2: ktype)
   val name2 = l2.label-name-ex.fst
   name1.label-name-compare(name2)
 
-fun unify-labels(ls1: list<ktype>, ls2: list<ktype>, closed1: bool, closed2: bool): <unify,pure,uniquePhase> (list<ktype>, list<ktype>)
+fun unify-labels(ls1: list<ktype>, ls2: list<ktype>, closed1: bool, closed2: bool): <unify,pure,unique> (list<ktype>, list<ktype>)
   match (ls1, ls2)
     (Nil, Nil) -> (Nil, Nil)
     (Cons, Nil) -> ([], [])
@@ -94,7 +95,7 @@ fun unify-labels(ls1: list<ktype>, ls2: list<ktype>, closed1: bool, closed2: boo
               val ll2' = ll2.subst
               unify-labels(ll1', ll2', closed1, closed2)
 
-fun unify-effect-var(tv1: typeVar, tp2: ktype): <pure,unify,uniquePhase> ()
+fun unify-effect-var(tv1: typeVar, tp2: ktype): <pure,unify,unique> ()
   val (ls2, tl2) = tp2.extract-ordered-effect // ls2 must be non-empty
   match tl2.expand-syn 
     // e ~ <div,exn|e> ~> e := <div,exn|e'>
@@ -108,7 +109,7 @@ fun extract-normalize-effect(tp: ktype): <pure,unify> (list<ktype>, ktype)
   tp'.extract-ordered-effect
 
 // Unify effects
-fun unify-effect(tp1: ktype, tp2: ktype): <unify,pure,uniquePhase> ()
+fun unify-effect(tp1: ktype, tp2: ktype): <unify,pure,unique> ()
   val (ls1, tl1) = tp1.extract-normalize-effect
   val (ls2, tl2) = tp2.extract-normalize-effect
   val (ds1, ds2) = unify-labels(ls1, ls2, tl1.is-effect-empty, tl2.is-effect-empty)
@@ -131,7 +132,7 @@ fun unify-effect(tp1: ktype, tp2: ktype): <unify,pure,uniquePhase> ()
       tp2.subst
       ()
 
-fun unify-pred(p1: pred, p2: pred): <unify,pure,uniquePhase> ()
+fun unify-pred(p1: pred, p2: pred): <unify,pure,unique> ()
   match (p1, p2)
     (PredSub(t1, t2), (PredSub(u1, u2))) ->
       unify(t1, u1)
@@ -141,7 +142,7 @@ fun unify-pred(p1: pred, p2: pred): <unify,pure,uniquePhase> ()
     _ -> unify-error(NoMatchPred)
 
 // Unify predicates (applies a substitution before each unification)
-fun unify-preds(l1: list<pred>, l2: list<pred>): <pure,unify,uniquePhase> ()
+fun unify-preds(l1: list<pred>, l2: list<pred>): <pure,unify,unique> ()
   match (l1, l2)
     (Nil, Nil) -> ()
     (Cons(p1, ps1), Cons(p2, ps2)) ->
@@ -150,7 +151,7 @@ fun unify-preds(l1: list<pred>, l2: list<pred>): <pure,unify,uniquePhase> ()
     _ -> throw("type/unify unify-preds")
 
 // Unify two equal length lists of types, and apply a substitution before each unification
-fun unifies(l1: list<ktype>, l2: list<ktype>): <pure,unify,uniquePhase> ()
+fun unifies(l1: list<ktype>, l2: list<ktype>): <pure,unify,unique> ()
   match (l1, l2)
     (Nil, Nil) -> ()
     (Cons(t1, ts1), Cons(t2, ts2)) ->
@@ -181,7 +182,7 @@ fun unify-tvar(tv: typeVar, tp: ktype): <pure,unify> ()
     _ -> throw("type/unify unify-tvar: valued with skolem or bound variable")
 
 // Unify two types
-fun unify(t1: ktype, t2: ktype): <pure,unify,uniquePhase> ()
+fun unify(t1: ktype, t2: ktype): <pure,unify,unique> ()
   match (t1, t2)
     // effects
     (TApp(TCon(tc1)), TApp(TCon(tc2))) | tc2 == tconEffectExtend && tc1 == tconEffectExtend ->
@@ -276,7 +277,7 @@ fun entails(skolems: tvs, known: list<evidence>, evs: list<evidence>): unify (li
 // Returns under which predicates this holds and a core transformer that needs to be
 // applied to the expression of type `t2`. Also returns a new type for the expected type `tp1` where 'some'
 // types have been properly substituted (and may be quantified).
-fun subsume(rng: range, free: tvs, tp1: ktype, tp2: ktype): <unify,pure,comp-flags,uniquePhase|e> (ktype, list<evidence>, expr -> <unify,pure|e> expr)
+fun subsume(rng: range, free: tvs, tp1: ktype, tp2: ktype): <unify,pure,comp-flags,unique|e> (ktype, list<evidence>, expr -> <unify,pure|e> expr)
   // skolemize, instantiate and unify
   val (sks, evs1, rho1, _) = skolemizeEx(tp1, rng)
   val (tvs, evs2, rho2, _) = skolemizeEx(tp2, rng)
@@ -303,7 +304,7 @@ fun subsume(rng: range, free: tvs, tp1: ktype, tp2: ktype): <unify,pure,comp-fla
 
 /// Does a function type match the given arguments? if the first argument 'matchSome' is ture,
 /// it is considered a match even if not all arguments to the function are supplied
-fun match-arguments(matchSome: bool, rng: range, free: tvs, tp: ktype, fixed: list<ktype>, namedArgs: list<(name,ktype)>): <unify,pure,comp-flags,uniquePhase> ()
+fun match-arguments(matchSome: bool, rng: range, free: tvs, tp: ktype, fixed: list<ktype>, namedArgs: list<(name,ktype)>): <unify,pure,comp-flags,unique> ()
   val rho1 = instantiate(tp, rng)
   match rho1.split-funType
     Nothing -> unify-error(NoMatchType)
@@ -323,7 +324,7 @@ fun match-arguments(matchSome: bool, rng: range, free: tvs, tp: ktype, fixed: li
         else unify-error(NoMatchType)
 
 /// Does a type have the given named arguments?
-fun match-named(rng: range, tp: ktype, n: int, namedArgs: list<name>): <unify,pure,comp-flags,uniquePhase> ()
+fun match-named(rng: range, tp: ktype, n: int, namedArgs: list<name>): <unify,pure,comp-flags,unique> ()
   val rho1 = instantiate(tp, rng)
   match rho1.split-funType
     Nothing -> unify-error(NoMatchType)
@@ -339,7 +340,7 @@ fun match-named(rng: range, tp: ktype, n: int, namedArgs: list<name>): <unify,pu
         else unify-error(NoMatchType)
 
 /// Do two types overlap on the argument types? Used to check for overlapping definitions of overloaded identifiers.
-fun overlaps(rng: range, free: tvs, tp1: ktype, tp2: ktype): <unify,pure,comp-flags,uniquePhase> ()
+fun overlaps(rng: range, free: tvs, tp1: ktype, tp2: ktype): <unify,pure,comp-flags,unique> ()
   val rho1 = instantiate(tp1, rng)
   val rho2 = instantiate(tp2, rng)
   match (rho1.split-funType, rho2.split-funType)
