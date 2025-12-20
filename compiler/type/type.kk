@@ -8,31 +8,26 @@ import compiler/kind/kind
 import std/data/sort
 import std/core/unsafe
 import std/core/undiv
-// Updated to #7083c02 on 7/13/25
-
-// The flavour of a type variable. Types in a "Type.Assumption" (Gamma) and inferred types in "Core.Core"
-// are always of the 'Bound' flavour. 'Meta' and 'Skolem' type variables only ever occur during type inference.
-// Kind and Type variables come in three flavours: 'Unifiable'
-// variables can be unified, 'Skolem's are non-unifiable (fresh)
-// variables, and 'Bound' variables are bound by a quantifier.
-type flavour
-  Bound
-  Skolem
-  Meta // used for pretty printing
-
-fun flavour/(==)(f1: flavour, f2: flavour): bool
-  match (f1, f2)
-    (Meta, Meta) -> True
-    (Skolem, Skolem) -> True
-    (Bound, Bound) -> True
-    _ -> False
+// Updated to #7083c02 on 12/19/25
 
 pub type ktype
-  TForAll(vars: list<typeVar>, r: ktype) // rho
+  // forall a b c. phi, psi => rho 
+  // - There is at least one variable
+  // - Every variable occurs at least once in rho
+  // - Variables are canonically ordered
+  // - Rho has kind *
+  TForAll(vars: list<typeVar>, r: ktype) 
+  // (x:a, y:b, z:c) -> m d
   TFun(args: list<(name, ktype)>, e: ktype, t: ktype) // keffect
+  // Type constant (primitive, label, or newtype; not -> or =>)
   TCon(constant: typeCon)
+  // Type variable (cannot instantiate to -> or =>)
   TVar(variable: typeVar)
+  // Application of datatypes
   TApp(t: ktype, args: list<ktype>)
+  // Type synonym indirection
+  // first `list<ktype>` is the actual arguments
+  // final `ktype` is the "real" type (expanded)
   TSyn(syn: typeSyn, args: list<ktype>, t: ktype)
 
 fun ktype/show(tp: ktype): div string
@@ -44,15 +39,6 @@ fun ktype/show(tp: ktype): div string
     TApp(t, args) -> t.show ++ " " ++ args.show
     TSyn(syn, args, t) -> syn.name.name/name/show ++ " " ++ args.show ++ " " ++ t.show
   
-type pred
-  PredSub(a: ktype, b: ktype)
-  PredIFace(n: name, tps: list<ktype>) 
-
-fun pred/show(p: pred): div string
-  match p
-    PredSub(a, b) -> a.show ++ " <: " ++ b.show
-    PredIFace(n, tps) -> n.name/name/show ++ " " ++ tps.show
-
 // Various synonyms of types
 pub alias scheme = ktype
 pub alias sigma = ktype // polymorphic type
@@ -78,6 +64,23 @@ fun tv/(==)(t1: typeVar, t2: typeVar): bool
 
 fun tv/cmp(t1: typeVar, t2: typeVar)
   cmp(t1.tid, t2.tid) // also flavours?
+
+// The flavour of a type variable. Types in a "Type.Assumption" (Gamma) and inferred types in "Core.Core"
+// are always of the 'Bound' flavour. 'Meta' and 'Skolem' type variables only ever occur during type inference.
+// Kind and Type variables come in three flavours: 'Unifiable'
+// variables can be unified, 'Skolem's are non-unifiable (fresh)
+// variables, and 'Bound' variables are bound by a quantifier.
+type flavour
+  Bound
+  Skolem
+  Meta 
+
+fun flavour/(==)(f1: flavour, f2: flavour): bool
+  match (f1, f2)
+    (Meta, Meta) -> True
+    (Skolem, Skolem) -> True
+    (Bound, Bound) -> True
+    _ -> False
 
 // Type constants have a name and a kind
 value struct typeCon
@@ -120,6 +123,8 @@ pub fun max-synonym-rank(t: ktype): synonymRank
     TSyn(syn, args, ty) -> max(syn.rank, max-synonym-ranks(Cons(ty, args).pretend-decreasing))
 
 // Information about types
+// Defined here to avoid circular dependencies
+// Data type information: name, kind, type arguments, and constructors
 pub struct dataInfo
   sort: dataKind
   name: name
@@ -145,12 +150,12 @@ pub fun is-extend(d: dataInfo): bool
 pub fun is-open(d: dataInfo): bool
   d.def.is-open
 
-pub fun di/is-lazy(d: dataInfo): bool
-  d.def.datadef/is-lazy
-
 pub fun is-literal(d: dataInfo): bool
   val n = d.name
   n == nameTpInt || n == nameTpChar || n == nameTpString || n == nameTpFloat
+
+pub fun di/is-lazy(d: dataInfo): bool
+  d.def.datadef/is-lazy
 
 fun lazy-name(di: dataInfo, stem: string): exn name
   type-qualified-name(di.name, "lazy-" ++ stem).unqualify
@@ -183,10 +188,10 @@ fun coninfo/show(c: conInfo): string
   c.name.name/name/show
 
 fun coninfo/size(c: conInfo, p: platform)
-  size(p, c.valueRepr)
+  p.size(c.valueRepr)
 
 fun coninfo/scan-count(c: conInfo)
-  scan-count(c.valueRepr)
+  c.valueRepr.scan-count
 
 fun coninfo/is-lazy(c: conInfo): bool
   c.mblazy.is-just
@@ -213,14 +218,15 @@ fun syninfo/(==)(s1: synInfo, s2: synInfo): bool
 fun syninfo/show(s: synInfo): string
   s.name.name/name/show
 
+// Is a type variable 'Bound'
 fun tv/is-bound(t: typeVar): bool
   t.flavour == Bound
 
-// unifiable
+// Is a type variable 'Meta' (e.g. unifiable)
 fun tv/is-meta(t: typeVar): bool
   t.flavour == Meta
 
-// not unifiable
+// Is a type variable a 'Skolem' (e.g. not unifiable)
 fun tv/is-skolem(t: typeVar): bool
   t.flavour == Skolem
 
@@ -229,17 +235,22 @@ fun is-mono-type(tp: ktype): bool
     TForAll -> False
     _ -> True
 
-fun must-split(tp: ktype)
-  match tp
-    TForAll -> True
-    TSyn(_, _, tp) -> tp.must-split
-    _ -> False
 
+// Split / add quantifiers
+
+// Split type into a list of universally quantified type variables and a rho type
 fun split-type-scheme(tp: ktype): (list<typeVar>, rho)
+  // We must split a synonym if its expansion includes further quantifiers
+  fun must-split(tp': ktype)
+    match tp'
+      TForAll -> True
+      TSyn(_, _, tp'') -> tp''.must-split
+      _ -> False
   match tp
     TForAll(vars, t) -> (vars, t)
     _ -> if tp.must-split then tp.pretend-decreasing.split-type-scheme else ([], tp)
 
+// Find all quantified type variables, but do not expand synonyms
 fun shallow-split-vars(tp: ktype)
   match tp
     TForAll(vars, t) -> (vars, t)
@@ -250,6 +261,7 @@ fun expand-syn(tp: ktype): ktype
     TSyn(_, _, t) -> expand-syn(t)
     _ -> tp
 
+// A type in canonical form has no type synonyms and expanded effect types.
 fun canonical-form(tp: ktype): pure ktype
   match tp
     TSyn(_, _, t) -> canonical-form(t)
@@ -258,24 +270,34 @@ fun canonical-form(tp: ktype): pure ktype
     TFun(args, eff, res) -> TFun(args.map(fn((name, t)) (name, t.canonical-form)), order-effect(eff.canonical-form), res.canonical-form)
     _ -> tp
 
-// Removes names from function arguments
+// A type in minimal form is canonical and has no named function arguments
 fun minimal-form(tp: ktype): pure ktype
   match tp
     TSyn -> tp.canonical-form
     TForAll(vars, t) -> TForAll(vars, t.canonical-form)
     TApp(t, ts) -> TApp(t.canonical-form, ts.map(canonical-form))
-    TFun(args, eff, res) -> TFun(args.map(fn((_, t)) (nameListNil, t.canonical-form)), order-effect(eff.canonical-form), res.canonical-form)
+    TFun(args, eff, res) -> TFun(args.map(fn((_, t)) (name/nil, t.canonical-form)), order-effect(eff.canonical-form), res.canonical-form)
 
 // Create a type scheme from a list of quantifiers
 fun make-scheme(vars: list<typeVar>, rho: rho): scheme
   val (vars0, _) = rho.split-type-scheme
-  TForAll(vars ++ vars0, rho)
+  tForall(vars ++ vars0, rho)
 
 fun quantify-type(vars: list<typeVar>, tp: scheme): scheme
   val (vars0, rho) = tp.split-type-scheme
-  TForAll(vars ++ vars0, rho)
+  tForall(vars ++ vars0, rho)
+
+fun tForall(vars: list<typeVar>, rho: rho): scheme
+  match vars
+    Nil -> rho
+    _ -> TForAll(vars, rho)
 
 fun apply-type(tp1: ktype, tp2: ktype): ktype
+  fun must-split(tp: ktype): bool
+    match tp
+      TApp -> True
+      TSyn(_, _, tp) -> tp.must-split
+      _ -> False
   match tp1
     TApp(tp, tps) -> TApp(tp, tps ++ [tp2])
     TSyn(_, _, tp) | tp.must-split -> apply-type(tp, tp2)
@@ -292,24 +314,29 @@ fun split-fun-scheme(tp: scheme): maybe<(list<typeVar>, list<(name, tau)>, keffe
     Just((pars, eff, res)) -> Just((tvars, pars, eff, res))
     Nothing -> Nothing
 
+// Assertions
+// Is this a type variable?
 fun tp/is-tvar(tp: ktype): bool
   match tp
     TVar -> True
     TSyn(_, _, t) -> t.tp/is-tvar
     _ -> False
 
+// Is this a type constant?
 fun tp/is-tcon(tp: ktype): bool
   match tp
     TCon -> True
     TSyn(_, _, t) -> t.tp/is-tcon
     _ -> False
 
+// Is this a rho type? (i.e. no outermost quantifiers)
 fun is-rho(tp: ktype): bool
   match tp
     TForAll -> False
     TSyn(_, _, t) -> t.is-rho
     _ -> True
 
+// Is this a tau type? (i.e. no quantifiers anywhere)
 fun is-tau(tp: ktype): bool
   match tp
     TForAll -> False
@@ -319,6 +346,13 @@ fun is-tau(tp: ktype): bool
     TApp(a, b) -> a.is-tau && b.all(_.pretend-decreasing.is-tau)
     TSyn(_, _, t) -> t.is-tau
 
+// Is this a function type?
+fun is-fun(tp: ktype): bool
+  match split-fun-type(tp)
+    Just(_) -> True
+    Nothing -> False
+
+// Split function type into argument list, effect type, and result type
 fun split-fun-type(tp: ktype): maybe<(list<(name, ktype)>, ktype, ktype)>
   match tp
     TFun(args, eff, res) -> Just((args, eff, res))
@@ -365,7 +399,7 @@ fun is-type-localvar(tp: ktype): bool
 fun is-value-operation(tp: ktype): bool
   match tp.split-type-scheme
     // TSyn(syn, [_]) -> syn.name == nameTpValueOp
-    (_, TApp(TCon(TypeCon(nm, _)), [_, _])) -> nm == nameTpValueOp
+    (_, TApp(TCon(TypeCon(nm)), [_, _])) -> nm == nameTpValueOp
     _ -> False
 
 fun make-value-operation(eff: ktype, tp: ktype)
@@ -376,13 +410,15 @@ fun order-effect(tp: tau): <exn,div> tau
   val (ls, tl) = extract-ordered-effect(tp)
   ls.foldr(tl, effect-extend)
 
-fun extract-ordered-effect(tp: tau): exn (list<tau>, tau)
+fun extract-ordered-effect(tp: tau): pure (list<tau>, tau)
   val (labs, tl) = extract-effect-extend(tp)
   fun expand(l)
     val (ls, tl') = extract-effect-extend(l)
     if tl'.is-effect-empty && !ls.is-nil then ls else [l]
   val labss = labs.map(expand).concat
-  val slabs = labss.sort(?(<) =fn(l1: tau, l2: tau) -> label-name/cmp(l1.label-name, l2.label-name).is-lt)
+  fun label/(<)(l1: tau, l2: tau) 
+    label-name/cmp(l1.label-name, l2.label-name).is-lt
+  val slabs = labss.sort()
   (slabs, tl)
 
 fun label-name(tp: tau): exn name
@@ -396,13 +432,24 @@ fun label-name-full(tp: tau): pure name
 fun label-name-ex(tp: tau): exn (name, int, list<tau>)
   match tp.expand-syn
     TCon(tc) -> (tc.name, 0, [])
-    TApp(TCon(TypeCon(name)), [htp]) | name == nameTpHandled || name == nameTpHandled1 || name == nameTpNHandled || name == nameTpNHandled1 -> htp.pretend-decreasing.label-name-ex
-    TApp(TCon(tc), targs as Cons(TVar(TypeVar(id, kind, Skolem)), _)) | kind == kindScope -> (tc.name, id, targs)
-    TApp(TCon(tc), targs) -> if (tc.name == nameEffectExtend) then throw("non-expanded type sysnonym used as label") else (tc.name, 0, targs)
+    TApp(TCon(TypeCon(name)), [htp]) | name == nameTpHandled || name == nameTpHandled1 || name == nameTpNHandled || name == nameTpNHandled1 -> 
+      // use the handled effect name for handled<htp> types.
+      htp.pretend-decreasing.label-name-ex
+    TApp(TCon(tc), targs as Cons(TVar(TypeVar(id, kind, Skolem)), _)) | kind == kindScope -> 
+      (tc.name, id, targs)
+    TApp(TCon(tc), targs) -> 
+      if (tc.name == nameEffectExtend) then 
+        throw("non-expanded type synonym used as label") 
+      else (tc.name, 0, targs)
     _ -> throw("type/type labelNameEx: label is not a constant")
 
 val typePartial = TApp(tconHandled, [TCon(TypeCon(nameTpPartial, kindHandled))])
 val typeLocal = TCon(TypeCon(nameTpLocal, kindLocal))
+fun is-type-local(tp: ktype): bool
+  match tp.expand-syn
+    TApp(TCon(c)) -> c.name == nameTpLocal
+    _ -> False
+
 val tconHandled = TCon(TypeCon(nameTpHandled, kind-fun(kindHandled, kindLabel)))
 val tconHandled1 = TCon(TypeCon(nameTpHandled1, kind-fun(kindHandled1, kindLabel)))
 
@@ -446,7 +493,7 @@ fun effect-extend-no-dup(label: tau, eff: tau): pure tau
   match ls
     Nil ->
       val (els, _) = eff.extract-effect-extend
-      if els.any(_.eq-type(label)) then eff // use eqType?
+      if els.any(_.eq-type(label)) then eff // (label `elem` els)
       else app-effect-extend(label, eff)
     _ -> ls.effect-extend-no-dups(eff)
 
@@ -462,6 +509,7 @@ fun effect-extend(label: tau, eff: tau): pure tau
 val tconEffectExtend = TypeCon(nameEffectExtend, kind-fun(kindLabel, kind-fun(kindEffect, kindEffect)))
 
 fun effect-extends(labels: list<tau>, eff: tau): pure tau
+  // prevent over expansion of type synonyms here (see also: core/parse/teffect)
   match labels
     Cons(lab as TSyn(TypeSyn(_, kind)), _) | eff.is-effect-empty && kind == kindEffect -> lab
     _ -> labels.foldr(eff, effect-extend)
@@ -469,16 +517,16 @@ fun effect-extends(labels: list<tau>, eff: tau): pure tau
 fun effect-fixed(labels: list<tau>): pure tau
   effect-extends(labels, effectEmpty)
 
-fun is-effect-fixed(tp: tau): bool
+fun is-effect-fixed(tp: tau): pure bool
   tp.extract-effect-extend.snd.is-effect-empty
 
-fun extract-effect-extend(t: tau): (list<tau>, tau)
-  fun extractLabel(l: tau): list<tau>
+fun extract-effect-extend(t: tau): pure (list<tau>, tau)
+  fun extractLabel(l: tau): pure list<tau>
     match l.expand-syn
       TApp(TCon(tc), [_, _]) | tc.name == nameEffectExtend ->
-        val (ls, _) = l.pretend-decreasing.extract-effect-extend
-        // TODO: Assertion
-        ls
+        val (ls, tl) = l.pretend-decreasing.extract-effect-extend
+        if (!tl.is-effect-fixed) then throw("label was not a fixed effect type alias")
+        else ls
       _ -> [l]
   match t.expand-syn
     TApp(TCon(tc), [l, e]) | tc.name == nameEffectExtend ->
@@ -528,7 +576,7 @@ fun kind-of(tau: ktype)
 
 fun unsafe-type(f: () -> pure tau): tau
   unsafe-total
-    try(f) fn(e)
+    try(f) fn(e) // TODO: Replace this with exit
       TCon(TypeCon("error".new-name, kindStar))
 
 val typeDivergent = unsafe-type({single-eff(nameTpDiv)})
@@ -553,11 +601,13 @@ fun is-type-unit(t: tau): bool
   match t
     TCon(c) -> c == tconUnit
     _ -> False
+// Type of ctail
 fun type-cctx(tp: tau)
   TSyn(tsynCCtx, [tp], TApp(typeCCtxx, [tp, tp]))
 val tsynCCtx = TypeSyn(nameTpCCtx, kind-fun(kindStar, kindStar), 0, Nothing)
 val typeCCtxx = TCon(tconCCtxx)
 val tconCCtxx = TypeCon(nameTpCCtxx, kind-fun(kindStar, kind-fun(kindStar, kindStar)))
+// Type of cfield
 val typeFieldAddr = TCon(tconFieldAddr)
 val tconFieldAddr = TypeCon(nameTpFieldAddr, kind-fun(kindStar, kindStar))
 val typeVector = TCon(TypeCon(nameTpVector, kind-fun(kindStar, kindStar)))
@@ -572,6 +622,7 @@ fun is-ev-type(tp: tau): bool
     _ -> False
 fun make-ev-type(arg: tau): tau
   type-app(typeEv, [arg])
+// Create an application (reduced form)
 fun type-app(tau: tau, args: list<tau>): tau
   match args
     Nil -> tau
@@ -606,6 +657,7 @@ fun un-optional(tp: ktype): ktype
     TApp(TCon(tc), [t]) | tc == tconOptional -> t
     _ -> tp
 
+// Remove type synonym indirections
 fun prune-syn(rho: rho): rho
   match rho
     TSyn(_, _, t) -> t.prune-syn
