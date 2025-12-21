@@ -23,10 +23,10 @@ fun open-resolve()
   set-core-defs(resolve(get-core-defs()))
 
 // transform definition groups
-fun dgs/resolve(dgs: defGroups): openEff defGroups
+fun dgs/resolve(dgs: def-groups): openEff def-groups
   dgs.map(resolve)
 
-fun dg/resolve(dg: defGroup): openEff defGroup
+fun dg/resolve(dg: def-group): openEff def-group
   match dg
     DefRec(dfs) -> DefRec(dfs.map(resolve))
     DefNonRec(df) -> DefNonRec(resolve(df))

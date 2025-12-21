@@ -16,11 +16,12 @@ import compiler/common/name-prim
 import compiler/common/name-collections
 import compiler/common/file
 import compiler/common/error
+import compiler/common/unique
 import compiler/syntax/syntax
 import compiler/syntax/promote
 import compiler/syntax/range-map
 import compiler/core/core
-import compiler/kind/importmap
+import compiler/kind/import-map
 import compiler/kind/kind
 import compiler/kind/assumption
 import compiler/kind/constructors
@@ -43,10 +44,10 @@ import std/data/sort
 // Kindcheck a program and calculate types
 // Also group recursive type and expressing bindings in order
 fun inferKinds(
-      isValue: (dataInfo) -> pure bool, // is this a value type
+      isValue: (data-info) -> pure bool, // is this a value type
       target: platform, // target platform (x32, x64)
       mbRangeMap: maybe<range-map>, // range map for tool integration
-      imports: importmap, // import aliases
+      imports: import-map, // import aliases
       kgamma0: kGamma, // initial kind kgamma
       syns0: synonyms, // initial list of synonyms
       data0: newtypes) // initial list of data types
@@ -78,25 +79,25 @@ fun unzip-either(xs: list<either<a, b>>): (list<a>, list<b>)
       Cons(Right(b), b1) -> loop(b1, las, lbs ++ ctx Cons(b, hole))
   loop(xs, ctx hole, ctx hole)
 
-fun extract-infos(groups: list<core/core/typeDefGroup>): list<either<synInfo, dataInfo>>
-  fun extract-info(td: core/core/typeDef): either<synInfo, dataInfo>
+fun extract-infos(groups: list<core/core/typedef-group>): list<either<syn-info, data-info>>
+  fun extract-info(td: core/core/typedef): either<syn-info, data-info>
     match td
       core/core/Synonym(si) -> Left(si)
       Data(di) -> Right(di)
-  fun extract-group-infos(g: core/core/typeDefGroup): list<either<synInfo, dataInfo>>
+  fun extract-group-infos(g: core/core/typedef-group): list<either<syn-info, data-info>>
     g.map(extract-info)
   groups.flatmap(extract-group-infos)
 
 // 
 alias lazyExpr = (name, syntax/syntax/expr<ktype>)
 
-fun syn-typedef-groups(tdgs: list<core/core/typeDefGroup>, lazyExprs: list<lazyExpr>)
+fun syn-typedef-groups(tdgs: list<core/core/typedef-group>, lazyExprs: list<lazyExpr>)
   tdgs.flatmap(_.syn-typedef-group(lazyExprs))
 
-fun syn-typedef-group(tdg: core/core/typeDefGroup, lazyExprs: list<lazyExpr>): _ syntax/syntax/defGroups<ktype>
+fun syn-typedef-group(tdg: core/core/typedef-group, lazyExprs: list<lazyExpr>): _ syntax/syntax/def-groups<ktype>
   tdg.flatmap(_.syn-typedef(lazyExprs))
 
-fun syn-typedef(td: core/core/typeDef, lazyExprs: list<lazyExpr>): _ list<syntax/syntax/defGroup<ktype>>
+fun syn-typedef(td: core/core/typedef, lazyExprs: list<lazyExpr>): _ list<syntax/syntax/def-group<ktype>>
   match td
     core/core/Synonym -> []
     Data(di) | di.name.is-hidden-name -> []
@@ -116,18 +117,18 @@ fun syn-typedef(td: core/core/typeDef, lazyExprs: list<lazyExpr>): _ list<syntax
                     else [] 
       accessors ++ testers ++ copycon ++ contag ++ synLazy
 
-effect data-info 
-  val data-info : dataInfo
+effect data-info-eff 
+  val data-info : data-info
   val data-def-name: name
-  val lazy-constructors: list<conInfo>
-  val whnf-constructors: list<conInfo>
+  val lazy-constructors: list<con-info>
+  val whnf-constructors: list<con-info>
   fun lazy-name(str: string): name
-  fun alloc-size-scan(conInfo: conInfo): (int, int)
-effect con-info 
-  val con-info : conInfo
+  fun alloc-size-scan(conInfo: con-info): (int, int)
+effect con-info-eff
+  val con-info : con-info
   val con-range: range
   val con-name: name
-fun with-data(di: dataInfo, action: () -> <inferKindEffect,data-info,exn|e> a): <inferKindEffect,exn|e> a
+fun with-data(di: data-info, action: () -> <infer-kind-eff,data-info-eff,exn|e> a): <infer-kind-eff,exn|e> a
   val (lazy-cons, whnf-cons) = di.constrs.partition(coninfo/is-lazy)
   val p = platform
   with handler 
@@ -139,7 +140,7 @@ fun with-data(di: dataInfo, action: () -> <inferKindEffect,data-info,exn|e> a): 
     val lazy-constructors = lazy-cons
     val whnf-constructors = whnf-cons
   action()
-fun with-con(ci: conInfo, action: () -> <con-info|e> a): e a
+fun with-con(ci: con-info, action: () -> <con-info-eff|e> a): e a
   with handler 
     val con-info = ci 
     val con-range = ci.range.hide
@@ -165,7 +166,7 @@ fun syn-copycon()
   val expr = Lam([ValueBinder(argName, Nothing, Nothing, cr, cr)] ++ params0, body, True, cr)
   DefNonRec(Def(ValueBinder(defName, (), Ann(expr, fullTp, cr), cr, cr), cr, data-info.vis, def-fun([]), InlineAuto, ""))
 
-fun ci/has-accessor(ci: conInfo, nm: name, tp: ktype)
+fun ci/has-accessor(ci: con-info, nm: name, tp: ktype)
   val tvs = tp.free-type-vars
   !(nm.is-field-name || nm == nil) && ci.existentials.all(!tvs.member(_))
 
@@ -197,7 +198,7 @@ fun syn-accessors()
       if dataName.show.list.all(is-alphanum) then dataName else "@this".new-name
     val fld = "x".new-hidden-name
     val dataTp = TApp(TCon(TypeCon(di.name, di.kind)), di.params.map(TVar))
-    fun make-branch(ci: conInfo)
+    fun make-branch(ci: con-info)
       val r = ci.range
       match zip(ci.params.map(fst), list(0, ci.params.length)).lookup(_ == nm)
         Just(i) ->
@@ -282,7 +283,7 @@ fun syn-lazy-force()
   val dataTp = TApp(TCon(TypeCon(di.name, di.kind)), di.params.map(TVar))
   val fullTp = TForAll(di.params, TFun([(nil, dataTp)], typeDivergent, dataTp))
   val nameIsWhnf = 
-    if di.constrs.all(fn(ci: conInfo) ci.params.length > 0)
+    if di.constrs.all(fn(ci: con-info) ci.params.length > 0)
     then nameLazyPtrIsWhnf else nameLazyIsWhnf
   
   val argName = "lazy".new-hidden-name
@@ -306,7 +307,7 @@ fun syn-lazy-whnf()
   val defName = lazy-name("whnf")
   val dataTp = TApp(TCon(TypeCon(di.name, di.kind)), di.params.map(TVar))
   val nameIsWhnf = 
-    if di.constrs.all(fn(ci: conInfo) ci.params.length > 0)
+    if di.constrs.all(fn(ci: con-info) ci.params.length > 0)
     then nameLazyPtrIsWhnf else nameLazyIsWhnf
 
   val valName = "val".new-hidden-name
@@ -341,7 +342,7 @@ fun syn-lazy-step()
   val dataTp = TApp(TCon(TypeCon(di.name, di.kind)), di.params.map(TVar))
   // val fullTp = TForAll(di.params, TFun([(nil, dataTp)], typePure, dataTp))
   val nameIsWhnf = 
-    if di.constrs.all(fn(ci: conInfo) ci.params.length > 0)
+    if di.constrs.all(fn(ci: con-info) ci.params.length > 0)
     then nameLazyPtrIsWhnf else nameLazyIsWhnf
   val argName = "lazy".new-hidden-name
   val arg = Var(argName, False, rng)
@@ -399,7 +400,7 @@ noinline fbip fun stream/lazy-eval-locked( s : stream<a>,recurse : bool ) : _ st
     _                  -> s
 ```
 */
-fun syn-lazy-eval-locked(les : list<lazyExpr>): _ list<compiler/syntax/syntax/defGroup<ktype>>
+fun syn-lazy-eval-locked(les : list<lazyExpr>): _ list<compiler/syntax/syntax/def-group<ktype>>
   val di = data-info
   val xrng = di.range 
   val rng = xrng.hide
@@ -413,11 +414,11 @@ fun syn-lazy-eval-locked(les : list<lazyExpr>): _ list<compiler/syntax/syntax/de
       Nil -> Nil
       Cons(x, xs) -> xs ++ [x]
   val lazy-cons = di.constrs.filter(coninfo/is-lazy).rotate // indirect match comes last
-  fun branch-expr(ci: conInfo, par-names: list<name>)
+  fun branch-expr(ci: con-info, par-names: list<name>)
     match les.lookup(ci.name)
       Just(lazyExpr) -> lazy-con-def-call(di, ci, par-names, rec, arg, lazyExpr) 
       Nothing -> fail("kind/infer/syn-lazy-eval-locked/branch-expr: cannot find expression for lazy constructor " ++ ci.name.show)
-  fun branch(ci: conInfo)
+  fun branch(ci: con-info)
     if ci.name.is-lazy-indirect-con-name then 
       val [(par, _)] = ci.params
       val compress = App(Var(nameLazyIndirectCompress, False, rng), [(Nothing, Var(par, False, rng)), (Nothing, Var(lazy-name("tag"), False, rng))], rng)
@@ -435,9 +436,9 @@ fun syn-lazy-eval-locked(les : list<lazyExpr>): _ list<compiler/syntax/syntax/de
   val def = Def(ValueBinder(def-name, (), lam, rng, rng), rng, di.vis, DefFun([], di.lazy-fip), InlineNever, "")
   defss.concat.map(DefNonRec) ++ [DefNonRec(def)]
 
-fun lookup-con(constrs: list<conInfo>, cname: name)
+fun lookup-con(constrs: list<con-info>, cname: name)
   val modName = data-info.name.qualifier
-  constrs.find fn(ci: conInfo)
+  constrs.find fn(ci: con-info)
     ci.name == (if cname.is-qualified then cname else qualify(modName, cname))
 
 fun is-whnf-con(cname: name)
@@ -473,7 +474,7 @@ fun is-whnf-con-branch(b)
 // ```
 
 
-fun lazy-con-def-call(di: dataInfo, ci: conInfo, par-names: list<name>, recurse-arg: compiler/syntax/syntax/expr<ktype>, memo-target: compiler/syntax/syntax/expr<ktype>, top-expr: compiler/syntax/syntax/expr<ktype>): _ (compiler/syntax/syntax/def<ktype>, compiler/syntax/syntax/expr<ktype>)
+fun lazy-con-def-call(di: data-info, ci: con-info, par-names: list<name>, recurse-arg: compiler/syntax/syntax/expr<ktype>, memo-target: compiler/syntax/syntax/expr<ktype>, top-expr: compiler/syntax/syntax/expr<ktype>): _ (compiler/syntax/syntax/def<ktype>, compiler/syntax/syntax/expr<ktype>)
   val rng = ci.range 
   val nameLazyCon = lazy-name(ci.name.unqualify.show)// lazy-SAppRev
   val modName = di.name.qualifier
@@ -553,7 +554,7 @@ fun guard/memoize(compiler/syntax/syntax/Guard(test, body))
 fun memoize-warning(rng, fdoc)
   fun show-con-name(n)
     n.unqualify.pretty.color(colors.colorCons)
-  add-warning(rng, "Cannot update the lazy constructor ".text |+| fdoc(con-info.conInfo/name.show-con-name))
+  add-warning(rng, "Cannot update the lazy constructor ".text |+| fdoc(con-info.con-info/name.show-con-name))
 fun memoize-unknown(expr: compiler/syntax/syntax/expr<ktype>)
   val rng = expr.range.hide
   memoize-warning(rng, fn(_) "in-place as the result constructor is not statically known -- using an indirection instead".text)
@@ -661,7 +662,7 @@ fun unknown-update(expr, arg)
   update-warning(rng, fn(_) "in-place as the result constructor is not statically known -- using an indirection instead".text)
   lazy-update(expr, arg)
 
-fun recursive-update(ci': conInfo, expr, arg)
+fun recursive-update(ci': con-info, expr, arg)
   val r0 = expr.expr/range.hide
   // No need to warn anymore as we don't force recursively here
   warn-update(expr.range, ci')
@@ -680,21 +681,21 @@ fun lazy-update(expr, arg)
   val rng = expr.expr/range.hide
   App(Var(nameLazyMemoize, False, rng), [(Nothing, arg), (Nothing, expr)], rng)
 
-fun lazy-fip(di: dataInfo)
+fun lazy-fip(di: data-info)
   match di.def
     DataDefLazy(fip) -> fip
     _ -> fail("kind/infer/lazy-fip: not a lazy data type? " ++ di.name.show)
 
 // Types for constructors
-fun constructor-gamma(dis: list<dataInfo>, is-value: (dataInfo) -> bool): exn gamma
-  fun gamma(cis: list<(conInfo, conRepr)>)
-    cis.map(fn((ci: conInfo, crepr)) (ci.name, InfoCon(ci.vis, ci.typeScheme, crepr, ci, ci.range, ci.doc))).gamma/new
+fun constructor-gamma(dis: list<data-info>, is-value: (data-info) -> bool): exn gamma
+  fun gamma(cis: list<(con-info, con-repr)>)
+    cis.map(fn((ci: con-info, crepr)) (ci.name, InfoCon(ci.vis, ci.typeScheme, crepr, ci, ci.range, ci.doc))).gamma/new
   dis.flatmap(fn(di) di.constrs.zip(data-repr(di, is-value).snd)).gamma
 
-fun constructor-check-duplicates(cis: list<conInfo>)
-  fun same-name(ci1: conInfo, ci2: conInfo)
+fun constructor-check-duplicates(cis: list<con-info>)
+  fun same-name(ci1: con-info, ci2: con-info)
     ci1.name == ci2.name
-  fun duplicate(cis': list<conInfo>)
+  fun duplicate(cis': list<con-info>)
     match cis'
       Cons(ci1, Cons(ci2)) -> 
         add-error(ci2.range, "Constructor".text |+| ci2.name.pretty.color(colors.colorSource) 
@@ -712,20 +713,20 @@ fun inf-import(imp: syntax/syntax/kimport)
   add-range-info(aliasRng, RIId(aliasn, NIModule, [], True))
 
 // Infer kinds for type definition groups
-fun tdgs/kinfer(tdgs: list<syntax/syntax/typeDefGroup<userType,userKind>>)
+fun tdgs/kinfer(tdgs: list<syntax/syntax/typedef-group<user-type,user-kind>>)
   fun get-ranges(tdg)
     match tdg
       TypeDefRec(tdefs) -> tdefs.map(range)
       TypeDefNonRec(tdef) -> [tdef.range]
   match tdgs
-    Nil -> (Nil, infKindEnv.kGamma, get-syns(), infKindEnv.allnewtypes, [])
+    Nil -> (Nil, inf-kind-env.kGamma, get-syns(), inf-kind-env.allnewtypes, [])
     Cons(tdgroup, tdgroups) ->
       val (ctdgroup, lazyExprs) = kinfer(tdgroup)
       with extend-kgamma(tdgroup.get-ranges, ctdgroup)
       val (ctdgroups, kgamma1, syns1, data1, lazyExprss) = tdgs/kinfer(tdgroups)
       (Cons(ctdgroup, ctdgroups), kgamma1, syns1, data1, lazyExprs ++ lazyExprss)
 
-fun tdg/kinfer(td: syntax/syntax/typeDefGroup<userType,userKind>)
+fun tdg/kinfer(td: syntax/syntax/typedef-group<user-type,user-kind>)
   match td
     TypeDefRec(tdefs) -> kinfer(True, tdefs)
     TypeDefNonRec(tdef) -> kinfer(False, [tdef])
@@ -738,7 +739,7 @@ fun get-data-effect((tbind, dt))
       else [(tbind.name, deffect)]
     _ -> []
 
-fun tdl/kinfer(isRec: bool, tdefs0: list<syntax/syntax/typeDef<userType, userType, userKind>>)
+fun tdl/kinfer(isRec: bool, tdefs0: list<syntax/syntax/typedef<user-type, user-type, user-kind>>)
   val tdefs = tdefs0.map(add-lazy-indirect)
   val xinfgamma = tdefs.map(bind-typedef) // set up recursion
   val infgamma = xinfgamma.filter(snd).map(fst)
@@ -751,7 +752,7 @@ fun tdl/kinfer(isRec: bool, tdefs0: list<syntax/syntax/typeDef<userType, userTyp
   val (ctdefs, lazyExprss) = ctdefs'.unzip
   (ctdefs, lazyExprss.concat)
 
-fun check-recursion(tdefs: list<syntax/syntax/typeDef<userType, userType, userKind>>)
+fun check-recursion(tdefs: list<syntax/syntax/typedef<user-type, user-type, user-kind>>)
   if tdefs.length <= 1 || tdefs.any(is-dataType) then
     ()
   else
@@ -759,7 +760,7 @@ fun check-recursion(tdefs: list<syntax/syntax/typeDef<userType, userType, userKi
               "Type synonyms cannot be recursive".text)
 
 // Setup type environment for recursive definitions
-fun bind-typedef(tdef: syntax/syntax/typeDef<userType, userType, userKind>)
+fun bind-typedef(tdef: syntax/syntax/typedef<user-type, user-type, user-kind>)
   val TypeBinder(name, kind, rngName, rng) = bind-typebinder(tdef.binder)
   val isExtend = 
     match tdef
@@ -768,12 +769,12 @@ fun bind-typedef(tdef: syntax/syntax/typeDef<userType, userType, userKind>)
   val qname = if isExtend then name else name.qualify-def
   (TypeBinder(qname, kind, rngName, rng), !isExtend)
 
-fun bind-typebinder(TypeBinder(name, userKind, rngName, rng): typeBinder<userKind>)
-  val kind = to-kind(userKind)
+fun bind-typebinder(TypeBinder(name, user-kind, rngName, rng): type-binder<user-kind>)
+  val kind = to-kind(user-kind)
   TypeBinder(name, kind, rngName, rng)
 
-fun userkind/to-kind(userKind: userKind)
-  match userKind
+fun userkind/to-kind(user-kind: user-kind)
+  match user-kind
     KindCon(nm) -> KICon(KCon(nm))
     KindArrow(k1, k2) ->
       val k1' = to-kind(k1)
@@ -810,8 +811,8 @@ fun external/kinfer(ex: syntax/syntax/external, names: list<name>)
       (core/core/External(cname, tp', pinfos, calls.map(_.format-call(tp')), vis, fipT, nameRng, doc), Cons(qname, names))
     syntax/syntax/ExternalImport(imps, rng) -> (core/core/ExternalImport(imps, rng), names)
 
-fun format-call((target, externalCall): (target, externalCall), tp: ktype)
-  match externalCall
+fun format-call((target, external-call): (target, external-call), tp: ktype)
+  match external-call
     ExternalInline(inl) -> (target, inl)
     ExternalCall(fname) ->
       val (foralls, rho) = tp.split-type-scheme
@@ -827,15 +828,15 @@ fun format-call((target, externalCall): (target, externalCall), tp: ktype)
         C -> (target, fname ++ argumentsC)
         DefaultTarget -> (target, fname ++ arguments)
 
-fun inf-resolve-type(tp: userType)
+fun inf-resolve-type(tp: user-type)
   val infTp = kinfer(infKindStar, tp)
   resolve-type(nameTVMapEmpty, False, infTp)
 
-fun inf-resolve-hx(tp: userType)
+fun inf-resolve-hx(tp: user-type)
   val infTp = kinfer(infKindHandled, tp)
   resolve-type(nameTVMapEmpty, False, infTp)
 
-fun inf-resolvex(tp: userType, rng: range)
+fun inf-resolvex(tp: user-type, rng: range)
   val ikind = fresh-kind()
   val infTp = kinfer(ikind, tp)
   val skind = subst(ikind)
@@ -859,21 +860,21 @@ fun inf-resolvex(tp: userType, rng: range)
     resolve-type(nameTVMapEmpty, False, eff)
 
 // Infer kinds of definitions
-fun dgs/kinfer(dgs: list<syntax/syntax/defGroup<userType>>)
+fun dgs/kinfer(dgs: list<syntax/syntax/def-group<user-type>>)
   dgs.map(kinfer)
 
-fun dg/kinfer(dg: syntax/syntax/defGroup<userType>)
+fun dg/kinfer(dg: syntax/syntax/def-group<user-type>)
   match dg
     syntax/syntax/DefRec(defs) -> DefRec(defs.map(kinfer))
     syntax/syntax/DefNonRec(def) -> DefNonRec(kinfer(def))
 
-fun def/kinfer(syntax/syntax/Def(binder, rng, vis, isVal, inl, doc): syntax/syntax/def<userType>)
+fun def/kinfer(syntax/syntax/Def(binder, rng, vis, isVal, inl, doc): syntax/syntax/def<user-type>)
   Def(binder.kinfer, rng, vis, isVal, inl, doc)
 
-fun valuebinder/kinfer(ValueBinder(nm, u, x, nmRng, rng): valueBinder<(), syntax/syntax/expr<userType>>)
+fun valuebinder/kinfer(ValueBinder(nm, u, x, nmRng, rng): value-binder<(), syntax/syntax/expr<user-type>>)
   ValueBinder(nm, u, x.kinfer, nmRng, rng)
 
-fun lam-valuebinder/kinfer(ValueBinder(lamnm, mbTp, mbExpr, nmRng, rng): valueBinder<maybe<userType>, maybe<syntax/syntax/expr<userType>>>)
+fun lam-valuebinder/kinfer(ValueBinder(lamnm, mbTp, mbExpr, nmRng, rng): value-binder<maybe<user-type>, maybe<syntax/syntax/expr<user-type>>>)
   val mbTp' = mbTp.map fn(t)
     with override val uctx = Check("Function parameters must be values", rng)
     t.inf-resolve-type()
@@ -886,19 +887,19 @@ fun lam-valuebinder/kinfer(ValueBinder(lamnm, mbTp, mbExpr, nmRng, rng): valueBi
       expr -> expr.kinfer
   ValueBinder(lamnm, mbTp', mbExpr', nmRng, rng)
 
-fun pat-valuebinder/kinfer(ValueBinder(nm, mbTp, pat, nmRng, rng): valueBinder<maybe<userType>, syntax/syntax/pattern<userType>>)
+fun pat-valuebinder/kinfer(ValueBinder(nm, mbTp, pat, nmRng, rng): value-binder<maybe<user-type>, syntax/syntax/pattern<user-type>>)
   val mbTp' = mbTp.map fn(t)
     with override val uctx = Check("Matched expressions must be values", rng)
     t.inf-resolve-type()
   ValueBinder(nm, mbTp', pat.kinfer, nmRng, rng)
 
-fun handler-valuebinder/kinfer(ValueBinder(nm, mbTp, u, nmRng, rng): valueBinder<maybe<userType>, ()>)
+fun handler-valuebinder/kinfer(ValueBinder(nm, mbTp, u, nmRng, rng): value-binder<maybe<user-type>, ()>)
   val mbTp' = mbTp.map fn(t)
     with override val uctx = Check("Handler parameters must be values", rng)
     inf-resolve-type(t)
   ValueBinder(nm, mbTp', u, nmRng, rng)
 
-fun expr/kinfer(ex: syntax/syntax/expr<userType>)
+fun expr/kinfer(ex: syntax/syntax/expr<user-type>)
   match ex
     syntax/syntax/Lam(binds, expr, tl, rng) -> syntax/syntax/Lam(binds.map(kinfer), expr.kinfer, tl, rng)
     syntax/syntax/Let(defs, expr, rng) -> syntax/syntax/Let(defs.kinfer, expr.kinfer, rng)
@@ -924,7 +925,7 @@ fun expr/kinfer(ex: syntax/syntax/expr<userType>)
         tp.inf-resolvex(rng)
       Inject(tp', expr.kinfer, b, rng)
 
-fun pat/kinfer(p: syntax/syntax/pattern<userType>)
+fun pat/kinfer(p: syntax/syntax/pattern<user-type>)
   match p
     syntax/syntax/PatWild(rng) -> syntax/syntax/PatWild(rng)
     syntax/syntax/PatLit(l) -> syntax/syntax/PatLit(l)
@@ -937,17 +938,17 @@ fun pat/kinfer(p: syntax/syntax/pattern<userType>)
     syntax/syntax/PatCon(name, args, r1, r2) -> syntax/syntax/PatCon(name, args.map(fn((mbNm, p')) (mbNm, p'.kinfer)), r1, r2)
     syntax/syntax/PatParens(pat, rng) -> syntax/syntax/PatParens(pat.kinfer, rng)
 
-fun handlerbranch/kinfer(HandlerBranch(name, pars, expr, opSort, nmRng, rng): handlerBranch<userType>)
+fun handlerbranch/kinfer(HandlerBranch(name, pars, expr, opSort, nmRng, rng): handler-branch<user-type>)
   HandlerBranch(name, pars.map(kinfer), expr.kinfer, opSort, nmRng, rng)
 
-fun branch/kinfer(syntax/syntax/Branch(pat, guards): syntax/syntax/branch<userType>)
+fun branch/kinfer(syntax/syntax/Branch(pat, guards): syntax/syntax/branch<user-type>)
   syntax/syntax/Branch(pat.kinfer, guards.map(kinfer))
 
-fun guard/kinfer(syntax/syntax/Guard(test, body): syntax/syntax/guard<userType>)
+fun guard/kinfer(syntax/syntax/Guard(test, body): syntax/syntax/guard<user-type>)
   syntax/syntax/Guard(test.kinfer, body.kinfer)
 
 // Infer the kinds for a type definition
-fun typedef/kinfer(tb: typeBinder<infKind>, td: syntax/syntax/typeDef<userType, userType, userKind>)
+fun typedef/kinfer(tb: type-binder<inf-kind>, td: syntax/syntax/typedef<user-type, user-type, user-kind>)
   match td
     syntax/syntax/Synonym(_, args, tp, rng, vis, doc) ->
       val infgamma = args.map(bind-typebinder)
@@ -969,16 +970,16 @@ fun typedef/kinfer(tb: typeBinder<infKind>, td: syntax/syntax/typeDef<userType, 
         unify(newTp.range, tbinder'.tb/kind, kd)
       DataType(tbinder', infgamma, constrs', rng, vis, sort, ddef, dataEff, doc)
 
-fun unify-binder(tb: typeBinder<infKind>, rng: range, infgamma: list<typeBinder<infKind>>, resKind: infKind)
+fun unify-binder(tb: type-binder<inf-kind>, rng: range, infgamma: list<type-binder<inf-kind>>, resKind: inf-kind)
   val kind = inf-kind-funN(infgamma.map(tb/kind), resKind)
   with override val uctx = Infer(rng)
   unify(rng, tb.tb/kind, kind)
   tb
 
-fun tb/kind(TypeBinder(_, k, _, _): typeBinder<k>): k
+fun tb/kind(TypeBinder(_, k, _, _): type-binder<k>): k
   k
 
-fun constr/kinfer(UserCon(name, exists0, params, mbresult, mblazy, rngName, rng, vis, doc): userCon<userType,userType,userKind>)
+fun constr/kinfer(UserCon(name, exists0, params, mbresult, mblazy, rngName, rng, vis, doc): user-con<user-type,user-type,user-kind>)
   val infgamma = exists0.map(bind-typebinder)
   with extend-infgamma(infgamma)
   val params' = params.map(kinfer)
@@ -987,12 +988,12 @@ fun constr/kinfer(UserCon(name, exists0, params, mbresult, mblazy, rngName, rng,
     kinfer(infKindStar, t)
   UserCon(name, infgamma, params', result', mblazy, rngName, rng, vis, doc)
 
-fun con-valuebinder/kinfer((vis,ValueBinder(name, tp, mbExpr, nameRng, rng)): (visibility, valueBinder<userType, maybe<syntax/syntax/expr<userType>>>))
+fun con-valuebinder/kinfer((vis,ValueBinder(name, tp, mbExpr, nameRng, rng)): (visibility, value-binder<user-type, maybe<syntax/syntax/expr<user-type>>>))
   with override val uctx = Check("Constructor parameters must be values", rng)
   (vis, ValueBinder(name, kinfer(infKindStar, tp), mbExpr, nameRng, rng))
 
-fun usertp/kinfer(expected: infKind, userType: userType)
-  match userType
+fun usertp/kinfer(expected: inf-kind, user-type: user-type)
+  match user-type
     TpQuan(quant, tname, tp, r) ->
       val ikind = match quant
         QSome -> expected
@@ -1071,16 +1072,16 @@ fun usertp/kinfer(expected: infKind, userType: userType)
       unify(rng, expected, kind)
       TpCon(qname, rng)
     TpParens(tp, rng) -> TpParens(kinfer(expected, tp), rng)
-    TpAnn(tp, userKind) ->
-      val kind = userKind.to-kind
-      val rng = userType.range
+    TpAnn(tp, user-kind) ->
+      val kind = user-kind.to-kind
+      val rng = user-type.range
       unify(rng, expected, kind)
       val tp' = 
         with check-annot(rng)
         kinfer(kind, tp)
-      TpAnn(tp', kind)
+      TpAnn(tp', kind) 
 
-fun get-effect-lift(utp: kUserType<infKind>): inferKindEnvEffect (forall<k> (kUserType<k>, range) -> kUserType<k>)
+fun get-effect-lift(utp: kuser-type<inf-kind>): inf-kind-env (forall<k> (kuser-type<k>, range) -> kuser-type<k>)
   match utp
     TpQuan(_, _, tp) -> get-effect-lift(tp)
     TpParens(tp) -> get-effect-lift(tp)
@@ -1094,7 +1095,7 @@ fun get-effect-lift(utp: kUserType<infKind>): inferKindEnvEffect (forall<k> (kUs
       trace("get-effect-lift: ")
       fn(tp, _) tp
 
-fun param/kinfer(expected: infKind, (nm, tp): (name, userType))
+fun param/kinfer(expected: inf-kind, (nm, tp): (name, user-type))
   (nm, kinfer(expected, tp))
 
 // Add indirection constructor to a lazy datatype
@@ -1104,7 +1105,7 @@ fun add-lazy-indirect(dt)
       val (lazyCons, strictCons) = cons.partition(user-con-is-lazy)
       val rng = newtp.name-range.hide
       val indirectName = "indirect".new-hidden-name
-      fun make-tp-app(t: kUserType<k>, targs': list<kUserType<k>>): kUserType<k>
+      fun make-tp-app(t: kuser-type<k>, targs': list<kuser-type<k>>): kuser-type<k>
         if targs'.is-nil then t else TpApp(t, targs', rng)
       val indirectPar = ValueBinder(indirectName, 
         make-tp-app(TpCon(newtp.name, rng), 
@@ -1128,7 +1129,7 @@ fun add-lazy-indirect(dt)
       
       // get fip annotation of the data definition
       fun user-con-fip(c)
-        match c.userCon/mblazy
+        match c.user-con/mblazy
           Just((f, _)) -> f
           _ -> noFip
       val defaultFip = lazyCons.map(user-con-fip).foldr(fipBot, max)
@@ -1145,7 +1146,7 @@ fun add-lazy-indirect(dt)
 
 
 fun user-con-is-lazy(ucon)
-  match ucon.userCon/mblazy
+  match ucon.user-con/mblazy
     Just -> True
     Nothing -> is-lazy-indirect-con-name(ucon.name)
 
@@ -1192,28 +1193,28 @@ fun kind/arity(kind: kind)
     _ -> []
 
 // Resolve kinds: from InfKind to Kind, and UserType to Type
-fun resolve-typedef(isRec: bool, recNames: list<name>, td: syntax/syntax/typeDef<kUserType<infKind>, userType, infKind>)
+fun resolve-typedef(isRec: bool, recNames: list<name>, td: syntax/syntax/typedef<kuser-type<inf-kind>, user-type, inf-kind>)
   match td
     Synonym(syn, params, tp, rng, vis, doc) ->
       val syn' = syn.resolve-typebinder-def(doc)
       val params' = params.map(_.resolve-typebinder(""))
-      val typeVars = params'.map(_.fresh-typevar(Bound))
-      val tvarMap = LinearMap([]) + params'.map(name).zip(typeVars)
+      val type-vars = params'.map(_.fresh-typevar(Bound))
+      val tvarMap = LinearMap([]) + params'.map(name).zip(type-vars)
       val tp' = resolve-type(tvarMap, True, tp)
       // eta-expand type synonyms
       val kind = syn'.tb/kind
       val karity = kind.arity
-      val etaKinds = karity.drop(typeVars.length)
+      val etaKinds = karity.drop(type-vars.length)
       val (etaTp, etaParams) = 
         if etaKinds.is-nil then
-          (tp', typeVars)
+          (tp', type-vars)
         else
           val etaVars = etaKinds.map(TypeVar(unique-id("eta"), _, Bound))
-          (TApp(tp', etaVars.map(TVar)), typeVars ++ etaVars)
+          (TApp(tp', etaVars.map(TVar)), type-vars ++ etaVars)
       add-range-info(rng, RIDecl("alias", syn'.name, syn'.name.mangle-type-name, Just(tp')))
-      val synInfo = SynInfo(syn'.name, syn'.tb/kind, etaParams, etaTp, etaTp.max-synonym-rank + 1, rng, vis, doc)
-      add-synonym(synInfo)
-      (Synonym(synInfo), [])
+      val syn-info = SynInfo(syn'.name, syn'.tb/kind, etaParams, etaTp, etaTp.max-synonym-rank + 1, rng, vis, doc)
+      add-synonym(syn-info)
+      (Synonym(syn-info), [])
     DataType(newtp, params, constrs, rng, vis, sort, ddef, dataEff, doc) ->
       val newtp' = 
         if ddef.is-extend then
@@ -1224,19 +1225,19 @@ fun resolve-typedef(isRec: bool, recNames: list<name>, td: syntax/syntax/typeDef
           newtp.resolve-typebinder-def(doc)
       val params' = params.map(_.resolve-typebinder(""))
       val typeResult = TCon(TypeCon(newtp'.name, newtp'.tb/kind))
-      val typeVars =
+      val type-vars =
         val (kargs, _kres) = extract-kind-fun(newtp'.tb/kind)
         if params.is-nil && !kargs.is-nil then
           kargs.map(TypeVar(unique-id("k"), _, Bound)) // invent parameters if they are not given (and it has an arrow kind)
         else
           params'.map(_.fresh-typevar(Bound))
-      val tvarMap = LinearMap([]) + params'.map(name).zip(typeVars)
+      val tvarMap = LinearMap([]) + params'.map(name).zip(type-vars)
       val qname = newtp'.name
       val fname = qname.unqualify
       val name = fname
       val nameDoc = name.pretty.color(colors.colorType)
       val consinfos = constrs.map-indexed fn(i, c) 
-        resolve-constructor(qname, sort, !ddef.is-open && constrs.length == 1, typeResult, typeVars, tvarMap, c, i + 1) // constructor tags start at 1
+        resolve-constructor(qname, sort, !ddef.is-open && constrs.length == 1, typeResult, type-vars, tvarMap, c, i + 1) // constructor tags start at 1
       val (lazyExprss, conInfos0) = consinfos.unzip
       // check recursion
       if sort.is-retractive then
@@ -1255,7 +1256,7 @@ fun resolve-typedef(isRec: bool, recNames: list<name>, td: syntax/syntax/typeDef
       fun emit-warning(d)
         add-warning(rng, "Type".text |+| nameDoc |+| d)
       val resultHasKindStar = typeResult.kind.has-kind-star-result
-      val maxMembers = conInfos0.map(_.conInfo/params.length).maximum
+      val maxMembers = conInfos0.map(_.con-info/params.length).maximum
       val conCount = conInfos0.length
       val willNeedStructTag = ddef.is-value && conCount > 1 && maxMembers >= 1
       val extraFields = 
@@ -1263,7 +1264,7 @@ fun resolve-typedef(isRec: bool, recNames: list<name>, td: syntax/syntax/typeDef
         elif willNeedStructTag then 1 // explicit struct tag
         else 0
       val (ddef1, conInfos1) = create-data-def(emit-error, emit-warning, lookup-datainfo, platform, qname, resultHasKindStar, isRec, sort, extraFields, ddef, conInfos0)
-      val dataInfo = DataInfo(sort, qname, newtp'.tb/kind, typeVars, conInfos1, rng, ddef1, dataEff, isRec, vis, doc)
+      val dataInfo = DataInfo(sort, qname, newtp'.tb/kind, type-vars, conInfos1, rng, ddef1, dataEff, isRec, vis, doc)
       val declaration = (if dataInfo.di/is-lazy then "lazy " else "")
                         ++ (if !sort.is-inductive then "" elif ddef1.is-value then "value " else "reference ")
                         ++ sort.show
@@ -1272,7 +1273,7 @@ fun resolve-typedef(isRec: bool, recNames: list<name>, td: syntax/syntax/typeDef
       add-range-info(rng, RIDecl(declaration, qname, qname.mangle-type-name, Nothing))
       (Data(dataInfo), lazyExprss.concat)
 
-fun occurs-negative-con(names: list<name>, ci: conInfo)
+fun occurs-negative-con(names: list<name>, ci: con-info)
   val (_, rho) = ci.typeScheme.split-type-scheme
   match rho.split-fun-type
     Just((pars, _, res)) -> pars.map(snd).any(_.occurs-negative(names)) || res.occurs-negative(names)
@@ -1290,23 +1291,23 @@ fun occurs(tp: ktype, names: list<name>, isNeg: bool)
     TApp(tp, args) -> Cons(tp, args).any(_.occurs(names, isNeg))
     TSyn(_, _, t) -> t.occurs(names, isNeg)
 
-fun typebinder/show(TypeBinder(name, kind, _, _): typeBinder<kind>)
+fun typebinder/show(TypeBinder(name, kind, _, _): type-binder<kind>)
   name.show ++ ":" ++ kind.show
 
-fun resolve-typebinder-def(TypeBinder(name, infkind, rngName, rng): typeBinder<infKind>, doc)
+fun resolve-typebinder-def(TypeBinder(name, infkind, rngName, rng): type-binder<inf-kind>, doc)
   val infkind' = infkind.resolve-kind
   val qname = name.qualify-def
   add-range-info(rngName, RIId(qname, NITypeCon(infkind', doc), [], True))
   TypeBinder(qname, infkind', rngName, rng)
 
-fun resolve-typebinder(TypeBinder(name, infkind, rngName, rng): typeBinder<infKind>, doc)
+fun resolve-typebinder(TypeBinder(name, infkind, rngName, rng): type-binder<inf-kind>, doc)
   val infkind' = infkind.resolve-kind
   add-range-info(rngName, RIId(name, NITypeCon(infkind', doc), [], True))
   TypeBinder(name, infkind', rngName, rng)
 
-fun resolve-kind(infkind: infKind)
+fun resolve-kind(infkind: inf-kind)
   val skind = subst(infkind)
-  fun resolve(k: infKind)
+  fun resolve(k: inf-kind)
     match skind
       KIVar(_) -> kindStar // default unconstrained parameter to kind star
       KICon(k') -> k'
@@ -1315,8 +1316,8 @@ fun resolve-kind(infkind: infKind)
 
 val nameTVMapEmpty = LinearMap([])
 
-fun resolve-constructor(typeName: name, typeSort: dataKind, isSingleton: bool, typeResult: ktype, typeParams: list<typeVar>,
-  idmap: name-map<typeVar>, UserCon(cname, exists0, params, mbResult, mblazy, rngName, rng, vis, doc): userCon<kUserType<infKind>, userType, infKind>, tag)
+fun resolve-constructor(typeName: name, typeSort: data-kind, isSingleton: bool, typeResult: ktype, typeParams: list<type-var>,
+  idmap: name-map<type-var>, UserCon(cname, exists0, params, mbResult, mblazy, rngName, rng, vis, doc): user-con<kuser-type<inf-kind>, user-type, inf-kind>, tag)
   val qname = cname.qualify-def
   val exists' = exists0.map(_.resolve-typebinder(""))
   val existsVars = exists'.map(fresh-typevar(_, Bound))
@@ -1336,12 +1337,12 @@ fun resolve-constructor(typeName: name, typeSort: dataKind, isSingleton: bool, t
   add-range-info(rng, RIDecl("con", qname, qname.mangle-con-name, Just(scheme)))
   add-range-info(rngName, RIId(qname, NICon(scheme, doc), [], True))
   val fields = params'.map(snd).map-indexed(fn(i, b) (if b.name.is-nil then (i + 1).new-field-name else b.name, b.binderType))
-  (lazyExpr, 
+  (lazyExpr,
    ConInfo(qname, typeName, typeParams, existsVars, fields, scheme, typeSort, rngName, 
     params'.map(fn((_, b)) b.name-range), params'.map(fst), isSingleton, [], zero, // Initialized later at the datadef
     mbLazyFip, tag, vis, doc))
 
-fun resolve-con-param(idmap: name-map<typeVar>, (vis, ValueBinder(name, tp, mbExpr, nameRng, rng)): (visibility, valueBinder<kUserType<infKind>, maybe<syntax/syntax/expr<userType>>>))
+fun resolve-con-param(idmap: name-map<type-var>, (vis, ValueBinder(name, tp, mbExpr, nameRng, rng)): (visibility, value-binder<kuser-type<inf-kind>, maybe<syntax/syntax/expr<user-type>>>))
   val tp' = resolve-type(idmap, False, tp)
   val expr = match mbExpr
     Nothing -> Nothing
@@ -1353,16 +1354,16 @@ fun resolve-con-param(idmap: name-map<typeVar>, (vis, ValueBinder(name, tp, mbEx
 // a boolean that is 'True' if partially applied type synonyms are allowed (i.e. when
 // these are arguments to type synonyms themselves), a user type with inference kinds,
 // and it returns a fully resolved type
-fun resolve-type(idmap: name-map<typeVar>, partialSyn: bool, userType: kUserType<infKind>)
-  fun resolve-param((nm, tp): (name, kUserType<infKind>))
+fun resolve-type(idmap: name-map<type-var>, partialSyn: bool, user-type: kuser-type<inf-kind>)
+  fun resolve-param((nm, tp): (name, kuser-type<inf-kind>))
     (nm, resolve-type(idmap, False, tp))
-  fun collect-args(args: list<kUserType<k>>, tp: kUserType<k>): (kUserType<k>, list<kUserType<k>>)
+  fun collect-args(args: list<kuser-type<k>>, tp: kuser-type<k>): (kuser-type<k>, list<kuser-type<k>>)
     match tp
       TpApp(tp', args') -> collect-args(args' ++ args, tp')
       TpParens(tp') -> collect-args(args, tp')
       TpAnn(tp') -> collect-args(args, tp')
       _ -> (tp, args)
-  match userType
+  match user-type
     TpQuan(QForall, tname, tp) ->
       val tname' = tname.resolve-typebinder("")
       val tvar = fresh-typevar(tname', Bound)
@@ -1383,15 +1384,15 @@ fun resolve-type(idmap: name-map<typeVar>, partialSyn: bool, userType: kUserType
     TpApp(tp, args, rng) ->
       resolve-app(idmap, partialSyn, args.collect-args(tp), rng)
     TpVar(_, rng) ->
-      resolve-app(idmap, partialSyn, (userType, []), rng)
+      resolve-app(idmap, partialSyn, (user-type, []), rng)
     TpCon(_, rng) ->
-      resolve-app(idmap, partialSyn, (userType, []), rng)
+      resolve-app(idmap, partialSyn, (user-type, []), rng)
     TpParens(tp) ->
       resolve-type(idmap, partialSyn, tp)
     TpAnn(tp) ->
       resolve-type(idmap, partialSyn, tp)
 
-fun resolve-app(idmap: name-map<typeVar>, partialSyn: bool, (tp, args): (kUserType<infKind>, list<kUserType<infKind>>), rng: range)
+fun resolve-app(idmap: name-map<type-var>, partialSyn: bool, (tp, args): (kuser-type<inf-kind>, list<kuser-type<inf-kind>>), rng: range)
   match (tp, args)
     (TpVar(name, r), _) ->
       val (tp', kind) = match idmap.lookup(name)

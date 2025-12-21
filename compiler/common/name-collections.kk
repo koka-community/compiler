@@ -16,8 +16,8 @@ import std/test
 
 alias name-map<a> = linearMap<name, a>;
 
-alias nameSet = linearSet<name>;
-val names/empty: nameSet = LinearSet([])
+alias name-set = linearSet<name>;
+val names/empty: name-set = LinearSet([])
 
 alias qname-map<a> = linearMap<name,list<(name,a)>>;
 

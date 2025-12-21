@@ -18,7 +18,7 @@ fun suite()
       expect(True)
         Public == Public && Private == Private && !(Public == Private)
 
-    test("paramInfo equality")
+    test("param-info equality")
       expect(True)
         Borrow == Borrow && Own == Own && !(Borrow == Own)
 
@@ -95,12 +95,12 @@ fun suite()
         DebugFull.build-type/show == "debugfull" && Debug.build-type/show == "debug" && 
         Release.build-type/show == "release" && RelWithDebInfo.build-type/show == "drelease"
 
-  group("handlerSort display")
+  group("handler-sort display")
     test("handler sort display")
       expect(True)
         HandlerNormal.handler-sort/show == "normal" && HandlerInstance.handler-sort/show == "named"
 
-  group("operationSort display and parsing")
+  group("operation-sort display and parsing")
     test("operation sort display")
       expect(True)
         OpVal.op-sort/show == "val" && OpFun.op-sort/show == "fun" && 
@@ -147,13 +147,13 @@ fun suite()
       expect(True)
         ValueRepr(8, 2, 4).is-mixed && ValueRepr(16, 0, 16).is-raw
 
-  group("paramInfo display")
-    test("paramInfo display")
+  group("param-info display")
+    test("param-info display")
       expect(True)
         Borrow.param/show == "Borrow" && Own.param/show == "Own"
 
-  group("defSort display and creation")
-    test("defSort display")
+  group("def-sort display and creation")
+    test("def-sort display")
       expect(True)
         DefFun([]).defsort/show == "fun" && DefVal.defsort/show == "val" && 
         DefVar.defsort/show == "var"

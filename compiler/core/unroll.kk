@@ -7,31 +7,31 @@ import compiler/core/corevar
 import std/core/undiv
 import std/data/linearset
 
-fun unrollDefs(unrollMax: int)
-  set-core-defs(unrollDefGroups(get-core-defs()))
+fun defs/unroll(unrollMax: int)
+  set-core-defs(unroll(get-core-defs()))
 
-fun unrollDefGroups(defGroups: list<defGroup>)
-  defGroups.map(unrollDefGroup).concat
+fun dgs/unroll(def-groups: list<def-group>)
+  def-groups.map(unroll).concat
 
-fun unrollDefGroup(defGroup: defGroup)
-  match defGroup
-    DefRec([d]) -> d.unrollRecDef
-    _ -> [defGroup]
+fun dg/unroll(def-group: def-group)
+  match def-group
+    DefRec([d]) -> d.unroll
+    _ -> [def-group]
 
-fun unrollRecDef(d: def)
+fun recdef/unroll(d: def)
   val dgs = match d.defExpr
-    Lam(pars, eff, body) -> unrollBody(d, [], pars, eff, body)
-    TypeLam(tpars, Lam(pars, eff, body)) -> unrollBody(d, tpars, pars, eff, body)
+    Lam(pars, eff, body) -> unroll(d, [], pars, eff, body)
+    TypeLam(tpars, Lam(pars, eff, body)) -> unroll(d, tpars, pars, eff, body)
     _ -> []
   if dgs.is-nil then [DefRec([d])] else dgs
 
-fun unrollBody(d: def, tpars: list<typeVar>, pars: list<tName>, eff: keffect, body: expr)
+fun body/unroll(d: def, tpars: list<type-var>, pars: list<tName>, eff: keffect, body: expr)
   match body
     Case(exprs, brnchs as Cons(Branch(pats))) | pretend-no-div{exprs.all(fn(x:expr) x.cost == 0)} ->
-      match extractNonRecBranches(d.defTname, [], brnchs)
+      match extract-nonrec-branches(d.defTname, [], brnchs)
         (nonrecbs, recbs) | nonrecbs.length > 0 && recbs.length > 0 ->
           val dname = d.defTname
-          val rname = dname.unique-tnameFrom
+          val rname = dname.unique-tname-from
           val info = InfoArity(tpars.length, pars.length)
           val sub = [(dname, Var(rname, info))]
           val rdef = d(def-name=rname.get-name, defExpr=(sub |-> d.defExpr), vis=Private)
@@ -47,56 +47,56 @@ fun unrollBody(d: def, tpars: list<typeVar>, pars: list<tName>, eff: keffect, bo
         _ -> []
     _ -> [] // TODO: small let bindings?
 
-fun extractNonRecBranches(dname: tName, recs: list<branch>, bs: list<branch>): div (list<branch>, list<branch>)
+fun extract-nonrec-branches(dname: tName, recs: list<branch>, bs: list<branch>): div (list<branch>, list<branch>)
   match bs
     // Stop on end
     Nil -> (Nil, recs)
     // stop also when we cannot push down patterns of recursive branches any further
-    Cons(b, _) | pretend-no-div({recs.any(_.matchCanOverlap(b))}) ->
+    Cons(b, _) | pretend-no-div({recs.any(_.match-can-overlap(b))}) ->
       (Nil, recs ++ [b] ++ bs)
     // otherwise
     Cons(b as Branch(pats, guards), bs') ->
       // we only want cheap matches in the unrolling, and they should be non-recursive    
-      if pats.any(!_.singletonPat) || guards.free-vars.member(dname) then
+      if pats.any(!_.is-singleton-pat) || guards.free-vars.member(dname) then
         // assume it contains a recursive call
         // push down as long the other patterns don't match to maximize non-recursive matches
-        extractNonRecBranches(dname, (recs ++ [b]), bs')
+        extract-nonrec-branches(dname, (recs ++ [b]), bs')
       else
         // surely non-recursive, keep going
-        val (bs1, bs2) = extractNonRecBranches(dname, recs, bs')
-        val newb = if recs.is-nil then b else b.dontSkip
+        val (bs1, bs2) = extract-nonrec-branches(dname, recs, bs')
+        val newb = if recs.is-nil then b else b.dont-skip
         (Cons(newb, bs1), bs2)
 
 // is this a singleton (which can be matched without memory access)
-fun singletonPat(p: pattern): bool
+fun is-singleton-pat(p: pattern): bool
   match p
-    PatVar(_, p') -> p'.singletonPat
+    PatVar(_, p') -> p'.is-singleton-pat
     PatCon(_, []) -> True
     PatWild -> True
     PatLit -> True
     _ -> False
 
 // Patterns could overlap? (can be conservative, returning True is always ok)
-fun matchCanOverlap(Branch(pats1, _): branch, Branch(pats2, _): branch)
-  fun patCanOverlap(pp: (pattern, pattern))
+fun match-can-overlap(Branch(pats1, _): branch, Branch(pats2, _): branch)
+  fun pat-can-overlap(pp: (pattern, pattern))
     match pp
       (PatWild, _) -> True
       (_, PatWild) -> True
-      (PatVar(_, p1), p2) -> patCanOverlap((p1, p2))
-      (p1, PatVar(_, p2)) -> patCanOverlap((p1, p2))
+      (PatVar(_, p1), p2) -> pat-can-overlap((p1, p2))
+      (p1, PatVar(_, p2)) -> pat-can-overlap((p1, p2))
       (PatLit(lit1), PatLit(lit2)) -> lit1 == lit2
       (PatCon(name1), PatCon(name2)) -> name1 == name2 // TODO: make more precise
       _ -> True
-  pats1.zip(pats2).any(patCanOverlap)
+  pats1.zip(pats2).any(pat-can-overlap)
 
-fun dontSkip(Branch(pats, guards): branch)
-  fun noSkip(pat: pattern)
+fun dont-skip(Branch(pats, guards): branch)
+  fun no-skip(pat: pattern)
     match pat
-      PatVar(name, p) -> PatVar(name, p.noSkip)
+      PatVar(name, p) -> PatVar(name, p.no-skip)
       PatCon(patName, ps, repr, typeArgs, kexists, typeRes, info, _) ->
-        PatCon(patName, ps.map(noSkip), repr, typeArgs, kexists, typeRes, info, False)
+        PatCon(patName, ps.map(no-skip), repr, typeArgs, kexists, typeRes, info, False)
       _ -> pat 
-  Branch(pats.map(noSkip), guards)
+  Branch(pats.map(no-skip), guards)
 
-fun unique-tnameFrom(tn: tName): <ndet,unique> tName
+fun unique-tname-from(tn: tName): <ndet,unique> tName
   TName(to-hidden-unique-name(unique(), "unroll", tn.get-name), tn.type-of)

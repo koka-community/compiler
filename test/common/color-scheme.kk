@@ -210,7 +210,7 @@ fun suite()
       expect(True)
         cs.colorComment == Green
 
-  group("effect colorSchemeEffect")
+  group("effect colors")
     test("color-scheme-default provides access to colors")
       val result = color-scheme-default({
         colors().colorError

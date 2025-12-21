@@ -385,7 +385,7 @@ fun parse-import-alias(): <parse> (name, name, range, range)
 fun parse-param-id(): <parse> (name, range)
   parse-choices("param id", [parse-identifier, parse-wildcard])
 
-fun parse-param-info(): <parse> paramInfo
+fun parse-param-info(): <parse> param-info
   parse-choices("param info", [{
     parse-special-op("^")
     Borrow
@@ -394,7 +394,7 @@ fun parse-param-info(): <parse> paramInfo
 fun parse-identifier(): <parse> (name, range)
   ensure-unqualified("identifier", parse-qualified-identifier)
 
-fun parse-fip-alloc(): <parse> (fipAlloc, range)
+fun parse-fip-alloc(): <parse> (fip-alloc, range)
   parse-choices("alloc", [
     {
       parens
@@ -426,7 +426,7 @@ fun parse-fip-ex(rng0: range, isTail: bool): <parse> (fipT, range)
     { (NoFip(isTail), null) }
   ])
 
-fun parse-inline(): <parse> defInline
+fun parse-inline(): <parse> def-inline
   parse-choices("inline", [{
       parse-special-id("inline")
       InlineAlways
@@ -437,7 +437,7 @@ fun parse-inline(): <parse> defInline
     { InlineAuto }
   ])
 
-fun parse-idcon(): <parse> userExpr
+fun parse-idcon(): <parse> user-expr
   val (name, rng) = parse-choices("", [parse-qualified-identifier, parse-qualified-constructor])
   Var(name, False, rng)
 
@@ -643,10 +643,10 @@ fun unique-range-name(rng: range, pre: string): name
   val pos = rng.start
   new-name(pre ++ "-l" ++ pos.line.show ++ "-c" ++ pos.col.show)
 
-fun expr/adjust-range(ue: userExpr, r: range): userExpr
+fun expr/adjust-range(ue: user-expr, r: range): user-expr
   Parens(ue, nil, "", r)
 
-fun tp/adjust-range(ut: userType, r: range): userType
+fun tp/adjust-range(ut: user-type, r: range): user-type
   TpParens(ut, r)
 
 fun unimplemented(): <parse> a

@@ -9,7 +9,8 @@ fun main()
   "/Users/timwhiting/koka/lib/std/".path.list-directory-recursive.foreach fn(f)
     if f.is-file && f.string.ends-with(".kk").bool then
       println("Parsing... " ++ f.show)
-      catch { parse-program-from-file(f, True, True); () } fn(err) err.show.trace
+      with catch fn(err) err.show.trace 
+      parse-program-from-file(f, True, True)
       println("Parsed " ++ f.show)
 
 fun test-x1()

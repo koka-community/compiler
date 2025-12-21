@@ -17,7 +17,7 @@ import std/data/linearmap
 // Map identifiers to /nice/ strings.
 alias nice = id-map<string>
 
-effect niceEff<k>
+effect nice-eff<k>
   fun extend-nice(tv: k): ()
   fun get-nice(tv: k): string 
   fun get-nice-doc(tv: k): doc 
@@ -30,7 +30,7 @@ fun niceEnv(f)
   var typeLetterIndex := 0
   var scopeIndex := 0
   with handler
-    fun extend-nice(tv: typeVar)
+    fun extend-nice(tv: type-var)
       val x = 
         if tv.kind == kindEffect then
           effectIndex := effectIndex + 1
@@ -52,9 +52,9 @@ fun niceEnv(f)
           s
       nice := nice.extend(tv.tid, x)
       ()
-    fun get-nice(tv: typeVar)
+    fun get-nice(tv: type-var)
       nice.show(tv.tid)
-    fun get-nice-doc(tv: typeVar)
+    fun get-nice-doc(tv: type-var)
       nice.pretty(tv.tid)
   f()
 

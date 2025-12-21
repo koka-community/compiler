@@ -3,7 +3,7 @@ import std/test
 
 fun suite()
   group("platform/config")
-    test("compilerFlags")
+    test("compiler-flags")
       expect("3.2.3")
         with @default-comp-flags
         comp-flags.version

@@ -12,7 +12,7 @@ import compiler/kind/infer-kind
 import compiler/kind/assumption
 import compiler/kind/synonyms
 import compiler/kind/newtypes
-import compiler/kind/importmap
+import compiler/kind/import-map
 import compiler/type/type
 import compiler/syntax/range-map
 import compiler/syntax/syntax
@@ -20,40 +20,41 @@ import compiler/core/core
 import compiler/common/error
 import std/data/linearmap
 
-struct inferKindEnv
-  imports: importmap
-  kGamma: kGamma
-  infgamma: infKGamma
-  synonyms: synonyms
-  newtypesImported: newtypes
-  newtypesExtended: newtypes
-  dataEffects: name-map<dataEffect>
+type infer-kind-env
+  InferKindEnv(
+    imports: import-map,
+    kGamma: kGamma,
+    infgamma: inf-kgamma,
+    synonyms: synonyms,
+    newtypesImported: newtypes,
+    newtypesExtended: newtypes,
+    dataEffects: name-map<data-effect>
+  )
 
-alias inferKindEff = <inferKindEnvEffect, inferKindEffect>
+alias infer-kind-eff = <inf-kind-env, infer-kind-effect, unique>
 
-effect inferKindEnvEffect
-  val infKindEnv: inferKindEnv
+effect val inf-kind-env: infer-kind-env
 
-effect inferKindEffect
+effect infer-kind-effect
   fun get-ksub(): ksub
   fun extend-ksub(s: ksub): ()
   fun get-local-syns(): synonyms
   fun get-syns(): synonyms
-  fun add-synonym(syn: synInfo): ()
+  fun add-synonym(syn: syn-info): ()
   fun add-external(name: name, rng: range): ()
   fun lookup-external(name: name): maybe<range>
   val platform: platform
 
-fun allnewtypes(infKindEnv: inferKindEnv)
-  infKindEnv.newtypesImported.compose(infKindEnv.newtypesExtended)
+fun allnewtypes(env: infer-kind-env)
+  env.newtypesImported.compose(env.newtypesExtended)
 
-fun runKindInfer(platform: platform, moduleName: name, imports: importmap, kgamma: kGamma, syns: synonyms, datas: newtypes, f: () -> <inferKindEff,pure,colorSchemeEffect,unique,koka-error|e> a): <pure,colorSchemeEffect,unique,comp-error|e> a
+fun runKindInfer(platform: platform, moduleName: name, imports: import-map, kgamma: kGamma, syns: synonyms, datas: newtypes, f: () -> <infer-kind-eff,pure,colors,unique,koka-error|e> a): <pure,colors,unique,comp-error,unique|e> a
   with val current-error-kind = ErrKind
   val imports' = match imports.extend(moduleName, moduleName)
     Just(imp) -> imp
     Nothing -> imports // ignore
   with handler
-    val infKindEnv = InferKindEnv(imports', kgamma, LinearMap([]), syns, datas, newtypes/empty, LinearMap([]))
+    val inf-kind-env = InferKindEnv(imports', kgamma, LinearMap([]), syns, datas, newtypes/empty, LinearMap([]))
   var local-syns := synonyms/empty
   var ksub := LinearMap([])
   var externals: name-map<range> := LinearMap([])
@@ -61,7 +62,7 @@ fun runKindInfer(platform: platform, moduleName: name, imports: importmap, kgamm
     fun get-ksub() ksub
     fun extend-ksub(s) ksub := ksub.compose(s)
     fun get-local-syns() local-syns
-    fun get-syns() infKindEnv.synonyms.compose(local-syns)
+    fun get-syns() inf-kind-env.synonyms.compose(local-syns)
     fun add-synonym(syn) local-syns := local-syns.extend(syn)
     fun lookup-external(nm) externals.lookup(nm)
     fun add-external(nm, rng) externals := externals.add(nm, rng)
@@ -71,32 +72,32 @@ fun runKindInfer(platform: platform, moduleName: name, imports: importmap, kgamm
 fun fresh-kind()
   KIVar(unique-id("k"))
 
-fun fresh-typevar(TypeBinder(name, kind): typeBinder<kind>, fl: flavour)
+fun fresh-typevar(TypeBinder(name, kind): type-binder<kind>, fl: flavour)
   TypeVar(unique-id(name.show), kind, fl)
 
-fun subst(x: infKind)
+fun subst(x: inf-kind)
   get-ksub() |-> x
 
 // Extend the inference kind assumption; checks for 'shadow' definitions
-fun extend-infgamma(tbinders: list<typeBinder<infKind>>, f)
-  fun check(TypeBinder(nm, infkind, nmrng, _): typeBinder<infKind>, infgamma: infKGamma)
+fun extend-infgamma(tbinders: list<type-binder<inf-kind>>, f)
+  fun check(TypeBinder(nm, infkind, nmrng, _): type-binder<inf-kind>, infgamma: inf-kgamma)
     match infgamma.lookup(nm)
       Nothing -> infgamma.add(nm, infkind)
       Just(_) ->
         add-error(nmrng, "Type".text |+| nm.pp-type |+| "is already defined".text)
         infgamma.set(nm, infkind) // replace
-  val infgammaNew = tbinders.foldl(infKindEnv.infgamma, fn(acc, tb) tb.check(acc))
+  val infgammaNew = tbinders.foldl(inf-kind-env.infgamma, fn(acc, tb) tb.check(acc))
   with override
-    val infKindEnv = infKindEnv( infgamma = infgammaNew)
+    val inf-kind-env = inf-kind-env( infgamma = infgammaNew)
   f()
 
 // Extend the kind assumption; checks for duplicate definitions
-fun extend-kgamma(rngs: list<range>, dg: compiler/core/core/typeDefGroup, f)
-  fun nameKind(tdef: compiler/core/core/typeDef)
+fun extend-kgamma(rngs: list<range>, dg: compiler/core/core/typedef-group, f)
+  fun nameKind(tdef: compiler/core/core/typedef)
     match tdef
-      core/Synonym(synInfo) -> (synInfo.name, synInfo.kind, synInfo.doc)
+      core/Synonym(syn-info) -> (syn-info.name, syn-info.kind, syn-info.doc)
       core/Data(ntInfo) -> (ntInfo.name, ntInfo.kind, ntInfo.doc)
-  fun check((kgamma: kGamma, tdefs: list<compiler/core/core/typeDef>), (rng: range, tdef: compiler/core/core/typeDef))
+  fun check((kgamma: kGamma, tdefs: list<compiler/core/core/typedef>), (rng: range, tdef: compiler/core/core/typedef))
     if tdef.is-extension then (kgamma, tdefs)
     else
       val (nm, knd, doc) = nameKind(tdef)
@@ -105,24 +106,25 @@ fun extend-kgamma(rngs: list<range>, dg: compiler/core/core/typeDefGroup, f)
         Just(_) ->
           add-error(rng, "Type".text |+| nm.pp-type |+| "is already defined".text)
           (kgamma, tdefs)
-  val (_, tdefs) = zip(rngs, dg).foldl((infKindEnv.kGamma, []), check)
+  val (_, tdefs) = zip(rngs, dg).foldl((inf-kind-env.kGamma, []), check)
   
-  fun name-syn(tdef: compiler/core/core/typeDef)
+  fun name-syn(tdef: compiler/core/core/typedef)
     match tdef
-      core/Synonym(synInfo) -> [synInfo]
+      core/Synonym(syn-info) -> [syn-info]
       _ -> []
-  fun name-newtype(tdef: compiler/core/core/typeDef)
+  fun name-newtype(tdef: compiler/core/core/typedef)
     match tdef
       Data(dataInfo) -> [dataInfo]
       _ -> []
   val newkGamma = new-nub(tdefs.map(nameKind))
   val kSyns = tdefs.map(name-syn).concat.new
   val kNewtypes = tdefs.map(name-newtype).concat.new
+  val old-env = inf-kind-env
   with override
-    val infKindEnv = infKindEnv( 
-      kGamma = infKindEnv.kGamma.qname-map/union(newkGamma), 
-      synonyms = infKindEnv.synonyms.compose(kSyns), 
-      newtypesExtended = infKindEnv.newtypesExtended.compose(kNewtypes))  
+    val inf-kind-env = old-env( 
+      kGamma = old-env.kGamma.qname-map/union(newkGamma), 
+      synonyms = old-env.synonyms.compose(kSyns), 
+      newtypesExtended = old-env.newtypesExtended.compose(kNewtypes))  
   f()
 
 fun member-doc(doc: string, header: string, members: list<string>): string
@@ -140,7 +142,7 @@ fun check-external(name: name, range: range)
 fun inf-qualified-name(nm: name, rng: range)
   if !nm.is-qualified then nm
   else
-    match expand(infKindEnv.imports, nm)
+    match expand(inf-kind-env.imports, nm)
       Right((name', alias0)) ->
         if !nm.qualifier.name-case-equal-prefix-of(alias0) then
           add-error(rng, "module".text |+| nm.pp-module |+| "should be cased as".text |+| alias0.pretty.color(colors.colorModule))
@@ -158,21 +160,21 @@ fun pp-module(nm: name)
   nm.nameModule.text.color(colors.colorModule)
 
 fun find-infkind(nm0: name, rng: range)
-  val (nm, mbAlias) = match expand(infKindEnv.imports, nm0)
+  val (nm, mbAlias) = match expand(inf-kind-env.imports, nm0)
     Right((name', alias0)) -> (name', Just(alias0))
     _ -> (nm0, Nothing)
   val qname = if nm.is-qualified then nm else qualify(current-modname(), nm)
   // lookup locally
   // note: also lookup qualified since it might be recursive definition
   // TODO: check for the locally inferred names for casing too.
-  val infgamma = infKindEnv.infgamma
+  val infgamma = inf-kind-env.infgamma
   match infgamma.lookup(nm)
     Just(infkind) -> (nm, infkind, "")
     Nothing ->
       match infgamma.lookup(qname)
         Just(infkind) -> (qname, infkind, "")
         _ ->
-          val kgamma = infKindEnv.kGamma  
+          val kgamma = inf-kind-env.kGamma  
           match kgamma.lookup(current-modname(), nm)
             Found((qname', TypeNameInfo(kind, doc))) ->
               val name' = if nm.is-qualified then qname' else qname'.unqualify
@@ -214,17 +216,17 @@ fun find-kind(nm: name)
     _ -> fail("kind/infer find-kind: unknown type constructor: " ++ nm.show)
 
 fun lookup-datainfo(nm: name)
-  match infKindEnv.newtypesExtended.lookup-any(nm)
-    Nothing -> infKindEnv.newtypesImported.lookup-any(nm)
+  match inf-kind-env.newtypesExtended.lookup-any(nm)
+    Nothing -> inf-kind-env.newtypesImported.lookup-any(nm)
     just -> just
 
-fun with-data-effects(effs: name-map<dataEffect>, f)
+fun with-data-effects(effs: name-map<data-effect>, f)
   with override
-    val infKindEnv = infKindEnv(dataEffects = effs)
+    val inf-kind-env = inf-kind-env(dataEffects = effs)
   f()
 
 fun lookup-data-effect(nm: name)
-  match infKindEnv.dataEffects.lookup(nm)
+  match inf-kind-env.dataEffects.lookup(nm)
     Just(eff) -> eff
     Nothing -> 
       match lookup-datainfo(nm)

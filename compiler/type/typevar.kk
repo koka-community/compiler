@@ -46,10 +46,10 @@ pub fun all-tv(a: a, ?bound-type-vars: (a) -> e tvs, ?free-type-vars: (a) -> e t
 
 // A substitution from type variables to 'Tau's.
 pub struct sub
-  map: linearMap<typeVar, ktype>
+  map: linearMap<type-var, ktype>
   tvs: tvs
 
-pub fun sub/unsub(s: sub): linearMap<typeVar, ktype>
+pub fun sub/unsub(s: sub): linearMap<type-var, ktype>
   s.map
 
 pub fun sub/count(Sub(sub): sub): int
@@ -60,7 +60,7 @@ pub val sub/null = Sub(LinearMap([]), LinearSet([]))
 pub fun sub/is-null(Sub(sub): sub): bool
   sub.list.is-empty
 
-pub fun new/sub(sub: list<(typeVar, ktype)>): pure sub
+pub fun new/sub(sub: list<(type-var, ktype)>): pure sub
   if sub.all(fn((tv, t)) tv.kind == t.kind) then
     Sub(LinearMap([]) + sub, sub.map(fst).tvs.union(sub.map(snd).free-type-vars))
   else
@@ -72,13 +72,13 @@ pub fun sub/dom(Sub(sub): sub): tvs
 pub fun sub/range(s: sub): list<ktype>
   s.list.map(snd)
 
-pub fun sub/list(s: sub): list<(typeVar, ktype)>
+pub fun sub/list(s: sub): list<(type-var, ktype)>
   s.map.list
 
-pub fun sub/common(s1: sub, s2: sub): exn list<(typeVar, (tau, tau))>
+pub fun sub/common(s1: sub, s2: sub): exn list<(type-var, (tau, tau))>
   s1.list.map(fn(s) s2.lookup(s.fst).map((s.fst, (s.snd, _)))).concat-maybe
 
-pub fun sub/single(tvar: typeVar, tau: tau)
+pub fun sub/single(tvar: type-var, tau: tau)
   // Top assertion is invalid; it can happen (and happens) in the CoreF typechecker when
   // typechecking (forall a. f a) with f :: forall b. b -> b, that a bound variable (b) with
   // number ID must be substituted for another bound variable (a), which *could* have the same
@@ -91,7 +91,7 @@ pub fun sub/single(tvar: typeVar, tau: tau)
     throw("type/typevar: subSingle: kind mismatch " ++ tau.show ++ " " ++ tvar.show)
   Sub(LinearMap([(tvar, tau)]), free-type-vars(tau).add(tvar))
 
-pub fun sub/lookup(Sub(s): sub, tvar: typeVar): exn maybe<tau>
+pub fun sub/lookup(Sub(s): sub, tvar: type-var): exn maybe<tau>
   match s.lookup-index(tvar) 
     Nothing -> Nothing 
     Just(i) ->
@@ -102,29 +102,29 @@ pub fun sub/lookup(Sub(s): sub, tvar: typeVar): exn maybe<tau>
         throw("type/typevar: subLookup: kind mismatch " ++ ktvar.show ++ " " ++ tvar.show)
       Just(tau)
 
-pub fun sub/remove(Sub(sub, tvs): sub, tvars: list<typeVar>): sub
+pub fun sub/remove(Sub(sub, tvs): sub, tvars: list<type-var>): sub
   Sub(sub.remove-all(tvars), tvs - tvars)
 
 pub fun subtvs/remove(s: sub, tvars: tvs): sub
   s.remove(tvars.list)
 
-pub fun sub/find(Sub(sub): sub, tv: typeVar): exn tau
+pub fun sub/find(Sub(sub): sub, tv: type-var): exn tau
   match sub.lookup(tv)
     Nothing -> TVar(tv)
     Just(tau) -> tau
 
-pub fun show-tv(tv: typeVar): string
+pub fun show-tv(tv: type-var): string
   tv.tid.show
 
 // (s1 \@\@ s2) |-> x == s1 |-> (s2 |-> x)
 pub fun sub/compose(sub1 as Sub(s1, tv1): sub, sub2 as Sub(_, tv2): sub): pure sub
   Sub(s1.union((sub1 |-> sub2).unsub), tv1.union(tv2)) // Assume: left biased union
 
-pub fun sub/extend(sub: sub, tv: typeVar, tau: tau): pure sub
+pub fun sub/extend(sub: sub, tv: type-var, tau: tau): pure sub
   single(tv, tau).compose(sub)
 
 // Insert a new substitution. (Note: breaks abstraction barrier)
-pub fun sub/insert(Sub(s, tvs): sub, tvar: typeVar, tau: tau)
+pub fun sub/insert(Sub(s, tvs): sub, tvar: type-var, tau: tau)
   if tau.free-type-vars.member(tvar) then
     throw("type/typevar: insert: recursive type " ++ tvar.show-tv)
   elif !tau.is-tau then
@@ -132,7 +132,7 @@ pub fun sub/insert(Sub(s, tvs): sub, tvar: typeVar, tau: tau)
   else
     Sub(s.add(tvar, tau), union(tvs, tau.free-type-vars.add(tvar)))
 
-pub fun sub/inserts(Sub(sub, tvars): sub, assoc: list<(typeVar, tau)>)
+pub fun sub/inserts(Sub(sub, tvars): sub, assoc: list<(type-var, tau)>)
   Sub(LinearMap([]) + assoc + sub.list, // ASSUME: left-biased union
       unions([tvars, assoc.map(fst).tvs, assoc.map(snd).free-type-vars]))
 
@@ -140,20 +140,20 @@ pub fun sub/inserts(Sub(sub, tvars): sub, assoc: list<(typeVar, tau)>)
 // Type variables
 
 // A set of type variables
-pub alias tvs = linearSet<typeVar>
+pub alias tvs = linearSet<type-var>
 pub val tvs/empty:tvs = LinearSet([])
 // All the tvar functions defer to Set functions, just alias here
 
-pub fun tv/single(tv: typeVar) 
+pub fun tv/single(tv: type-var) 
   [tv]
 
-pub fun new/tvs(tv: list<typeVar>): tvs
+pub fun new/tvs(tv: list<type-var>): tvs
   LinearSet([]) + tv
 
 pub fun tvs/common(tvs1: tvs, tvs2: tvs): bool
   !tvs1.disjoint(tvs2)
 
-pub fun tvslist/max(tvs: list<typeVar>): int
+pub fun tvslist/max(tvs: list<type-var>): int
   tvs.foldl(0, fn(n, tv) max(n, tv.tid))
 
 pub fun tvs/max(tvs: tvs): int
@@ -162,18 +162,18 @@ pub fun tvs/max(tvs: tvs): int
 // Entities with type variables
 
 // Return the free unifiable type variables in a particular order
-pub fun ofuv(x: a, ?odftv: (a) -> e list<typeVar>): e list<typeVar>
+pub fun ofuv(x: a, ?odftv: (a) -> e list<type-var>): e list<type-var>
   x.oftv.filter(is-meta)
 
 // Return the free type variables in a particular order
-pub fun oftv(x: a, ?odftv: (a) -> e list<typeVar>): e list<typeVar>
+pub fun oftv(x: a, ?odftv: (a) -> e list<type-var>): e list<type-var>
   val vs = x.odftv.nub 
   fun is-special(k : kind)
     k == kindEffect || k == kindHeap || k == kindLabel || k == kind-fun(kindLabel, kindEffect)
   val (es, ws) = vs.partition(_.kind.is-special)
   ws ++ es
 
-pub alias typeCons = linearSet<typeCon>
+pub alias type-cons = linearSet<type-con>
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 // Utilities for types and expressions
@@ -197,7 +197,7 @@ pub fun list/free-type-vars(ps: list<a>, ?free-type-vars: (a) -> div tvs): div t
   ps.map(free-type-vars).unions
 pub fun list/bound-type-vars(ps: list<a>, ?bound-type-vars: (a) -> div tvs): div tvs
   ps.map(bound-type-vars).unions
-pub fun list/free-type-constructors(ps: list<a>, ?free-type-constructors: (a) -> div typeCons): div typeCons
+pub fun list/free-type-constructors(ps: list<a>, ?free-type-constructors: (a) -> div type-cons): div type-cons
   ps.map(free-type-constructors).unions
 pub fun list/substitute(s: sub, ps: list<a>, ?substitute: (sub, a) -> pure a): pure list<a>
   ps.map(substitute(s, _))
@@ -218,7 +218,7 @@ pub fun ktype/bound-type-vars(tp: ktype): div tvs
     TSyn(_, _, t) -> t.bound-type-vars
     TApp(t, arg) -> t.bound-type-vars + arg.bound-type-vars
     _ -> tvs/empty
-pub fun ktype/free-type-constructors(tp: ktype): div typeCons
+pub fun ktype/free-type-constructors(tp: ktype): div type-cons
   match tp
     TForAll(_, t) -> t.free-type-constructors
     TFun(args, eff, res) -> (args.map(_.snd) ++ [res, eff]).free-type-constructors
@@ -247,7 +247,7 @@ pub fun exp/free-type-vars(e0: expr): div tvs
     TypeApp(e, tp) -> e.free-type-vars + tp.free-type-vars
     Con(tn) -> tn.free-type-vars
     ELit -> tvs/empty
-    Let(defGroups, e) -> defGroups.map(free-type-vars).unions + e.free-type-vars
+    Let(def-groups, e) -> def-groups.map(free-type-vars).unions + e.free-type-vars
     Case(es, bs) -> es.free-type-vars + bs.map(free-type-vars).unions
 pub fun expr/substitute(s: sub, e: expr): pure expr
   match e
@@ -260,15 +260,15 @@ pub fun expr/substitute(s: sub, e: expr): pure expr
     TypeApp(e, tp) -> TypeApp(s |-> e, s |-> tp)
     Con(tn, repr) -> Con(s |-> tn, repr)
     ELit(l) -> ELit(l)
-    Let(defGroups, e) -> Let(defGroups.map(s |-> _), s |-> e)
+    Let(def-groups, e) -> Let(def-groups.map(s |-> _), s |-> e)
     Case(es, bs) -> Case(s |-> es, bs.map(s |-> _))
 
 // Type utilities for definition groups
-pub fun dg/free-type-vars(dg: defGroup): div tvs
+pub fun dg/free-type-vars(dg: def-group): div tvs
   match dg
     DefRec(defs) -> defs.map(free-type-vars).unions
     DefNonRec(e) -> free-type-vars(e)
-pub fun dg/substitute(s: sub, dg: defGroup): pure defGroup
+pub fun dg/substitute(s: sub, dg: def-group): pure def-group
   match dg
     DefRec(defs) -> DefRec(defs.map(s |-> _))
     DefNonRec(e) -> DefNonRec(s |-> e)
@@ -333,7 +333,7 @@ pub fun tn/substitute(s: sub, TName(n, tp): tName): pure tName
   TName(n, s |-> tp)
 
 
-pub fun ordered-free-type-vars(tp: ktype) : list<typeVar>
+pub fun ordered-free-type-vars(tp: ktype) : list<type-var>
   match tp
     TForAll(vars, tp') -> tp'.ordered-free-type-vars.filter(fn(tv) !vars.contains(tv))
     TFun(args, eff, res) -> (args.map(snd) ++ [eff, res]).flatmap(_.pretend-decreasing.ordered-free-type-vars)
@@ -399,7 +399,7 @@ pub fun match-type(tp1: ktype, tp2: ktype): pure bool
 
 
 // For debugging purposes since we cannot include type/pretty
-fun show-type-var(tv: typeVar): string
+fun show-type-var(tv: type-var): string
   tv.tid.show ++ "::" ++ tv.kind.show
 
 fun show-tp(tp: ktype): string

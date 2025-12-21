@@ -18,19 +18,19 @@ pub type ktype
   // - Every variable occurs at least once in rho
   // - Variables are canonically ordered
   // - Rho has kind *
-  TForAll(vars: list<typeVar>, r: ktype) 
+  TForAll(vars: list<type-var>, r: ktype) 
   // (x:a, y:b, z:c) -> m d
   TFun(args: list<(name, ktype)>, e: ktype, t: ktype) // keffect
   // Type constant (primitive, label, or newtype; not -> or =>)
-  TCon(constant: typeCon)
+  TCon(constant: type-con)
   // Type variable (cannot instantiate to -> or =>)
-  TVar(variable: typeVar)
+  TVar(variable: type-var)
   // Application of datatypes
   TApp(t: ktype, args: list<ktype>)
   // Type synonym indirection
   // first `list<ktype>` is the actual arguments
   // final `ktype` is the "real" type (expanded)
-  TSyn(syn: typeSyn, args: list<ktype>, t: ktype)
+  TSyn(syn: type-syn, args: list<ktype>, t: ktype)
 
 pub fun ktype/show(tp: ktype): div string
   match tp
@@ -53,18 +53,20 @@ pub alias keffect = tau
 
 // Variables in a type which have an identifier and kind
 // One can ask for the free type variables in a type, and substitute them with 'Tau' types.
-pub struct typeVar
-  tid: id
-  kind: kind
-  flavour: flavour;
+pub type type-var
+  TypeVar(
+    tid: id,
+    kind: kind,
+    flavour: flavour
+  )
 
-pub fun show(t: typeVar): string
+pub fun show(t: type-var): string
   t.tid.show-id ++ "::" ++ t.kind.show
 
-pub fun tv/(==)(t1: typeVar, t2: typeVar): bool
+pub fun tv/(==)(t1: type-var, t2: type-var): bool
   t1.tid == t2.tid // also flavours?
 
-pub fun tv/cmp(t1: typeVar, t2: typeVar)
+pub fun tv/cmp(t1: type-var, t2: type-var)
   cmp(t1.tid, t2.tid) // also flavours?
 
 // The flavour of a type variable. Types in a "Type.Assumption" (Gamma) and inferred types in "Core.Core"
@@ -85,34 +87,38 @@ pub fun flavour/(==)(f1: flavour, f2: flavour): bool
     _ -> False
 
 // Type constants have a name and a kind
-pub struct typeCon
-  name: name
-  kind: kind;
+pub type type-con
+  TypeCon(
+    name: name,
+    kind: kind
+  )
 
-pub fun typecon/(==)(t1: typeCon, t2: typeCon): bool
+pub fun typecon/(==)(t1: type-con, t2: type-con): bool
   name/(==)(t1.name, t2.name)
 
-pub fun typecon/cmp(t1: typeCon, t2: typeCon): order
+pub fun typecon/cmp(t1: type-con, t2: type-con): order
   t1.name.name/name/cmp(t2.name)
 
 // Type synonyms have an identifier, kind, and rank (= partial ordering among type synonyms)
-pub struct typeSyn
-  name: name
-  kind: kind
-  rank: synonymRank
-  info: maybe<synInfo>
+pub type type-syn
+  TypeSyn(
+    name: name,
+    kind: kind,
+    rank: synonym-rank,
+    info: maybe<syn-info>
+  )
 
-pub fun typesyn/(==)(t1: typeSyn, t2: typeSyn): bool
+pub fun typesyn/(==)(t1: type-syn, t2: type-syn): bool
   name/(==)(t1.name, t2.name)
 
-pub fun typesyn/cmp(t1: typeSyn, t2: typeSyn): order
+pub fun typesyn/cmp(t1: type-syn, t2: type-syn): order
   t1.name.name/name/cmp(t2.name)
 
 // The rank of a type synonym gives a relative ordering among them. This is used
 // during unification to increase the chance of matching up type synonyms.
-pub alias synonymRank = int
+pub alias synonym-rank = int
 
-pub fun max-synonym-rank(t: ktype): synonymRank
+pub fun max-synonym-rank(t: ktype): synonym-rank
   fun max-synonym-ranks(tps: list<ktype>): int
     tps.foldr(0) fn(t1, r) 
       max(r, max-synonym-rank(t1.pretend-decreasing))
@@ -127,109 +133,115 @@ pub fun max-synonym-rank(t: ktype): synonymRank
 // Information about types
 // Defined here to avoid circular dependencies
 // Data type information: name, kind, type arguments, and constructors
-pub struct dataInfo
-  sort: dataKind
-  name: name
-  kind: kind
-  params: list<typeVar> // arguments
-  constrs: list<conInfo>
-  range: range
-  def: dataDef // value(raw,scan), normal, lazy, open, linear
-  deffect: dataEffect
-  is-rec: bool // recursive datatype?
-  vis: visibility
-  doc: string
+pub type data-info
+  DataInfo(
+    sort: data-kind,
+    name: name,
+    kind: kind,
+    params: list<type-var>, // arguments
+    constrs: list<con-info>,
+    range: range,
+    def: data-def, // value(raw,scan), normal, lazy, open, linear
+    deffect: data-effect,
+    is-rec: bool, // recursive datatype?
+    vis: visibility,
+    doc: string
+  )
 
-pub fun datainfo/(==)(d1: dataInfo, d2: dataInfo): bool
+pub fun datainfo/(==)(d1: data-info, d2: data-info): bool
   name/(==)(d1.name, d2.name)
 
-pub fun datainfo/show(d: dataInfo): string
+pub fun datainfo/show(d: data-info): string
   d.name.name/name/show
 
-pub fun is-extend(d: dataInfo): bool
+pub fun is-extend(d: data-info): bool
   d.def.is-extend
 
-pub fun is-open(d: dataInfo): bool
+pub fun is-open(d: data-info): bool
   d.def.is-open
 
-pub fun is-literal(d: dataInfo): bool
+pub fun is-literal(d: data-info): bool
   val n = d.name
   n == nameTpInt || n == nameTpChar || n == nameTpString || n == nameTpFloat
 
-pub fun di/is-lazy(d: dataInfo): bool
+pub fun di/is-lazy(d: data-info): bool
   d.def.datadef/is-lazy
 
-pub fun lazy-name(di: dataInfo, stem: string): exn name
+pub fun lazy-name(di: data-info, stem: string): exn name
   type-qualified-name(di.name, "lazy-" ++ stem).unqualify
 
 // Constructor information: constructor name, name of the newtype, field types, and the full type of the constructor
-pub struct conInfo
-  name: name
-  typeName: name
-  // sort: name
-  foralls: list<typeVar> // quantifiers
-  existentials: list<typeVar> // existentials
-  params: list<(name, ktype)> // field types
-  typeScheme: ktype // scheme
-  typeSort: dataKind // inductive, coinductive, retractive
-  range: range
-  paramRanges: list<range>
-  paramVis: list<visibility>
-  singleton: bool // only constructor of this type
-  orderedParams: list<(name, ktype)> // fields ordered by size
-  valueRepr: valueRepr
-  mblazy: maybe<fipT> // also Just for indirection nodes
-  tag: int
-  vis: visibility
-  doc: string;
+pub type con-info
+  ConInfo(
+    name: name,
+    typeName: name,
+    // sort: name
+    foralls: list<type-var>, // quantifiers
+    existentials: list<type-var>, // existentials
+    params: list<(name, ktype)>, // field types
+    typeScheme: ktype, // scheme
+    typeSort: data-kind, // inductive, coinductive, retractive
+    range: range,
+    paramRanges: list<range>,
+    paramVis: list<visibility>,
+    singleton: bool, // only constructor of this type
+    orderedParams: list<(name, ktype)>, // fields ordered by size
+    valueRepr: value-repr,
+    mblazy: maybe<fipT>, // also Just for indirection nodes
+    tag: int,
+    vis: visibility,
+    doc: string
+  )
 
-pub fun coninfo/(==)(c1: conInfo, c2: conInfo): bool
+pub fun coninfo/(==)(c1: con-info, c2: con-info): bool
   name/(==)(c1.name, c2.name)
 
-pub fun coninfo/show(c: conInfo): string
+pub fun coninfo/show(c: con-info): string
   c.name.name/name/show
 
-pub fun coninfo/size(c: conInfo, p: platform)
+pub fun coninfo/size(c: con-info, p: platform)
   p.size(c.valueRepr)
 
-pub fun coninfo/scan-count(c: conInfo)
+pub fun coninfo/scan-count(c: con-info)
   c.valueRepr.scan-count
 
-pub fun coninfo/is-lazy(c: conInfo): bool
+pub fun coninfo/is-lazy(c: con-info): bool
   c.mblazy.is-just
 
-pub fun coninfo/lazy-fip(c: conInfo): fipT
+pub fun coninfo/lazy-fip(c: con-info): fipT
   match c.mblazy
     Just(fp) -> fp
     Nothing -> noFip
 
 // A type synonym is quantified by type parameters
-pub struct synInfo
-  name: name
-  kind: kind
-  params: list<typeVar> // type parameters
-  t: ktype // result type
-  rank: synonymRank
-  range: range
-  pub vis: visibility
-  doc: string;
+pub type syn-info
+  SynInfo(
+    name: name,
+    kind: kind,
+    params: list<type-var>, // type parameters
+    t: ktype, // result type
+    rank: synonym-rank,
+    range: range,
+    pub vis: visibility,
+    doc: string
+  )
 
-pub fun syninfo/(==)(s1: synInfo, s2: synInfo): bool
+pub fun syninfo/(==)(s1: syn-info, s2: syn-info): bool
   name/(==)(s1.name, s2.name)
 
-pub fun syninfo/show(s: synInfo): string
+pub fun syninfo/show(s: syn-info): string
   s.name.name/name/show
 
 // Is a type variable 'Bound'
-pub fun tv/is-bound(t: typeVar): bool
+pub fun tv/is-bound(t: type-var): bool
   t.flavour == Bound
 
 // Is a type variable 'Meta' (e.g. unifiable)
-pub fun tv/is-meta(t: typeVar): bool
+pub fun tv/is-meta(t: type-var): bool
   t.flavour == Meta
 
 // Is a type variable a 'Skolem' (e.g. not unifiable)
-pub fun tv/is-skolem(t: typeVar): bool
+pub fun tv/is-skolem(t: type-var): bool
   t.flavour == Skolem
 
 pub fun is-mono-type(tp: ktype): bool
@@ -241,7 +253,7 @@ pub fun is-mono-type(tp: ktype): bool
 // Split / add quantifiers
 
 // Split type into a list of universally quantified type variables and a rho type
-pub fun split-type-scheme(tp: ktype): (list<typeVar>, rho)
+pub fun split-type-scheme(tp: ktype): (list<type-var>, rho)
   // We must split a synonym if its expansion includes further quantifiers
   fun must-split(tp': ktype)
     match tp'
@@ -281,15 +293,15 @@ pub fun minimal-form(tp: ktype): pure ktype
     TFun(args, eff, res) -> TFun(args.map(fn((_, t)) (name/nil, t.canonical-form)), order-effect(eff.canonical-form), res.canonical-form)
 
 // Create a type scheme from a list of quantifiers
-pub fun make-scheme(vars: list<typeVar>, rho: rho): scheme
+pub fun make-scheme(vars: list<type-var>, rho: rho): scheme
   val (vars0, _) = rho.split-type-scheme
   tForall(vars ++ vars0, rho)
 
-pub fun quantify-type(vars: list<typeVar>, tp: scheme): scheme
+pub fun quantify-type(vars: list<type-var>, tp: scheme): scheme
   val (vars0, rho) = tp.split-type-scheme
   tForall(vars ++ vars0, rho)
 
-fun tForall(vars: list<typeVar>, rho: rho): scheme
+fun tForall(vars: list<type-var>, rho: rho): scheme
   match vars
     Nil -> rho
     _ -> TForAll(vars, rho)
@@ -310,7 +322,7 @@ pub fun type-arities(tp: ktype): (int, int)
     Just((tvars, pars, _, _)) -> (tvars.length, pars.length)
     Nothing -> (0, 0)
 
-pub fun split-fun-scheme(tp: scheme): maybe<(list<typeVar>, list<(name, tau)>, keffect, tau)>
+pub fun split-fun-scheme(tp: scheme): maybe<(list<type-var>, list<(name, tau)>, keffect, tau)>
   val (tvars, rho) = tp.split-type-scheme
   match rho.split-fun-type
     Just((pars, eff, res)) -> Just((tvars, pars, eff, res))
@@ -431,7 +443,7 @@ pub fun label-name-full(tp: tau): pure name
   val ids = i.show-id
   postpend(name, "$" ++ ids)
 
-fun label-name-ex(tp: tau): exn (name, int, list<tau>)
+pub fun label-name-ex(tp: tau): exn (name, int, list<tau>)
   match tp.expand-syn
     TCon(tc) -> (tc.name, 0, [])
     TApp(TCon(TypeCon(name)), [htp]) | name == nameTpHandled || name == nameTpHandled1 || name == nameTpNHandled || name == nameTpNHandled1 -> 
@@ -455,7 +467,7 @@ pub fun is-type-local(tp: ktype): bool
 pub val tconHandled = TCon(TypeCon(nameTpHandled, kind-fun(kindHandled, kindLabel)))
 pub val tconHandled1 = TCon(TypeCon(nameTpHandled1, kind-fun(kindHandled1, kindLabel)))
 
-pub fun wrap-handled-from-data-effect(de: dataEffect, eff: ktype)
+pub fun wrap-handled-from-data-effect(de: data-effect, eff: ktype)
   match de
     DataEffect(is-named, is-linear) ->
       val name = make-tp-handled(is-named, is-linear)
@@ -508,7 +520,7 @@ pub fun effect-extend(label: tau, eff: tau): pure tau
     Nil -> app-effect-extend(label, eff)
     _ -> effect-extends(ls, eff)
 
-val tconEffectExtend = TypeCon(nameEffectExtend, kind-fun(kindLabel, kind-fun(kindEffect, kindEffect)))
+pub val tconEffectExtend = TypeCon(nameEffectExtend, kind-fun(kindLabel, kind-fun(kindEffect, kindEffect)))
 
 pub fun effect-extends(labels: list<tau>, eff: tau): pure tau
   // prevent over expansion of type synonyms here (see also: core/parse/teffect)
@@ -665,10 +677,10 @@ fun prune-syn(rho: rho): rho
     TApp(t1, ts) -> TApp(t1.prune-syn, ts.map(_.pretend-decreasing.prune-syn))
     _ -> rho
 
-fun tv/to-type(v: typeVar)
+fun tv/to-type(v: type-var)
   TVar(v)
 
-fun tcon/to-type(c: typeCon)
+fun tcon/to-type(c: type-con)
   TCon(c)
 
 // fun ktype/(==)(t1: ktype, t2: ktype): pure bool

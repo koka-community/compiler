@@ -19,24 +19,24 @@ pub infixr 5 (|->)
 // inf gamma
 // Environment mapping names to type schemes. Due to overloading
 // there may be multiple entries for the same name
-alias infGamma = name-map<list<nameInfo>>
+alias infGamma = name-map<list<name-info>>
 
 effect infGammaEff
-  fun gamma-extend(name: name, ni: nameInfo): ()
-  fun gamma-lookup-ex(guard: (nameInfo) -> bool, name: name): either<list<(name, nameInfo)>, (name, nameInfo)>
+  fun gamma-extend(name: name, ni: name-info): ()
+  fun gamma-lookup-ex(guard: (name-info) -> bool, name: name): either<list<(name, name-info)>, (name, name-info)>
   fun gamma-set(inf: infGamma): ()
   fun gamma-get(): infGamma
 
 fun inf-gamma(ig0: infGamma, f: () -> <infGammaEff,exn,comp-flags|e> a): <exn,comp-flags|e> a
   var ig := ig0
   with handler
-    fun gamma-extend(name: name, ni: nameInfo) ig := ig.inf-gamma/extend(name, ni)
+    fun gamma-extend(name: name, ni: name-info) ig := ig.inf-gamma/extend(name, ni)
     fun gamma-lookup-ex(guard, name) ig.inf-gamma/lookup-ex(guard, name)
     fun gamma-set(inf: infGamma) ig := inf
     fun gamma-get() ig
   f()
 
-fun ni/combine(nis: list<nameInfo>, nis2: list<nameInfo>): exn list<nameInfo>
+fun ni/combine(nis: list<name-info>, nis2: list<name-info>): exn list<name-info>
   match nis
     [] -> nis2
     Cons(ni, nis) -> combine(nis, Cons(ni, nis2.filter(fn(ni2) ni.cname != ni2.cname)))
@@ -49,7 +49,7 @@ fun inf-gamma/delete(ig: infGamma, n : name): infGamma
 // during inference by inserting fully qualified expressions (in resolveApp-name)
 // (if isQualified name then trace ("gamma-extend: insert qualified: " ++ show name) else id) $
 // overwrite previous names
-fun inf-gamma/extend(ig: infGamma, name: name, ni: nameInfo): <exn> infGamma
+fun inf-gamma/extend(ig: infGamma, name: name, ni: name-info): <exn> infGamma
   ig.update(name.unqualify-full, [ni], ni/combine)
 
 fun inf-gamma-eff/extends(tnames: list<(name,ktype,int,string)>)
@@ -70,19 +70,19 @@ fun inf-gamma/extend-x(ig: infGamma, name: name, cname: name, tp: ktype, scope-d
 // lookup any exact match in the local scope
 // note that recursive definitions add the fully qualified name to the infgamma,
 // in that case we also consider it an exact match with just the stem.
-fun inf-gamma/lookup(ig: infGamma, name: name): either<list<(name, nameInfo)>, (name, nameInfo)>
+fun inf-gamma/lookup(ig: infGamma, name: name): exn either<list<(name, name-info)>, (name, name-info)>
   match ig.lookup-ex(fn(_) True, name)
     Left([(name', info)]) -> Right((name', info))
     other -> other
 
-fun inf-gamma-eff/lookup(name: name): <infGammaEff> either<list<(name, nameInfo)>, (name, nameInfo)>
+fun inf-gamma-eff/lookup(name: name): <infGammaEff,exn> either<list<(name, name-info)>, (name, name-info)>
   match gamma-lookup-ex(fn(_) True, name)
     Left([(name', info)]) -> Right((name', info))
     other -> other
 
 // lookup a local name: return either a list of possibly matching (locally qualified) names, or an exact match
-fun inf-gamma/lookup-ex(ig: infGamma, guard: (nameInfo) -> bool, name: name): either<list<(name, nameInfo)>, (name, nameInfo)>
-  val mbinfos = ig.lookup(name.unqualify-full)
+fun inf-gamma/lookup-ex(ig: infGamma, guard: (name-info) -> bool, name: name): exn either<list<(name, name-info)>, (name, name-info)>
+  val mbinfos = ig.map/lookup(name.unqualify-full)
   match mbinfos
     Nothing -> Left([])
     Just(infos) ->
@@ -93,11 +93,11 @@ fun inf-gamma/lookup-ex(ig: infGamma, guard: (nameInfo) -> bool, name: name): ei
           val matches = infos.filter(fn(info) guard(info) && match-qualifiers(name, info.cname))
           Left(matches.map(fn(info) (info.cname, info)))
 
-fun inf-gamma-eff/lookup-ex(guard: (nameInfo) -> bool, name: name): <infGammaEff> either<list<(name, nameInfo)>, (name, nameInfo)>
+fun inf-gamma-eff/lookup-ex(guard: (name-info) -> bool, name: name): <infGammaEff> either<list<(name, name-info)>, (name, name-info)>
   gamma-lookup-ex(guard, name)
 
 fun inf-gamma/map(ig: infGamma, f: (ktype) -> ktype): infGamma
-  ig.map(fn(_, infos) infos.map(fn(i : nameInfo) i(typ = f(i.typ))))
+  ig.map(fn(a, infos) infos.list/map(fn(i : name-info) i.update-type(f(i.typ))))
 
 fun inf-gamma/union(ig1: infGamma, ig2: infGamma): <exn> infGamma
   ig1.union-with(ig2, fn(nis1, nis2) ni/combine(nis2, nis1)) // right-biased
@@ -137,5 +137,5 @@ fun infgamma/free-type-vars(ig: infGamma): pure tvs
 fun infgamma/bound-type-vars(ig: infGamma): pure tvs
   ig.inf-gamma/list().map(snd).bound-type-vars
 
-fun infgamma/free-type-constructors(ig: infGamma): pure typeCons
+fun infgamma/free-type-constructors(ig: infGamma): pure type-cons
   ig.inf-gamma/list().map(snd).free-type-constructors

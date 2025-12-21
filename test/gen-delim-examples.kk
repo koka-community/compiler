@@ -11,23 +11,23 @@ fun range(?kk-module: string, ?kk-line: string)
   val line = parse-int(?kk-line).default(1)
   val mod = Source(?kk-module, "")
   Range(Pos(mod, 0, line, 0), Pos(mod, 0, line, 0), False)
-fun bind(n: name, e: userExpr, ?range: range)
+fun bind(n: name, e: user-expr, ?range: range)
   match e
     Lam -> DefNonRec(Def(ValueBinder(n, (), e, ?range, ?range), range, Private, DefFun([], NoFip(False)), InlineAuto, ""))
     _ -> DefNonRec(Def(ValueBinder(n, (), e, ?range, ?range), range, Private, DefVal, InlineAuto, ""))
-fun let(b: name, e: userExpr, body: (userExpr) -> _ userExpr, ?range: range) Let(b.bind(e), body(Var(b, False, ?range)), ?range)
+fun let(b: name, e: user-expr, body: (user-expr) -> _ user-expr, ?range: range) Let(b.bind(e), body(Var(b, False, ?range)), ?range)
 fun expr(i: int, ?range: range) Literal(LitInt(i, range))
 fun name(s: string) new-name(s)
 fun opName(s: string, ?range: range) Var(new-name(s), True, range)
-fun arg(e: userExpr) (Nothing, e)
-fun (+)(e1: userExpr, e2: userExpr, ?range: range) App("+".opName, [e1.arg, e2.arg], range)
-fun defh(hname: name, ops: list<(operationSort,name,list<(name,userType)>,userType)>, ?range: range)
+fun arg(e: user-expr) (Nothing, e)
+fun (+)(e1: user-expr, e2: user-expr, ?range: range) App("+".opName, [e1.arg, e2.arg], range)
+fun defh(hname: name, ops: list<(operation-sort,name,list<(name,user-type)>,user-type)>, ?range: range)
   "effect".text |+| hname.show.pretty |--| ops.map(fn(op)
       op.fst.pretty |+| op.snd.pretty |.| op.thd.map(fn((n, t)) n.pretty |.| colon |+| t.pretty).tupled |.| colon |+| op.field4.pretty
     ).vcat.indent(2)
 fun tstring(?range: range) TpCon("string".name, ?range)
 fun tint(?range: range) TpCon("int".name, ?range)
-fun def-fn(n: name, args: list<(name,userType)>, body: () -> _ userExpr, ?range: range) 
+fun def-fn(n: name, args: list<(name,user-type)>, body: () -> _ user-expr, ?range: range) 
   DefNonRec(Def(ValueBinder(n, (), 
             Lam(args.map(fn((a,t)) ValueBinder(a, Just(t), Nothing, ?range, ?range)), body(), True, ?range), ?range, ?range)
             ,range , Private, DefFun([], NoFip(False)), InlineAuto, ""))
@@ -51,7 +51,7 @@ type gen
   GenLam
 
 effect binders
-  fun get-binders(): list<userExpr>
+  fun get-binders(): list<user-expr>
 
 effect handlers
   fun get-all-ops(): list<name>
@@ -64,7 +64,7 @@ fun bind-nm(n, f)
       Cons(Var(n, False, null), get-binders())
   f()
 
-fun handles(op: name, f: () -> hnd userExpr): hnd userExpr
+fun handles(op: name, f: () -> hnd user-expr): hnd user-expr
   with override
     fun needs-handler(op1)
       if op1 == op then ()
@@ -82,7 +82,7 @@ fun handles(op: name, f: () -> hnd userExpr): hnd userExpr
 //   create-handler()
 //   f()
 
-fun gen-noop(): <gen-delim,handlers,binders,pure,random,depth> userExpr
+fun gen-noop(): <gen-delim,handlers,binders,pure,random,depth> user-expr
   match rand-e()
     // 0 -> expr(random-int())
     GenVar -> 
@@ -109,7 +109,7 @@ fun gen-noop(): <gen-delim,handlers,binders,pure,random,depth> userExpr
       val arg = gen-noop()
       App(f, [(Nothing, arg)], null)
 
-fun finish-handlers(e: userExpr, hnds): hnd userExpr
+fun finish-handlers(e: user-expr, hnds): hnd user-expr
   hnds.foldl(e) fn(acc, h) acc
 
 fun inc-depth(f)
@@ -122,7 +122,7 @@ fun inc-depth(f)
 
 val maxDepth = 5
 
-fun gen(): <gen-delim,handlers,binders,pure,depth,random> (() -> hnd userExpr)
+fun gen(): <gen-delim,handlers,binders,pure,depth,random> (() -> hnd user-expr)
   with inc-depth
   trace("gen at depth " ++ depth.show)
   match rand-e()

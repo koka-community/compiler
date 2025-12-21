@@ -10,23 +10,23 @@ import std/data/linearmap
 
 effect val modname: name
 // Program
-fun program/group-bindings(program: userProgram)
+fun program/group-bindings(program: user-program)
   with val modname = program.name
-  program(typeDefs=program.typeDefs.group-bindings, defs=program.defs.group-bindings)
+  program(typedefs=program.typedefs.group-bindings, defs=program.defs.group-bindings)
 
 // Binding groups in type definitions
-fun typedefs/group-bindings(tdGroups: list<userTypeDefGroup>)
+fun typedefs/group-bindings(tdGroups: list<user-typedef-group>)
   val (ds, extends) = tdGroups.flatten.partition(is-definition)
   ds.group(emptyDeps + ds.map(dependencies)) ++ extends.map(TypeDefNonRec)
 
-fun flatten(grps: list<userTypeDefGroup>)
+fun flatten(grps: list<user-typedef-group>)
   val xs = grps.map fn(g)
     match g
       TypeDefRec(tds) -> tds
       TypeDefNonRec(td) -> [td]
   xs.concat
 
-fun is-definition(td: userTypeDef)
+fun is-definition(td: user-typedef)
   match td
     DataType(ddef=ddef) -> !ddef.is-extend
     _ -> True
@@ -34,16 +34,16 @@ fun is-definition(td: userTypeDef)
 fun normalize(n: name)
   if n.qualifier == modname then n.unqualify else n
 
-fun typedef/dependencies(td: userTypeDef): <pure,modname|e> (name, nameSet)
+fun typedef/dependencies(td: user-typedef): <pure,modname|e> (name, name-set)
   match td
     Synonym(_, _, t) -> (td.name, t.free-types.list.map(normalize).linear-set)
     DataType(_, _, c) -> (td.name, c.free-types.list.map(normalize).linear-set)
 
 // Free type constructors
-fun list/free-types(l: list<t>, ?free-types: (t) -> <pure|e> nameSet): <pure|e> nameSet
+fun list/free-types(l: list<t>, ?free-types: (t) -> <pure|e> name-set): <pure|e> name-set
   l.map(free-types).unions
 
-fun ktp/free-types(tp: userType): <pure|e> nameSet
+fun ktp/free-types(tp: user-type): <pure|e> name-set
   match tp
     TpQuan(_, _, t) -> t.free-types
     TpFun(args, eff, t) -> args.map(snd).free-types + eff.free-types + t.free-types
@@ -53,14 +53,14 @@ fun ktp/free-types(tp: userType): <pure|e> nameSet
     TpParens(t) -> t.free-types
     TpAnn(t) -> t.free-types
 
-fun vb/free-types(vb: valueBinder<t,e>, ?free-types: (t) -> pure nameSet): pure nameSet
+fun vb/free-types(vb: value-binder<t,e>, ?free-types: (t) -> pure name-set): pure name-set
   vb.binderType.free-types
 
-fun uc/free-types(c: userCon<t,u,k>, ?free-types: (t) -> pure nameSet): pure nameSet
+fun uc/free-types(c: user-con<t,u,k>, ?free-types: (t) -> pure name-set): pure name-set
   c.params.map(snd).free-types + c.result.map(free-types).default(empty)
 
 // Binding groups in definitions
-fun defgroups/group-bindings(dgs: list<defGroup<t>>): <pure,modname> list<defGroup<t>>
+fun defgroups/group-bindings(dgs: list<def-group<t>>): <pure,modname> list<def-group<t>>
   val (defs0, deps0) = dgs.map(group-bindings).unzip
   val defs = defs0.concat
   val deps1 = deps0.unions
@@ -69,17 +69,17 @@ fun defgroups/group-bindings(dgs: list<defGroup<t>>): <pure,modname> list<defGro
     match extraDefs.lookup(n.unqualify)
       Just(extra) -> extra
       Nothing -> []
-  fun extend(def-name: name, ndeps: nameSet)
+  fun extend(def-name: name, ndeps: name-set)
     ndeps.union(ndeps.list.flatmap(extend-name(def-name, _)).linear-set)
   val deps = deps1.map(fn(k, v) extend(k, v))
   group-bindings(defs, deps)
 
 alias extraDeps = name-map<list<name>>; // maps base names (`eq`) to internally qualified names (`int/eq`, `char/eq`)
 
-fun def-groups/extract(dgs: list<defGroup<t>>): exn extraDeps
+fun def-groups/extract(dgs: list<def-group<t>>): exn extraDeps
   dgs.map(ee).unions
 
-fun defgroup/ee(d0: defGroup<t>): exn extraDeps
+fun defgroup/ee(d0: def-group<t>): exn extraDeps
   match d0
     DefNonRec(d) -> d.def/ee
     DefRec(defs) -> defs.map(def/ee).unions
@@ -89,7 +89,7 @@ fun def/ee(d: def<t>): extraDeps
   if nm.is-locally-qualified then LinearMap([(nm.unqualify-full, [nm])])
   else LinearMap([])
 
-fun defgroup/group-bindings(g: defGroup<t>): <pure,modname> (list<def<t>>, deps)
+fun defgroup/group-bindings(g: def-group<t>): <pure,modname> (list<def<t>>, deps)
   match g
     DefNonRec(d) ->
       val (d', deps) = d.def/dependencies
@@ -105,28 +105,28 @@ fun def/dependencies(d: def<t>): <pure,modname> (def<t>, deps)
   val (depBinding, deps) = d.binder.dependencies
   (d(binder=depBinding), deps)
 
-fun binding/dependencies(vb: valueBinder<(), expr<t>>): <pure,modname> (valueBinder<(), expr<t>>, deps)
+fun binding/dependencies(vb: value-binder<(), expr<t>>): <pure,modname> (value-binder<(), expr<t>>, deps)
   val (depExpr, free-var) = vb.expr.dependencies
   (vb(expr=depExpr), emptyDeps.add(vb.name, free-var))
 
-fun fv/dependencies(d: def<t>): <pure,modname> (def<t>, nameSet)
+fun fv/dependencies(d: def<t>): <pure,modname> (def<t>, name-set)
   val (depDef, deps) = d.def/dependencies
   (depDef, deps.list.map(snd).unions)
 
-fun groupfv/dependencies(dg: defGroup<t>): <pure,modname> (list<defGroup<t>>, nameSet, nameSet)
+fun groupfv/dependencies(dg: def-group<t>): <pure,modname> (list<def-group<t>>, name-set, name-set)
   val (defs, deps) = dg.group-bindings
   val names = defs.map(_.binder.name).linear-set
   val free-vars = deps.list.map(snd).unions - names
   (defs.group-bindings(deps), free-vars, names)
 
-fun mbexpr/dependencies(mex: maybe<expr<t>>): <pure,modname> (maybe<expr<t>>, nameSet)
+fun mbexpr/dependencies(mex: maybe<expr<t>>): <pure,modname> (maybe<expr<t>>, name-set)
   match mex
     Just(ex) ->
       val (ex', deps) = ex.dependencies
       (Just(ex'), deps)
     Nothing -> (Nothing, names/empty)
 
-fun expr/dependencies(ex: expr<t>): <pure,modname> (expr<t>, nameSet)
+fun expr/dependencies(ex: expr<t>): <pure,modname> (expr<t>, name-set)
   match ex
     Lam(binders, body, tl, rng) ->
       val (depBody, fv1) = body.dependencies
@@ -175,22 +175,22 @@ fun expr/dependencies(ex: expr<t>): <pure,modname> (expr<t>, nameSet)
       val (depBody, fv) = body.dependencies
       (Inject(tp, depBody, b, rng), fv)
 
-fun handlerBranch/dependencies(h: handlerBranch<t>): <pure,modname> (handlerBranch<t>, nameSet)
+fun handler-branch/dependencies(h: handler-branch<t>): <pure,modname> (handler-branch<t>, name-set)
   val (depExpr, fvExpr) = h.branchExpr.dependencies
   val uname = if h.branchName.qualifier == modname then h.branchName.unqualify else h.branchName
   (h(branchExpr=depExpr), (fvExpr - h.branchPars.map(name)) + uname)
 
-fun branch/dependencies(Branch(patts, guards): branch<t>): <pure,modname> (branch<t>, nameSet)
+fun branch/dependencies(Branch(patts, guards): branch<t>): <pure,modname> (branch<t>, name-set)
   val (depGuards, fvGuardss) = guards.map(dependencies).unzip
-  val fvsg : nameSet = fvGuardss.unions
+  val fvsg : name-set = fvGuardss.unions
   (Branch(patts, depGuards), fvsg - patts.free-var)
 
-fun guard/dependencies(Guard(test, expr): guard<t>): <pure,modname> (guard<t>, nameSet)
+fun guard/dependencies(Guard(test, expr): guard<t>): <pure,modname> (guard<t>, name-set)
   val (depTest, fv1) = test.dependencies
   val (depExpr, fv2) = expr.dependencies
   (Guard(depTest, depExpr), fv1 + fv2)
 
-fun lambinders/dependencies(binders: list<valueBinder<maybe<t>, maybe<expr<t>>>>, fvs: nameSet): <pure,modname> (list<valueBinder<maybe<t>, maybe<expr<t>>>>, nameSet)
+fun lambinders/dependencies(binders: list<value-binder<maybe<t>, maybe<expr<t>>>>, fvs: name-set): <pure,modname> (list<value-binder<maybe<t>, maybe<expr<t>>>>, name-set)
   match binders
     Nil -> (Nil, fvs)
     Cons(binder, rest) ->
@@ -202,7 +202,7 @@ fun lambinders/dependencies(binders: list<valueBinder<maybe<t>, maybe<expr<t>>>>
           val (depEx, fv2) = ex.dependencies
           (Cons(binder(expr=Just(depEx)), binders0), fv1 + fv2)
 
-fun lambinder/dependencies(binder: valueBinder<maybe<t>, maybe<expr<t>>>): <pure,modname> (valueBinder<maybe<t>, maybe<expr<t>>>, nameSet)
+fun lambinder/dependencies(binder: value-binder<maybe<t>, maybe<expr<t>>>): <pure,modname> (value-binder<maybe<t>, maybe<expr<t>>>, name-set)
   match binder.expr
     Nothing -> (binder, names/empty)
     Just(ex) ->
@@ -212,15 +212,15 @@ fun lambinder/dependencies(binder: valueBinder<maybe<t>, maybe<expr<t>>>): <pure
 
 // Free variables
 
-fun list/free-var(l: list<t>, ?free-var: (t) -> pure nameSet): pure nameSet
+fun list/free-var(l: list<t>, ?free-var: (t) -> pure name-set): pure name-set
   l.map(?free-var).unions
 
-fun maybe/free-var(mex: maybe<t>, ?free-var: (t) -> pure nameSet): pure nameSet
+fun maybe/free-var(mex: maybe<t>, ?free-var: (t) -> pure name-set): pure name-set
   match mex
     Just(ex) -> ex.free-var
     Nothing -> names/empty
 
-fun pat/free-var(pat: pattern<t>): pure nameSet
+fun pat/free-var(pat: pattern<t>): pure name-set
   match pat
     PatVar(binder) -> names/empty + binder.name
     PatCon(_, pats) -> pats.map(snd).map(free-var).unions
@@ -229,7 +229,7 @@ fun pat/free-var(pat: pattern<t>): pure nameSet
     PatLit(_) -> names/empty
     PatWild -> names/empty
 
-fun expr/free-var(ex: expr<t>): pure nameSet
+fun expr/free-var(ex: expr<t>): pure name-set
   match ex
     Lam(binders, body) -> binders.foldr(body.free-var, fn(b, fv) fv - b.name)
     Bind(def, bd) -> bd.free-var - def.name + def.body.free-var
@@ -246,16 +246,16 @@ fun expr/free-var(ex: expr<t>): pure nameSet
     Handler(branches=ops, hReturn=ret, initially=init, finally=fin, localPars=pars) ->
       ret.free-var + ops.map(free-var).unions + init.free-var + fin.free-var - pars.map(name)
 
-fun branch/free-var(Branch(patt, guards): branch<t>): pure nameSet
+fun branch/free-var(Branch(patt, guards): branch<t>): pure name-set
   patt.free-var + guards.map(free-var).unions
 
-fun guard/free-var(Guard(test, expr): guard<t>): pure nameSet
+fun guard/free-var(Guard(test, expr): guard<t>): pure name-set
   test.free-var + expr.free-var
 
-fun hb/free-var(HandlerBranch(_, pars, expr): handlerBranch<t>): pure nameSet
+fun hb/free-var(HandlerBranch(_, pars, expr): handler-branch<t>): pure name-set
   expr.free-var - pars.map(name)
 
-fun dg/free-bound-var(dg: defGroup<t>): pure (nameSet, nameSet)
+fun dg/free-bound-var(dg: def-group<t>): pure (name-set, name-set)
   match dg
     DefNonRec(d) -> (names/empty + d.name, d.body.free-var)
     DefRec(defs) ->
@@ -264,13 +264,13 @@ fun dg/free-bound-var(dg: defGroup<t>): pure (nameSet, nameSet)
       (names/empty + bound, free - bound)
 
 // Dependencies
-alias deps = name-map<nameSet>
-alias free-var = nameSet
-val emptyDeps: linearMap<name, nameSet> = LinearMap([])
+alias deps = name-map<name-set>
+alias free-var = name-set
+val emptyDeps: linearMap<name, name-set> = LinearMap([])
 
 // Topological sort
 
-fun dfs/group-bindings(defs: list<def<t>>, deps: deps): pure list<defGroup<t>>
+fun dfs/group-bindings(defs: list<def<t>>, deps: deps): pure list<def-group<t>>
   // get definition id's
   val defVars = names/empty + deps.list.map(fst)
   // constrain to the current group of id's
@@ -334,7 +334,7 @@ fun dfs/group-bindings(defs: list<def<t>>, deps: deps): pure list<defGroup<t>>
   
   defOrder.map(make-group).concat
 
-fun typedefs/group(tdefs: list<userTypeDef>, deps: deps)
+fun typedefs/group(tdefs: list<user-typedef>, deps: deps)
   // get type names
   val typeNames = names/empty + deps.list.map(fst)
   // constrain to current group of ids
@@ -344,7 +344,7 @@ fun typedefs/group(tdefs: list<userTypeDef>, deps: deps)
   // create a map from type id's to type defs
   // note: due to duplicate definitions (which are checked for during kind checking), we map to a list of possible definitions
   val typeMap = tdefs.map(fn(d) (d.name, [d])).foldl(LinearMap([])) fn(acc, (id, v))
-    acc.update(id, v, fn(old:list<userTypeDef>, new) old ++ new)
+    acc.update(id, v, fn(old:list<user-typedef>, new) old ++ new)
   // create a (recursive) definition group
   fun make-group(ids: list<name>)
     match ids
@@ -385,7 +385,7 @@ fun typedefs/group(tdefs: list<userTypeDef>, deps: deps)
 // ATTR TypeDefGroups [ || grouped USE {++} {[]}: TypeDefGroups]
 
 // SEM TypeDefGroup
-//   | TypeDefGroup lhs.grouped = group-typedefs @typeDefs.grouped @typeDefs.deps
+//   | TypeDefGroup lhs.grouped = group-typedefs @typedefs.grouped @typedefs.deps
 
 
 // {
@@ -408,7 +408,7 @@ fun typedefs/group(tdefs: list<userTypeDef>, deps: deps)
 //     in map make-group defOrder
 
 // group-typedefs :: TypeDefs -> Deps -> TypeDefGroups
-// group-typedefs typeDefs deps
+// group-typedefs typedefs deps
 //   = let -- get type names
 //         typeNames = S.fromList (M.keys deps)
 //         -- constrain to current group of id's
@@ -416,7 +416,7 @@ fun typedefs/group(tdefs: list<userTypeDef>, deps: deps)
 //         -- determine strongly connected components
 //         typeOrder = scc [(id,S.toList fts) | (id,fts) <- M.toList typeDeps]
 //         -- create a map from type id's to type defs
-//         typeMap   = M.fromList [(typeDefName def,def) | def <- typeDefs]
+//         typeMap   = M.fromList [(typedefName def,def) | def <- typedefs]
 //         -- create a (recursive) definition group
 //         make-group ids = TypeDefGroup [M.find id typeMap | id <- ids]
 //     in map make-group typeOrder

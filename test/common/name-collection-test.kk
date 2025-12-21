@@ -8,3 +8,6 @@ fun suite()
       val qname1 = "hello/world".read-qualified-name
       expect(Found((qname1, 0)))
         single(qname1, 0).lookup("".new-name, "world".new-name)
+
+fun main()
+  run-tests(suite)

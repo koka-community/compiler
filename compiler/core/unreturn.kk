@@ -12,47 +12,47 @@ value type kexpr
   U(e: expr) // unchanged
   I(e: expr) // identity
   R(e: expr) // returned
-  F(e: ((expr -> ureff expr) -> ureff expr)) // CPS Transformed, needs continuation
+  F(e: ((expr -> ur-eff expr) -> ur-eff expr)) // CPS Transformed, needs continuation
 
 fun unreturn()
   with handler
-    val currentEff = Nothing
-  set-core-defs(urTopDefGroups(get-core-defs()))
+    val current-eff = Nothing
+  set-core-defs(tdgs/unreturn(get-core-defs()))
 
-fun urTopDefGroups(defGroups: list<defGroup>): ureff list<defGroup>
-  defGroups.map(urTopDefGroup)
+fun tdgs/unreturn(def-groups: list<def-group>): ur-eff list<def-group>
+  def-groups.map(unreturn)
 
-fun urTopDefGroup(dg: defGroup)
+fun tdg/unreturn(dg: def-group)
   match dg
-    DefRec(defs) -> DefRec(defs.map(urTopDef))
-    DefNonRec(d) -> DefNonRec(urTopDef(d))
+    DefRec(defs) -> DefRec(defs.map(unreturn))
+    DefNonRec(d) -> DefNonRec(d.unreturn)
 
-fun urTopDef(d: def): ureff def
-  val (make-def, kexpr) = d.urDef
+fun topdef/unreturn(d: def): ur-eff def
+  val (make-def, kexpr) = d.unreturn
   match kexpr
     U(e) -> make-def(e)
     I(e) -> make-def(e)
     _ -> fail("core/unreturn urTopDef: should not happen: return inside top level definition")
 
 effect ur
-  val currentEff: maybe<keffect>
+  val current-eff: maybe<keffect>
 
-alias ureff = <ur,comp-flags,pure,corePhase,unique>
+alias ur-eff = <ur,comp-flags,pure,core-phase,unique>
 
-fun currentEffect(eff: keffect, k: () -> <ur|e> a): <ur|e> a
+fun current-effect(eff: keffect, k: () -> <ur|e> a): <ur|e> a
   with override
-    val currentEff = Just(eff)
+    val current-eff = Just(eff)
   k()
 
-fun urDef(d: def)
-  val kexpr = d.defExpr.urExpr
+fun def/unreturn(d: def)
+  val kexpr = d.defExpr.unreturn
   (fn(e) d(defExpr = e), kexpr)
 
-fun urExpr(e: expr): <comp-flags,corePhase,div,exn,ur,unique> kexpr
+fun expr/unreturn(e: expr): <comp-flags,core-phase,div,exn,ur,unique> kexpr
   match e
     // lambdas and type lambdas use UnK to contain returns inside their body
     Lam(pars, eff, body) ->
-      with currentEffect(eff)
+      with current-effect(eff)
       e.emapUnK(fn(b) Lam(pars, eff, b), body.urExpr)
     TypeLam(tvars, body) ->
       e.emapUnK(fn(b) TypeLam(tvars, b), body.urExpr)
@@ -61,31 +61,31 @@ fun urExpr(e: expr): <comp-flags,corePhase,div,exn,ur,unique> kexpr
       Just(e).emapK(fn(b) TypeApp(b, targs), body.urExpr)
     // bindings
     Let(defgs, body) ->
-      e.urLet(defgs, body.urExpr)
+      e.unreturn(defgs, body.urExpr)
     // case: scrutinee cannot contain return due to grammar
     Case(scruts, branches) ->
-      e.urCase(scruts, branches)
+      e.unreturn(scruts, branches)
     // return
     App(Var(v), [arg]) | v.get-name == nameReturn -> R(arg)
     // pure expressions that do not contain return (as checked by the grammar)
     App(f, args) ->
-      I(App(f.urPure, args.map(urPure)))
+      I(App(f.unreturn-pure, args.map(unreturn-pure)))
     _ -> U(e)
 
-fun urPure(e: expr)
-  e.urExpr.toExpr
+fun unreturn-pure(e: expr)
+  e.unreturn.to-expr
 
-fun toExpr(k: kexpr)
+fun to-expr(k: kexpr)
   match k
     U(org) -> org
     I(e') -> e'
-    _ -> fail("core/unreturn urPure: should not happen: return inside pure expression")
+    _ -> fail("core/unreturn unreturn-pure: should not happen: return inside pure expression")
 
-alias alter<x> = (x -> ureff defGroup)
+alias alter<x> = (x -> ur-eff def-group)
 alias maybechanged = either<(alter<list<expr>>, list<kexpr>), (alter<expr>, kexpr)>
 
-fun urLet(org: expr, defgroups: list<defGroup>, kbody: kexpr): ureff kexpr
-  fun urLetDefGroup(dg: defGroup)
+fun let/unreturn(org: expr, defgroups: list<def-group>, kbody: kexpr): ur-eff kexpr
+  fun dg/unreturn(dg: def-group)
     match dg
       DefRec(dfs) ->
         val (mkDefs, kexprs) = dfs.map(urDef).unzip
@@ -97,7 +97,7 @@ fun urLet(org: expr, defgroups: list<defGroup>, kbody: kexpr): ureff kexpr
     match e
       Left((_, dgs)) -> dgs.all(is-u)
       Right((_, dg)) -> dg.is-u
-  fun addDef(d: defGroup, e: expr): expr
+  fun add-def(d: def-group, e: expr): expr
     match e
       Let(defs, e') -> Let(Cons(d, defs), e')
       _ -> Let([d], e)
@@ -105,22 +105,22 @@ fun urLet(org: expr, defgroups: list<defGroup>, kbody: kexpr): ureff kexpr
     match l
       Nil -> kexpr
       Cons(Left((mkDefGroup, kexprs)), kdefgs) -> 
-        kdefgs.fold(Nothing.emapK(fn(e) addDef(mkDefGroup(kexprs.map(toExpr)), e), kexpr))
+        kdefgs.fold(Nothing.emapK(fn(e) add-def(mkDefGroup(kexprs.map(to-expr)), e), kexpr))
       Cons(Right((mkDefGroup, kdefexpr)), kdefgs) -> 
         fun combine(e1: expr, e2: expr)
-          addDef(mkDefGroup(e1), e2)
+          add-def(mkDefGroup(e1), e2)
         kdefgs.fold(Nothing.bind(combine, kdefexpr, kexpr))
-  val kdefgs = defgroups.map(urLetDefGroup)
+  val kdefgs = defgroups.map(dg/unreturn)
   if kdefgs.all(is-unchanged) then
     Just(org).emapK(fn(e) make-let(defgroups, e), kbody)
   else kdefgs.reverse.fold(kbody)
 
-fun urCase(org: expr, scruts: list<expr>, branches: list<branch>): <div,exn,unique,ur,comp-flags,corePhase> kexpr
-  val (mkBranches, kexprss) = branches.map(urBranch).unzip
+fun case/unreturn(org: expr, scruts: list<expr>, branches: list<branch>): <div,exn,unique,ur,comp-flags,core-phase> kexpr
+  val (mkBranches, kexprss) = branches.map(branch/unreturn).unzip
   val ks = kexprss.concat
   if ks.all(is-u) then U(org)
   elif ks.all(fn(k) k.is-u || k.is-i) then
-    I(Case(scruts, kexprss.zipwith(mkBranches, fn(kexprs, mk) mk(kexprs.map(toExpr)))))
+    I(Case(scruts, kexprss.zipwith(mkBranches, fn(kexprs, mk) mk(kexprs.map(to-expr)))))
   elif ks.filter(fn(k) !k.is-r).length <= 1 then
     // Directly inline
     fun f(c)
@@ -130,7 +130,7 @@ fun urCase(org: expr, scruts: list<expr>, branches: list<branch>): <div,exn,uniq
     // generate a local continuation function
     val name = "cont".unique-name
     val pname = "x".unique-name
-    val eff = currentEff.unjust
+    val eff = current-eff.unjust
     val tp = org.type-of
     val parName = TName(pname, tp)
     val parVar = Var(parName, InfoNone)
@@ -144,15 +144,15 @@ fun urCase(org: expr, scruts: list<expr>, branches: list<branch>): <div,exn,uniq
       Case(scruts, kexprss.zipwith(mkBranches, fn(kexprs, mk) mk(kexprs.map(fn(k) applyK(app, k)))))
     F(f)
 
-fun urBranch(b: branch)
-  val (mkGuards, kexprs) = b.guards.map(urGuard).unzip
+fun branch/unreturn(b: branch)
+  val (mkGuards, kexprs) = b.guards.map(unreturn).unzip
   (fn(es) Branch(b.patterns, mkGuards.zipwith(es, fn(make, e) make(e))), kexprs)
 
-fun urGuard(g: guard)
-  val kexpr = g.body.urExpr
+fun guard/unreturn(g: guard)
+  val kexpr = g.body.unreturn
   (fn(e) Guard(g.test, e), kexpr)
 
-fun applyK(c: expr -> ureff expr, k: kexpr): ureff expr
+fun applyK(c: expr -> ur-eff expr, k: kexpr): ur-eff expr
   match k
     U(e) -> c(e)
     I(e) -> c(e)

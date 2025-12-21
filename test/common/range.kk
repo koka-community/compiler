@@ -1,5 +1,6 @@
 import compiler/common/range
 import std/test
+import std/os/path
 
 // Shared test source
 val src = Source("test.kk", "")
@@ -218,7 +219,7 @@ fun suite()
 
   group("Make source range")
     test("make-source-range creates range with line/col")
-      val r = make-source-range("test.kk", 1, 5, 2, 10)
+      val r = make-source-range("test.kk".path, 1, 5, 2, 10)
       expect(True) fn() r.start.line == 1 && r.start.col == 5 && r.end.line == 2 && r.end.col == 10
 
   group("Edge cases")

@@ -20,10 +20,10 @@ fun extend(inls: inlines, inl: inlineDef)
 fun merge(inls1: inlines, inls2: inlines)
   inls1.union(inls2)
 
-fun defs/extract-inlines(dgs: defGroups, costMax: int)
+fun defs/extract-inlines(dgs: def-groups, costMax: int)
   dgs.map(_.extract-inlines(costMax)).concat
 
-fun dg/extract-inlines(dg: defGroup, costMax: int)
+fun dg/extract-inlines(dg: def-group, costMax: int)
   match dg
     DefRec() -> []
     DefNonRec(d) -> d.extract-inlines(costMax, False).map(fn(d') [d']).default([])

@@ -1,5 +1,9 @@
+import compiler/type/type
+import compiler/common/syntax
+import compiler/common/range
 import compiler/core/core
 import std/data/linearset
+import std/data/linearmap
 import compiler/common/name
 import compiler/type/typevar
 
@@ -44,17 +48,17 @@ fun pat/bound-vars(p: pattern): div linearSet<tName>
     PatLit -> tnames/empty
     PatWild -> tnames/empty
 
-fun dgs/free-vars(defGroups: defGroups, e: expr): div linearSet<tName>
-  match defGroups
+fun dgs/free-vars(def-groups: def-groups, e: expr): div linearSet<tName>
+  match def-groups
     [] -> e.free-vars
     Cons(dg, dgs) -> 
       val fv1: linearSet<tName> = (free-vars(dgs, e) - dg.bound-vars)
       dg.free-vars + fv1
 
-fun dg/free-vars(defg: defGroup): div linearSet<tName>
+fun dg/free-vars(defg: def-group): div linearSet<tName>
   defg.flatten.map(free-vars).unions
 
-fun dg/bound-vars(defg: defGroup): div linearSet<tName>
+fun dg/bound-vars(defg: def-group): div linearSet<tName>
   defg.flatten.map(bound-vars).unions
 
 fun def/bound-vars(Def(nm, tp): def): div linearSet<tName>
@@ -67,7 +71,7 @@ fun def/free-vars(Def(_, _, e): def): div linearSet<tName>
 noinline fun list/(|->)(sub: list<(tName, expr)>, l: list<a>, ?(|->): (list<(tName, expr)>, a) -> pure a): pure list<a>
   l.map(sub |-> _)
 
-fun dg/(|->)(sub: list<(tName, expr)>, dg: defGroup): pure defGroup
+fun dg/(|->)(sub: list<(tName, expr)>, dg: def-group): pure def-group
   match dg
     DefRec(defs) -> DefRec(sub |-> defs)
     DefNonRec(def) -> DefNonRec(sub |-> def)

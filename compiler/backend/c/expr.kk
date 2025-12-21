@@ -17,10 +17,10 @@ import compiler/common/color-scheme
 import compiler/common/nice
 import std/core/undiv
 
-fun gen-local-groups(dgs: defGroups): asmEff list<doc>
+fun gen-local-groups(dgs: def-groups): asmEff list<doc>
   dgs.map(gen-local-group)
 
-fun gen-local-group(dg: defGroup): asmEff doc
+fun gen-local-group(dg: def-group): asmEff doc
   match dg
     DefRec -> fail("backend/c/from-core gen-local-group: local recursive function definitions are not allowed")
     DefNonRec(d) -> gen-local-def(d)
@@ -43,12 +43,12 @@ fun gen-local-def(d: def): asmEff doc
 
 // Generate C declaration for top level definitions
 
-fun gen-top-groups(d: list<defGroup>): asmEff ()
+fun gen-top-groups(d: list<def-group>): asmEff ()
   with localUnique
   d.map(gen-top-group)
   ()
 
-fun gen-top-group(g: defGroup): asmEff ()
+fun gen-top-group(g: def-group): asmEff ()
   match g
     DefRec(defs) -> 
       defs.map(gen-fun-topdef-sig)
@@ -812,7 +812,7 @@ fun gen-expression-external(tname: tName, formats: list<(target, string)>, args:
         ([], gen-hole-call(tname.typeOf.resultType))
   val format = getFormat(tname, formats)
   val argDocs = args.map(fn(d) if d.asString.list.all(fn(c) c.is-alpha || c.is-digit || c == '_') then d else d.parens)
-  fun pp-externalf(name: name, k: list<char>): <comp-flags,documentation,pure,colorSchemeEffect,ppEnvEff> doc
+  fun pp-externalf(name: name, k: list<char>): <comp-flags,documentation,pure,colors,ppEnvEff> doc
     match k
       Nil -> empty
       Cons('\\', Cons('#', xs)) -> char('#') |.| pp-externalf(name, xs)

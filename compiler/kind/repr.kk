@@ -12,9 +12,15 @@ import compiler/type/pretty
 // constraints and platform sizes.
 
 // value types
-fun create-data-def(emit-error: (doc) -> e (), emitWarning: (doc) -> e (), lookup-datainfo: (name) -> e maybe<dataInfo>, platform: platform, nm:name, resultHasKindStar: bool, isRec: bool, sort: dataKind, extraFields: int, defaultDef:dataDef, conInfos0: list<conInfo>): e (dataDef, list<conInfo>)
+fun create-data-def(
+    emit-error: (doc) -> e (), 
+    emit-warning: (doc) -> e (), 
+    lookup-datainfo: (name) -> e maybe<data-info>, 
+    platform: platform, nm:name, 
+    resultHasKindStar: bool, isRec: bool, sort: data-kind, extraFields: int, 
+    defaultDef:data-def, conInfos0: list<con-info>): e (data-def, list<con-info>)
   val isVal = defaultDef.is-value
-  fun create-con-info-repr(c: conInfo)
+  fun create-con-info-repr(c: con-info)
     val (orderedFields, vrepr) = order-con-fields(emit-error, "constructor ".text |+| (c.name:name).pretty, lookup-datainfo, platform, extraFields, c.params)
     c(orderedParams=orderedFields, valueRepr=vrepr)
   
@@ -34,7 +40,7 @@ fun create-data-def(emit-error: (doc) -> e (), emitWarning: (doc) -> e (), looku
             else 0
           val m =
             if size <= 0 then
-              emitWarning("is declared as a primitive value type but has no known compilation size, assuming size".text |+| platform.ptrSize.pretty)
+              emit-warning("is declared as a primitive value type but has no known compilation size, assuming size".text |+| platform.ptrSize.pretty)
               platform.ptrSize
             else size
           DataDefValue(ValueRepr(m, 0, m))
@@ -59,7 +65,7 @@ fun create-data-def(emit-error: (doc) -> e (), emitWarning: (doc) -> e (), looku
               DataDefNormal
           _ -> DataDefNormal
 
-  fun create-max-data-def(ci: list<conInfo>)
+  fun create-max-data-def(ci: list<con-info>)
     val vreprs = ci.map(valueRepr)
     val ddef = max-data-def(vreprs)
     match ddef
@@ -117,9 +123,9 @@ fun create-data-def(emit-error: (doc) -> e (), emitWarning: (doc) -> e (), looku
         DataDefValue(vr) ->
           val size = platform.size(vr)
           if size > 4*platform.ptrSize then
-            emitWarning("requires ".text |+| size.pretty |+| " bytes which is rather large for a value type".text)
+            emit-warning("requires ".text |+| size.pretty |+| " bytes which is rather large for a value type".text)
           if isEnum then
-            emitWarning("is an enumeration -- there is not need to declare it as a value type".text)
+            emit-warning("is an enumeration -- there is not need to declare it as a value type".text)
           dd
         _ ->
           // should never happen
@@ -131,8 +137,8 @@ fun create-data-def(emit-error: (doc) -> e (), emitWarning: (doc) -> e (), looku
 //  order constructor fields of constructors with raw field so the regular fields come first to be scanned.
 // return the ordered fields, and a ValueRepr (raw size part, the scan count (including tags), align, and full size)
 // The size is used for reuse and should include all needed fields including the tag field for "open" datatypes 
-fun order-con-fields(emit-error: (doc) -> e (), nameDoc: doc, get-datainfo: (name) -> e maybe<dataInfo>, platform: platform, extraPreScan: int, fields: list<(name, ktype)>): e (list<(name, ktype)>, valueRepr)
-  fun visit(rraw: list<((name, ktype), valueRepr)>, rmixed: list<((name, ktype), valueRepr)>, rscan: list<(name, ktype)>, scan-count0: int, alignment0: int, l: list<(name, ktype)>)
+fun order-con-fields(emit-error: (doc) -> e (), nameDoc: doc, get-datainfo: (name) -> e maybe<data-info>, platform: platform, extraPreScan: int, fields: list<(name, ktype)>): e (list<(name, ktype)>, value-repr)
+  fun visit(rraw: list<((name, ktype), value-repr)>, rmixed: list<((name, ktype), value-repr)>, rscan: list<(name, ktype)>, scan-count0: int, alignment0: int, l: list<(name, ktype)>)
     if rmixed.length > 1 then
       emit-error(nameDoc |+| " has multiple value type fields that each contain both raw types and regular types".text |-|
         "hint: use 'box' on either field to make it a non-value type.".text)
@@ -170,7 +176,7 @@ fun extract-datadef-type(tp: ktype): maybe<name>
 
 // Return the DataDef for a type.
 // This may be 'Nothing' for abstract types.
-fun get-data-def(lookupDI: (name) -> e maybe<dataInfo>, tp: ktype): e maybe<dataDef>
+fun get-data-def(lookupDI: (name) -> e maybe<data-info>, tp: ktype): e maybe<data-def>
   match tp.extract-datadef-type
     Nothing -> Just(DataDefNormal)
     Just(nm) | nm == nameTpBox -> Just(DataDefNormal)

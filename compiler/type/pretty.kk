@@ -9,7 +9,7 @@ import compiler/lib/pprint
 import compiler/lib/printer
 import compiler/type/type
 import compiler/type/typevar
-import compiler/kind/importmap
+import compiler/kind/import-map
 import compiler/platform/config
 import compiler/type/kind
 import compiler/kind/kind
@@ -29,9 +29,9 @@ val precTypeApp = 3
 val precTypeAtom = 4
 val precPred = 5
 
-alias tvScheme = linearMap<typeVar, (prec -> doc)>;
+alias tv-scheme = linearMap<type-var, (prec -> doc)>;
 
-val rankedDefault:tvScheme = LinearMap([])
+val rankedDefault:tv-scheme = LinearMap([])
 
 fun keyword(s: string)
   s.text.color(colors.colorTypeKeyword)
@@ -47,7 +47,7 @@ effect documentation
 // find a better place for this
 // Signifies whether we output core for an interface or not
 
-fun defaultDocEnv(f)
+fun default-doc-env(f)
   with handler
     val colorizing = False
     val htmlBases = []
@@ -55,32 +55,32 @@ fun defaultDocEnv(f)
     val htmlJs = "scripts/" ++ comp-flags.programName ++ "-highlight.js"
   f()
 
-fun defaultPPEnv(f)
+fun default-pp-env(f)
   with handler
-    val ppEnv = PpEnv()
+    val pp-env = PrettyEnv()
   f()
 
 // Pretty print environment for types
 
-alias pp-typeEff = <pp-typeEnv,documentation,colorSchemeEffect,pure,niceEff<typeVar>,comp-flags>
+alias pp-type-eff = <pp-type-env,documentation,colors,pure,nice-eff<type-var>,comp-flags>
 
-effect precEff
-  val prec: prec;
+effect val pp-prec: prec;
 
-effect ppEnvEff
-  val ppEnv: ppEnv;
+effect val pp-env: pretty-env;
 
-struct ppEnv
-  showKinds: bool = False
-  showIds: bool = False // show id numbers
-  showFlavours: bool = True
-  expandSynonyms: bool = False
-  fullNames: bool = False // TODO: If True it can lead to .kki parse errors
-  alwaysUnqualify: bool = False
-  coreIface: bool = False
-  coreShowTypes: bool = False // show types in core output
-  coreShowVis: bool = True // show visibility
-  coreShowDef: bool = False; // show definition body
+type pretty-env
+  PrettyEnv(
+    showKinds: bool = False,
+    showIds: bool = False, // show id numbers
+    showFlavours: bool = True,
+    expandSynonyms: bool = False,
+    fullNames: bool = False, // TODO: If True it can lead to .kki parse errors
+    alwaysUnqualify: bool = False,
+    coreIface: bool = False,
+    coreShowTypes: bool = False, // show types in core output
+    coreShowVis: bool = True, // show visibility
+    coreShowDef: bool = False // show definition body
+  )
 
 effect indent 
   val indent : int
@@ -89,21 +89,21 @@ fun default-indent(f)
   with val indent = 0
   f()
 
-alias pp-typeEnv = <prettyTypeEff,ppEnvEff,precEff>
+alias pp-type-env = <pretty-type-eff,pp-env,pp-prec>
 
-effect prettyTypeEff
-  val ranked: tvScheme
+effect pretty-type-eff
+  val ranked: tv-scheme
   val moduleContext: name // module in which we pretty print
-  val importsMap: importmap // import aliases
+  val importsMap: import-map // import aliases
 
-fun overridePrec(p: prec, f)
+fun override-prec(p: prec, f)
   with override 
-    val prec = p
+    val pp-prec = p
   f()
 
-fun handlePrettyEff(f)
+fun handle-pretty-eff(f)
   with handler
-    val prec = precTopTop
+    val pp-prec = precTopTop
   with handler 
     val ranked = rankedDefault
     val moduleContext = "Main".new-name
@@ -133,40 +133,40 @@ fun list/compress(l: list<char>): list<char>
 fun nice-type(tp: ktype)
   nice-types([tp]).head.unjust
 
-fun nice-types(tps: list<ktype>): pp-typeEff list<doc>
+fun nice-types(tps: list<ktype>): pp-type-eff list<doc>
   tps.niceList fn(tp)
     tp.pp-type.color(colors.colorType)
 
-fun niceList(schemes: list<ktype>, f: (ktype) -> pp-typeEff doc): pp-typeEff list<doc>
+fun niceList(schemes: list<ktype>, f: (ktype) -> pp-type-eff doc): pp-type-eff list<doc>
   schemes.map(free-type-vars).unions.list.map(extend-nice)
   schemes.map(f)
 
 // Pretty print a type
-fun ktp/ppretty(t: ktype): <documentation,ppEnvEff,pure,comp-flags,colorSchemeEffect> doc
-  with handlePrettyEff
+fun ktp/ppretty(t: ktype): <documentation,pp-env,pure,comp-flags,colors> doc
+  with handle-pretty-eff
   with niceEnv
   t.pp-type
 
 fun ktp/pretty(t: ktype): <comp-flags, pure> doc
-  with defaultPPEnv
-  with defaultDocEnv
-  with handlePrettyEff
+  with default-pp-env
+  with default-doc-env
+  with handle-pretty-eff
   with niceEnv
   with color-scheme-default
   t.pp-type
 
-fun tv/pretty(tv: typeVar): <documentation,ppEnvEff,pure,comp-flags,colorSchemeEffect> doc
-  with handlePrettyEff
+fun tv/pretty(tv: type-var): <documentation,pp-env,pure,comp-flags,colors> doc
+  with handle-pretty-eff
   with niceEnv
   tv.pp-typevar
 
-fun tcon/pretty(tc: typeCon): <documentation,ppEnvEff,pure,comp-flags,colorSchemeEffect> doc
-  with handlePrettyEff
+fun tcon/pretty(tc: type-con): <documentation,pp-env,pure,comp-flags,colors> doc
+  with handle-pretty-eff
   with niceEnv
   tc.pp-typecon
 
-fun tsyn/pretty(ts: typeSyn): <documentation,ppEnvEff,pure,comp-flags,colorSchemeEffect> doc
-  with handlePrettyEff
+fun tsyn/pretty(ts: type-syn): <documentation,pp-env,pure,comp-flags,colors> doc
+  with handle-pretty-eff
   with niceEnv
   ts.pp-typesyn
 
@@ -178,14 +178,14 @@ fun pp-schema-effect(tp: ktype)
     TFun([], _) -> pp-schema-effect(TForAll([], tp))
     TForAll(vars, TFun([], eff, res)) ->
       vars.foreach(extend-nice)
-      with overridePrec(precTypeTop)
+      with override-prec(precTypeTop)
       val fors = if vars.is-nil then pprint/empty else "forall".keyword |.| vars.map(pp-typevar).angled |.| dot |.| space
-      val effDoc = if eff.is-type-total then pprint/empty else overridePrec(precArrow - 1, {eff.pp-type}) |.| space
+      val effDoc = if eff.is-type-total then pprint/empty else override-prec(precArrow - 1, {eff.pp-type}) |.| space
       val resDoc = res.pp-type
-      (fors |.| effDoc |.| resDoc).pparens(prec, precTypeQuant)
+      (fors |.| effDoc |.| resDoc).pparens(pp-prec, precTypeQuant)
     _ -> tp.nice-type
 
-fun pretty-def-fun-type(tp: ktype, pinfos: list<paramInfo>)
+fun pretty-def-fun-type(tp: ktype, pinfos: list<param-info>)
   fun pp-param((nm:name, pinfo, tpDoc))
     val x = match pinfo
       Borrow -> "^".text |+| (if nm.is-nil then "_".text else nm.pp-name) |+| ": ".text
@@ -196,7 +196,7 @@ fun pretty-def-fun-type(tp: ktype, pinfos: list<paramInfo>)
       pre |.| params.map(pp-param).comma-sep.parens |+| "->".text |+| post
     (Nothing, pre, post) -> pre |+| "()".text |+| "->".text |+| post
 
-fun pp-decl-type(tp: ktype, pinfos: list<paramInfo>)
+fun pp-decl-type(tp: ktype, pinfos: list<param-info>)
   match tp
     TForAll(vars, rho) ->
       vars.foreach(extend-nice)
@@ -205,21 +205,21 @@ fun pp-decl-type(tp: ktype, pinfos: list<paramInfo>)
       (args, pre, res)
     TFun(params, eff, rho) ->
       val pparams = params.map(fn((name, tp')) (name, Own, tp'.pp-type))
-      (Just(pparams), pprint/empty, if eff.is-type-total then pprint/empty else overridePrec(precArrow, {eff.pp-type |.| space}) |.| overridePrec(precArrow, {rho.pp-type})) 
+      (Just(pparams), pprint/empty, if eff.is-type-total then pprint/empty else override-prec(precArrow, {eff.pp-type |.| space}) |.| override-prec(precArrow, {rho.pp-type}))
     _ -> (Nothing, pprint/empty, tp.pp-type)
 
-fun pretty(d: dataInfo): <documentation,ppEnvEff,pure,comp-flags,colorSchemeEffect> doc
-  with handlePrettyEff
+fun pretty(d: data-info): <documentation,pp-env,pure,comp-flags,colors> doc
+  with handle-pretty-eff
   with niceEnv
   pp-data-info(d, True)
 
-fun pp-data-info(d: dataInfo, showBody: bool)
+fun pp-data-info(d: data-info, showBody: bool)
   d.pretty-data-info(showBody, False)
 
 fun comma-sep(d: list<doc>)
   d.punctuate(comma).hsep
 
-fun pretty-data-info(d: dataInfo, showBody: bool, publicOnly: bool)
+fun pretty-data-info(d: data-info, showBody: bool, publicOnly: bool)
   if publicOnly && d.vis.is-private then pprint/empty
   else
     val vis = if publicOnly then pprint/empty else d.vis.pp-vis
@@ -247,7 +247,7 @@ fun pretty-data-info(d: dataInfo, showBody: bool, publicOnly: bool)
     val data = vis |.| recur |.| ext |.| eff |.| sort |+| d.name.pp-name |.| d.range.pretty |.| params |.| body
     data.pretty-comment(d.doc)
 
-fun pretty-con-info(c: conInfo, publicOnly: bool)
+fun pretty-con-info(c: con-info, publicOnly: bool)
   if publicOnly && c.vis.is-private then pprint/empty
   else
     fun pp-field((_, (name, tp)))
@@ -269,7 +269,7 @@ fun pretty-comment(d: doc, comment: string)
     val cmt = if clist.last.unjust == '\n' then clist.init.string else comment
     (cmt.text |-| d).color(colors.colorComment)
 
-fun pp-vis(v: visibility): colorSchemeEffect doc
+fun pp-vis(v: visibility): colors doc
   match v
     Private -> pprint/empty
     Public -> "pub ".keyword
@@ -278,12 +278,12 @@ fun pp-sub(sub: sub): _ doc
   sub.list.map(fn((tv, tp)) tv.pp-typevar |+| "|->".text |+| tp.pp-type).list
 
 // Synonym info
-fun syninfo/pretty(s: synInfo): <documentation,ppEnvEff,pure,comp-flags,colorSchemeEffect> doc
-  with handlePrettyEff
+fun syninfo/pretty(s: syn-info): <documentation,pp-env,pure,comp-flags,colors> doc
+  with handle-pretty-eff
   with niceEnv
   pp-syn-info(s)
 
-fun pp-syn-info(s: synInfo, isLocal: bool=False, publicOnly:bool=False, showBody:bool=True)
+fun pp-syn-info(s: syn-info, isLocal: bool=False, publicOnly:bool=False, showBody:bool=True)
   if publicOnly && s.vis.is-private then pprint/empty 
   else
     val al = if isLocal then "local alias".keyword else s.vis.pp-vis |.| "alias".keyword
@@ -294,13 +294,13 @@ fun pp-syn-info(s: synInfo, isLocal: bool=False, publicOnly:bool=False, showBody
     syn.pretty-comment(s.doc)
 
 fun range/pretty-range(r: range)
-  if ppEnv.coreIface then r.pretty else pprint/empty
+  if pp-env.coreIface then r.pretty else pprint/empty
 
 fun pp-type(tp: ktype)
-  val isCoreIface = ppEnv.coreIface
+  val isCoreIface = pp-env.coreIface
   val t = match tp
     TForAll(vars, t) ->
-      val p = prec
+      val p = pp-prec
       vars.foreach(extend-nice)
       val d = (if vars.is-nil then pprint/empty else "forall".keyword |.| vars.map(pp-typevar).angled |.| space)
       val d' = d |.| t.pp-type
@@ -309,56 +309,56 @@ fun pp-type(tp: ktype)
     TVar(tv as TypeVar(_, _, Bound)) ->
       match ranked.lookup(tv)
         Nothing -> tv.pp-typevar
-        Just(f) -> f(prec)
+        Just(f) -> f(pp-prec)
     TVar(tv) -> tv.pp-typevar
     TCon(cv) -> pp-typecon(cv)
     TApp(TCon(c), [_, _]) | c.name == nameEffectExtend ->
       val (ls, tl) = tp.shallow-extract-effect-extend
-      val tldoc = if tl.match-type(effectEmpty) then pprint/empty else "|".text |.| overridePrec(precTypeTop, {tl.pp-type})
+      val tldoc = if tl.match-type(effectEmpty) then pprint/empty else "|".text |.| override-prec(precTypeTop, {tl.pp-type})
       val isTailEmpty = tl.match-type(effectEmpty)
       val doc = match ls
-        [l] | isTailEmpty && !isCoreIface -> overridePrec(precTypeAtom, {l.pp-type})
-        _ -> "<".text |.| ls.map(fn(l) overridePrec(precTypeTop, {l.pp-type})).punctuate(comma).hcat |.| tldoc |.| ">".text
+        [l] | isTailEmpty && !isCoreIface -> override-prec(precTypeAtom, {l.pp-type})
+        _ -> "<".text |.| ls.map(fn(l) override-prec(precTypeTop, {l.pp-type})).punctuate(comma).hcat |.| tldoc |.| ">".text
       doc.color(colors.colorEffect)
     TApp(TCon(c), [eff, res]) | c.name == nameTpValueOp && !isCoreIface ->
       "->".text |+| eff.pp-type |+| res.pp-type
     TApp(TCon(c), [eff, res]) | c.name == nameTpDelay ->
-      "$".text |+| (if eff.is-type-total then pprint/empty else overridePrec(precArrow, {eff.pp-type}) |.| space) |.|
-      overridePrec(precArrow, {res.pp-type})
+      "$".text |+| (if eff.is-type-total then pprint/empty else override-prec(precArrow, {eff.pp-type}) |.| space) |.|
+      override-prec(precArrow, {res.pp-type})
     TApp(TCon(c), [arg]) ->
       val nm = c.name
       if nm == nameTpOptional && !isCoreIface then
-        "?".text |.| overridePrec(precTypeAtom, {arg.pp-type})
+        "?".text |.| override-prec(precTypeAtom, {arg.pp-type})
       elif nm == nameTpHandled || nm == nameTpHandled1 || nm == nameTpNHandled || nm == nameTpNHandled1 && !isCoreIface then
         arg.pp-type
       else
         match tp
-          TApp(TCon(TypeCon(nm1)), args) | nm1.is-name-tp-tuple -> args.map(fn(t) overridePrec(precTypeTop, {t.pp-type})).comma-sep.parens
+          TApp(TCon(TypeCon(nm1)), args) | nm1.is-name-tp-tuple -> args.map(fn(t) override-prec(precTypeTop, {t.pp-type})).comma-sep.parens
           TApp(f, args) ->
-            val fdoc = overridePrec(precTypeAtom, {f.pp-type})
+            val fdoc = override-prec(precTypeAtom, {f.pp-type})
             val argsdoc = match args 
               Nil -> pprint/empty
               Cons(targ, rest) -> 
-                val argsDoc = args.map(fn(a) overridePrec(precTypeTop, {a.pp-type})).angled
+                val argsDoc = args.map(fn(a) override-prec(precTypeTop, {a.pp-type})).angled
                 if rest.is-nil then argsDoc.color-by-kind(targ.kind, id) else argsDoc
-            (fdoc |.| argsdoc).pparens(prec, precApp)
+            (fdoc |.| argsdoc).pparens(pp-prec, precApp)
     // TODO: this is duplicated above due to issues with limitations in guards
     TApp(f, args) ->
-      val fdoc = overridePrec(precTypeAtom, {f.pp-type})
+      val fdoc = override-prec(precTypeAtom, {f.pp-type})
       val argsdoc = match args 
         Nil -> pprint/empty
         Cons(arg, rest) -> 
-          val argsDoc = args.map(fn(a) overridePrec(precTypeTop, {a.pp-type})).angled
+          val argsDoc = args.map(fn(a) override-prec(precTypeTop, {a.pp-type})).angled
           if rest.is-nil then argsDoc.color-by-kind(arg.kind, id) else argsDoc
-      (fdoc |.| argsdoc).pparens(prec, precApp)
+      (fdoc |.| argsdoc).pparens(pp-prec, precApp)
     TSyn(syn, args, tp) ->
-      overridePrec(precTop, {tp.pp-type}).pp-synonym(syn, args)
+      override-prec(precTop, {tp.pp-type}).pp-synonym(syn, args)
   t.color(colors.colorType)
 
 fun pp-fun(arrow, args, eff, result)
-  args.map(fn(p) overridePrec(precTypeTop, {p.pp-param})).punctuate(comma).hsep.parens.pparens(prec, precTypeArrow) |+|
-  (if eff.is-type-total then arrow else arrow |+| overridePrec(precTypeArrow, {eff.pp-type})) |+|
-  overridePrec(precTypeArrow, {result.pp-type})
+  args.map(fn(p) override-prec(precTypeTop, {p.pp-param})).punctuate(comma).hsep.parens.pparens(pp-prec, precTypeArrow) |+|
+  (if eff.is-type-total then arrow else arrow |+| override-prec(precTypeArrow, {eff.pp-type})) |+|
+  override-prec(precTypeArrow, {result.pp-type})
 
 fun pp-param((nm: name, tp: ktype))
   val name = if (nm.is-nil || nm.is-field-name || nm.is-wildcard || nm.is-hidden-name) then
@@ -376,46 +376,46 @@ fun pp-type-name(nm: name)
 fun pp-name-plain(n: name)
   if n.is-implicit-param-name then
     "?".text |.| pp-name-plain(n.from-implicit-param-name)
-  elif ppEnv.fullNames || n.is-module-name then n.pretty
-  elif n.qualifier == moduleContext || ppEnv.alwaysUnqualify then
+  elif pp-env.fullNames || n.is-module-name then n.pretty
+  elif n.qualifier == moduleContext || pp-env.alwaysUnqualify then
     n.unqualify.pretty
-  elif n.is-system-core-name && !ppEnv.coreIface then
+  elif n.is-system-core-name && !pp-env.coreIface then
     n.shorten-system-core-name.pretty
   else
     importsMap.get-alias(n).pretty
 
-fun pp-synonym(tpdoc: doc, ts: typeSyn, args: list<ktype>)
-  val nm = overridePrec(precTypeTop, {TApp(TCon(TypeCon(ts.name, ts.kind)), args).pp-type}) |.| 
-    (if ppEnv.expandSynonyms then " == ".text |.| ts.rank.pretty |+| tpdoc else pprint/empty)
-  if ppEnv.expandSynonyms then
+fun pp-synonym(tpdoc: doc, ts: type-syn, args: list<ktype>)
+  val nm = override-prec(precTypeTop, {TApp(TCon(TypeCon(ts.name, ts.kind)), args).pp-type}) |.| 
+    (if pp-env.expandSynonyms then " == ".text |.| ts.rank.pretty |+| tpdoc else pprint/empty)
+  if pp-env.expandSynonyms then
     nm.parens
   elif args.is-nil then
     nm
   else
-    nm.pparens(prec, precTypeApp)
+    nm.pparens(pp-prec, precTypeApp)
 
-fun pp-typevar(tv: typeVar)
+fun pp-typevar(tv: type-var)
   val fl = 
-    if ppEnv.showFlavours then 
+    if pp-env.showFlavours then 
       match tv.flavour
         Meta -> "_".text
-        Skolem -> if ppEnv.coreIface then "__".text else "$".text
+        Skolem -> if pp-env.coreIface then "__".text else "$".text
         _ -> pprint/empty
     else pprint/empty
-  val nm = fl |.| get-nice-doc(tv) |.| (if ppEnv.showIds then text("=" ++ tv.tid.show) else pprint/empty)
+  val nm = fl |.| get-nice-doc(tv) |.| (if pp-env.showIds then text("=" ++ tv.tid.show) else pprint/empty)
   nm.wrap-kind(tv.kind).color-by-kind-def(tv.kind, colorTypeVar)
 
-fun pp-typecon(tc: typeCon)
+fun pp-typecon(tc: type-con)
   val doc = if tc.name == nameTpUnit then "()".text else tc.name.pp-name-plain
   doc.wrap-kind(tc.kind).color-by-kind-def(tc.kind, colorTypeCon)
 
-fun pp-typesyn(ts: typeSyn)
+fun pp-typesyn(ts: type-syn)
   ts.name.pp-name-plain.wrap-kind(ts.kind).color-by-kind-def(ts.kind, colorTypeCon)
 
-fun color-by-kind-def(d: doc, k: kind, defcolor: (colorScheme -> <prettyTypeEff,colorSchemeEffect> color))
+fun color-by-kind-def(d: doc, k: kind, defcolor: (colorScheme -> <pretty-type-eff,colors> color))
   d.color-by-kind(k, fn(d') d'.color(defcolor(colors)))
 
-fun color-by-kind(d: doc, k: kind, defcolor: (doc -> <prettyTypeEff,colorSchemeEffect> doc))
+fun color-by-kind(d: doc, k: kind, defcolor: (doc -> <pretty-type-eff,colors> doc))
   match k.color-for-kind
     Just(c) -> d.color(c)
     Nothing -> defcolor(d)
@@ -428,6 +428,6 @@ fun color-for-kind(k: kind)
   else Nothing
 
 fun wrap-kind(d: doc, k: kind)
-  if ppEnv.showKinds && k != kindStar then
+  if pp-env.showKinds && k != kindStar then
     parens(d.color(colors.colorType) |+| "::".text |+| k.pp-kind(kind/pretty/precTop)).color(colors.colorKind)
   else d

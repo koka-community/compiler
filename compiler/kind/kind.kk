@@ -4,7 +4,7 @@ import std/core/undiv
 // Updated 7/12/25; Commit #752748d
 
 type kind
-  KCon(constant: kindCon) // Kind constants: "*","->","!","H","P"
+  KCon(constant: kind-con) // Kind constants: "*","->","!","H","P"
   KApp(a: kind, b: kind) // Application (only allowed for functions as yet)
 
 fun kind/(==)(a: kind, b: kind): bool
@@ -22,7 +22,7 @@ fun kind/show(k: kind): string
     KApp(a, b) -> show(a) ++ " " ++ show(b)
 
 // Kind constant
-alias kindCon = name
+alias kind-con = name
 
 pub fun kind/has-kind-star-result(k: kind): bool
   k.extract-kind-fun.snd == kindStar

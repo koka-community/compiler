@@ -9,18 +9,20 @@ import compiler/platform/config
 import std/data/linearmap
 import std/data/sort
 
-alias kGamma = qname-map<typeNameInfo>;
+alias kGamma = qname-map<type-name-info>;
 
-struct typeNameInfo
-  kind: kind 
-  doc: string;
+type type-name-info
+  TypeNameInfo(
+    kind: kind,
+    doc: string
+  )
 
 effect kGammaEff
   fun kgamma-extend(name: name, k: kind, d: string): ()
   fun kgamma-lookup(ctxt: name, name: name): lookup<(kind,string)>
-  fun kgamma-lookupQ(name: name): maybe<typeNameInfo>
+  fun kgamma-lookupQ(name: name): maybe<type-name-info>
   fun kgamma-find(ctxt: name, name: name): (name, kind, string)
-  fun kgamma-list(): list<(name, list<(name, typeNameInfo)>)>
+  fun kgamma-list(): list<(name, list<(name, type-name-info)>)>
   fun kgamma-filter(modName: name): kGamma
 
 fun withKGamma(kg0: kGamma, f: () -> <kGammaEff,exn,comp-flags|e> a): <exn,comp-flags|e> a
@@ -52,14 +54,14 @@ fun kgamma/filter(kg: kGamma, modName: name)
 val kgamma/empty:kGamma = LinearMap([])
 
 fun core/extract-typedefs(c: core): <exn,comp-flags> kGamma
-  c.typeDefs.map(extract-typedefs).qname-map/unions
+  c.typedefs.map(extract-typedefs).qname-map/unions
 
-fun tdg/extract-typedefs(g: typeDefGroup): <exn,comp-flags> kGamma
+fun tdg/extract-typedefs(g: typedef-group): <exn,comp-flags> kGamma
   g.map(extract-typedefs).qname-map/unions
 
-fun td/extract-typedefs(d: typeDef): kGamma
+fun td/extract-typedefs(d: typedef): kGamma
   match d
-    Synonym(synInfo) | synInfo.vis.is-public -> single(synInfo.name, TypeNameInfo(synInfo.kind, synInfo.doc))
+    Synonym(syn-info) | syn-info.vis.is-public -> single(syn-info.name, TypeNameInfo(syn-info.kind, syn-info.doc))
     Data(dataInfo) | dataInfo.vis.is-public && !dataInfo.is-extend -> single(dataInfo.name, TypeNameInfo(dataInfo.kind, dataInfo.doc))
     _ -> kgamma/empty
 

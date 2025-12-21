@@ -9,9 +9,9 @@ import std/data/linearmap
 
 // Map names to their borrowing info. If a name does not use borrowing
 // it may not be in here.
-alias borrowed = name-map<list<paramInfo>>
+alias borrowed = name-map<list<param-info>>
 
-alias borrowDef = (name, list<paramInfo>)
+alias borrowDef = (name, list<param-info>)
 
 // The initial borrowed
 val empty:borrowed = LinearMap([])
@@ -29,7 +29,7 @@ fun core/extend(c: core, b0: borrowed): borrowed
   b0.extend(c.defs.extract-borrow).extend(c.externals.extract-borrow)
 
 // Get borrow information from core
-fun dgs/extract-borrow(dgs: defGroups)
+fun dgs/extract-borrow(dgs: def-groups)
   dgs.map(extract-borrow).concat
 
 fun externs/extract-borrow(exs: externals)
@@ -41,7 +41,7 @@ fun ext/extract-borrow(ex: external)
       if params.any(_ == Borrow) then Just((nm, params)) else Nothing
     _ -> Nothing
 
-fun dg/extract-borrow(dg: defGroup)
+fun dg/extract-borrow(dg: def-group)
   match dg
     DefRec(defs) -> defs.map(_.extract-borrow(True)).concat-maybe
     DefNonRec(d) -> d.extract-borrow(False).map(fn(d') [d']).default([])

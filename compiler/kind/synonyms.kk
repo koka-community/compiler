@@ -7,22 +7,22 @@ import compiler/common/failure
 import compiler/platform/config
 import std/data/linearmap
 
-alias synonyms = name-map<synInfo>
-effect synonymsEff
-  fun synonyms-extend(newtp: synInfo): ()
-  fun synonyms-lookup(name: name): maybe<synInfo>
-  fun synonyms-find(name: name): synInfo
-  fun synonyms-list(): list<(name, synInfo)>
+alias synonyms = name-map<syn-info>
+effect synonyms-eff
+  fun synonyms-extend(newtp: syn-info): ()
+  fun synonyms-lookup(name: name): maybe<syn-info>
+  fun synonyms-find(name: name): syn-info
+  fun synonyms-list(): list<(name, syn-info)>
   fun synonyms-filter(modName: name): synonyms
   fun get-synonyms(): synonyms
   fun set-synonyms(syns: synonyms): ()
 
-fun withSynonyms(synonyms0: synonyms, f: () -> <synonymsEff,pure,comp-flags|e> a): <pure,comp-flags|e> a
+fun withSynonyms(synonyms0: synonyms, f: () -> <synonyms-eff,pure,comp-flags|e> a): <pure,comp-flags|e> a
   var synonyms := synonyms0
   with handler
     fun get-synonyms() synonyms
     fun set-synonyms(syns: synonyms) synonyms := syns
-    fun synonyms-extend(k: synInfo)
+    fun synonyms-extend(k: syn-info)
       synonyms := synonyms.extend(k)
     fun synonyms-lookup(name: name)
       synonyms.lookup(name)
@@ -35,9 +35,9 @@ fun withSynonyms(synonyms0: synonyms, f: () -> <synonymsEff,pure,comp-flags|e> a
       // TODO: Should this modify the synonyms?
   f()
 
-fun new(ls: list<synInfo>)
+fun new(ls: list<syn-info>)
   LinearMap(ls.map(fn(si) (si.name, si)))
-fun extend(synonyms: synonyms, k: synInfo)
+fun extend(synonyms: synonyms, k: syn-info)
   synonyms.set(k.name, k)
 // fun lookup(synonyms: synonyms, name: name)
 //   synonyms.map/lookup(name)
@@ -53,19 +53,19 @@ fun synonyms/filter(synonyms: synonyms, modName: name)
 fun compose(syns1: synonyms, syns2: synonyms)
   unions([syns2, syns1])
 
-fun single(name: name, s: synInfo): synonyms
+fun single(name: name, s: syn-info): synonyms
   LinearMap([(name, s)])
 val empty:synonyms = LinearMap([])
 
 fun core/extract-synonyms(c: core): <pure,comp-flags> synonyms
-  c.typeDefs.map(extract-synonyms).unions
+  c.typedefs.map(extract-synonyms).unions
 
-fun tdg/extract-synonyms(g: typeDefGroup): <pure,comp-flags> synonyms
+fun tdg/extract-synonyms(g: typedef-group): <pure,comp-flags> synonyms
   g.map(extract-synonyms).unions
 
-fun td/extract-synonyms(d: typeDef): <pure,comp-flags> synonyms
+fun td/extract-synonyms(d: typedef): <pure,comp-flags> synonyms
   match d
-    Synonym(synInfo) -> single(synInfo.name, synInfo)
+    Synonym(syn-info) -> single(syn-info.name, syn-info)
     _ -> empty
 
 // TODO: Pretty print

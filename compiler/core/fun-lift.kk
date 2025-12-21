@@ -19,15 +19,14 @@ fun lift-functions()
   with handle-fun-lift()
   set-core-defs(lift-def-groups(get-core-defs(), True))
 
-effect funLiftEffect
-  fun emit-lifted(dg: defGroup): ()
-  fun emit-lifteds(dgs: defGroups): ()
-  fun collect-lifted(): defGroups
+effect fun-lift-eff
+  fun emit-lifted(dg: def-group): ()
+  fun emit-lifteds(dgs: def-groups): ()
+  fun collect-lifted(): def-groups
 
-effect currentDefEffect
-  val currentDef: list<def>
+effect val currentDef: list<def>
 
-alias liftDefEff = <funLiftEffect, currentDefEffect, pure, unique, comp-flags>
+alias liftDefEff = <fun-lift-eff, currentDef, pure, unique, comp-flags>
 
 fun current-def-names()
   currentDef.map(def-name)
@@ -51,7 +50,7 @@ fun handle-fun-lift(f)
   f()
 
 // Transform definition groups
-fun lift-def-groups(defgs: defGroups, topLevel: bool): liftDefEff defGroups
+fun lift-def-groups(defgs: def-groups, topLevel: bool): liftDefEff def-groups
   defgs.map(_.lift-defgroup(topLevel)).concat
 
 fun subst-with-lifted-expr(d: def, subst)
@@ -66,7 +65,7 @@ fun subst-with-lifted-expr(d: def, subst)
   // and we have ensured that fvs/pars and tvs/tpars are always unique (see type/infer)
   d(defExpr = body)
 
-fun lift-defgroup(defg: defGroup, topLevel: bool)
+fun lift-defgroup(defg: def-group, topLevel: bool)
   if topLevel then
     match defg
       DefNonRec(d) ->
@@ -87,7 +86,7 @@ fun lift-defgroup(defg: defGroup, topLevel: bool)
     match defg
       DefNonRec(d) -> [DefNonRec(d.lift-def(False))]
       DefRec(defs) ->
-        val pinfoss = defs.map(paramInfos)
+        val pinfoss = defs.map(param-infos)
         val exprDocs = defs.map(fn(d) (d.defExpr, d.doc))
         val exprs = defs.map(defExpr)
         val names = defs.map(defTName)
@@ -106,7 +105,7 @@ fun lift-def(d: def, topLevel: bool)
   val expr' = d.defExpr.lift-expr(topLevel)
   d(defExpr=expr', sort=d.sort.lift-sort(topLevel))
 
-fun lift-sort(s: defSort, b: bool)
+fun lift-sort(s: def-sort, b: bool)
   match (s, b)
     (DefFun, False) -> DefVal
     _ -> s
@@ -118,18 +117,18 @@ fun lift-expr(ex: expr, topLevel: bool)
       Lam(args, eff, body.lift-expr(False))
     Let(defgs, body) ->
       Let(defgs.lift-def-groups(False), body.lift-expr(False))
-    Case(exprs, bs) -> Case(exprs.map(_.lift-expr(False)), bs.map(liftBranch))
+    Case(exprs, bs) -> Case(exprs.map(_.lift-expr(False)), bs.map(lift-branch))
     TypeLam(tvars, body) -> TypeLam(tvars, body.lift-expr(topLevel))
     TypeApp(body, targs) -> TypeApp(body.lift-expr(topLevel), targs)
     _ -> ex
 
-fun liftBranch(Branch(pat, guards): branch)
-  Branch(pat, guards.map(liftGuard))
+fun lift-branch(Branch(pat, guards): branch)
+  Branch(pat, guards.map(lift-guard))
 
-fun liftGuard(Guard(test, expr): guard)
+fun lift-guard(Guard(test, expr): guard)
   Guard(test.lift-expr(False), expr.lift-expr(False))
 
-fun make-def(fvs: list<tName>, tvs: list<typeVar>, pinfos: list<paramInfo>, origName: tName, (expr, doc): (expr, string))
+fun make-def(fvs: list<tName>, tvs: list<type-var>, pinfos: list<param-info>, origName: tName, (expr, doc): (expr, string))
   val dnames = current-def-names()
   val (name, inl) = unique-name-current-def()
   fun unwild(TName(nm, tp): tName)
@@ -160,24 +159,24 @@ fun unique-name-current-def()
 // Don't lift a simple function. A function is simple if it's body is simply an
 // application consisting of simple arguments.
 // More general than eta-expanded expressions.
-fun isSimpleFun(ex: expr)
+fun is-simple-fun(ex: expr)
   // The definition of simple arguments can be extended.
-  fun isSimpleTArg(t: ktype)
+  fun is-simple-targ(t: ktype)
     match t
       TCon -> True
       TVar -> True
-      TApp(ty, tys) -> isSimpleTArg(ty) && tys.all(isSimpleTArg)
+      TApp(ty, tys) -> is-simple-targ(ty) && tys.all(is-simple-targ)
       _ -> False
-  fun isSimpleArg(a: expr)
+  fun is-simple-arg(a: expr)
     match a
       Con -> True
       ELit -> True
       Var -> True
-      App(e, es) -> isSimpleArg(e) && es.all(isSimpleArg)
+      App(e, es) -> is-simple-arg(e) && es.all(is-simple-arg)
       _ -> False
   match ex
-    Lam(_, _, App(_, args)) -> args.all(isSimpleArg)
+    Lam(_, _, App(_, args)) -> args.all(is-simple-arg)
     TypeLam(_, Lam(_, _, App(TypeApp(_, targs), args))) ->
-      targs.all(isSimpleTArg) && args.all(isSimpleArg)
-    TypeLam(_, Lam(_, _, App(_, args))) -> args.all(isSimpleArg)
+      targs.all(is-simple-targ) && args.all(is-simple-arg)
+    TypeLam(_, Lam(_, _, App(_, args))) -> args.all(is-simple-arg)
   

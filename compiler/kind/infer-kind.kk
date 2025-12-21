@@ -14,41 +14,41 @@ import std/data/linearset
 
 pub infixr 5 (|->)
 // Inference Kind: These kinds contain meta kind variables
-type infKind
+type inf-kind
   KIVar(kid: id)
   KICon(k: kind)
-  KIApp(k1: infKind, k2: infKind)
+  KIApp(k1: inf-kind, k2: inf-kind)
 
-fun (==)(k1: infKind, k2: infKind): div bool
+fun (==)(k1: inf-kind, k2: inf-kind): div bool
   match (k1, k2)
     (KIVar(kid1), KIVar(kid2)) -> kid1 == kid2
     (KICon(k1), KICon(k2)) -> k1 == k2
     (KIApp(k11, k12), KIApp(k21, k22)) -> k11 == k21 && k12 == k22
     _ -> False
 
-alias infKGamma = linearMap<name, infKind>
+alias inf-kgamma = linearMap<name, inf-kind>
 
 val infKindStar = KICon(kindStar)
 val infKindHandled = KICon(kindHandled)
 val infKindLabel = KICon(kindLabel)
-fun inf-kind-fun(k1: infKind, k2: infKind)
+fun inf-kind-fun(k1: inf-kind, k2: inf-kind)
   KIApp(KIApp(KICon(kindArrow), k1), k2)
 
-fun inf-kind-funN(kinds: list<infKind>, k: infKind)
+fun inf-kind-funN(kinds: list<inf-kind>, k: inf-kind)
   kinds.foldr(k, inf-kind-fun)
 
-fun is-infkind-scope(infk: infKind)
+fun is-infkind-scope(infk: inf-kind)
   match infk
     KICon(k) -> k == kindScope
     _ -> False
 
-fun is-infkind-label(infk: infKind)
+fun is-infkind-label(infk: inf-kind)
   match infk
     KICon(k) -> k == kindLabel
     _ -> False
 
 // Lift KApp nodes to KIApp
-fun lift-kapp(infkind: infKind)
+fun lift-kapp(infkind: inf-kind)
   match infkind
     KIVar -> infkind
     KIApp(k1, k2) -> KIApp(k1.lift-kapp, k2.lift-kapp)
@@ -56,7 +56,7 @@ fun lift-kapp(infkind: infKind)
     KICon(KApp(k1, k2)) -> KIApp(KICon(k1).lift-kapp, KICon(k2).lift-kapp)
 
 // extract arguments
-fun inf-extract-kind-fun(infkind: infKind)
+fun inf-extract-kind-fun(infkind: inf-kind)
   fun inj(k1, (ks, _))
     (Cons(k1, ks), k1)
   match infkind
@@ -65,23 +65,23 @@ fun inf-extract-kind-fun(infkind: infKind)
     KICon(KApp(KApp(ka, k1), k2)) | ka == kindArrow -> KICon(k1).inj(KICon(k2).inf-extract-kind-fun) 
     _ -> ([], infkind)
 
-fun is-infkind-handled(ikind: infKind): div bool
+fun is-infkind-handled(ikind: inf-kind): div bool
   match ikind.inf-extract-kind-fun
     ([KICon(k1), KICon(k2)], KICon(k3)) -> is-kind-handled(kind-fun(k1, kind-fun(k2, k3)))
     _ -> False
 
 // Substitution
-alias ksub = id-map<infKind>
+alias ksub = id-map<inf-kind>
 val ksubEmpty = LinearMap([])
 alias kvs = id-set
 
-fun ksub-single(id: id, infkind: infKind): ksub
+fun ksub-single(id: id, infkind: inf-kind): ksub
   LinearMap([(id, infkind)])
 
 fun compose(sub1: ksub, sub2: ksub): ksub
   sub1.union(sub1 |-> sub2)
 
-fun inf/(|->)(sub: ksub, k: infKind): infKind
+fun inf/(|->)(sub: ksub, k: inf-kind): inf-kind
   match k
     KIVar(kid) -> sub.lookup(kid).default(k)
     KIApp(k1, k2) -> KIApp(sub |-> k1, sub |-> k2)
@@ -93,29 +93,29 @@ fun sub/(|->)(sub1: ksub, sub2: ksub): ksub
 fun sub/fkv(sub: ksub): pure kvs
   sub.list.map(fn((_, s)) s.fkv).unions
 
-fun inf/fkv(k: infKind): kvs
+fun inf/fkv(k: inf-kind): kvs
   match k
     KIVar(kid) -> LinearSet([]) + kid
     KIApp(k1, k2) -> k1.fkv.union(k2.fkv)
     KICon(_) -> LinearSet([])
 
 // Pretty printing
-fun infkind/show(infkind: infKind): <comp-flags,pure,colorSchemeEffect> string
+fun infkind/show(infkind: inf-kind): <comp-flags,pure,colors> string
   with nice-kind-env()
   infkind.fkv.list.foreach(extend-nice)
   infkind.pp-infkind(precInfKindTop).pprint/show
 
-fun nice-infkinds(kinds: list<infKind>): <pure,comp-flags,colorSchemeEffect> list<doc>
+fun nice-infkinds(kinds: list<inf-kind>): <pure,comp-flags,colors> list<doc>
   with nice-kind-env()
   kinds.map(fkv).unions.list.map(extend-nice)
   kinds.map(_.lift-kapp.pp-infkind(precInfKindTop))
 
-fun pp-infkind(k: infKind, prec: int): <pure, niceEff<id>, comp-flags, colorSchemeEffect> doc
-  fun collect-funargs(ik: infKind)
+fun pp-infkind(k: inf-kind, prec: int): <pure, nice-eff<id>, comp-flags, colors> doc
+  fun collect-funargs(ik: inf-kind)
     match ik
       KIApp(KIApp(KICon(KCon(nm)), k1), k2) | nm == "->".new-name -> Cons(k1, k2.collect-funargs)
       _ -> [ik]
-  fun collect-args(ik: infKind)
+  fun collect-args(ik: inf-kind)
     match ik
       KIApp(k1, k2) -> k1.collect-args ++ [k2]
       _ -> [ik]
@@ -134,7 +134,7 @@ fun pp-infkind(k: infKind, prec: int): <pure, niceEff<id>, comp-flags, colorSche
         _ -> throw("kind/inferKind KIApp")
       doc.pparens(prec, precInfKindApp)
 
-fun nice-kind-env(f: () -> <niceEff<id>|e> a): e a
+fun nice-kind-env(f: () -> <nice-eff<id>|e> a): e a
   var nice := LinearMap([])
   var kindIndex := -1
   with handler

@@ -104,21 +104,21 @@ fun make-drop-special(y: tName, xUnique: expr, xShared: expr, xDecRef: expr)
 struct core
   coreName: name
   imports: kimports = []
-  fixDefs: fixDefs = []
-  typeDefs: typeDefGroups = []
-  defs: defGroups = []
+  fix-defs: fix-defs = []
+  typedefs: typedef-groups = []
+  defs: def-groups = []
   externals: externals = []
   doc: string = ""
 
 fun core/show(c: core): div string
-  "Core(" ++ c.coreName.name/name/show ++ "," ++ c.imports.show-list(show) ++ "," ++ c.fixDefs.show-list(show) ++ 
-  "," ++ c.typeDefs.show-list(fn(g) g.show-list(show)) ++ "," ++ c.defs.show-list(show) ++ "," ++ c.externals.show-list(show) ++ "," ++ c.doc.show ++ ")"
+  "Core(" ++ c.coreName.name/name/show ++ "," ++ c.imports.show-list(show) ++ "," ++ c.fix-defs.show-list(show) ++ 
+  "," ++ c.typedefs.show-list(fn(g) g.show-list(show)) ++ "," ++ c.defs.show-list(show) ++ "," ++ c.externals.show-list(show) ++ "," ++ c.doc.show ++ ")"
 
-alias fixDefs = list<fixDef>;
-value type fixDef
+alias fix-defs = list<fix-def>;
+value type fix-def
   FixDef(def-name: name, f: fixity);
 
-fun fixd/show(f: fixDef): string
+fun fixd/show(f: fix-def): string
   match f
     FixDef(def-name, f') -> "FixDef(" ++ def-name.name/name/show ++ "," ++ show(f') ++ ")"
 
@@ -137,7 +137,7 @@ type external
   External
     externName: name
     typeScheme: ktype //scheme
-    params: list<paramInfo>
+    params: list<param-info>
     format: list<(target, string)>
     visibility: visibility
     fipT: fipT
@@ -190,39 +190,39 @@ pub fun lookup-target(t: target, ims: list<(target, a)>): maybe<a>
     Cons(Just(x)) -> Just(x)
     _ -> Nothing
 
-type typeDef
-  Synonym(i: synInfo) // name, synonym info, and the visibility
-  Data(info: dataInfo) //  name, info, visibility, and the visibilities of the constructors, the isExtend is true if this is an extension of the datatype.
+type typedef
+  Synonym(i: syn-info) // name, synonym info, and the visibility
+  Data(info: data-info) //  name, info, visibility, and the visibilities of the constructors, the isExtend is true if this is an extension of the datatype.
 
-fun td/show(t: typeDef): string
+fun td/show(t: typedef): string
   match t
     Synonym(i) -> "Synonym(" ++ i.show ++ ")"
     Data(i) -> "Data(" ++ i.show ++ ")"
 
-alias typeDefGroups = list<typeDefGroup>
-alias typeDefGroup = typeDefs
-alias typeDefs = list<typeDef>
+alias typedef-groups = list<typedef-group>
+alias typedef-group = typedefs
+alias typedefs = list<typedef>
 
-pub fun td/name(t: typeDef): name
+pub fun td/name(t: typedef): name
   match t
     Synonym(info) -> info.name
     Data(info) -> info.name
 
-pub fun td/is-extension(t: typeDef): bool
+pub fun td/is-extension(t: typedef): bool
   match t
     Data(d) -> d.is-extend
     _ -> False
 
-pub fun td/vis(t: typeDef): visibility
+pub fun td/vis(t: typedef): visibility
   match t
     Synonym(info) -> vis(info)
     Data(info) -> vis(info)
 
-fun tdgs/flatten(tdgs:list<typeDefGroup>): list<typeDef>
+fun tdgs/flatten(tdgs:list<typedef-group>): list<typedef>
   tdgs.concat()
 
 // Data representation
-value type dataRepr
+value type data-repr
   DataEnum // only singletons (as an enumeration)
   DataIso // only one constructor with one field  (isomorpic)
   DataSingleStruct // only one constructor (no tag needed)
@@ -236,7 +236,7 @@ value type dataRepr
   DataNormal(hasSingletons: bool)
   DataOpen;
 
-fun isDataStructOrLess(d: dataRepr): bool
+fun isDataStructOrLess(d: data-repr): bool
   match d
     DataEnum -> True
     DataIso -> True
@@ -245,7 +245,7 @@ fun isDataStructOrLess(d: dataRepr): bool
     DataStruct -> True
     _ -> False
 
-fun show(d: dataRepr): string
+fun show(d: data-repr): string
   match d
     DataEnum -> "DataEnum"
     DataIso -> "DataIso"
@@ -259,18 +259,17 @@ fun show(d: dataRepr): string
     DataNormal(b) -> "DataNormal(" ++ b.show ++ ")"
     DataOpen -> "DataOpen"
 
-type conRepr
-  ConEnum(n: name, repr: dataRepr, vrepr: valueRepr, tag: int) // part of enumeration (none has fields)
-  ConIso(n: name, repr: dataRepr, vrepr: valueRepr, tag: int) // one constructor with one field
-  ConSingleton(n: name, repr: dataRepr, vrepr: valueRepr, tag: int) // constructor without fields (and not part of an enum)
-  ConSingle(n: name, repr: dataRepr, vrepr: valueRepr, ctxPath: ctxPath, tag: int) // there is only one constructor and it is not iso or singleton (and this is it)
-  ConAsJust(n: name, repr: dataRepr, vrepr: valueRepr, asNothing: name, tag: int) // constructor is the just node of a maybe-like datatype  (only use for DataAsMaybe, not for DataStructAsMaybe)
-  ConStruct(n: name, repr: dataRepr, vrepr: valueRepr, tag: int) // constructor as value type
-  ConAsCons(n: name, repr: dataRepr, vrepr: valueRepr, asNil: name, ctxPath: ctxPath, tag: int) // constructor is the cons node of a list-like datatype  (may have one or more fields)
-  ConOpen(n: name, repr: dataRepr, vrepr: valueRepr, ctxPath: ctxPath) // constructor of open data type
-  ConNormal(n: name, repr: dataRepr, vrepr: valueRepr, ctxPath: ctxPath, tag: int); // a regular constructor
-
-fun tag(c: conRepr): exn int
+type con-repr
+  ConEnum(n: name, repr: data-repr, vrepr: value-repr, tag: int) // part of enumeration (none has fields)
+  ConIso(n: name, repr: data-repr, vrepr: value-repr, tag: int) // one constructor with one field
+  ConSingleton(n: name, repr: data-repr, vrepr: value-repr, tag: int) // constructor without fields (and not part of an enum)
+  ConSingle(n: name, repr: data-repr, vrepr: value-repr, ctxPath: ctx-path, tag: int) // there is only one constructor and it is not iso or singleton (and this is it)
+  ConAsJust(n: name, repr: data-repr, vrepr: value-repr, asNothing: name, tag: int) // constructor is the just node of a maybe-like datatype  (only use for DataAsMaybe, not for DataStructAsMaybe)
+  ConStruct(n: name, repr: data-repr, vrepr: value-repr, tag: int) // constructor as value type
+  ConAsCons(n: name, repr: data-repr, vrepr: value-repr, asNil: name, ctxPath: ctx-path, tag: int) // constructor is the cons node of a list-like datatype  (may have one or more fields)
+  ConOpen(n: name, repr: data-repr, vrepr: value-repr, ctxPath: ctx-path) // constructor of open data type
+  ConNormal(n: name, repr: data-repr, vrepr: value-repr, ctxPath: ctx-path, tag: int); // a regular constructor
+fun tag(c: con-repr): exn int
   match c
     ConEnum(tag=tag) -> tag
     ConIso(tag=tag) -> tag
@@ -282,7 +281,7 @@ fun tag(c: conRepr): exn int
     ConOpen(_) -> throw("core/core: tag: open constructor")
     ConNormal(tag=tag) -> tag
 
-fun update-ctx-path(c: conRepr, cp: ctxPath)
+fun update-ctx-path(c: con-repr, cp: ctx-path)
   match c
     ConSingle(n, r, v, _, t) -> ConSingle(n, r, v, cp, t)
     ConAsCons(n, r, v, a, _, t) -> ConAsCons(n, r, v, a, cp, t)
@@ -290,7 +289,7 @@ fun update-ctx-path(c: conRepr, cp: ctxPath)
     ConNormal(n, r, v, _, t) -> ConNormal(n, r, v, cp, t)
     _ -> throw("core/core: update-ctx-path: not a constructor with a path")
 
-fun conRepr/show(r: conRepr): string
+fun con-repr/show(r: con-repr): string
   match r
     ConEnum(n, drepr, vrepr, tag) -> "ConEnum(" ++ n.name/name/show ++ "," ++ show(drepr) ++ "," ++ show(vrepr) ++ "," ++ tag.int/show ++ ")"
     ConIso(n, drepr, vrepr, tag) -> "ConIso(" ++ n.name/name/show ++ "," ++ show(drepr) ++ "," ++ show(vrepr) ++ "," ++ tag.int/show ++ ")"
@@ -302,20 +301,20 @@ fun conRepr/show(r: conRepr): string
     ConOpen(n, drepr, vrepr, ctxPath) -> "ConOpen(" ++ n.name/name/show ++ "," ++ show(drepr) ++ "," ++ show(vrepr) ++ "," ++ show(ctxPath) ++ ")"
     ConNormal(n, drepr, vrepr, ctxPath, tag) -> "ConNormal(" ++ n.name/name/show ++ "," ++ show(drepr) ++ "," ++ show(vrepr) ++ "," ++ show(ctxPath) ++ "," ++ tag.int/show ++ ")"
 
-type ctxPath
+type ctx-path
   CtxNone
   CtxField(name: tName)
 
-fun ctxPath/show(p: ctxPath): string
+fun ctxPath/show(p: ctx-path): string
   match p
     CtxNone -> "CtxNone"
     CtxField(name) -> "CtxField(" ++ name.show ++ ")"
 
 // Value data is not heap allocated and needs no header
-fun has-ctx-path(repr: conRepr): bool
+fun has-ctx-path(repr: con-repr): bool
   repr.ctx-path.is-just
 
-fun ctx-path(repr: conRepr): maybe<ctxPath>
+fun ctx-path(repr: con-repr): maybe<ctx-path>
   if repr.is-value then Nothing 
   else match repr
     ConSingle(ctxPath=cpath) -> Just(cpath)
@@ -324,17 +323,17 @@ fun ctx-path(repr: conRepr): maybe<ctxPath>
     ConOpen(ctxPath=cpath) -> Just(cpath)
     _ -> Nothing
 
-fun scan-count(repr: conRepr)
+fun scan-count(repr: con-repr)
   scan-count(repr.vrepr)
 
-fun alloc-size(c: conRepr, p: platform)
+fun alloc-size(c: con-repr, p: platform)
   c.alloc-size-scan(p).fst
 
-fun alloc-size-scan(c: conRepr, p: platform): (int, int)
+fun alloc-size-scan(c: con-repr, p: platform): (int, int)
   val (sz, sc) = p.scan-size(c.vrepr)
   if c.is-value then (0, sc) else (sz, sc)
 
-fun dataRepr/is-value(d: dataRepr): bool
+fun dataRepr/is-value(d: data-repr): bool
   match d
     DataEnum -> True
     DataIso -> True
@@ -343,25 +342,25 @@ fun dataRepr/is-value(d: dataRepr): bool
     DataStruct -> True
     _ -> False
 
-fun needsTagField(d: dataRepr): bool
+fun needsTagField(d: data-repr): bool
   match d
     DataStruct -> True
     DataStructAsMaybe -> True
     _ -> False
 
-fun con/is-value(c: conRepr): bool
+fun con/is-value(c: con-repr): bool
   c.repr.is-value
 
-fun data/is-value(d: dataInfo): bool
+fun data/is-value(d: data-info): bool
   d.def.is-value
 
-fun con-repr(d: dataInfo, c: conInfo)
+fun con-repr(d: data-info, c: con-info)
   val (_, creprs) = d.data-repr(is-value)
   match d.constrs.zip(creprs).filter(fn((a, _)) a.name == c.name).map(snd)
     [crepr] -> crepr
     _ -> throw("core/core: conRepr: constructor not in the datatype")
 
-fun data-repr(i: dataInfo, is-val: (dataInfo) -> bool): exn (dataRepr, list<conRepr>)
+fun data-repr(i: data-info, is-val: (data-info) -> bool): exn (data-repr, list<con-repr>)
   val typeName = i.name
   val conInfos = i.constrs
   val tags = list(0, conInfos.length - 1)
@@ -401,29 +400,29 @@ fun data-repr(i: dataInfo, is-val: (dataInfo) -> bool): exn (dataRepr, list<conR
 
 
 // Definition Groups
-alias defGroups = list<defGroup>
+alias def-groups = list<def-group>
 
-fun dgs/flatten(dgs: list<defGroup>): list<def>
+fun dgs/flatten(dgs: list<def-group>): list<def>
   dgs.map(fn(d) match d {DefRec(dfs) -> dfs; DefNonRec(d) -> [d]}).concat()
 
-fun list/flatten(dgs: list<defGroups>): list<def>
+fun list/flatten(dgs: list<def-groups>): list<def>
   dgs.map(flatten).concat()
 
-fun dg/flatten(dg: defGroup): list<def>
+fun dg/flatten(dg: def-group): list<def>
   match dg
     DefRec(defs) -> defs 
     DefNonRec(d) -> [d]
 
-fun dg/map(dg: defGroup, f: (def) -> e def): e defGroup
+fun dg/map(dg: def-group, f: (def) -> e def): e def-group
   match dg
     DefRec(defs) -> DefRec(defs.map(f))
     DefNonRec(d) -> DefNonRec(f(d))
 
-type defGroup
+type def-group
   DefRec(defs: list<def>)
   DefNonRec(d: def)
 
-fun dg/show(d: defGroup): div string
+fun dg/show(d: def-group): div string
   match d
     DefRec(defs) -> "DefRec(" ++ defs.show-list(show) ++ ")"
     DefNonRec(d') -> "DefNonRec(" ++ d'.show ++ ")"
@@ -434,8 +433,8 @@ struct def
   ktype: ktype
   defExpr: expr
   vis: visibility // private public
-  sort: defSort // fun / val / var
-  kinline: defInline // auto / always, never
+  sort: def-sort // fun / val / var
+  kinline: def-inline // auto / always, never
   nameRange: range
   doc: string;
 
@@ -443,36 +442,38 @@ fun def/show(d: def): div string
   "Def(" ++ d.def-name.name/name/show ++ "," ++ d.ktype.show ++ "," ++ d.defExpr.show ++ "," ++ d.vis.show ++ "," ++
   d.sort.show ++ "," ++ d.kinline.show ++ "," ++ d.nameRange.show ++ "," ++ d.doc.show ++ ")"
 
-struct inlineDef
-  def-name: name
-  expr: expr
-  is-rec: bool
-  kind: defInline
-  cost: int
-  sort: defSort // for borrow information
-  paramSpecialize: list<bool>
+type inline-def
+  InlineDef(
+    def-name: name,
+    expr: expr,
+    is-rec: bool,
+    kind: def-inline,
+    cost: int,
+    sort: def-sort, // for borrow information
+    paramSpecialize: list<bool>
+  )
 
-fun idef/(==)(inl1: inlineDef, inl2: inlineDef): bool
+fun idef/(==)(inl1: inline-def, inl2: inline-def): bool
   name/(==)(inl1.def-name, inl2.def-name)
 
-fun idef/show(inl: inlineDef): div string
+fun idef/show(inl: inline-def): div string
   "InlineDef(" ++ inl.def-name.name/name/show ++ "," ++ inl.expr.show ++ "," ++ inl.is-rec.show ++ "," ++ inl.kind.show ++ "," ++ inl.cost.int/show ++ "," ++ inl.sort.show ++ "," ++ inl.paramSpecialize.show-list(show) ++ ")"
 
 fun def/is-val(d: def): bool
   !d.sort.is-defFun
 
-fun paramInfos(d: def)
+fun param-infos(d: def)
   match d.sort
     DefFun(i) -> i
     _ -> Nil
 
-fun isSpecialize(inl: inlineDef)
+fun isSpecialize(inl: inline-def)
   inl.paramSpecialize.is-cons
 
 
-effect corePhase
-  fun get-core-defs(): defGroups
-  fun set-core-defs(dgs: defGroups): ()
+effect core-phase
+  fun get-core-defs(): def-groups
+  fun set-core-defs(dgs: def-groups): ()
   fun phaseError(s: string): a
 
 // Expressions
@@ -480,15 +481,15 @@ effect corePhase
 type expr
   // Core lambda calculus
   Lam(names: list<tName>, eff: ktype, e: expr)
-  Var(n: tName, info: varInfo) // typed name and possible type-arity/parameter arity tuple for top-level functions
+  Var(n: tName, info: var-info) // typed name and possible type-arity/parameter arity tuple for top-level functions
   App(f: expr, args: list<expr>) // always fully applied!
-  TypeLam(args: list<typeVar>, e: expr) // Type (universal) abstraction/application
+  TypeLam(args: list<type-var>, e: expr) // Type (universal) abstraction/application
   TypeApp(f: expr, types: list<ktype>)
   // Literals, constants and labels
-  Con(n: tName, repr: conRepr) // typed name and its representation
+  Con(n: tName, repr: con-repr) // typed name and its representation
   ELit(lit: lit)
   // Let
-  Let(defs: list<defGroup>, e: expr)
+  Let(defs: list<def-group>, e: expr)
   // Case expressions
   Case(exprs: list<expr>, branches: list<branch>);
 
@@ -522,11 +523,11 @@ type pattern
   PatCon
     patName: tName // names the constructor with full signature.
     pattern: list<pattern> // sub-patterns. fully materialized to match arity.
-    repr: conRepr // representation of ctor in backend.
+    repr: con-repr // representation of ctor in backend.
     typeArgs: list<ktype> // zipped with patConPatterns
-    kexists: list<typeVar> // closed under existentials here
+    kexists: list<type-var> // closed under existentials here
     typeRes: ktype // result type
-    info: conInfo // other constructor info
+    info: con-info // other constructor info
     skip: bool // skip testing for this constructor (as it should match already)
   PatVar(varName: tName, pattern: pattern) // name / type of variable and named subpattern
   PatLit(lit: lit)
@@ -562,12 +563,12 @@ fun lit/show(l: lit): string
     LitChar(c) -> "LitChar(" ++ c.show ++ ")"
     LitString(s) -> "LitString(" ++ s.show ++ ")"
 
-type varInfo
+type var-info
   InfoNone
   InfoArity(t: int, p: int) // type parameters, parameters
   InfoExternal(b: list<(target, string)>) // inline body
   InfoReuse(p: pattern) 
-  InfoConField(cName: tName, repr: conRepr, fName: tName) // constructor name, field name
+  InfoConField(cName: tName, repr: con-repr, fName: tName) // constructor name, field name
 
 value struct tName
   get-name: name
@@ -585,15 +586,15 @@ fun defTName(d: def): tName
 fun defsTNames(defs: list<def>): list<tName>
   defs.map(defTName)
 
-fun defGroupTNames(dg: defGroup): list<tName>
+fun def-groupTNames(dg: def-group): list<tName>
   match dg
     DefRec(defs) -> defsTNames(defs)
     DefNonRec(d) -> [defTName(d)]
 
-fun defGroupsTNames(dgs: list<defGroup>): list<tName>
-  dgs.map(defGroupTNames).concat()
+fun def-groupsTNames(dgs: list<def-group>): list<tName>
+  dgs.map(def-groupTNames).concat()
 
-fun varInfo/show(v: varInfo): string
+fun varInfo/show(v: var-info): string
   match v
     InfoNone -> ""
     InfoReuse -> "reuse:<pat>"
@@ -601,23 +602,23 @@ fun varInfo/show(v: varInfo): string
     InfoArity(m, n) -> "arity:" ++ m.int/show ++ "," ++ n.int/show
     InfoExternal(b) -> "external:" ++ b.show-list(fn((t, s)) t.show ++ ":" ++ s)
 
-fun arity(v: varInfo): int
+fun arity(v: var-info): int
   match v
     InfoArity(_, n) -> n
     _ -> 0
 
-fun type-arity(v: varInfo): int
+fun type-arity(v: var-info): int
   match v
     InfoArity(n, _) -> n
     _ -> 0
 
-fun is-local(i: varInfo): bool
+fun is-local(i: var-info): bool
   match i
     InfoNone -> True
     InfoReuse -> True
     _ -> False
 
-fun isRefCounted(i: varInfo)
+fun isRefCounted(i: var-info)
   i.is-local
 
 fun expr/is-total(e: expr): div bool
@@ -690,7 +691,7 @@ fun def/cost(d: def): div int
 fun cost-local(d: def): div int
   d.defExpr.cost
 
-fun dg/cost(dg: defGroup): div int
+fun dg/cost(dg: def-group): div int
   match dg
     DefRec(defs) -> defs.map(cost).sum
     DefNonRec(def) -> cost(def)
@@ -763,7 +764,7 @@ fun tnames(l: list<tName>): linearSet<tName>
 fun cmp(t1: tName, t2: tName): order
   name/name/cmp(t1.get-name, t2.get-name)
 
-fun make-let(defs: list<defGroup>, expr: expr): expr
+fun make-let(defs: list<def-group>, expr: expr): expr
   match defs
     Nil -> expr
     _ -> match expr
@@ -784,14 +785,14 @@ fun add-apps(l: list<expr>, e: expr)
       App(e1, l') -> App(e1, l ++ l')
       _ -> App(e, l)
 
-fun add-type-apps(l: list<typeVar>, e: expr)
+fun add-type-apps(l: list<type-var>, e: expr)
   match l
     Nil -> e
     _ -> match e
       TypeApp(e', l') -> TypeApp(e', l' ++ l.map(TVar))
       _ -> TypeApp(e, l.map(TVar))
 
-fun add-type-lambdas(l: list<typeVar>, e: expr)
+fun add-type-lambdas(l: list<type-var>, e: expr)
   match l
     Nil -> e
     _ -> match e
@@ -906,7 +907,7 @@ fun externals/extract-signatures(es: externals): list<ktype>
     Cons(_, rst) -> extract-signatures(rst)
     Nil -> Nil
 
-fun dgs/extract-signatures(d: defGroups): list<ktype>
+fun dgs/extract-signatures(d: def-groups): list<ktype>
   d.flatten.map(fn(d') d'.ktype)
 
 fun core/extract-signatures(c: core): list<ktype>
@@ -917,7 +918,7 @@ fun split-fun(tp: ktype): <exn> (list<(name, ktype)>, ktype)
     TFun(args, _, res) -> (args, res)
     _ -> throw("core/core split-fun: expected function type")
 
-fun split-tforall(tp: ktype): <exn> (list<typeVar>, ktype)
+fun split-tforall(tp: ktype): <exn> (list<type-var>, ktype)
   match tp.expand-syn
     TForAll(tvs, t) -> (tvs, t)
     _ -> throw("core/core split-tforall: expected forall type")
@@ -930,18 +931,18 @@ fun tname/dep(t: tName): deps
 fun name/dep(n: name): deps
   if n.is-qualified then LinearSet([n.qualifier]) else LinearSet([])
 
-fun idefscore/deps(l: list<inlineDef>, c: core): div deps
+fun idefscore/deps(l: list<inline-def>, c: core): div deps
   deps/unions(l.map(_.expr.dep)) + c.deps
 
-fun idefs/deps(l: list<inlineDef>): div deps
+fun idefs/deps(l: list<inline-def>): div deps
   deps/unions(l.map(_.expr.dep))
 
 fun core/deps(c: core): div deps
-  val x0 : deps = deps/unions(c.defs.flatten.map(dep)) + deps/unions(c.typeDefs.flatten.map(dep))
+  val x0 : deps = deps/unions(c.defs.flatten.map(dep)) + deps/unions(c.typedefs.flatten.map(dep))
   val x1 : deps = LinearSet(c.imports.filter(_.visibility.is-public).map(importName))
   x0 + x1 - c.coreName
 
-fun td/dep(td: typeDef): div deps
+fun td/dep(td: typedef): div deps
   match td
     Synonym(info) -> info.t.dep
     Data(info) -> deps/unions(info.constrs.map(_.typeScheme.dep))

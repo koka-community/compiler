@@ -11,62 +11,59 @@ import std/data/linearmap
 import compiler/lib/pprint
 // Updated to 7eb71dc on 2/10/25
 
-fun fixity-resolve(fixMap: fixities, program: userProgram)
-  val fixMap1 = fixities-compose(fixMap, program.fixDefs.extract-fix-map)
+fun fixity-resolve(fixMap: fixities, program: user-program)
+  val fixMap1 = fixities-compose(fixMap, program.fix-defs.extract-fix-map)
   with handleFixities(fixMap1)
   val defs1 = program.defs.resolve
-  val tdefs = program.typeDefs.resolve
-  program(defs=defs1, typeDefs=tdefs)
+  val tdefs = program.typedefs.resolve
+  program(defs=defs1, typedefs=tdefs)
 
-fun extract-fix-map(fds: list<fixDef>): fixities
-  fun extractFix(FixDef(name, fixity): fixDef)
+fun extract-fix-map(fds: list<fix-def>): fixities
+  fun extractFix(FixDef(name, fixity): fix-def)
     (name, fixity)
   fixities-new(fds.map(extractFix))
 
 // Resolve lazy constructor definitions
-fun tdefgroups/resolve(tdefs: typeDefGroups<userType, userKind>)
-  tdefs.map(resolve)
-
-fun tdefgroup/resolve(tdefg: typeDefGroup<userType, userKind>)
+fun tdefgroup/resolve(tdefg: typedef-group<user-type, user-kind>)
   match tdefg
     TypeDefRec(tdefs) -> TypeDefRec(tdefs.map(resolve))
     TypeDefNonRec(tdef) -> TypeDefNonRec(tdef.resolve)
 
-fun tdef/resolve(tdef: userTypeDef)
+fun tdef/resolve(tdef: user-typedef)
   match tdef
     DataType(tbinder, params, constrs, rng, vis, sort, ddef, deffect, doc) -> 
       DataType(tbinder, params, constrs.map(resolve), rng, vis, sort, ddef, deffect, doc)
     d -> d
 
-fun con/resolve(constr: userUserCon)
+fun con/resolve(constr: user-user-con)
   match constr
     UserCon(nm, exists0, params, result, Just((fipT, lzy)), nmrng, rng, vis, doc) ->
       UserCon(nm, exists0, params, result, Just((fipT, lzy.expr/resolve)), nmrng, rng, vis, doc)
     c -> c
 
 // Rewrite syntax tree
-fun def-group/resolve(dg: defGroup<userType>)
+fun def-group/resolve(dg: def-group<user-type>)
   match dg
     DefRec(dfs) -> DefRec(dfs.map(resolve))
     DefNonRec(df) -> DefNonRec(resolve(df))
 
-fun def/resolve(d: def<userType>)
+fun def/resolve(d: def<user-type>)
   val binder' = d.binder.resolve
   d(binder=binder')
 
-fun binder/resolve(b: valueBinder<t, a>, ?resolve: (a) -> fixEff a): fixEff valueBinder<t, a>
+fun binder/resolve(b: value-binder<t, a>, ?resolve: (a) -> fix-eff a): fix-eff value-binder<t, a>
   val expr' = b.expr.resolve
   b(expr=expr')
 
-fun list/resolve(ls: list<a>, ?resolve: (a) -> fixEff a): fixEff list<a>
+fun list/resolve(ls: list<a>, ?resolve: (a) -> fix-eff a): fix-eff list<a>
   ls.map(resolve)
 
-fun expr/resolve(ex: userExpr): fixEff userExpr
+fun expr/resolve(ex: user-expr): fix-eff user-expr
   match ex
-    Lam(binds, expr, rng) ->
+    Lam(binds, expr, rng, tp) ->
       val binds' = binds.list/resolve
       val expr' = expr.resolve
-      Lam(binds', expr', rng)
+      Lam(binds', expr', rng, tp)
     Let(defs, expr, rng) ->
       val defs' = defs.resolve
       val expr' = expr.resolve
@@ -105,18 +102,18 @@ fun expr/resolve(ex: userExpr): fixEff userExpr
       val expr' = expr.resolve
       Inject(tp, expr', b, rng)
 
-fun maybe/resolve(ex: maybe<a>, ?resolve: (a) -> fixEff a): fixEff maybe<a>
+fun maybe/resolve(ex: maybe<a>, ?resolve: (a) -> fix-eff a): fix-eff maybe<a>
   ex.map(resolve)
 
-fun branch/resolve(branch: branch<userType>)
+fun branch/resolve(branch: branch<user-type>)
   match branch
     Branch(patt, guards) -> Branch(patt, guards.map(resolve))
 
-fun guard/resolve(g: guard<userType>)
+fun guard/resolve(g: guard<user-type>)
   match g
     Guard(test, expr) -> Guard(test.resolve, expr.resolve)
 
-fun handlerbranch/resolve(hb: handlerBranch<userType>)
+fun handlerbranch/resolve(hb: handler-branch<user-type>)
   match hb
     HandlerBranch(branchExpr=e) -> hb(branchExpr=e.resolve)
 
@@ -141,7 +138,7 @@ effect fixityEff
   fun get-fixities(): fixities
   fun update-fixities(f: fixities -> pure fixities): ()
 
-alias fixEff = <fixityEff, pure, comp-flags>
+alias fix-eff = <fixityEff, pure, comp-flags>
 
 fun handleFixities(initial: fixities, f: () -> <fixityEff,pure|e> a): <pure|e> (a, fixities, list<doc>)
   var fixes := initial
@@ -158,26 +155,26 @@ fun handleFixities(initial: fixities, f: () -> <fixityEff,pure|e> a): <pure|e> (
 // Resolve fixities:
 // The algorithm is written a bit long to enable easy extension to prefix, postfix, and distfix operators
 
-value struct op { expr: userExpr; fixity: fixity }
+value struct op { expr: user-expr; fixity: fixity }
 value type term
-  Term(expr: userExpr)
+  Term(expr: user-expr)
   Oper(op: op)
 
-alias exprStack = list<userExpr>
-alias opStack = list<op>
+alias expr-stack = list<user-expr>
+alias op-stack = list<op>
 
-fun fixities/resolve(exprs: list<userExpr>): fixEff userExpr
+fun fixities/resolve(exprs: list<user-expr>): fix-eff user-expr
   val fixMap = get-fixities()
   terms/resolve([], [], exprs.map(_.to-term(fixMap)))
 
 // Find out if this is an operator
-fun to-term(expr: userExpr, fixities: fixities): term
+fun to-term(expr: user-expr, fixities: fixities): term
   match expr
     Var(name, True) -> Oper(Op(expr, find-fixity(fixities, name)))
     _ -> Term(expr)
 
 // The real resolve algorithm uses Dijkstra's strategy with two stacks
-fun terms/resolve(exprs: exprStack, os: opStack, tms: list<term>): fixEff userExpr
+fun terms/resolve(exprs: expr-stack, os: op-stack, tms: list<term>): fix-eff user-expr
   match (exprs, os, tms)
     // final term computed
     ([x], [], []) -> x
@@ -217,13 +214,13 @@ fun precedence(f: fixity)
     FixPrefix -> 102
     FixPostfix -> 101
 
-fun check-ambiguous(ops: opStack, Op(op, fix): op)
+fun check-ambiguous(ops: op-stack, Op(op, fix): op)
   match (ops, fix)
     (Cons(Op(_, fixCtx as FixInfix(_, assocCtx))), FixInfix(_, assoc)) | assoc.is-assocNone || !(assocCtx == assoc) ->
       ambiguous(fixCtx, fix, op)
     _ -> ()
 
-fun ambiguous(fixCtx: fixity, fix: fixity, op: userExpr)
+fun ambiguous(fixCtx: fixity, fix: fixity, op: user-expr)
   val opText =
     match op
       Var(nm) -> nm.pretty |.| space
@@ -242,10 +239,10 @@ fun pp-fixity(f: fixity): doc
     FixPostfix -> "postfix".text
 
 // Helper operations: push and apply
-fun push(xs: exprStack, ops: opStack, ts: list<term>, t: op): fixEff userExpr 
+fun push(xs: expr-stack, ops: op-stack, ts: list<term>, t: op): fix-eff user-expr 
   resolve(xs, Cons(t, ops), ts)
 
-fun apply(xs: list<expr<userType>>, ops: list<op>, ts: list<term>)
+fun apply(xs: list<expr<user-type>>, ops: list<op>, ts: list<term>)
   match ops
     Cons(Op(op, FixPostfix), rst) ->
       val ys = apply-unary-op(op, xs)
@@ -258,14 +255,14 @@ fun apply(xs: list<expr<userType>>, ops: list<op>, ts: list<term>)
       resolve(ys, rst, ts)
     _ -> fail("static/fixity-resolve apply: fixity resolver error")
 
-fun apply-unary-op(op: expr<t>, ts: list<expr<t>>): fixEff list<expr<t>>
+fun apply-unary-op(op: expr<t>, ts: list<expr<t>>): fix-eff list<expr<t>>
   match ts
     Cons(t, ts) -> Cons(App(op, [(Nothing, t)], t.range.combine(op.range)), ts)
     _ -> 
       add-fix-error("Unary operator has not enough arguments".text, op.range )
       ts
 
-fun apply-infix-op(op: expr<t>, ts: list<expr<t>>): fixEff list<expr<t>>
+fun apply-infix-op(op: expr<t>, ts: list<expr<t>>): fix-eff list<expr<t>>
   match ts
     Cons(t1, Cons(t2, ts)) -> Cons(App(op, [(Nothing, t1), (Nothing, t2)], t1.range.combine(t2.range)), ts)
     _ -> 

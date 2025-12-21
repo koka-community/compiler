@@ -14,7 +14,7 @@ import compiler/core/core
 import compiler/platform/config
 
 // take a context and check if it is well-formed and return a well-typed context expression
-fun analyze(rng: range, expr: expr): <comp-flags, unique, pure, newtypesEff> (expr, list<doc>)
+fun analyze(rng: range, expr: expr): <comp-flags, unique, pure, newtypes-eff> (expr, list<doc>)
   with handler
     return(x) (x, [])
     final ctl emit-ctx-err(e) (expr.type-of.make-empty, [e])

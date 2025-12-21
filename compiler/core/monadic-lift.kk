@@ -17,13 +17,13 @@ fun monadicLift()
   set-core-defs(get-core-defs().lift-defgroups(True))
 
 //   transform definition groups
-fun lift-defgroups(dgs: defGroups, topLevel: bool)
+fun lift-defgroups(dgs: def-groups, topLevel: bool)
   dgs.map(_.lift-defgroup(topLevel)).concat
 
 alias liftedEff = <lifted, unique, pure, comp-flags>
 effect lifted
-  fun emit(dg: defGroup): ()
-  fun collect(): list<defGroup>
+  fun emit(dg: def-group): ()
+  fun collect(): list<def-group>
   val currentDef: list<def>
 
 fun runLifted(f: () -> <lifted|e> a): e a 
@@ -39,7 +39,7 @@ fun runLifted(f: () -> <lifted|e> a): e a
   f()
 
 // transform definition groups
-fun lift-defgroup(dg: defGroup, topLevel: bool)
+fun lift-defgroup(dg: def-group, topLevel: bool)
   if topLevel then
     match dg
       DefNonRec(d) ->
@@ -147,7 +147,7 @@ fun liftLocalFun(e: expr, eff: keffect)
   emit(DefNonRec(liftDef))
   expr2
 
-fun make-def(e: expr, fvs: list<tName>, tvs: list<typeVar>)
+fun make-def(e: expr, fvs: list<tName>, tvs: list<type-var>)
     
   fun unwild(TName(name, tp): tName)
     TName(if name.nameStem == "" || name.nameStem.starts-with("_").is-just then prepend("wild", name) else name, tp)

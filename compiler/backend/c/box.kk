@@ -15,15 +15,15 @@ import compiler/common/color-scheme
 import std/core/undiv
 
 // Box / unbox transformation
-alias boxEff = <unique,comp-flags,documentation,pure,colorSchemeEffect,ppEnvEff>
+alias boxEff = <unique,comp-flags,documentation,pure,colors,ppEnvEff>
 
 fun box-core(c: core): boxEff core
   c(defs=box-def-groups(c.defs))
 
-fun box-def-groups(dgs: defGroups)
+fun box-def-groups(dgs: def-groups)
   dgs.map(box-def-group)
 
-fun box-def-group(dg: defGroup)
+fun box-def-group(dg: def-group)
   match dg
     DefRec(defs) -> DefRec(defs.map(box-def))
     DefNonRec(d) -> DefNonRec(box-def(d))
@@ -51,8 +51,8 @@ fun box-expr(tp: ktype, ex: expr)
       val fnTp = ex.box-typeof
       val bbody = box-expr(tp, body)
       bcoerce(fnTp, tp, Lam(tparams, eff, bbody))
-    Let(defGroups, body) ->
-      val bdgs = defGroups.box-def-groups
+    Let(def-groups, body) ->
+      val bdgs = def-groups.box-def-groups
       val bbody = box-expr(tp, body)
       Let(bdgs, bbody)
     Case(exprs, branches) ->
@@ -174,7 +174,7 @@ fun box-var-at-tp(tp: ktype)
 fun unbox-var-at-tp(tp: ktype)
   Var(TName(nameUnbox, tp), InfoExternal([(C(CDefault), "unbox(#1)")]))
 
-fun box-coerce-fun(toParTps: list<(name, ktype)>, toEffTp: ktype, toResTp: ktype, fromParTps: list<(name, ktype)>, fromEffTp: ktype, fromResTp: ktype, ex: expr): <colorSchemeEffect,comp-flags,pure,documentation,ppEnvEff,unique> expr
+fun box-coerce-fun(toParTps: list<(name, ktype)>, toEffTp: ktype, toResTp: ktype, fromParTps: list<(name, ktype)>, fromEffTp: ktype, fromResTp: ktype, ex: expr): <colors,comp-flags,pure,documentation,ppEnvEff,unique> expr
   val names = toParTps.map(fn(_) unique-name("b"))
   val pars = names.zipwith(toParTps.map(snd), fn(n, t) TName(n,t))
   val args = pars.map(Var(_, InfoNone))

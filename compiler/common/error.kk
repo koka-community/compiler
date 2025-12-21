@@ -24,17 +24,19 @@ alias errors = list<error-msg>;
 
 alias warnings = errors;
 
-struct error-msg
-  range: range
-  message: doc
-  severity: error-severity
-  kind: error-kind
+type error-msg
+  ErrorMsg(
+    range: range,
+    message: doc,
+    severity: error-severity,
+    kind: error-kind
+  )
 
 // Automatically generated.
 // Equality comparison of the `error-msg` type.
 pub fun error-msg/(==)(this : error-msg, other : error-msg) : bool
   match (this, other)
-    (Error-msg(range, message, severity, kind), Error-msg(range', message', severity', kind')) -> range == range' && message == message' && severity == severity' && kind == kind'
+    (ErrorMsg(range, message, severity, kind), ErrorMsg(range', message', severity', kind')) -> range == range' && message == message' && severity == severity' && kind == kind'
 
 type error-severity
   SevInfo
@@ -97,13 +99,13 @@ fun is-warning(e: error-msg): bool
   (<=)(e.severity, SevWarning, ?cmp=cmp)
 
 fun info-message-kind(d: doc, rng: range, ekind: error-kind = ErrGeneral): error-msg
-  Error-msg(rng, d, SevInfo, ekind)
+  ErrorMsg(rng, d, SevInfo, ekind)
 
 fun warning-message-kind(d: doc, rng: range, ekind: error-kind = ErrGeneral): error-msg
-  Error-msg(rng, d, SevWarning, ekind)
+  ErrorMsg(rng, d, SevWarning, ekind)
 
 fun error-message-kind(d: doc, rng: range, ekind: error-kind = ErrGeneral): error-msg
-  Error-msg(rng, d, SevError, ekind)
+  ErrorMsg(rng, d, SevError, ekind)
 
 fun info-message(d: doc, rng: range): current-error-kind error-msg
   d.info-message-kind(rng, current-error-kind)
@@ -125,7 +127,7 @@ fun errs/pretty(msgs: errors): doc
   with color-scheme-default
   msgs.pp-errors("".path, False)
 
-fun pp-error-severity(sev: error-severity, ekind: error-kind): colorSchemeEffect doc
+fun pp-error-severity(sev: error-severity, ekind: error-kind): colors doc
   val ekindTxt = match ekind
     ErrParse -> "parse"
     ErrKind -> "kind"
@@ -140,12 +142,12 @@ fun pp-error-severity(sev: error-severity, ekind: error-kind): colorSchemeEffect
     SevWarning -> header(colorWarning, "warning")
     SevInfo -> header(colorWarning, "info")
 
-fun pp-error-message(msg: error-msg, cwd: path, showRangeEnd: bool): colorSchemeEffect doc
+fun pp-error-message(msg: error-msg, cwd: path, showRangeEnd: bool): colors doc
   (msg.range.pp-range(cwd,showRangeEnd)
   |.| colon |+| msg.severity.pp-error-severity(msg.kind) |+| msg.message
   ).hang(2)
 
-fun pp-errors(errs: errors, cwd: path, showRangeEnd: bool): colorSchemeEffect doc
+fun pp-errors(errs: errors, cwd: path, showRangeEnd: bool): colors doc
   vcat(errs.map(_.pp-error-message(cwd, showRangeEnd)))
 
 fun to-warning((range, doc): (range, doc), ekind: error-kind): error-msg

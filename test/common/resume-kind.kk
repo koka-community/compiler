@@ -2,7 +2,7 @@ import compiler/common/resume-kind
 import std/test
 
 fun suite()
-  group("resumeKind show")
+  group("resume-kind show")
     test("ResumeNever shows as never")
       expect("never")
         ResumeNever.show
@@ -35,7 +35,7 @@ fun suite()
       expect("normal (no finalization)")
         ResumeNormalRaw.show
 
-  group("resumeKind index")
+  group("resume-kind index")
     test("ResumeNever has index 0")
       expect(0)
         ResumeNever.index
@@ -68,7 +68,7 @@ fun suite()
       expect(7)
         ResumeNormalRaw.index
 
-  group("resumeKind ordering")
+  group("resume-kind ordering")
     test("ResumeNever before ResumeTail by index")
       expect(True)
         ResumeNever.index < ResumeTail.index
@@ -97,7 +97,7 @@ fun suite()
       expect(True)
         ResumeNormalRaw.index >= ResumeOnceRaw.index
 
-  group("resumeKind ordering comparison")
+  group("resume-kind ordering comparison")
     test("ResumeNever index cmp ResumeTail index returns Lt")
       expect(True)
         ResumeNever.index.cmp(ResumeTail.index) == Lt

@@ -51,16 +51,15 @@ fun lex(str: string, pos: pos): pure list<lexeme>
         _ -> ()
       l
     fun do-emit(l, lstart, lend)
-      val Alex-pos(soff, sline, scol) = lstart.adjust(line-off, if col-off-line == lstart.line then col-off else 0)
-      val Alex-pos(eoff, eline, ecol) = lend.adjust(line-off, if col-off-line == lend.line then col-off else 0)
+      val AlexPos(soff, sline, scol) = lstart.adjust(line-off, if col-off-line == lstart.line then col-off else 0)
+      val AlexPos(eoff, eline, ecol) = lend.adjust(line-off, if col-off-line == lend.line then col-off else 0)
       lexemes := Cons(Lexeme(make-range(Pos(src, soff, sline, scol), Pos(src, eoff, eline, ecol)), l), lexemes)
   alex-scan(str.bytes.slice, 0)
   lexemes.reverse
 
 fun adjust(pos: alex-pos, l: int, c: int): alex-pos
   match pos
-    Alex-pos(off, line, col) ->
-      Alex-pos(off, line + l, col + c)
+    AlexPos(off, line, col) -> AlexPos(off, line + l, col + c)
 
 fun get-int(l: list<char>): int
   l.drop-while(is-white).take-while(is-digit).string.parse-int.default(0)

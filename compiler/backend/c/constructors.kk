@@ -11,16 +11,16 @@ import std/data/sort
 
 // Generate value constructors for each defined type
 
-fun gen-typedefs(tds: typeDefGroups): asmEff ()
+fun gen-typedefs(tds: typedef-groups): asmEff ()
   tds.map(gen-typedef-group)
   ()
 
-fun gen-typedef-group(tds: typeDefGroup): asmEff ()
+fun gen-typedef-group(tds: typedef-group): asmEff ()
   tds.map(gen-typedef-pre)
   tds.map(gen-typedef-post)
   ()
 
-fun gen-typedef-pre(td: typeDef)
+fun gen-typedef-pre(td: typedef)
   match td
     Synonym -> ()
     Data(info, isExtend) ->
@@ -45,7 +45,7 @@ fun gen-typedef-pre(td: typeDef)
            else "typedef kk_datatype_ptr_t".text |+| info.name.typeClassName.cpp-name |.| semi)
           )
 
-fun gen-typedef-post(td: typeDef)
+fun gen-typedef-post(td: typedef)
   match td
     Synonym -> ()
     Data(info, isExtend) ->

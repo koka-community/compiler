@@ -10,32 +10,32 @@ import compiler/core/uniquefy
 import std/data/linearset
 
 // Fix a group of recursive definitions to potentially include the divergence effect in their type
-fun analyzeDivergence(defs0: list<def>)
+fun analyze-divergence(defs0: list<def>)
   match defs0
     [] -> False
     Cons(_, Cons) -> True // For mutual recursion, we assume divergence for now
     [d0] ->
-      val DefRec([d1]) = DefRec([d0]).uniquefy
-      d1.isDivergent
+      val DefRec([d1]) = DefRec([d0]).dg/uniquefy
+      d1.is-divergent
 
 // Is a recursive definition group potentially divergent?
 // Assumes that the defintions are uniquefied
 // A valid result is always to return 'True'
-fun isDivergent(d: def): <comp-flags, pure> bool
-  d.defExpr.isDivergentBody(d.def-name)
+fun is-divergent(d: def): <comp-flags, pure> bool
+  d.defExpr.is-divergent-body(d.def-name)
 
-fun isDivergentBody(b: expr, dname: name)
+fun is-divergent-body(b: expr, dname: name)
   match b
-    TypeLam(_, expr) -> expr.isDivergentBody(dname)
-    TypeApp(expr) -> expr.isDivergentBody(dname)
-    Lam(pars, _, e) -> e.isDivFun(pars, dname)
+    TypeLam(_, expr) -> expr.is-divergent-body(dname)
+    TypeApp(expr) -> expr.is-divergent-body(dname)
+    Lam(pars, _, e) -> e.is-divergent-fun(pars, dname)
     _ -> True
 
-fun isDivFun(b: expr, pars: list<tName>, dname: name): <comp-flags, pure> bool
+fun is-divergent-fun(b: expr, pars: list<tName>, dname: name): <comp-flags, pure> bool
   match pars
     Nil -> True
     _ ->
-      val calls = runDiv(dname, pars, {divExpr(b)})
+      val calls = run-div(dname, pars, {divExpr(b)})
       val orders = calls.transpose.permutations.map(transpose)
       fun isAnOrder(cs)
         cs.all(fn(call) match call.drop-while(_ == SEq) {Cons(SLt) -> True; _ -> False})
@@ -69,8 +69,8 @@ fun permutations(xs0: list<a>): div list<list<a>>
 
 struct rel
   n: name
-  ns: list<nameSet>
-  ns': list<nameSet>
+  ns: list<name-set>
+  ns': list<name-set>
 
 alias call = list<size>
 
@@ -88,33 +88,33 @@ fun (==)(s1: size, s2: size): bool
 
 effect divergent
   val rel: rel
-  fun addCall(n: name, c: call): ()
+  fun add-call(n: name, c: call): ()
 
-alias divEff = <divergent, comp-flags, pure>
+alias div-eff = <divergent, comp-flags, pure>
 
-fun setRel(r: rel, f: () -> divEff a): divEff a
+fun set-rel(r: rel, f: () -> div-eff a): div-eff a
   with override
     val rel = r
-    fun addCall(n, c) addCall(n, c)
+    fun add-call(n, c) add-call(n, c)
   f()
 
-fun runDiv(dname: name, args: list<tName>, f: () -> divEff a): <comp-flags, pure> list<call>
+fun run-div(dname: name, args: list<tName>, f: () -> div-eff a): <comp-flags, pure> list<call>
   var calls: list<call> := []
   with handler
     val rel = Rel(dname, args.map(names/empty + _.get-name), args.map(fn(a) names/empty))
-    fun addCall(n, c)
+    fun add-call(n, c)
       calls := Cons(c, calls)
   f()
   calls
 
-fun at(xs: list<nameSet>, i: int): nameSet
+fun at(xs: list<name-set>, i: int): name-set
   xs[i].default(names/empty)
 
-fun isRecursiveCall(n: name): divEff bool
+fun is-recursive-call(n: name): div-eff bool
   val Rel(rname) = rel
   rname == n
 
-fun lookupSize(dname: name, argPos: int, argName: name): divEff size
+fun lookup-size(dname: name, argPos: int, argName: name): div-eff size
   val Rel(rname, eqs, lts) = rel
   if rname != dname then Unknown
   else
@@ -124,7 +124,7 @@ fun lookupSize(dname: name, argPos: int, argName: name): divEff size
     elif equal.member(argName) then SEq
     else Unknown
 
-fun addRelation(sz: size, name1: name, name2: name, div: () -> divEff a): divEff a
+fun addRelation(sz: size, name1: name, name2: name, div: () -> div-eff a): div-eff a
   if sz == Unknown then div()
   else
     val Rel(rname, eqs, lts) = rel
@@ -138,9 +138,9 @@ fun addRelation(sz: size, name1: name, name2: name, div: () -> divEff a): divEff
         (eq, lt.add(name2))
       else (eq, lt)
     val (eqs', lts') = eqs.zipwith(lts, addEqLt).unzip
-    setRel(Rel(rname, eqs', lts'), div)
+    set-rel(Rel(rname, eqs', lts'), div)
 
-fun divExpr(e: expr): divEff ()
+fun divExpr(e: expr): div-eff ()
   match e
     Lam(_, _, expr) -> expr.divExpr
     // Ignore .open effect calls
@@ -152,18 +152,18 @@ fun divExpr(e: expr): divEff ()
     App(TypeApp(v as Var), args) ->
       App(v, args).divExpr
     App(Var(tname), args) ->
-      val isRec = isRecursiveCall(tname.get-name)
+      val isRec = is-recursive-call(tname.get-name)
       if isRec then
         val call = args.map-indexed(fn(i, a) argumentSize(tname.get-name, i, a))
-        addCall(tname.get-name, call)
+        add-call(tname.get-name, call)
       else
         ()
       args.map(divExpr)
       ()
     Var(tname) -> // recursive call may appear as argument, say id(recfun)(x)
-      val isRec = isRecursiveCall(tname.get-name)
+      val isRec = is-recursive-call(tname.get-name)
       if isRec then
-        addCall(tname.get-name, [Unknown])
+        add-call(tname.get-name, [Unknown])
       else
         ()
     App(f, args) ->
@@ -180,7 +180,7 @@ fun divExpr(e: expr): divEff ()
       branches.foreach(divBranch(exprs, _))
     _ -> ()
 
-fun divBranch(exprs, Branch(pats, guards): branch): divEff ()
+fun divBranch(exprs, Branch(pats, guards): branch): div-eff ()
   fun extractName(e: expr)
     match e
       Var(tname) -> Just(tname.get-name)
@@ -194,7 +194,7 @@ fun divBranch(exprs, Branch(pats, guards): branch): divEff ()
   exprs.map(extractName).zip(pats).foreach(fn((n, p)) divPattern(SEq, n, p))
   guards.foreach(divGuard)
 
-fun divPattern(size: size, mbName: maybe<name>, p: pattern): divEff ()
+fun divPattern(size: size, mbName: maybe<name>, p: pattern): div-eff ()
   match (mbName, p)
     (Just(n), PatVar(pname, pat)) ->
       with addRelation(size, n, pname.get-name)
@@ -204,7 +204,7 @@ fun divPattern(size: size, mbName: maybe<name>, p: pattern): divEff ()
     (_, _) ->
       ()
 
-fun divDefGroup(dg: defGroup): divEff ()
+fun divDefGroup(dg: def-group): div-eff ()
   match dg
     DefNonRec(d) -> d.divDef
     DefRec(dfs) -> dfs.foreach(divDef)
@@ -212,14 +212,14 @@ fun divDefGroup(dg: defGroup): divEff ()
 fun divDef(d: def)
   d.defExpr.divExpr
 
-fun argumentSize(name: name, pos: int, arg: expr): divEff size
+fun argumentSize(name: name, pos: int, arg: expr): div-eff size
   fun reduceSize(sz)
     match sz
       SEq -> SLt
       _ -> sz
   match arg
     Var(tname, _) ->
-      lookupSize(name, pos, tname.get-name)
+      lookup-size(name, pos, tname.get-name)
     // Ignore .open effect calls
     App(App(TypeApp(Var(openName)), [f]), args) | openName.get-name == nameEffectOpen ->
       argumentSize(name, pos, App(f, args))
@@ -230,13 +230,13 @@ fun argumentSize(name: name, pos: int, arg: expr): divEff size
       SLt
     // special case substr1
     App(Var(substrName), Cons(Var(sname), _)) | substrName.get-name == nameSubStr1 ->
-      val sz = lookupSize(name, pos, sname.get-name)
+      val sz = lookup-size(name, pos, sname.get-name)
       reduceSize(sz)
     // these two cases state that the call to a function f where f < name is itself < name
     App(Var(tname)) ->
-      lookupSize(name, pos, tname.get-name)
+      lookup-size(name, pos, tname.get-name)
     App(TypeApp(Var(tname))) ->
-      lookupSize(name, pos, tname.get-name)
+      lookup-size(name, pos, tname.get-name)
     _ -> Unknown
 
   

@@ -7,7 +7,7 @@ import compiler/type/type
 import std/data/linearset
 import std/data/linearmap
 
-alias locals = nameSet;
+alias locals = name-set;
 alias renaming = name-map<name>
 
 effect uniquefy
@@ -61,19 +61,19 @@ fun uniquefyExprU(e: expr)
 fun core/uniquefy(c: core): pure core
   c(defs=uniquefy(c.defs))
 
-fun dgs/uniquefy(dgs: defGroups): pure defGroups
+fun dgs/uniquefy(dgs: def-groups): pure def-groups
   with start/run-unique(0)
   val locals = get-locals()
   val topLevelDefs = dgs.flatten.map(def-name).filter(fn(n:name) !n.is-nil)
   set-locals(topLevelDefs.foldl(locals, fn(acc, n) acc.add(n.unqualify)))
   dgs.map(fn(dg) full-localized({uniquefyDG(dg)}))
 
-fun dg/uniquefyDG(dg: defGroup)
+fun dg/uniquefyDG(dg: def-group)
   match dg
     DefNonRec(d) -> DefNonRec(d(defExpr=d.defExpr.uniquefyx))
     DefRec(ds) -> DefRec(ds.map(fn(d) d(defExpr=d.defExpr.uniquefyx)))
 
-fun dg/uniquefy(dg: defGroup): pure defGroup
+fun dg/uniquefy(dg: def-group): pure def-group
   with start/run-unique(0)
   match dg
     DefNonRec(d) -> DefNonRec(d.uniquefy)
@@ -82,7 +82,7 @@ fun dg/uniquefy(dg: defGroup): pure defGroup
       set-locals(defs.map(def-name).filter(!_.is-nil).foldl(locals, add))
       DefRec(defs.map(fn(d) d(defExpr=localized({d.defExpr.uniquefyx}))))
 
-fun innerdefgroup/uniquefy(dg: defGroup)
+fun innerdefgroup/uniquefy(dg: def-group)
   match dg
     DefNonRec(d) -> DefNonRec(uniquefy(d))
     DefRec(defs) -> DefRec(recdefs/uniquefy(defs))
@@ -114,7 +114,7 @@ fun expr/uniquefyx(e: expr)
     TypeApp(expr, tps) -> TypeApp(expr.uniquefyx, tps)
     Con -> e
     ELit -> e
-    Let(defGroups, expr) -> Let(defGroups.map(innerdefgroup/uniquefy), expr.uniquefyx)
+    Let(def-groups, expr) -> Let(def-groups.map(innerdefgroup/uniquefy), expr.uniquefyx)
     Case(exprs, branches) ->
       Case(exprs.map(uniquefyx), localized({branches.map(_.uniquefy(exprs.map(type-of)))}))
 
@@ -163,7 +163,7 @@ fun name/uniquefy(n:name)
       set-locals(locals.add(n))
       n
 
-fun find-unique-name(i: int, n: name, locals: nameSet): div name
+fun find-unique-name(i: int, n: name, locals: name-set): div name
   val name1 = to-unique-name(i, n)
   if locals.member(name1) then find-unique-name(i+1, n, locals)
   else name1

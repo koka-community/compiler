@@ -1,6 +1,6 @@
 import std/os/env
 
-pub effect val comp-flags: compilerFlags;
+pub effect val comp-flags: compiler-flags;
 
 fun @default-comp-flags(f)
   with handler val comp-flags = CompilerFlags(
@@ -11,20 +11,24 @@ fun @default-comp-flags(f)
   )
   f()
 
-struct compilerFlags
-  programName: string
-  version: string
-  compiler: string
-  buildVariant: string;
+type compiler-flags
+  CompilerFlags(
+    programName: string,
+    version: string,
+    compiler: string,
+    buildVariant: string
+  )
 
-struct fileConfig
-  exeExt: string
-  dllExt: string
-  objExt: string
-  libExt: string
-  libPrefix: string;
+type file-config
+  FileConfig(
+    exeExt: string,
+    dllExt: string,
+    objExt: string,
+    libExt: string,
+    libPrefix: string
+  )
 
-fun os-config(): <exn,ndet> fileConfig
+fun os-config(): <exn,ndet> file-config
   match get-os-name()
     "linux" -> FileConfig(".so", ".o", ".a", "lib", "")
     "windows" -> FileConfig(".exe", ".dll", ".obj", ".lib", "")

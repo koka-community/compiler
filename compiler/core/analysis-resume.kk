@@ -34,7 +34,7 @@ fun tname/is-resuming(t: tName)
 fun name/is-resuming(t: name)
   t == resumeName.get-name || t == resumeShallowName.get-name
 
-fun expr'(e: expr, defaultKind: resumeKind): div resumeKind
+fun expr'(e: expr, defaultKind: resume-kind): div resume-kind
   match e
     Lam -> if e.free-vars.is-resuming-elem then ResumeNormal else ResumeNever
     App(Var(tname), args) | tname.is-resuming ->
@@ -51,34 +51,34 @@ fun expr'(e: expr, defaultKind: resumeKind): div resumeKind
     Case(exprs, brnchs) ->
       exprs.map(expr).ands && brnchs.branches(defaultKind)
 
-fun branches(bs: list<branch>, defaultKind: resumeKind): div resumeKind
+fun branches(bs: list<branch>, defaultKind: resume-kind): div resume-kind
   bs.map(_.branch(defaultKind)).ors
 
-fun branch(b: branch, defaultKind: resumeKind): div resumeKind
+fun branch(b: branch, defaultKind: resume-kind): div resume-kind
   b.guards.map(_.guard(defaultKind)).ors
 
-fun guard(g: guard, defaultKind: resumeKind): div resumeKind
+fun guard(g: guard, defaultKind: resume-kind): div resume-kind
   g.body.expr && g.test.expr'(defaultKind)
 
-fun ands(exprs: list<resumeKind>)
+fun ands(exprs: list<resume-kind>)
   exprs.foldl(ResumeNever, _ && _)
 
-fun ors(exprs: list<resumeKind>)
+fun ors(exprs: list<resume-kind>)
   exprs.foldl(ResumeNever, _ || _)
 
-fun is-scoped(rk: resumeKind): bool
+fun is-scoped(rk: resume-kind): bool
   match rk
     ResumeNormal -> False
     ResumeOnce -> False
     _ -> True
 
-fun (&&)(rk1: resumeKind, rk2: resumeKind): resumeKind
+fun (&&)(rk1: resume-kind, rk2: resume-kind): resume-kind
   match (rk1, rk2)
     (ResumeNever, rk) -> rk
     (rk, ResumeNever) -> rk
     _ -> if rk1.is-scoped && rk2.is-scoped then ResumeScoped else ResumeNormal
 
-fun (||)(rk1: resumeKind, rk2: resumeKind): resumeKind
+fun (||)(rk1: resume-kind, rk2: resume-kind): resume-kind
   match (rk1, rk2)
     (ResumeOnce, rk) | rk.index >= ResumeScoped.index -> ResumeNormal
     (rk, ResumeOnce) | rk.index >= ResumeScoped.index -> ResumeNormal

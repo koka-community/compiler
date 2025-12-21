@@ -20,3 +20,6 @@ Something long: there"#) fn()
     expect(r#"hello
 wor"#) fn()
       doc-from-range(Range(start, end, False)).show
+
+fun main()
+  run-tests(suite)

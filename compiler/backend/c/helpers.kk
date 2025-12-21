@@ -21,7 +21,7 @@ import std/os/path
 import std/num/float64
 import std/core/undiv
 
-alias asmEff = <pure,asm,comp-flags,unique,colorSchemeEffect,newtypesEff,printer,subst,documentation,niceEff<typeVar>,ppEnvEff,precEff,prettyTypeEff>
+alias asmEff = <pure,asm,comp-flags,unique,colors,newtypes-eff,printer,subst,documentation,nice-eff<type-var>,ppEnvEff,precEff,prettyTypeEff>
 
 // Put the things that need overriding in here
 effect subst
@@ -254,7 +254,7 @@ fun c-type(tp: ktype): cType
     TVar -> CBox
     TSyn(_, _, t) -> t.c-type
 
-fun c-type-con(tp: typeCon): cType
+fun c-type-con(tp: type-con): cType
   val nm = tp.name
   if nm == nameTpInt then CPrim("kk_integer_t")
   elif nm == nameTpString then CPrim("kk_string_t")

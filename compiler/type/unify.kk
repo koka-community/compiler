@@ -222,7 +222,7 @@ fun unify(t1: ktype, t2: ktype): <pure,unify,unique> ()
     _ -> unify-error(NoMatchType)
 
 // Unify a type variable with a type
-fun unify-tvar(tv: typeVar, tp: ktype): <pure,unify> ()
+fun unify-tvar(tv: type-var, tp: ktype): <pure,unify> ()
   match tv
     TypeVar(id, k, Meta) -> 
       val etp = tp.expand-syn
@@ -280,7 +280,7 @@ fun unify-effect(tp1: ktype, tp2: ktype): <unify,pure,unique> ()
 fun extract-normalize-effect(tp: ktype): <pure,unify> (list<ktype>, ktype)
   tp.subst.extract-ordered-effect
 
-fun unify-effect-var(tv1: typeVar, tp2: ktype): <pure,unify,unique> ()
+fun unify-effect-var(tv1: type-var, tp2: ktype): <pure,unify,unique> ()
   val (ls2, tl2) = tp2.extract-ordered-effect // ls2 must be non-empty
   match tl2.expand-syn 
     // e ~ <div,exn|e> ~> e := <div,exn|e'>
@@ -336,7 +336,7 @@ fun match-kinds(kinds1: list<kind>, kinds2: list<kind>): <div,unify> ()
 
 effect unify
   final ctl unify-error(e: unifyErr): a
-  fun extend-sub(tv: typeVar, t: ktype): ()
+  fun extend-sub(tv: type-var, t: ktype): ()
   fun get-subst(): sub
 
 fun with-err(e: unifyErr -> unifyErr, f: () -> <unify|e> a): <unify|e> a
@@ -346,10 +346,10 @@ fun with-err(e: unifyErr -> unifyErr, f: () -> <unify|e> a): <unify|e> a
     fun get-subst() get-subst() 
   f()
 
-fun run-unify(action: () -> <pure,unique,unify|e> a): <pure,unique|e> (either<unifyErr, ()>, sub)
+fun run-unify(action: () -> <pure,unique,unify|e> a): <pure,unique|e> (either<unifyErr, a>, sub)
   var subst := sub/null
   with handler
-    return(x) (Right(()), subst)
+    return(x) (Right(x), subst)
     final ctl unify-error(e) (Left(e), subst)
     fun extend-sub(tv, t) 
       subst := subst.extend(tv, t)
@@ -371,3 +371,14 @@ type unifyErr
   NoSubsume
   Infinite
   NoArgMatch(i1: int, i2: int)
+
+pub fun show(e: unifyErr): string
+  match e
+    NoMatchType -> "types do not match"
+    NoMatchKind -> "kinds do not match"
+    NoMatchSkolem(k) -> "skolem variables do not match (kind " ++ k.show ++ ")"
+    NoMatchEffect(e1, e2) -> "effects do not match" // ++ e1.show ++ " and " ++ e2.show
+    NoSubsume -> "types do not subsume"
+    Infinite -> "infinite type"
+    NoArgMatch(i1, i2) -> "argument types do not match"
+

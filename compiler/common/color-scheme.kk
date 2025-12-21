@@ -19,8 +19,7 @@ import std/core/undiv
 // ----------------------------
 
 // Color scheme for the interpreter
-effect colorSchemeEffect
-  val colors: colorScheme;
+effect val colors: colorScheme;
 
 fun color-scheme-default(f)
   handle(f)

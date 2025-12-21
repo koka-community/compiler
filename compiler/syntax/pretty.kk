@@ -6,13 +6,13 @@ import compiler/common/range
 // Updated 7/12/25, Commit: #752748d, TODO: Check that it actually matches now
 
 
-fun program/pretty(Program(_, n, _, typeDefs, defs, imports, externals, fixDefs, _):userProgram): div doc
-  vcat(Cons("module".text |+| n.pretty, imports.map(pretty) ++ fixDefs.map(pretty) ++ externals.map(pretty) ++ typeDefs.map(pretty) ++ defs.map(pretty)))
+fun program/pretty(Program(_, n, _, typedefs, defs, imports, externals, fix-defs, _):user-program): div doc
+  vcat(Cons("module".text |+| n.pretty, imports.map(pretty) ++ fix-defs.map(pretty) ++ externals.map(pretty) ++ typedefs.map(pretty) ++ defs.map(pretty)))
 
 fun external/pretty(e: external): doc
   empty
 
-fun externcall/pretty(e: externalCall): doc
+fun externcall/pretty(e: external-call): doc
   match e
     ExternalInline -> empty
     ExternalCall -> empty
@@ -23,18 +23,18 @@ fun fixity/pretty(f: fixity): doc
     FixPrefix -> "prefix".text
     FixPostfix -> "postfix".text
 
-fun fixdef/pretty(f: fixDef): doc
+fun fixdef/pretty(f: fix-def): doc
   f.name.pretty |+| f.fixity.pretty |+| f.vis.pretty
 
 fun kimport/pretty(i: kimport): doc
   i.vis.pretty |.| "import".text |+| i.fullName.pretty 
 
-fun typedefgroup/pretty(t: typeDefGroup<userType,userKind>): div doc
+fun typedefgroup/pretty(t: typedef-group<user-type,user-kind>): div doc
   match t
     TypeDefRec(defs) -> defs.map(pretty).vcat
     TypeDefNonRec(d) -> d.pretty
 
-fun typedef/pretty(td: typeDef<userType,userType,userKind>): div doc
+fun typedef/pretty(td: typedef<user-type,user-type,user-kind>): div doc
   match td
     Synonym(binder, params, synonym, _, vis, doc) -> 
      doc.pretty |--| vis.pretty |.| "alias ".text |.| binder.pretty |+| params.map(pretty).vcat |+| synonym.pretty 
@@ -46,23 +46,23 @@ fun vis/pretty(v: visibility): doc
     Public -> "pub ".text
     Private -> empty
 
-fun tb/pretty(t: typeBinder<userKind>): div doc
+fun tb/pretty(t: type-binder<user-kind>): div doc
   t.name.pretty |+| t.kind.pretty
 
-fun con/pretty(u: userCon<userType,userType,userKind>): div doc
+fun con/pretty(u: user-con<user-type,user-type,user-kind>): div doc
   u.name.pretty |+| u.existentials.map(pretty).vcat |+| 
    u.params.map(fn((vis,bind)) tupled([vis.pretty, bind.pretty]) ).vcat |+| 
    u.result.pretty |+| u.vis.pretty |.| u.doc.pretty
 
-fun dg/pretty(d: defGroup<userType>): div doc
+fun dg/pretty(d: def-group<user-type>): div doc
   match d
     DefRec(defs) -> defs.map(_.pretty |+| "\n".text).vcat
     DefNonRec(df) -> df.pretty
 
-fun tdefvb/pretty(v: valueBinder<userType,maybe<expr<userType>>>): div doc
+fun tdefvb/pretty(v: value-binder<user-type,maybe<expr<user-type>>>): div doc
   v.name.pretty |+| v.expr.pretty
 
-fun lamvb/pretty(v: valueBinder<maybe<userType>,maybe<expr<userType>>>): div doc
+fun lamvb/pretty(v: value-binder<maybe<user-type>,maybe<expr<user-type>>>): div doc
   val tp = match v.binderType 
     Just -> ":".text |+| v.binderType.pretty
     Nothing -> empty
@@ -71,19 +71,19 @@ fun lamvb/pretty(v: valueBinder<maybe<userType>,maybe<expr<userType>>>): div doc
     Nothing -> empty
   v.name.pretty |.| tp |.| (if tp.is-empty then def else " ".text |.| def)
 
-fun defsort/pretty(d: defSort): doc
+fun defsort/pretty(d: def-sort): doc
   match d
     DefFun -> "fun".text
     DefVal -> "val".text
     DefVar -> "var".text
 
-fun definline/pretty(d: defInline): doc
+fun definline/pretty(d: def-inline): doc
   match d
     InlineNever -> "noinline".text
     InlineAlways -> "inline".text
     InlineAuto -> pretty/pprint/empty
 
-fun dbinder/pretty(vb: valueBinder<(), userExpr>, sort: defSort): div doc
+fun dbinder/pretty(vb: value-binder<(), user-expr>, sort: def-sort): div doc
   match sort
     DefFun -> 
       match vb.expr
@@ -95,16 +95,16 @@ fun dbinder/pretty(vb: valueBinder<(), userExpr>, sort: defSort): div doc
     DefVal -> vb.name.pretty |+| "=".text |+| vb.expr.pretty
     DefVar -> vb.name.pretty |+| ":=".text |+| vb.expr.pretty
 
-fun def/pretty(d: def<userType>): div doc
+fun def/pretty(d: def<user-type>): div doc
   val prf = d.doc.text |-| d.visibility.pretty |.| d.defInline.pretty |.| d.sort.pretty
   prf |+| d.binder.pretty(d.sort)
 
-fun arg/pretty(a: (maybe<(name,range)>, expr<userType>)): div doc
+fun arg/pretty(a: (maybe<(name,range)>, expr<user-type>)): div doc
   match a
     (Just((n, _)), expr) -> n.pretty |+| "=".text |+| expr.pretty
     (Nothing, expr) -> expr.pretty
 
-fun expr/pretty(expr: expr<userType>): div doc
+fun expr/pretty(expr: expr<user-type>): div doc
   match expr
     Lam(binder, e) -> "fn".text |.| binder.map(pretty).tupled |--| e.pretty.indent(2)
     Let(d, e) -> d.dg/pretty |--| e.expr/pretty 
@@ -125,10 +125,10 @@ fun expr/pretty(expr: expr<userType>): div doc
     Handler(_, _, _, _, _, _, _, hReturn, _, branches) -> 
       "handler".text |--| Cons(hReturn.pretty, branches.map(pretty)).vcat.indent(2)
 
-fun handbranch/pretty(b: handlerBranch<userType>): div doc
+fun handbranch/pretty(b: handler-branch<user-type>): div doc
   b.branchSort.pretty |+| b.branchName.pretty |--| b.branchExpr.pretty.indent(2)
 
-fun branchsort/pretty(b: operationSort): doc
+fun branchsort/pretty(b: operation-sort): doc
   match b
     OpVal -> "val".text
     OpFun -> "fun".text
@@ -137,30 +137,30 @@ fun branchsort/pretty(b: operationSort): doc
     OpControl -> "ctl".text
     OpControlErr -> "ctl".text
 
-fun hsort/pretty(h: handlerSort): doc
+fun hsort/pretty(h: handler-sort): doc
   match h
     HandlerInstance -> "named".text
     HandlerNormal -> empty
 
-fun hov/pretty(h: handlerOverride): doc
+fun hov/pretty(h: handler-override): doc
   match h
     HandlerOverride -> "override".text
     HandlerNoOverride -> empty
 
-fun hs/pretty(h: handlerScope): doc
+fun hs/pretty(h: handler-scope): doc
   match h
     HandlerScoped -> "scoped".text
     HandlerNoScope -> empty
 
-fun branch/pretty(b: branch<userType>): div doc
+fun branch/pretty(b: branch<user-type>): div doc
   b.branchPattern.pretty |+| b.branchGuard.map("->".text |--| _.guardExpr.pretty.indent(2)).vcat
 
-fun patarg/pretty(pa: (maybe<(name, range)>, userPattern)): div doc
+fun patarg/pretty(pa: (maybe<(name, range)>, user-pattern)): div doc
   match pa
     (Just((n, _)), p) -> n.pretty |+| "as".text |+| p.pretty
     (Nothing, p) -> p.pretty
 
-fun pat/pretty(p: userPattern): div doc
+fun pat/pretty(p: user-pattern): div doc
   match p
     PatWild -> "_".text
     PatVar(patvar) -> patvar.pretty
@@ -172,7 +172,7 @@ fun pat/pretty(p: userPattern): div doc
     PatParens(p) -> tupled([p.pretty])
     PatLit(value) -> value.pretty
 
-fun vbm/pretty(ValueBinder(nm, tp, subpat): valueBinder<maybe<userType>, userPattern>): div doc
+fun vbm/pretty(ValueBinder(nm, tp, subpat): value-binder<maybe<user-type>, user-pattern>): div doc
   if subpat.is-patWild then
     nm.pretty |.| tp.map(" : ".text |.| _.pretty).default(empty)
   else
@@ -185,13 +185,13 @@ fun lit/pretty(l: lit): doc
     LitChar(v) -> "'".text |.| v.text |.| "'".text
     LitString(v) -> v.show.pretty
 
-fun uquant/pretty(u: userQuantifier): doc
+fun uquant/pretty(u: user-quantifier): doc
   match u
     QSome -> "some".text
     QForall -> "forall".text
     QExists -> "exists".text
 
-fun ut/pretty(u: userType): div doc
+fun ut/pretty(u: user-type): div doc
   match u
     TpQuan(q, b, kind) -> q.pretty |+| b.pretty |+| kind.pretty 
     TpFun(a, b, c) -> a.map(fn((n, ut)) n.pretty |.| ":".text |.| ut.pretty).tupled |+| b.pretty |+| c.pretty 
@@ -201,7 +201,7 @@ fun ut/pretty(u: userType): div doc
     TpParens(t) -> tupled([t.pretty])
     TpAnn(t, k) -> t.pretty |+| "::".text |+| k.pretty
 
-fun uk/pretty(u: userKind): doc
+fun uk/pretty(u: user-kind): doc
   match u
     KindCon(name) -> name.pretty
     KindArrow(from, to) -> from.pretty |+| "->".text |+| to.pretty

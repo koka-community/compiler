@@ -7,7 +7,7 @@
 //----------------------------------------------------------------------------
 // Updated as of 7/23/24: Commit b8074c2
 
-type resumeKind
+type resume-kind
   ResumeNever
   ResumeTail
   ResumeScopedOnce
@@ -17,7 +17,7 @@ type resumeKind
   ResumeOnceRaw
   ResumeNormalRaw
 
-fun show(rk: resumeKind)
+fun show(rk: resume-kind)
   match rk
     ResumeNever -> "never"
     ResumeTail -> "tail"
@@ -28,7 +28,7 @@ fun show(rk: resumeKind)
     ResumeOnceRaw -> "once (no finalization)"
     ResumeNormalRaw -> "normal (no finalization)"
 
-fun index(rk: resumeKind)
+fun index(rk: resume-kind)
   match rk
     ResumeNever -> 0
     ResumeTail -> 1

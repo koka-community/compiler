@@ -38,7 +38,7 @@ fun suite()
         val n'' = extend(n', 2, "beta")
         n''.show(2)
 
-  group("niceEff effect handler")
+  group("nice-eff effect handler")
     test("niceEnv handler manages type variable names")
       expect("a")
         niceEnv

@@ -43,7 +43,7 @@ val alex-deflt = alex-deflt_create()
 extern alex-deflt_create(): vector<int>
   c inline "kk_intx_t arr[] = {-1,266,223,189,326,290,-1,-1,-1,-1,-1,-1,36,-1,-1,16,17,24,16,17,24,-1,-1,24,-1,-1,-1,32,29,168,-1,32,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,32,118,117,115,115,116,32,219,186,168,117,219,118,186,29,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,315,-1,-1,-1,-1,-1,-1,-1,-1,-1,183,-1,-1,-1,-1,-1,183,183,183,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,214,-1,-1,-1,-1,-1,-1,-1,214,-1,-1,214,214,-1,-1,116,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,255,-1,-1,-1,-1,-1,-1,-1,255,-1,-1,255,262,263,255,262,263,-1,-1,-1,-1,-1,-1,-1,279,-1,-1,-1,-1,-1,-1,-1,279,-1,-1,279,286,287,279,286,287,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,315,-1,-1,-1,-1,-1,-1,-1,315,-1,315,-1,-1,-1,-1,-1,-1,-1,-1,-1};\nkk_vector_from_cintarray(arr, 328, kk_context())"
   js inline "[-1,266,223,189,326,290,-1,-1,-1,-1,-1,-1,36,-1,-1,16,17,24,16,17,24,-1,-1,24,-1,-1,-1,32,29,168,-1,32,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,32,118,117,115,115,116,32,219,186,168,117,219,118,186,29,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,315,-1,-1,-1,-1,-1,-1,-1,-1,-1,183,-1,-1,-1,-1,-1,183,183,183,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,214,-1,-1,-1,-1,-1,-1,-1,214,-1,-1,214,214,-1,-1,116,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,255,-1,-1,-1,-1,-1,-1,-1,255,-1,-1,255,262,263,255,262,263,-1,-1,-1,-1,-1,-1,-1,279,-1,-1,-1,-1,-1,-1,-1,279,-1,-1,279,286,287,279,286,287,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,315,-1,-1,-1,-1,-1,-1,-1,315,-1,315,-1,-1,-1,-1,-1,-1,-1,-1,-1]"
-val alex-accept : vector<alexAcc> = ( [ AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(117), AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(116), AlexAcc(115), AlexAcc(114), AlexAcc(113), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(112), AlexAcc(111), AlexAcc(110), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(109), AlexAccNone, AlexAcc(108), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(107), AlexAccNone, AlexAcc(106), AlexAcc(105), AlexAcc(104), AlexAcc(103), AlexAcc(102), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(101), AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(100), AlexAcc(99), AlexAcc(98), AlexAcc(97), AlexAccNone, AlexAccNone, AlexAcc(96), AlexAcc(95), AlexAccNone, AlexAcc(94), AlexAcc(93), AlexAccNone, AlexAcc(92), AlexAccNone, AlexAcc(91), AlexAccNone, AlexAcc(90), AlexAccNone, AlexAccNone, AlexAcc(89), AlexAccNone, AlexAcc(88), AlexAcc(87), AlexAcc(86), AlexAcc(85), AlexAcc(84), AlexAcc(83), AlexAcc(82), AlexAcc(81), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(80), AlexAcc(79), AlexAcc(78), AlexAcc(77), AlexAcc(76), AlexAcc(75), AlexAcc(74), AlexAcc(73), AlexAcc(72), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(71), AlexAccNone, AlexAccNone, AlexAcc(70), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(69), AlexAccNone, AlexAcc(68), AlexAcc(67), AlexAcc(66), AlexAcc(65), AlexAcc(64), AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(63), AlexAcc(62), AlexAcc(61), AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(60), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(59), AlexAcc(58), AlexAccNone, AlexAcc(57), AlexAcc(56), AlexAcc(55), AlexAcc(54), AlexAcc(53), AlexAcc(52), AlexAcc(51), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(50), AlexAcc(49), AlexAccNone, AlexAcc(48), AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(47), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(46), AlexAcc(45), AlexAccNone, AlexAccNone, AlexAcc(44), AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(43), AlexAcc(42), AlexAccNone, AlexAccNone, AlexAcc(41), AlexAcc(40), AlexAccNone, AlexAcc(39), AlexAcc(38), AlexAcc(37), AlexAcc(36), AlexAcc(35), AlexAcc(34), AlexAcc(33), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(32), AlexAcc(31), AlexAcc(30), AlexAcc(29), AlexAcc(28), AlexAcc(27), AlexAcc(26), AlexAccNone, AlexAcc(25), AlexAcc(24), AlexAcc(23), AlexAcc(22), AlexAcc(21), AlexAcc(20), AlexAcc(19), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(18), AlexAcc(17), AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(16), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(15), AlexAcc(14), AlexAccNone, AlexAcc(13), AlexAcc(12), AlexAcc(11), AlexAcc(10), AlexAcc(9), AlexAcc(8), AlexAcc(7), AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(6), AlexAcc(5), AlexAcc(4), AlexAcc(3), AlexAcc(2), AlexAccNone, AlexAcc(1), AlexAcc(0), AlexAccNone ] : list<alexAcc>).vector;
+val alex-accept : vector<alex-acc> = ( [ AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(117), AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(116), AlexAcc(115), AlexAcc(114), AlexAcc(113), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(112), AlexAcc(111), AlexAcc(110), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(109), AlexAccNone, AlexAcc(108), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(107), AlexAccNone, AlexAcc(106), AlexAcc(105), AlexAcc(104), AlexAcc(103), AlexAcc(102), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(101), AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(100), AlexAcc(99), AlexAcc(98), AlexAcc(97), AlexAccNone, AlexAccNone, AlexAcc(96), AlexAcc(95), AlexAccNone, AlexAcc(94), AlexAcc(93), AlexAccNone, AlexAcc(92), AlexAccNone, AlexAcc(91), AlexAccNone, AlexAcc(90), AlexAccNone, AlexAccNone, AlexAcc(89), AlexAccNone, AlexAcc(88), AlexAcc(87), AlexAcc(86), AlexAcc(85), AlexAcc(84), AlexAcc(83), AlexAcc(82), AlexAcc(81), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(80), AlexAcc(79), AlexAcc(78), AlexAcc(77), AlexAcc(76), AlexAcc(75), AlexAcc(74), AlexAcc(73), AlexAcc(72), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(71), AlexAccNone, AlexAccNone, AlexAcc(70), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(69), AlexAccNone, AlexAcc(68), AlexAcc(67), AlexAcc(66), AlexAcc(65), AlexAcc(64), AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(63), AlexAcc(62), AlexAcc(61), AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(60), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(59), AlexAcc(58), AlexAccNone, AlexAcc(57), AlexAcc(56), AlexAcc(55), AlexAcc(54), AlexAcc(53), AlexAcc(52), AlexAcc(51), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(50), AlexAcc(49), AlexAccNone, AlexAcc(48), AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(47), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(46), AlexAcc(45), AlexAccNone, AlexAccNone, AlexAcc(44), AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(43), AlexAcc(42), AlexAccNone, AlexAccNone, AlexAcc(41), AlexAcc(40), AlexAccNone, AlexAcc(39), AlexAcc(38), AlexAcc(37), AlexAcc(36), AlexAcc(35), AlexAcc(34), AlexAcc(33), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(32), AlexAcc(31), AlexAcc(30), AlexAcc(29), AlexAcc(28), AlexAcc(27), AlexAcc(26), AlexAccNone, AlexAcc(25), AlexAcc(24), AlexAcc(23), AlexAcc(22), AlexAcc(21), AlexAcc(20), AlexAcc(19), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(18), AlexAcc(17), AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(16), AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(15), AlexAcc(14), AlexAccNone, AlexAcc(13), AlexAcc(12), AlexAcc(11), AlexAcc(10), AlexAcc(9), AlexAcc(8), AlexAcc(7), AlexAccNone, AlexAccNone, AlexAccNone, AlexAcc(6), AlexAcc(5), AlexAcc(4), AlexAcc(3), AlexAcc(2), AlexAccNone, AlexAcc(1), AlexAcc(0), AlexAccNone ] : list<alex-acc>).vector;
 
 val alex-actions : vector<action> = vector-init-list(118, [ (117,alex_action_32), (116,alex_action_26), (115,alex_action_25), (114,alex_action_25), (113,alex_action_25), (112,alex_action_25), (111,alex_action_24), (110,alex_action_23), (109,alex_action_23), (108,alex_action_22), (107,alex_action_21), (106,alex_action_20), (105,alex_action_19), (104,alex_action_18), (103,alex_action_36), (102,alex_action_42), (101,alex_action_42), (100,alex_action_17), (99,alex_action_17), (98,alex_action_17), (97,alex_action_17), (96,alex_action_16), (95,alex_action_15), (94,alex_action_14), (93,alex_action_14), (92,alex_action_14), (91,alex_action_13), (90,alex_action_13), (89,alex_action_12), (88,alex_action_12), (87,alex_action_11), (86,alex_action_11), (85,alex_action_11), (84,alex_action_10), (83,alex_action_9), (82,alex_action_8), (81,alex_action_8), (80,alex_action_7), (79,alex_action_6), (78,alex_action_6), (77,alex_action_5), (76,alex_action_4), (75,alex_action_3), (74,alex_action_2), (73,alex_action_1), (72,alex_action_0), (71,alex_action_50), (70,alex_action_50), (69,alex_action_50), (68,alex_action_50), (67,alex_action_50), (66,alex_action_50), (65,alex_action_50), (64,alex_action_50), (63,alex_action_49), (62,alex_action_50), (61,alex_action_48), (60,alex_action_50), (59,alex_action_47), (58,alex_action_46), (57,alex_action_46), (56,alex_action_46), (55,alex_action_46), (54,alex_action_46), (53,alex_action_46), (52,alex_action_46), (51,alex_action_46), (50,alex_action_45), (49,alex_action_46), (48,alex_action_44), (47,alex_action_46), (46,alex_action_6), (45,alex_action_6), (44,alex_action_5), (43,alex_action_9), (42,alex_action_8), (41,alex_action_43), (40,alex_action_42), (39,alex_action_42), (38,alex_action_42), (37,alex_action_42), (36,alex_action_42), (35,alex_action_42), (34,alex_action_42), (33,alex_action_42), (32,alex_action_41), (31,alex_action_40), (30,alex_action_39), (29,alex_action_38), (28,alex_action_41), (27,alex_action_37), (26,alex_action_36), (25,alex_action_36), (24,alex_action_36), (23,alex_action_36), (22,alex_action_36), (21,alex_action_36), (20,alex_action_36), (19,alex_action_36), (18,alex_action_35), (17,alex_action_34), (16,alex_action_36), (15,alex_action_33), (14,alex_action_32), (13,alex_action_32), (12,alex_action_32), (11,alex_action_32), (10,alex_action_32), (9,alex_action_32), (8,alex_action_32), (7,alex_action_32), (6,alex_action_32), (5,alex_action_31), (4,alex_action_32), (3,alex_action_30), (2,alex_action_29), (1,alex_action_28), (0,alex_action_27) ] : list<(int,action)>);
 
@@ -164,18 +164,20 @@ effect alex
   fun consume-char(): () // Consumes the current character, adding it to the accepted input
   // Lexer accepting finished tokens and info
   fun set-accept(s: int): () // Sets the latest potential accepting state, while still seeking for states that accept more input
-  fun recognize-token(): alexAccRes // Recognizes that the last accepting state is the longest accepting token, and prepares to start the next token
+  fun recognize-token(): alex-acc-res // Recognizes that the last accepting state is the longest accepting token, and prepares to start the next token
   fun action-info(): action-info // Get the info about the last token recognized (start, end, and slice) for the action
  
-pub value struct alex-pos
-  offset: int
-  column: int
-  line: int
+pub value type alex-pos
+  AlexPos(
+    offset: int,
+    column: int,
+    line: int
+  )
 
 // alias alex-eff = <pure, alex>
 // alias handled-alex-eff = <pure>
 // val alex-actions: vector<action> = [].vector
-// val alex-accept: vector<alexAcc> = [].vector
+// val alex-accept: vector<alex-acc> = [].vector
 // val alex-base : vector<int> = [].vector
 // val alex-check : vector<int> = [].vector
 // val alex-table : vector<int> = [].vector
@@ -184,18 +186,20 @@ pub value struct alex-pos
 alias alex-eff = <pure,alex,koka-lex>
 alias handled-alex-eff = <pure,koka-lex>
 
-fun pos-move(Alex-pos(o, line, col): alex-pos, c: int): alex-pos
+fun pos-move(AlexPos(o, line, col): alex-pos, c: int): alex-pos
   val o1 = if o < 0 then o else o+1
   match c.char
-    '\n' -> Alex-pos(o1, line + 1, 1)
-    _    -> Alex-pos(o1, line, col + 1)
+    '\n' -> AlexPos(o1, line + 1, 1)
+    _    -> AlexPos(o1, line, col + 1)
 
 alias action = () -> alex-eff ();
 
-struct action-info
-  token: bslice
-  start: alex-pos
-  end: alex-pos
+type action-info
+  ActionInfo(
+    token: bslice,
+    start: alex-pos,
+    end: alex-pos
+  )
 
 fun get-slice(): <alex> bslice
   action-info().token
@@ -212,50 +216,54 @@ fun get-start(): <alex> alex-pos
 fun get-end(): <alex> alex-pos
   action-info().end
 
-value type alexAcc
+value type alex-acc
   AlexAccNone
   AlexAcc(a: int)
   AlexAccSkip
 
-type alexAccRes
+type alex-acc-res
   AlexAccResNone
   AlexAccRes(action: int, input: bslice, acc: bslice, end: alex-pos)
   AlexAccResSkip(input: bslice, acc: bslice)
 
-struct alexScanState
-  states: list<int> 
-  seek: bslice // The seeked position in the input
-  // on an error, we want to keep the input *before* the
-  // character that failed, not after.
-  current: bslice // Trails the seeked position by one
-  acc: bslice // The slice representing the current 'accepted' portion of the input
-  prev: int // Previous character
-  curr: int // Current character
-  start: alex-pos // File position of the start of the current token
-  end: alex-pos // File position of the end of the current token
-  last-accept: alexAccRes // The last accepting state encountered
-  action-info: action-info // The action info
+type alex-scan-state
+  AlexScanState(
+    states: list<int>,
+    seek: bslice, // The seeked position in the input
+    // on an error, we want to keep the input *before* the
+    // character that failed, not after.
+    current: bslice, // Trails the seeked position by one
+    acc: bslice, // The slice representing the current 'accepted' portion of the input
+    prev: int, // Previous character
+    curr: int, // Current character
+    start: alex-pos, // File position of the start of the current token
+    end: alex-pos, // File position of the end of the current token
+    last-accept: alex-acc-res, // The last accepting state encountered
+    action-info: action-info // The action info
+  )
 
 // Consumes the current character, adding it to the accepted input for this token
-fun alex-consume-char(a: alexScanState)
+fun alex-consume-char(a: alex-scan-state)
   match a
     AlexScanState(states, seek, current, acc, prev, curr, start, end, last-accept, action-info) ->
       AlexScanState(states, seek, current, acc.extend(1), prev, curr, start, end.pos-move(curr), last-accept, action-info)
 
-pub value struct alex-next
-  s: alexScanState
-  c: int
+pub value type alex-next
+  AlexNext(
+    s: alex-scan-state,
+    c: int
+  )
 
 // Moves the current to the seeked position, and moves the seeked position to the next character
-fun alex-next(a: alexScanState): (maybe<alex-next>)
+fun alex-next(a: alex-scan-state): (maybe<alex-next>)
   match a
     AlexScanState(states, seek, _, acc, _, curr, start, end, last-accept, action-info) ->
       match seek.next()
         Just((c, slice')) ->
-          Just(Alex-next(AlexScanState(states, slice', seek, acc, curr, c.int, start, end, last-accept, action-info), c.int))
+          Just(AlexNext(AlexScanState(states, slice', seek, acc, curr, c.int, start, end, last-accept, action-info), c.int))
         Nothing ->  Nothing
 
-fun do-alex-accept(a: alexScanState, s: int) // Sets the accepting state
+fun do-alex-accept(a: alex-scan-state, s: int) // Sets the accepting state
   match a
     AlexScanState(states, seek, current, acc, prev, curr, start, end, last-accept, action-info) ->
       match alex-accept.unsafe-idx(s.ssize_t)
@@ -269,7 +277,7 @@ fun do-alex-accept(a: alexScanState, s: int) // Sets the accepting state
           AlexScanState(states, seek, current, acc, prev, curr, start, end, AlexAccResSkip(seek, acc), action-info)
 
 // Recognizes the last accepting state as the longest accepting token
-fun recognize(a: alexScanState, restart: bool)
+fun recognize(a: alex-scan-state, restart: bool)
   match a
     AlexScanState(states, seek, current, acc, prev, curr, start, end, last-accept, action-info) ->
       match last-accept
@@ -286,12 +294,12 @@ fun recognize(a: alexScanState, restart: bool)
                 // throw("Alex Error at: " ++ seek.subslice(0, 50).string.show)
         AlexAccRes(_, resnext, resacc, resend) ->
           // trace("Recognized " ++ resacc.show)
-          AlexScanState(states, resnext, resnext, resnext.truncate(), 0, 0, resend, resend, AlexAccResNone, Action-info(resacc, start, resend))
+          AlexScanState(states, resnext, resnext, resnext.truncate(), 0, 0, resend, resend, AlexAccResNone, ActionInfo(resacc, start, resend))
         AlexAccResSkip(resnext) ->
           AlexScanState(states, resnext, resnext, resnext.truncate(), 0, 0, end, end, AlexAccResNone, action-info)
 
 fun alex-scan(input: bslice, sc: int, restart:bool=False): handled-alex-eff ()
-  var state := AlexScanState([sc], input, input, input.truncate, 0, 0 , Alex-pos(0,1,1), Alex-pos(0,1,1), AlexAccResNone, Action-info(input.truncate, Alex-pos(0,1,1), Alex-pos(0,1,1)))
+  var state := AlexScanState([sc], input, input, input.truncate, 0, 0 , AlexPos(0,1,1), AlexPos(0,1,1), AlexAccResNone, ActionInfo(input.truncate, AlexPos(0,1,1), AlexPos(0,1,1)))
   with handler
     fun get-state()
       match state.states // Get the current lexer state (i.e. the state to start the next token in)
@@ -312,7 +320,7 @@ fun alex-scan(input: bslice, sc: int, restart:bool=False): handled-alex-eff ()
       val mc = state.alex-next()
       match mc
         Nothing -> Nothing
-        Just(Alex-next(s, c)) -> 
+        Just(AlexNext(s, c)) -> 
           state := s
           Just(c)
     fun consume-char() 

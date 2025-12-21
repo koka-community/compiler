@@ -30,10 +30,10 @@ fun top/mon-transform()
   set-core-defs(mon-transform(get-core-defs()))
 
 // transform definition groups
-fun def-group/mon-transform(dgs: defGroups)
+fun def-group/mon-transform(dgs: def-groups)
   dgs.map(mon-transform)
 
-fun dg/mon-transform(dg): monadicEff defGroup
+fun dg/mon-transform(dg): monadicEff def-group
   match dg
     DefRec(defs) -> DefRec(defs.map(fn(d) d.monDef(True)))
     DefNonRec(d) -> DefNonRec(d.monDef(False))
@@ -135,7 +135,7 @@ fun mon-branch(Branch(pat, guards): branch)
 fun mon-guard(Guard(guards, body): guard)
   Guard(guards, (body.mon-expr)(id)) // guards are total!
 
-fun mon-let-groups(dgs: defGroups, body: expr)
+fun mon-let-groups(dgs: def-groups, body: expr)
   match dgs
     Nil -> body.mon-expr
     Cons(dg, dgs') ->
@@ -143,7 +143,7 @@ fun mon-let-groups(dgs: defGroups, body: expr)
       val expr' = dgs'.mon-let-groups(body)
       fn(k) dg'(fn(xdg) Let(xdg, expr'(k)))
 
-fun mon-let-group(dg: defGroup)
+fun mon-let-group(dg: def-group)
   match dg
     DefRec(defs) ->
       val ldefs = mon-trans(fn(d) mon-let-def(True, d), defs)
@@ -234,7 +234,7 @@ fun is-mon-expr'(e: expr)
     Case(exprs, bs) -> exprs.any(is-mon-expr') || bs.any(is-mon-branch)
     _ -> e.type-of.is-mon-type
 
-fun is-mon-def-group(dg: defGroup)
+fun is-mon-def-group(dg: def-group)
   match dg
     DefRec(defs) -> defs.any(is-mon-def)
     DefNonRec(d) -> is-mon-def(d)

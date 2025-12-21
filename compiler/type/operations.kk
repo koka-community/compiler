@@ -77,19 +77,19 @@ fun skolemize-ex(tp: ktype, r: range)
   tp.instantiate-exfl(Skolem, r)
 
 // General instantiation for skolemize and instantiate
-fun instantiate-exfl(tp: ktype, fl: flavour, r: range): <unique, comp-flags, pure> (list<typeVar>, ktype, expr -> e expr)
+fun instantiate-exfl(tp: ktype, fl: flavour, r: range): <unique, comp-flags, pure> (list<type-var>, ktype, expr -> e expr)
   match tp.split-type-scheme
     ([], rho) -> ([], rho, id)
     (vars, rho) ->
       val (tvars, sub) = fresh-subx(TVar, fl, vars, rho.all-tv())
       (tvars, sub |-> rho, fn(e) add-type-apps(tvars,e))
 
-fun fresh-sub(fl: flavour, vars: list<typeVar>)
+fun fresh-sub(fl: flavour, vars: list<type-var>)
   val tvars = vars.map(fn(tv) fresh-typevar(tv.kind, fl))
   val sub = vars.zip(tvars.map(TVar)).sub
   (tvars, sub)
 
-fun fresh-subx(make-type: (typeVar -> ktype), fl: flavour, vars: list<typeVar>, exclude: tvs)
+fun fresh-subx(make-type: (type-var -> ktype), fl: flavour, vars: list<type-var>, exclude: tvs)
   val tvars = vars.map(fn(tv) fresh-typevarx(tv.kind, fl, exclude))
   val sub = vars.zip(tvars.map(make-type)).sub
   (tvars, sub)

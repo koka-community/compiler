@@ -27,54 +27,58 @@ import compiler/syntax/promote
 // ---------------------------------------------------------
 // the following types are used to represent intermediate syntactic
 // structures
-pub struct opDecl
-  opdoc: string
-  name: name
-  kwdrng: range
-  namerng: range
-  lin: bool // linear
-  sort: operationSort
-  exists0: list<typeBinder<userKind>>
-  pars: list<valueBinder<userType, maybe<userExpr>>>
-  parsrng: range
-  mbteff: maybe<userType>
-  tres: userType
-  declrng: range
+pub type op-decl
+  OpDecl(
+    opdoc: string,
+    name: name,
+    kwdrng: range,
+    namerng: range, 
+    lin: bool, // linear
+    sort: operation-sort,
+    exists0: list<type-binder<user-kind>>,
+    pars: list<value-binder<user-type, maybe<user-expr>>>,
+    parsrng: range,
+    mbteff: maybe<user-type>,
+    tres: user-type,
+    declrng: range
+  )
 
 // TODO: We still use "instance" for "named" effects, rename it more consistently
-pub struct effectDecl
-  vis: visibility
-  vis2: visibility
-  declStart: range
-  effRange: range
-  doc: string
-  kind: dataKind
-  lin: bool // linear
-  inst: bool // instance
-  scoped: bool // scoped
-  name: name
-  nameRng: range
-  exists0: list<typeBinder<userKind>>
-  declKind: userKind
-  paramRange: range
-  extras: effectExtra
-  decls: list<opDecl>
-  declRng: range
+pub type effect-decl
+  EffectDecl(
+    vis: visibility,
+    vis2: visibility,
+    declStart: range,
+    effRange: range,
+    doc: string,
+    kind: data-kind,
+    lin: bool, // linear
+    inst: bool, // instance
+    scoped: bool, // scoped
+    name: name,
+    nameRng: range,
+    exists0: list<type-binder<user-kind>>,
+    declKind: user-kind,
+    paramRange: range,
+    extras: effect-extra,
+    decls: list<op-decl>,
+    declRng: range
+  )
 
-pub type effectExtra
-  EffectExtra(extra: list<userType>) // Extra operation effects besides the regular effect (partial for non-scoped)
-  EffectReplace(replace: list<userType>) // Replace operation effect by these (umbrella type, and partial)
+pub type effect-extra
+  EffectExtra(extra: list<user-type>) // Extra operation effects besides the regular effect (partial for non-scoped)
+  EffectReplace(replace: list<user-type>) // Replace operation effect by these (umbrella type, and partial)
 
 pub value type statement
-  StatFun(e: (userExpr -> <parse> userExpr))
-  StatExpr(e: userExpr)
-  StatVar(e: userDef)
+  StatFun(e: (user-expr -> <parse> user-expr))
+  StatExpr(e: user-expr)
+  StatVar(e: user-def)
 
 pub value type clause
-  ClauseRet(expr: userExpr)
-  ClauseFinally(expr: userExpr)
-  ClauseInitially(expr: userExpr)
-  ClauseBranch(expr: userHandlerBranch)
+  ClauseRet(expr: user-expr)
+  ClauseFinally(expr: user-expr)
+  ClauseInitially(expr: user-expr)
+  ClauseBranch(expr: user-handler-branch)
 
 pub fun clause/range(c: clause): range
   match c
@@ -83,18 +87,18 @@ pub fun clause/range(c: clause): range
     ClauseInitially(e) -> e.range
     ClauseBranch(e) -> e.range
 
-pub alias param = (visibility, valueBinder<userType, maybe<userExpr>>);
-pub alias transExpr = ((userExpr) -> userExpr)
-pub alias binder = (clause, maybe<transExpr>)
+pub alias param = (visibility, value-binder<user-type, maybe<user-expr>>);
+pub alias trans-expr = ((user-expr) -> user-expr)
+pub alias binder = (clause, maybe<trans-expr>)
 
-pub value type topDef
-  DefValue(def: userDef)
-  DefType(def: userTypeDef)
+pub value type top-def
+  DefValue(def: user-def)
+  DefType(def: user-typedef)
   DefExtern(def: external)
 
 // Automatically generated.
 // Shows a string representation of the `topDef` type.
-pub fun topDef/show(this : topDef) : div string
+pub fun topDef/show(this : top-def) : div string
   match this
     DefValue(def) -> "DefValue(def: " ++ def.show ++ ")"
     DefType(def) -> "DefType(def: " ++ def.show ++ ")"
@@ -104,25 +108,25 @@ pub fun topDef/show(this : topDef) : div string
 pub fun make-app(expr: expr<t>, args: list<expr<t>>, rT: (t) -> range): expr<t>
   App(expr, args.map((Nothing, _)), combine(Cons(expr.range, args.map(range))))
 
-pub fun make-tp-pure(rng: range): kUserType<k>
+pub fun make-tp-pure(rng: range): kuser-type<k>
   TpCon(nameTpPure, rng)
 
-pub fun make-tp-total(rng: range): kUserType<k>
+pub fun make-tp-total(rng: range): kuser-type<k>
   TpCon(nameEffectEmpty, rng)
 
-pub fun make-effect-empty(rng: range): kUserType<k>
+pub fun make-effect-empty(rng: range): kuser-type<k>
   TpCon(nameEffectEmpty, rng)
 
-pub fun make-effect-extend(label: kUserType<k>, ext: kUserType<k>, rng: range, ?range: (k) -> range): kUserType<k>
+pub fun make-effect-extend(label: kuser-type<k>, ext: kuser-type<k>, rng: range, ?range: (k) -> range): kuser-type<k>
   TpApp(TpCon(nameEffectExtend, rng), [label, ext], label.range.combine(ext.range))
 
-pub fun type-from-params(rng:range, pars: list<valueBinder<userType, maybe<userExpr>>>, teff: userType, tres: userType): div userType
+pub fun type-from-params(rng:range, pars: list<value-binder<user-type, maybe<user-expr>>>, teff: user-type, tres: user-type): div user-type
   promote-type(TpFun(pars.map(fn(p) (p.name, p.binderType)), teff, tres, rng))
 
-pub fun gen-args(pars: list<valueBinder<userType, maybe<userExpr>>>): list<(maybe<(name, range)>, userExpr)>
+pub fun gen-args(pars: list<value-binder<user-type, maybe<user-expr>>>): list<(maybe<(name, range)>, user-expr)>
   pars.map(fn(p) (Nothing, Var(p.name, False, p.range.before)))
 
-pub fun gen-parameter-args(tp: userType)
+pub fun gen-parameter-args(tp: user-type)
   match tp
     TpQuan(QSome) -> parse-error("external types cannot contain unspecified ('_') types", tp.range)
     TpQuan(QExists) -> parse-error("external types cannot contain existential types", tp.range)
@@ -132,20 +136,20 @@ pub fun gen-parameter-args(tp: userType)
     TpFun(pars) -> pars.gen-fun-parameter-args
     _ -> parse-error("external declarations must have a function type", tp.range)
 
-pub fun gen-fun-parameter-args(pars: list<(name, userType)>)
+pub fun gen-fun-parameter-args(pars: list<(name, user-type)>)
   pars.map-indexed(fn(i, p) p.gen-parameter-arg(i + 1)).unzip 
 
-pub fun gen-parameter-arg((name:name, _:userType), idx: int)
+pub fun gen-parameter-arg((name:name, _:user-type), idx: int)
   val fullName = if name == nil then new-hidden-name-ex("arg", idx.show) else name
   (ValueBinder(fullName, Nothing, Nothing, null, null), (Nothing, Var(fullName, False, null)))
 
-pub fun tp-var(tb: typeBinder<k>)
+pub fun tp-var(tb: type-binder<k>)
   TpVar(tb.name, tb.range)
 
-pub fun tp-con(tb: typeBinder<k>)
+pub fun tp-con(tb: type-binder<k>)
   TpCon(tb.name, tb.range)
 
-pub fun make-user-constructor(const: name, foralls: list<userTypeBinder>, resTp: userType, exists0: list<userTypeBinder>, pars: list<(visibility, valueBinder<userType, maybe<userExpr>>)>, mbLazyExpr : maybe<(fipT, userExpr)>, nameRng: range, rng: range, vis: visibility, doc: string)
+pub fun make-user-constructor(const: name, foralls: list<user-type-binder>, resTp: user-type, exists0: list<user-type-binder>, pars: list<(visibility, value-binder<user-type, maybe<user-expr>>)>, mbLazyExpr : maybe<(fipT, user-expr)>, nameRng: range, rng: range, vis: visibility, doc: string)
   val conParams = pars.map(fn((v, p)) (v, p(expr=Nothing)))
   val cName = const.new-creator-name
   val params = pars.map(fn((_, p)) p(binderType=if p.expr.is-just then make-optional(p.binderType) else p.binderType))
@@ -158,16 +162,16 @@ pub fun make-user-constructor(const: name, foralls: list<userTypeBinder>, resTp:
   val creator = Def(binder, rng, vis, DefFun([]), InlineAlways, doc) 
   (UserCon(const, exists0, conParams, Nothing, mbLazyExpr, nameRng, rng, vis, doc), if pars.any(_.snd.expr.is-just) then [creator] else [])
 
-pub fun split-top-defs(dfs: list<topDef>): (list<userDef>, list<userTypeDef>, list<external>)
-  fun split(dfs': list<topDef>, userDefs: ctx<list<userDef>>, typeDefs: ctx<list<userTypeDef>>, externDefs: ctx<list<external>>): (list<userDef>, list<userTypeDef>, list<external>)
+pub fun split-top-defs(dfs: list<top-def>): (list<user-def>, list<user-typedef>, list<external>)
+  fun split(dfs': list<top-def>, user-defs: ctx<list<user-def>>, typedefs: ctx<list<user-typedef>>, externDefs: ctx<list<external>>): (list<user-def>, list<user-typedef>, list<external>)
     match dfs'
-      Cons(DefValue(d), rst) -> rst.split(userDefs ++ ctx Cons(d, hole), typeDefs, externDefs)
-      Cons(DefType(d), rst) -> rst.split(userDefs, typeDefs ++ ctx Cons(d, hole), externDefs)
-      Cons(DefExtern(d), rst) -> rst.split(userDefs, typeDefs, externDefs ++ ctx Cons(d, hole))
-      Nil -> (userDefs ++. Nil, typeDefs ++. Nil, externDefs ++. Nil)
+      Cons(DefValue(d), rst) -> rst.split(user-defs ++ ctx Cons(d, hole), typedefs, externDefs)
+      Cons(DefType(d), rst) -> rst.split(user-defs, typedefs ++ ctx Cons(d, hole), externDefs)
+      Cons(DefExtern(d), rst) -> rst.split(user-defs, typedefs, externDefs ++ ctx Cons(d, hole))
+      Nil -> (user-defs ++. Nil, typedefs ++. Nil, externDefs ++. Nil)
   dfs.split(ctx hole, ctx hole, ctx hole)
 
-pub fun make-effect-decl(decl: effectDecl): <parse-error,pure> list<topDef>
+pub fun make-effect-decl(decl: effect-decl): <parse-error,pure> list<top-def>
   // TODO: Use record operations
   val EffectDecl(vis, _, vrng, erng, doc, tpSort, singleShot, isInstance, isScoped, id, irng, tpars, effkind, _, effectsExtra, operations, oprng) = decl
   val rng = vrng.combine(erng).combine(irng)
@@ -211,7 +215,7 @@ pub fun make-effect-decl(decl: effectDecl): <parse-error,pure> list<topDef>
 
   // parse the operations and return the constructor fields and function definitions
   val opCount = operations.length
-  fun ltOp(op1: opDecl, op2: opDecl): bool
+  fun ltOp(op1: op-decl, op2: op-decl): bool
     op1.name.unqualify.show < op2.name.unqualify.show
   
   val orderedOperations = operations.sort(?(<) = ltOp)
@@ -261,10 +265,10 @@ pub fun make-effect-decl(decl: effectDecl): <parse-error,pure> list<topDef>
   val handleDef = Def(ValueBinder(handleName, (), handleBody, irng, rng), grng, vis, DefFun([]), InlineNever, "// handler for the " ++ docEffect)
   [DefValue(tagDef), DefType(hndTpDecl), DefValue(handleDef)] ++ opSelects.map(DefValue) ++ opDefs.map(DefValue) ++ opValDefs.concat-maybe.map(DefValue)
 
-pub fun make-operation-decl(opCount: int, vis: visibility, forallsScoped: list<userTypeBinder>, forallsNonScoped: list<userTypeBinder>, 
+pub fun make-operation-decl(opCount: int, vis: visibility, forallsScoped: list<user-type-binder>, forallsNonScoped: list<user-type-binder>, 
                        docEffect: string, docEffectDecl: string, hndName: name, effName: name, isInstance: bool,
-                       effectsExtra: effectExtra, effTp: userType, hndTp: userType, hndTpVars: list<userTypeBinder>, 
-                       opx: (int, opDecl)): <parse-error,pure> (valueBinder<userType, maybe<userExpr>>, userDef, userDef, maybe<userDef>) 
+                       effectsExtra: effect-extra, effTp: user-type, hndTp: user-type, hndTpVars: list<user-type-binder>, 
+                       opx: (int, op-decl)): <parse-error,pure> (value-binder<user-type, maybe<user-expr>>, user-def, user-def, maybe<user-def>) 
   val foralls = forallsScoped ++ forallsNonScoped
   // todo: use record operations
   val (opIndex, op) = opx
@@ -365,31 +369,31 @@ pub fun make-operation-decl(opCount: int, vis: visibility, forallsScoped: list<u
 // Given a name and an expression, this function generates
 // - a binder for a fresh name (let's say `val x$name$3 = expr; body`), binding the expression
 // - a tail resuming expression i.e. `resume(x$name$3, params...)`
-// TODO: add parameters to resume (replace userExpr by list<valueBinder<t,e>> -> userExpr)
+// TODO: add parameters to resume (replace user-expr by list<value-binder<t,e>> -> user-expr)
 
-pub fun bind-expr-to-val(opname: name, oprange: range, expr: userExpr): (userExpr -> userExpr, list<valueBinder<t,e>> -> userExpr)
+pub fun bind-expr-to-val(opname: name, oprange: range, expr: user-expr): (user-expr -> user-expr, list<value-binder<t,e>> -> user-expr)
   val fresh = "value".make-fresh-hidden-name(opname, oprange)
   val freshVar = Var(fresh, False, oprange)
   val erange = expr.range
   val binder = Def(ValueBinder(fresh, (), expr, oprange, erange), oprange, Private, DefVal, InlineAuto, "")
   (fn(b) Bind(binder, b, erange), fn(params) freshVar)
 
-pub fun make-optional(tp: kUserType<k>, ?range: (kUserType<k>) -> range): kUserType<k>
+pub fun make-optional(tp: kuser-type<k>, ?range: (kuser-type<k>) -> range): kuser-type<k>
   TpApp(TpCon(nameTpOptional, tp.range), [tp], tp.range)
 
-pub fun any-statement-var(l: list<statement>): maybe<userDef>
+pub fun any-statement-var(l: list<statement>): maybe<user-def>
   match l
     Cons(StatVar(def'), _) -> Just(def')
     Cons(_, tl) -> tl.any-statement-var
     Nil -> Nothing
 
-pub fun local-scope(vdef: userDef, exp: userExpr): userExpr
+pub fun local-scope(vdef: user-def, exp: user-expr): user-expr
   val erng = exp.range
   val drng = vdef.range
   val nrng = vdef.binder.name-range
   App(Var(nameRunLocal, False, nrng.hide), [(Nothing, Lam([], exp, False, erng))], drng)
 
-pub fun combine(e1: statement, exp: userExpr): <parse> userExpr
+pub fun combine(e1: statement, exp: user-expr): <parse> user-expr
   match e1
     StatFun(f) -> f(exp)
     StatExpr(e) ->
@@ -406,7 +410,7 @@ pub fun combine(e1: statement, exp: userExpr): <parse> userExpr
            name, "var", nameRng))],
            rng.combine(expr.range))
 
-pub fun make-return(e: userExpr, r: range): userExpr
+pub fun make-return(e: user-expr, r: range): user-expr
   App(Var(nameReturn, False, r), [(Nothing, e)], r.combine(e.range))
 
 pub fun expr/un-parens(e: expr<t>): expr<t>
@@ -419,7 +423,7 @@ pub fun pat/un-parens(e: pattern<t>): pattern<t>
       PatParens(p) -> p.un-parens
       _ -> e
 
-pub fun apply-to-continuation(wrng: range, params: list<valueBinder<maybe<t>, maybe<expr<t>>>>, expr: expr<t>, body: expr<t>): expr<t>  
+pub fun apply-to-continuation(wrng: range, params: list<value-binder<maybe<t>, maybe<expr<t>>>>, expr: expr<t>, body: expr<t>): expr<t>  
   val lam = Lam(params, body, False, wrng.combine(body.range))
   val f = Parens(lam, "with".new-name, "expr", wrng) // Parens makes it last in type inference so types can better propagate (ambients/heap1) (todo: no longer the case right?)
   val funarg = [(Nothing, f)]
@@ -428,7 +432,7 @@ pub fun apply-to-continuation(wrng: range, params: list<valueBinder<maybe<t>, ma
     App(f', args, _) -> App(f', (args ++ funarg), fullrange)
     atom -> App(atom, funarg, fullrange)
 
-pub fun apply-maybe(rng: range, reinit: maybe<userExpr>, finally: maybe<userExpr>, f: userExpr): userExpr
+pub fun apply-maybe(rng: range, reinit: maybe<user-expr>, finally: maybe<user-expr>, f: user-expr): user-expr
   match (reinit, finally)
     (Nothing, Nothing) -> f
     _ -> 
@@ -441,14 +445,14 @@ pub fun apply-maybe(rng: range, reinit: maybe<userExpr>, finally: maybe<userExpr
         Nothing -> bodyF
       Lam([ValueBinder("act".new-hidden-name, Nothing, Nothing, rng, rng)], bodyI, False, rng)
 
-pub fun extract-binders(l: list<binder>): (list<clause>, (userExpr -> userExpr))
-  l.foldr(([], fn(x) x)) fn(b, (cs, binders): (list<clause>, (userExpr -> userExpr)))
+pub fun extract-binders(l: list<binder>): (list<clause>, (user-expr -> user-expr))
+  l.foldr(([], fn(x) x)) fn(b, (cs, binders): (list<clause>, (user-expr -> user-expr)))
     match b
       (clause, Nothing) -> (Cons(clause, cs), binders)
       (clause, Just(binder)) -> (Cons(clause, cs), fn(e) binders(binder(e)))
 
-pub fun partition-clauses(clauses: list<clause>, rng: range): parse-error (maybe<userExpr>, maybe<userExpr>, maybe<userExpr>, list<userHandlerBranch>)
-  fun separate(clauses': list<clause>, ret: maybe<userExpr>, fin: maybe<userExpr>, init: maybe<userExpr>, br: ctx<list<userHandlerBranch>>): <parse-error> (maybe<userExpr>, maybe<userExpr>, maybe<userExpr>, list<userHandlerBranch>)
+pub fun partition-clauses(clauses: list<clause>, rng: range): parse-error (maybe<user-expr>, maybe<user-expr>, maybe<user-expr>, list<user-handler-branch>)
+  fun separate(clauses': list<clause>, ret: maybe<user-expr>, fin: maybe<user-expr>, init: maybe<user-expr>, br: ctx<list<user-handler-branch>>): <parse-error> (maybe<user-expr>, maybe<user-expr>, maybe<user-expr>, list<user-handler-branch>)
     match clauses'
       Cons(ClauseRet(e), rst) -> 
         if ret.is-just then
@@ -469,9 +473,9 @@ pub fun partition-clauses(clauses: list<clause>, rng: range): parse-error (maybe
       Nil -> (ret, fin, init, br ++. Nil)
   separate(clauses, Nothing, Nothing, Nothing, ctx hole)
 
-pub val userTpRange = fn(tp: userType) tp.range
+pub val userTpRange = fn(tp: user-type) tp.range
 
-pub fun make-nil(r: range): expr<userType>
+pub fun make-nil(r: range): expr<user-type>
   make-app(Var(nameListNil, False, r), [], userTpRange)
 
 pub fun make-cons(r: range, x: expr<t>, xs: expr<t>, rT: (t) -> range): expr<t>
@@ -483,17 +487,17 @@ pub fun make-nil-pattern(rng: range): pattern<t>
 pub fun make-cons-pattern(x: pattern<t>, xs: pattern<t>): pattern<t>
   PatCon(nameCons, [(Nothing, x), (Nothing, xs)], x.range, x.range)
 
-pub fun tuple(tps: list<(name, userType)>, r: range): userType
+pub fun tuple(tps: list<(name, user-type)>, r: range): user-type
   match tps
     Cons(tp, Nil) -> tp.snd
     _ -> TpApp(TpCon(name-tp-tuple(tps.length), r), tps.map(snd), r)
 
-pub fun eta-expand(e: userExpr): userExpr
+pub fun eta-expand(e: user-expr): user-expr
   val (e', binders) = e.eta-transform
   if binders.is-empty then e'
   else Lam(binders, e', False, e.range)
 
-fun eta-transform(ue : userExpr): (userExpr, list<valueBinder<maybe<userType>, maybe<userExpr>>>)
+fun eta-transform(ue : user-expr): (user-expr, list<value-binder<maybe<user-type>, maybe<user-expr>>>)
   match ue
     Var(name, isOp, rng) | name.is-eta-hole -> 
       val name' = "eta".unique-range-hidden-name(rng)

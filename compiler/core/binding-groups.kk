@@ -17,7 +17,7 @@ alias freeVar = linearSet<tName>
 // definition groups. After type checking it is possible that definitions
 // that seemed recursive are actually not mutually recursive.
 
-fun regroup(dfs: list<def>): <comp-flags,pure> list<defGroup>
+fun regroup(dfs: list<def>): <comp-flags,pure> list<def-group>
   match dfs
     Cons(d, Nil) ->
       val fvdef = d.free-vars
@@ -29,9 +29,9 @@ fun regroup(dfs: list<def>): <comp-flags,pure> list<defGroup>
         [DefNonRec(d)]
     defs ->
       val def-names = defs.map(fn(d) TName(d.def-name, d.ktype))
-      val def-nameSet = LinearSet(def-names)
+      val def-name-set = LinearSet(def-names)
       val defMap = LinearMap(def-names.zip(defs))
-      val deps = LinearMap(def-names.zip(defs.map(_.free-vars.intersection(def-nameSet))))
+      val deps = LinearMap(def-names.zip(defs.map(_.free-vars.intersection(def-name-set))))
       // determine strongly connected components
       val defOrder = deps.list.map(fn((nm, fvs)) (nm, fvs.linearset/list)).scc
       // create a definition group

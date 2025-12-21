@@ -25,14 +25,14 @@ effect fmt
   fun fmt(t: token<lexeme>, l: lexeme, s: string): token<lexeme>
   val source-file: string
 
-alias highlight-eff = <colorSchemeEffect,coloredPrinter,printer,pure>
+alias highlight-eff = <colors,coloredPrinter,printer,pure>
 alias highlight = <fmt,pure>
 // -----------------------------------------------------------
 // Easy syntax highlighting
 // ----------------------------------------------------------
 // | Print source in color, given a color scheme, source name, 
 // initial line number, the input string, and a 'Printer'.
-fun highlight-print(source-name: path, line-no: int, input: string): <colorSchemeEffect,coloredPrinter,printer,pure> ()
+fun highlight-print(source-name: path, line-no: int, input: string): <colors,coloredPrinter,printer,pure> ()
   val cls = ColorScheme()
   with handler 
     val source-file = source-name.string
@@ -176,7 +176,7 @@ fun fmt/highlight(transform: list<lexeme> -> pure list<lexeme>, c: highlight-ctx
 fun highlight-lexemes(transform: list<lexeme> -> pure list<lexeme>, c: highlight-ctx, lexes: list<lexeme>): highlight list<token<lexeme>>
   fun highlight-acc(ctx', acc, lexemes)
     match lexemes
-      Nil -> acc.reverse
+      Nil -> acc.list/reverse
       Cons(l, ls) -> 
         val (ctx2', content) = highlight-lexeme(transform, c, l, ls)
         highlight-acc(ctx2', Cons(content, acc), ls)
@@ -325,7 +325,7 @@ fun scan-tag(n: int, lacc: ctx<list<token-comment<lexeme>>>, content: list<char>
   fun default()
     val (tag, clos) = content.span(fn(c) c != '>' && c != '\n')
     val (end, rest) = if clos.is-nil then ([], []) else ([clos.string.head-char.unjust], clos.tail)
-    scan(if end.string.head-char.unjust == '\n' then n + 1 else n, lacc ++ ctx Cons(ComText(tag.string ++ end.string), _), [], rest)
+    scan(if end.string.head-char.unjust == '\n' then n + 1 else n, lacc ++ ctx Cons(ComText(tag.string ++ end.string), hole), [], rest)
   match content
     Cons('<', rest) ->
       val (tagName, _) = rest.span(is-alpha-num)
@@ -347,7 +347,7 @@ fun scan-tag(n: int, lacc: ctx<list<token-comment<lexeme>>>, content: list<char>
               span-to-end-tag(Cons(pre, acc), post)
         val (elem, after) = span-to-end-tag([], content)
         val m = elem.filter(_ == '\n').length
-        scan(n + m, lacc ++ ctx Cons(ComText(elem.string), _), [], after)
+        scan(n + m, lacc ++ ctx Cons(ComText(elem.string), hole), [], after)
       else
         default()
     _ -> default()
@@ -355,7 +355,7 @@ fun scan-tag(n: int, lacc: ctx<list<token-comment<lexeme>>>, content: list<char>
 fun scan-math(n: int, lacc: ctx<list<token-comment<lexeme>>>, content: list<char>): <pure,fmt> list<token-comment<lexeme>>
   val (math, clos) = content.span(fn(c) c != '$' && c != '\n')
   val (end, rest) = if clos.is-nil then ([], []) else ([clos.string.head-char.unjust], clos.tail)
-  scan(if end.string.head-char.unjust == '\n' then n + 1 else n, lacc ++ ctx Cons(ComText("$" ++ math.string ++ end.string), _), [], rest)
+  scan(if end.string.head-char.unjust == '\n' then n + 1 else n, lacc ++ ctx Cons(ComText("$" ++ math.string ++ end.string), hole), [], rest)
 
 // scanPre formatted ``pre``
 fun scan-pre(m: int, n: int, lacc: ctx<list<token-comment<lexeme>>>, acc: list<char>, chs: list<char>): <pure,fmt> list<token-comment<lexeme>>
@@ -380,7 +380,7 @@ fun scan-code(n: int, com: (list<lexeme>, string) -> token-comment<lexeme>, lacc
 
 fun end-code(n: int, com: (list<lexeme>, string) -> token-comment<lexeme>, lacc: ctx<list<token-comment<lexeme>>>, acc: list<char>, post: list<char>, rest: list<char>): <pure,fmt> list<token-comment<lexeme>>
   val lexemes = lexer(source-file, n, acc.drop-while(is-space).reverse.string)
-  scan(n, lacc ++ ctx Cons(com(lexemes, acc.reverse.string), _), post.reverse, rest)
+  scan(n, lacc ++ ctx Cons(com(lexemes, acc.reverse.string), hole), post.reverse, rest)
 
 fun comCode(l, s)
   ComCode(l, s)

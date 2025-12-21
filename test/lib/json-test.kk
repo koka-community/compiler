@@ -7,3 +7,6 @@ fun suite()
     expect(JSObj([("hello",JSString("world"))]))
       parse-json(r#"{"hello":"world" // a comment here
         }"#)
+
+fun main()
+  run-tests(suite)

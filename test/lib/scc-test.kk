@@ -14,3 +14,6 @@ fun suite()
         ,  ('f',"i".list)
         ,  ('g',"fb".list)
         ,  ('h',"".list)])
+
+fun main()
+  run-tests(suite)

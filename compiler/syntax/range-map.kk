@@ -24,25 +24,25 @@ import std/data/sort
 pub infixr 5 (|->)
 
 effect range-map-eff
-  fun add-range-info(rng: range, ri: rangeInfo): ()
+  fun add-range-info(rng: range, ri: range-info): ()
   fun get-rangemap(): range-map
 
 fun build-range-map(f)
   var rm := new/range-map
   with handler
-    fun add-range-info(rng: range, ri: rangeInfo)
+    fun add-range-info(rng: range, ri: range-info)
       rm := rm.insert(rng, ri)
     fun get-rangemap() rm
   f()
 
-alias range-map = list<(range, rangeInfo)>
+alias range-map = list<(range, range-info)>
 
-fun rm-find-first(rm: range-map, p: (rangeInfo) -> e bool): e maybe<(range, rangeInfo)>
+fun rm-find-first(rm: range-map, p: (range-info) -> e bool): e maybe<(range, range-info)>
   match rm.filter(fn((_,ri)) p(ri))
     Nil -> Nothing
     Cons(x, _) -> Just(x)
 
-fun rm-find-all(rm: range-map, p: (rangeInfo) -> e bool): e list<(range, rangeInfo)>
+fun rm-find-all(rm: range-map, p: (range-info) -> e bool): e list<(range, range-info)>
   rm.filter(fn((_,ri)) p(ri))
 
 fun mangle-con-name(nm: name)
@@ -54,16 +54,16 @@ fun mangle-type-name(nm: name)
 fun mangle(nm: name, tp: ktype)
   nm
 
-type rangeInfo
+type range-info
   RIDecl(kind: string, name: name, name2: name, tp: maybe<ktype>) // alias, type, cotype, rectype, fun, val
   RIBlock(str: string) // type, kind, pattern
   RIError(d: doc)
   RIWarning(d: doc)
-  RIId(name: name, ninfo: nameInfo, docs: list<doc>, isDefinition: bool) // qualified name, info, extra doc (from implicits), is this the definition?
+  RIId(name: name, ninfo: name-info, docs: list<doc>, isDefinition: bool) // qualified name, info, extra doc (from implicits), is this the definition?
   RIImplicits(shorten: (bool) -> doc) // inferred implicit arguments and (implicit) resume arguments
   RIInlayHint(append: bool, doc: doc) // Inlay hint in the editor, append after the range (or before it)
 
-type nameInfo
+type name-info
   NIValue(sort: string, tp: ktype, comment: string, isAnnotated: bool) // sort is fun, val, etc.
   NICon(tp: ktype, comment: string)
   NITypeCon(k: kind, comment: string)
@@ -71,7 +71,7 @@ type nameInfo
   NIModule
   NIKind
 
-fun ni/show(ni: nameInfo): <comp-flags,pure> string
+fun ni/show(ni: name-info): <comp-flags,pure> string
   match ni
     NITypeCon(_, d) -> "TypeCon: " ++ d
     NIValue(srt, tp, d) -> "Value " ++ srt ++ ": " ++ tp.pretty.show ++ ": " ++ d
@@ -80,7 +80,7 @@ fun ni/show(ni: nameInfo): <comp-flags,pure> string
     NIModule -> "Module"
     NIKind -> "Kind"
 
-fun ri/show(ri: rangeInfo): <comp-flags,pure> string
+fun ri/show(ri: range-info): <comp-flags,pure> string
   match ri
     RIDecl(kind, name, name2, mbtp) -> 
       "Decl " ++ kind ++ " " ++ show(name) ++ " " ++ show(name2) ++ mbtp.map(": " ++ _.pretty.show).default("")
@@ -92,7 +92,7 @@ fun ri/show(ri: rangeInfo): <comp-flags,pure> string
     RIImplicits(shorten) -> "Implicits " ++ shorten(False).show
     RIInlayHint(after, doc) -> "InlayHint " ++ (if after then "" else ("(before) ")) ++ doc.show
 
-fun ri/int(ri: rangeInfo)
+fun ri/int(ri: range-info)
   match ri
     RIDecl -> 0
     RIBlock -> 10
@@ -105,7 +105,7 @@ fun ri/int(ri: rangeInfo)
 fun penalty(nm: name)
   if nm.nameModule == "std/core/hnd" then 10 else 0
 
-fun ni/int(ni: nameInfo)
+fun ni/int(ni: name-info)
   match ni
     NIValue -> 1
     NICon -> 2
@@ -114,13 +114,13 @@ fun ni/int(ni: nameInfo)
     NIModule -> 5
     NIKind -> 6
 
-fun is-virtual(ri: rangeInfo): bool
+fun is-virtual(ri: range-info): bool
   match ri
     RIImplicits() -> True 
     RIInlayHint() -> True 
     _ -> False
 
-fun is-hidden(ri: rangeInfo)
+fun is-hidden(ri: range-info)
   match ri
     RIDecl(_, nm) -> nm.is-hidden-name
     RIId(nm) -> nm.is-hidden-name
@@ -131,7 +131,7 @@ val new/range-map:range-map = []
 fun cut(r: range)
   Range(r.start, r.start, r.hidden)
 
-fun insert(rm: range-map, r: range, ri: rangeInfo)
+fun insert(rm: range-map, r: range, ri: range-info)
   if ri.is-hidden || r.is-null || r.hidden then rm
   else
     val begin-end-token =
@@ -149,8 +149,8 @@ fun sort(rm: range-map)
 
 // select the best matching range infos from a selection (for hover info etc.)
 fun prioritize(rm: range-map)
-  fun this-cmp((_, ri1: rangeInfo), (_, ri2: rangeInfo)) ri1.int.cmp(ri2.int).is-lt
-  fun eq((_, ri1: rangeInfo), (_, ri2: rangeInfo)) ri1.int / 10 == ri2.int / 10
+  fun this-cmp((_, ri1: range-info), (_, ri2: range-info)) ri1.int.cmp(ri2.int).is-lt
+  fun eq((_, ri1: range-info), (_, ri2: range-info)) ri1.int / 10 == ri2.int / 10
   val sorted = rm.filter(fn((_, ri)) !ri.is-virtual).sort(?(<)=this-cmp)
   // Merge implicit documentation into identifiers
   val idocs = 
@@ -193,7 +193,7 @@ fun lookup(rm: range-map, r: range)
   val (rinfos, rm') = rm.drop-while(is-before).span(starts-at)
   (rinfos.prioritize, rm')
 
-fun find-in(rm: range-map, r: range, for-inlay: bool): list<(range, rangeInfo)>
+fun find-in(rm: range-map, r: range, for-inlay: bool): list<(range, range-info)>
   val s = r.start
   val e = r.end
   val res = rm.filter fn((ri, _))
@@ -333,7 +333,7 @@ fun drop-auto-gen-closing(lexes: list<lexeme>)
     _ -> lexes
 
 // We should use the lexemes to find the right start token
-fun find-at(rm: range-map, p: pos, lexemes: list<lexeme>): exn maybe<(range, rangeInfo)>
+fun find-at(rm: range-map, p: pos, lexemes: list<lexeme>): exn maybe<(range, range-info)>
   val lexstart = 
         match lexemes.drop-while(!_.range.contains(p))
           Cons(l) -> l.range.start
@@ -366,7 +366,7 @@ fun minimum-by-list(xs: list<a>, ?cmp: (a, a) -> order): list<a>
     )
   xs.foldl(Nothing, minlist).default([])
 
-fun ri-type(ri: rangeInfo): maybe<ktype>
+fun ri-type(ri: range-info): maybe<ktype>
   match ri
     RIId(_, i) ->
       match i
@@ -375,7 +375,7 @@ fun ri-type(ri: rangeInfo): maybe<ktype>
         _ -> Nothing
     _ -> Nothing
 
-fun ri-doc(ri: rangeInfo)
+fun ri-doc(ri: range-info)
   match ri
     RIId(_, i) ->
       match i
@@ -392,34 +392,34 @@ fun rm/free-type-vars(rm: range-map): pure tvs
 fun rm/bound-type-vars(rm: range-map): pure tvs
   rm.map(snd).map(bound-type-vars).unions
 
-fun ri/(|->)(s: sub, ri: rangeInfo): pure rangeInfo
+fun ri/(|->)(s: sub, ri: range-info): pure range-info
   match ri
     RIId(nm, i, docs, isDef) -> RIId(nm, s |-> i, docs, isDef)
     _ -> ri
 
-fun ri/free-type-vars(ri: rangeInfo): pure tvs
+fun ri/free-type-vars(ri: range-info): pure tvs
   match ri
     RIId(_, i) -> free-type-vars(i)
     _ -> tvs/empty
 
-fun ri/bound-type-vars(ri: rangeInfo): pure tvs
+fun ri/bound-type-vars(ri: range-info): pure tvs
   match ri
     RIId(_, i) -> bound-type-vars(i)
     _ -> tvs/empty
 
-fun ni/(|->)(s: sub, ni: nameInfo): pure nameInfo
+fun ni/(|->)(s: sub, ni: name-info): pure name-info
   match ni
     NIValue(sort, tp, isAnnotated, d) -> NIValue(sort, s |-> tp, isAnnotated, d)
     NICon(tp, d) -> NICon(s |-> tp, d)
     _ -> ni
 
-fun ni/free-type-vars(ni: nameInfo): pure tvs
+fun ni/free-type-vars(ni: name-info): pure tvs
   match ni
     NIValue(_, tp) -> free-type-vars(tp)
     NICon(tp) -> free-type-vars(tp)
     _ -> tvs/empty
 
-fun ni/bound-type-vars(ni: nameInfo): pure tvs
+fun ni/bound-type-vars(ni: name-info): pure tvs
   match ni
     NIValue(_, tp) -> bound-type-vars(tp)
     NICon(tp) -> bound-type-vars(tp)

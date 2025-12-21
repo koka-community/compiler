@@ -130,16 +130,16 @@ pub fun visibility/show(v: visibility): string
     Public -> "Public"
     Private -> "Private"
 
-pub type handlerSort
+pub type handler-sort
   HandlerNormal
   HandlerInstance
 
-pub fun handler-sort/show(h: handlerSort): string
+pub fun handler-sort/show(h: handler-sort): string
   match h
     HandlerNormal -> "normal"
     HandlerInstance -> "named"
 
-pub type operationSort
+pub type operation-sort
   OpVal
   OpFun
   OpExcept
@@ -147,7 +147,7 @@ pub type operationSort
   OpControl
   OpControlErr
 
-pub fun op-sort/show(o: operationSort): string
+pub fun op-sort/show(o: operation-sort): string
   match o
     OpVal -> "val"
     OpFun -> "fun"
@@ -156,7 +156,7 @@ pub fun op-sort/show(o: operationSort): string
     OpControlRaw -> "rawctl"
     OpControlErr -> ""
 
-pub fun op-sort/string(o: operationSort): string
+pub fun op-sort/string(o: operation-sort): string
   match o
     OpVal -> "val"
     OpFun -> "fun"
@@ -165,7 +165,7 @@ pub fun op-sort/string(o: operationSort): string
     OpControlRaw -> "rawctl"
     OpControlErr -> ""
 
-pub fun read-op-sort(s: string): maybe<operationSort>
+pub fun read-op-sort(s: string): maybe<operation-sort>
   match s
     "val" -> Just(OpVal)
     "fun" -> Just(OpFun)
@@ -178,35 +178,35 @@ pub fun read-op-sort(s: string): maybe<operationSort>
     "rcontrol" -> Just(OpControlRaw)
     _ -> Nothing
 
-pub value type dataEffect
+pub value type data-effect
   DataNoEffect
   DataEffect(is-named: bool, is-linear: bool)
 
-pub fun dataeffect/show(k: dataEffect): string
+pub fun dataeffect/show(k: data-effect): string
   match k
     DataNoEffect -> "noeffect"
     DataEffect(n, l) -> sep-by-space([if n then "named" else "", if l then "linear" else ""])
 
 // DataKind
-pub type dataKind
+pub type data-kind
   Inductive
   CoInductive
   Retractive
 
-pub fun datakind/show(k: dataKind): string
+pub fun datakind/show(k: data-kind): string
   match k
     Inductive -> "type"
     CoInductive -> "co type"
     Retractive -> "div type"
 
-pub type dataDef
-  DataDefValue(repr: valueRepr) // value type
+pub type data-def
+  DataDefValue(repr: value-repr) // value type
   DataDefNormal // reference type
   DataDefLazy(fipT: fipT) // Lazy reference type
   DataDefOpen(isExtend: bool)
   DataDefAuto(declaredAsStruct: bool) // value or reference type; determined by kind inference (in kind/repr.kk:create-data-def)
 
-pub fun datadef/(==)(d1: dataDef, d2: dataDef): bool
+pub fun datadef/(==)(d1: data-def, d2: data-def): bool
   match (d1, d2)
     (DataDefValue(r1), DataDefValue(r2)) -> r1 == r2
     (DataDefNormal, DataDefNormal) -> True
@@ -215,7 +215,7 @@ pub fun datadef/(==)(d1: dataDef, d2: dataDef): bool
     (DataDefAuto, DataDefAuto) -> True
     _ -> False
 
-pub fun datadef/show(d: dataDef): string
+pub fun datadef/show(d: data-def): string
   match d
     DataDefValue(r) -> "value" ++ r.show
     DataDefNormal -> "reference"
@@ -223,49 +223,51 @@ pub fun datadef/show(d: dataDef): string
     DataDefOpen(isExtend) -> if isExtend then "extend" else "open"
     DataDefAuto(isStruct) -> "auto" ++ (if isStruct then " struct" else "")
 
-pub fun datadef/is-extend(d: dataDef): bool
+pub fun datadef/is-extend(d: data-def): bool
   match d
     DataDefOpen(isExtend) -> isExtend
     _ -> False
   
-pub fun datadef/is-open(d: dataDef): bool
+pub fun datadef/is-open(d: data-def): bool
   d.is-dataDefOpen
 
-pub fun datadef/is-value(d: dataDef): bool
+pub fun datadef/is-value(d: data-def): bool
   d.is-dataDefValue
 
-pub fun datadef/is-normal(d: dataDef): bool
+pub fun datadef/is-normal(d: data-def): bool
   d.is-dataDefNormal
 
-pub fun datadef/is-lazy(d: dataDef): bool
+pub fun datadef/is-lazy(d: data-def): bool
   d.is-dataDefLazy
 
-pub fun datadef/size(d: dataDef, p: platform): int
+pub fun datadef/size(d: data-def, p: platform): int
   match d
     DataDefValue(r) -> size(p, r)
     _ -> p.fieldSize
 
-pub value struct valueRepr
-  rawSize: int // size in bytes
-  scan-count: int // count of scannable fields 
-  alignment: int // minimal alignment
+pub type value-repr
+  ValueRepr(
+    rawSize: int, // size in bytes
+    scan-count: int, // count of scannable fields 
+    alignment: int // minimal alignment
+  )
 
-pub fun valuerepr/(==)(v1: valueRepr, v2: valueRepr): bool
+pub fun valuerepr/(==)(v1: value-repr, v2: value-repr): bool
   v1.rawSize == v2.rawSize && v1.scan-count == v2.scan-count && v1.alignment == v2.alignment
 
-pub fun valuerepr/show(v: valueRepr): string
+pub fun valuerepr/show(v: value-repr): string
   "{" ++ v.rawSize.show ++ ", " ++ v.scan-count.show ++ ", " ++ v.alignment.show ++ "}"
 
-pub fun scan-size(p: platform, v: valueRepr): (int, int)
+pub fun scan-size(p: platform, v: value-repr): (int, int)
   (p.size(v), v.scan-count)
 
-pub fun valuerepr/size(p: platform, v: valueRepr): int
+pub fun valuerepr/size(p: platform, v: value-repr): int
   v.rawSize + (v.scan-count * p.fieldSize)
 
-pub fun is-mixed(v: valueRepr): bool
+pub fun is-mixed(v: value-repr): bool
   v.rawSize > 0 && v.scan-count > 0
 
-pub fun is-raw(v: valueRepr): bool
+pub fun is-raw(v: value-repr): bool
   v.rawSize > 0 && v.scan-count == 0
 
 pub val valuerepr/zero = ValueRepr(0,0,0)
@@ -276,55 +278,55 @@ pub fun value-repr-raw(m: int)
 pub fun value-repr-scan(n: int)
   ValueRepr(0,n,0)
 
-pub type defSort
-  DefFun(param: list<paramInfo>, fipKind: fipT=NoFip(False))
+pub type def-sort
+  DefFun(param: list<param-info>, fipKind: fipT=NoFip(False))
   DefVal
   DefVar
 
-pub type paramInfo
+pub type param-info
   Borrow
   Own
 
-pub fun def-fun-ex(pinfos: list<paramInfo>, fipKind: fipT)
+pub fun def-fun-ex(pinfos: list<param-info>, fipKind: fipT)
   if pinfos.all(_.is-own) then DefFun([], fipKind) else DefFun(pinfos, fipKind)
 
-pub fun def-fun(pinfos: list<paramInfo>)
+pub fun def-fun(pinfos: list<param-info>)
   def-fun-ex(pinfos, noFip)
 
-pub fun defsort/show(s: defSort): string
+pub fun defsort/show(s: def-sort): string
   match s
     DefFun -> "fun"
     DefVal -> "val"
     DefVar -> "var"
 
-pub fun show-full(s: defSort): string
+pub fun show-full(s: def-sort): string
   match s
     DefFun(_, f) -> [f.show, "fun"].sep-by-space
     DefVal -> "val"
     DefVar -> "var"
 
-pub fun defsort/is-fun(s: defSort): bool
+pub fun defsort/is-fun(s: def-sort): bool
   match s
     DefFun(_) -> True
     _ -> False
 
-pub fun param/(==)(p1: paramInfo, p2: paramInfo): bool
+pub fun param/(==)(p1: param-info, p2: param-info): bool
   match (p1, p2)
     (Borrow, Borrow) -> True
     (Own, Own) -> True
     _ -> False
 
-pub fun param/show(p: paramInfo): string
+pub fun param/show(p: param-info): string
   match p
     Borrow -> "Borrow"
     Own -> "Own"
 
-pub type defInline
+pub type def-inline
   InlineNever
   InlineAlways
   InlineAuto
 
-pub fun definline/show(i: defInline): string
+pub fun definline/show(i: def-inline): string
   match i
     InlineNever -> "noinline"
     InlineAlways -> "inline"
@@ -372,8 +374,8 @@ pub fun assoc/show(a: assoc): string
 
 // Fip
 pub type fipT
-  Fip(alloc: fipAlloc)
-  Fbip(alloc: fipAlloc, tail: bool)
+  Fip(alloc: fip-alloc)
+  Fbip(alloc: fip-alloc, tail: bool)
   NoFip(tail: bool) // Ordering seems wrong as `NoFip False` should be top but now NoFip True is the top
 
 pub fun fipt/show(f: fipT): string
@@ -399,12 +401,12 @@ pub fun subsumes(f1: fipT, f2: fipT): bool
     (Fip(a1), Fip(a2)) -> a1 >= a2
     _ -> False
 
-pub value type fipAlloc
+pub value type fip-alloc
   AllocAtMost(i: int)
   AllocFinitely
   AllocUnlimited
 
-pub fun fipa/cmp(f1: fipAlloc, f2: fipAlloc): order
+pub fun fipa/cmp(f1: fip-alloc, f2: fip-alloc): order
   match (f1, f2)
     (AllocAtMost(n1), AllocAtMost(n2)) -> n1.cmp(n2)
     (_, AllocAtMost) -> Gt
@@ -415,21 +417,21 @@ pub fun fipa/cmp(f1: fipAlloc, f2: fipAlloc): order
     (_, AllocUnlimited) -> Lt
     _ -> Lt
 
-pub fun fipa/(==)(f1: fipAlloc, f2: fipAlloc): bool
+pub fun fipa/(==)(f1: fip-alloc, f2: fip-alloc): bool
   match (f1, f2)
     (AllocAtMost(n1), AllocAtMost(n2)) -> n1 == n2
     (AllocFinitely, AllocFinitely) -> True
     (AllocUnlimited, AllocUnlimited) -> True
     _ -> False
 
-pub fun combine(f1: fipAlloc, f2: fipAlloc)
+pub fun combine(f1: fip-alloc, f2: fip-alloc)
   match (f1, f2)
     (AllocAtMost(n), AllocAtMost(m)) -> AllocAtMost(n + m)
     _ -> AllocFinitely
 
 pub val fipa/zero = AllocAtMost(0)
 
-pub fun fipalloc/show(a: fipAlloc): string
+pub fun fipalloc/show(a: fip-alloc): string
   match a
     AllocAtMost(0) -> "AllocAtMost(0)"
     AllocAtMost(n) -> "AllocAtMost(" ++ n.show ++ ")"
@@ -452,7 +454,7 @@ pub fun fipt/is-tail(f: fipT): bool
     Fbip(_, t) -> t
     NoFip(t) -> t
 
-pub fun fipt/alloc(f: fipT): fipAlloc
+pub fun fipt/alloc(f: fipT): fip-alloc
   match f
     Fip(a) -> a
     Fbip(a) -> a
@@ -461,7 +463,7 @@ pub fun fipt/alloc(f: fipT): fipAlloc
 pub fun show-fip(f: fipT)
   fun show-tail(b: bool): string
     if b then "tail" else ""
-  fun show-n(n: fipAlloc): string
+  fun show-n(n: fip-alloc): string
     match n
       AllocAtMost(0) -> ""
       AllocAtMost(n) -> "(" ++ n.show ++ ")"
@@ -485,7 +487,7 @@ pub fun fipt/max(fip1: fipT, fip2: fipT)
     (Fip(a1), Fbip(a2, t2)) -> Fbip(max(a1, a2), t2)
     (Fip(a1), Fip(a2)) -> Fip(max(a1, a2))
 
-pub fun fipa/max(a1: fipAlloc, a2: fipAlloc)
+pub fun fipa/max(a1: fip-alloc, a2: fip-alloc)
   match (a1, a2)
     (AllocUnlimited, _) -> AllocUnlimited
     (_, AllocUnlimited) -> AllocUnlimited

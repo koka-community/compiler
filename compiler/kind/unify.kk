@@ -11,14 +11,14 @@ import compiler/kind/infer-effect
 import std/data/linearset
 
 // Unify
-type unifyContext
+type unify-context
   Check(s: string, r: range)
   Infer(r: range)
 
-effect unifyContextEff
-  val uctx: unifyContext
+effect unify-context-eff
+  val uctx: unify-context
 
-fun unify(rng: range, k1: infKind, k2: infKind)
+fun unify(rng: range, k1: inf-kind, k2: inf-kind)
   val sk1 = subst(k1)
   val sk2 = subst(k2)
   match mgu(sk1, sk2)
@@ -26,7 +26,7 @@ fun unify(rng: range, k1: infKind, k2: infKind)
     err ->
       kind-error(rng, err, sk1, sk2)
 
-fun kind-error(rng: range, err: unify, k1: infKind, k2: infKind)
+fun kind-error(rng: range, err: unify, k1: inf-kind, k2: inf-kind)
   val message = match err
     InfiniteKind -> "Invalid type (due to an infinite kind)"
     _ -> "Invalid type"
@@ -55,7 +55,7 @@ value type unify
   InfiniteKind
   NoMatch
 
-fun mgu(k1': infKind, k2': infKind)
+fun mgu(k1': inf-kind, k2': inf-kind)
   match (k1', k2')
     // Constants
     (KIVar(id1), KIVar(id2)) | id1 == id2 -> UnifyKindOk(ksubEmpty)
@@ -78,7 +78,7 @@ fun mgu(k1': infKind, k2': infKind)
     (k, KIVar(id)) -> unify-var(id, k)
     _ -> NoMatch
 
-fun unify-var(id: int, k: infKind)
+fun unify-var(id: int, k: inf-kind)
   if k.fkv.member(id) then InfiniteKind else UnifyKindOk(ksub-single(id, k))
 
 fun match-kind(k1': kind, k2': kind)

@@ -27,14 +27,14 @@ import compiler/common/syntax
 import compiler/syntax/syntax
 import std/data/linearset
 
-fun promote-type(tp: userType): div userType
+fun promote-type(tp: user-type): div user-type
   val free = tp.free-type-vars
   if free.is-empty then tp
   else
     val (someVars, forallVars) = free.list.partition(is-some-var)
     quantify(QSome, someVars.map(to-type-binder), quantify(QForall, forallVars.map(to-type-binder), tp))
 
-fun promote-free(bound: list<userTypeBinder>, tps: list<userType>): div list<userTypeBinder>
+fun promote-free(bound: list<user-type-binder>, tps: list<user-type>): div list<user-type-binder>
   (tps.free-type-vars - (names/empty + bound.map(name))).list.map(to-type-binder)
 
 // Type variable promotion
@@ -44,13 +44,13 @@ fun promote-free(bound: list<userTypeBinder>, tps: list<userType>): div list<use
 // function some(a) forall(b) foo( x : a, y : b, z) : c { .. }
 // ~>
 // foo : some(a,a1) forall(b,c) (a,b,a1) -> total c = fun(x,y,z) { .. }
-fun promote(some-pars: list<userTypeBinder>, forall-pars: list<userTypeBinder>, preds: list<userType>, mb-res-tp: maybe<(maybe<userType>, userType)>, uexpr: userExpr): pure userExpr
+fun promote(some-pars: list<user-type-binder>, forall-pars: list<user-type-binder>, preds: list<user-type>, mb-res-tp: maybe<(maybe<user-type>, user-type)>, uexpr: user-expr): pure user-expr
   val (argres-tps, expr') = argres-types(uexpr, mb-res-tp)
   if argres-tps.all(_.snd.is-right) then uexpr // no annotation, no promotion
   else
     promote-ex(some-pars, forall-pars, preds, argres-tps, expr')
 
-fun argres-types(uexpr: userExpr, mb-res-tp: maybe<(maybe<userType>, userType)>)
+fun argres-types(uexpr: user-expr, mb-res-tp: maybe<(maybe<user-type>, user-type)>)
   match uexpr
     Parens(e, n, pre, r) -> 
       val (es, e') = argres-types(e, mb-res-tp)
@@ -72,7 +72,7 @@ fun argres-types(uexpr: userExpr, mb-res-tp: maybe<(maybe<userType>, userType)>)
       (fs ++ es, Lam(args', e1, tl, r))
     _ -> ([], uexpr)
 
-fun res-type(expr: userExpr, mb-res-tp: maybe<(maybe<userType>, userType)>)
+fun res-type(expr: user-expr, mb-res-tp: maybe<(maybe<user-type>, user-type)>)
   match expr
     Parens(e, n, pre, r) -> 
       val (es, e') = e.res-type(mb-res-tp)
@@ -86,7 +86,7 @@ fun res-type(expr: userExpr, mb-res-tp: maybe<(maybe<userType>, userType)>)
             expr)
         Nothing -> ([(nil, Right(expr.range)), (nil, Right(expr.range))], expr)
 
-fun promote-ex(some-pars: list<userTypeBinder>, forall-pars: list<userTypeBinder>, preds: list<userType>, argres-tps: list<(name, either<userType, range>)>, body: userExpr)
+fun promote-ex(some-pars: list<user-type-binder>, forall-pars: list<user-type-binder>, preds: list<user-type>, argres-tps: list<(name, either<user-type, range>)>, body: user-expr)
   // promote quantified variables of TpCon to TpVar
   val quantified = names/empty + some-pars.map(name) + forall-pars.map(name)
   val argres-types1 = argres-tps.map(promote-tp-vars(_, quantified))
@@ -109,7 +109,7 @@ fun promote-ex(some-pars: list<userTypeBinder>, forall-pars: list<userTypeBinder
     fun-tp))
   Ann(body, full-tp, body.range.combine(full-tp.range))
 
-fun insert-some((i, (name, either-tp)): (int, (name, either<userType, range>)))
+fun insert-some((i, (name, either-tp)): (int, (name, either<user-type, range>)))
   match either-tp
     Left(t) -> ([], (name, t))
     Right(r) ->
@@ -119,18 +119,18 @@ fun insert-some((i, (name, either-tp)): (int, (name, either<userType, range>)))
 fun is-some-var(n: name)
   n.is-wildcard
 
-fun quantify(q: userQuantifier, tbinders: list<userTypeBinder>, tp: userType): userType
+fun quantify(q: user-quantifier, tbinders: list<user-type-binder>, tp: user-type): user-type
   tbinders.foldr(tp, fn(tb, t) TpQuan(q, tb, t, combine(tb.range, t.range)))
 
-fun to-type-binder(n: name): userTypeBinder
+fun to-type-binder(n: name): user-type-binder
   TypeBinder(n, KindNone, null, null)
 
-fun name/promote-tp-vars(x: (name, either<userType, range>), vars: nameSet): div (name, either<userType, range>)
+fun name/promote-tp-vars(x: (name, either<user-type, range>), vars: name-set): div (name, either<user-type, range>)
   match x
     (_, Right) -> x
     (name, Left(u)) -> (name, Left(u.promote-tp-vars(vars)))
 
-fun ut/promote-tp-vars(tp: userType, vars: nameSet): div userType
+fun ut/promote-tp-vars(tp: user-type, vars: name-set): div user-type
   match tp
     TpQuan(quant, tb, t, rng) -> TpQuan(quant, tb, t.promote-tp-vars(vars - tb.name), rng)
     TpFun(args, eff, t, rng) -> TpFun(args.map(fn((name, t1)) (name, t1.promote-tp-vars(vars))), eff.promote-tp-vars(vars), t.promote-tp-vars(vars), rng)
