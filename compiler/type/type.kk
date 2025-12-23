@@ -636,7 +636,7 @@ pub fun is-ev-type(tp: tau): bool
 pub fun make-ev-type(arg: tau): tau
   type-app(typeEv, [arg])
 // Create an application (reduced form)
-fun type-app(tau: tau, args: list<tau>): tau
+pub fun type-app(tau: tau, args: list<tau>): tau
   match args
     Nil -> tau
     _ -> match tau

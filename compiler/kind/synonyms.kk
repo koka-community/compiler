@@ -17,7 +17,7 @@ effect synonyms-eff
   fun get-synonyms(): synonyms
   fun set-synonyms(syns: synonyms): ()
 
-fun withSynonyms(synonyms0: synonyms, f: () -> <synonyms-eff,pure,comp-flags|e> a): <pure,comp-flags|e> a
+fun with-synonyms(synonyms0: synonyms, f: () -> <synonyms-eff,pure,comp-flags|e> a): <pure,comp-flags|e> a
   var synonyms := synonyms0
   with handler
     fun get-synonyms() synonyms

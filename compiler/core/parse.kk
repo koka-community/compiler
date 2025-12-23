@@ -22,7 +22,7 @@ import compiler/type/typevar
 
 fun parse-core(fname: path)
   val input = read-text-file(fname)
-  lex-parse(False, fn(lexes) lexes.allow-dot-ids.requalify, {parse-program(Source(fname.string, input))}, fname.string, input)
+  lex-parse(True, False, id, {parse-program(fname, Source(fname.string, input))}, fname.string, input)
 
 fun requalify(lexes: list<lexeme>): div list<lexeme>
   match lexes
@@ -75,32 +75,32 @@ fun allow-dot-ids(lexes: list<lexeme>): div list<lexeme>
 
 fun parse-inlines(prog: core, s: source, env: envv, inlines: list<lexeme>, gamma: gamma)
   with parse-lexemes(s, inlines)
-  with withEnvInitial(prog.coreName, emptyImports)
-  setEnv(env(gamma=gamma))
+  with with-env-initial(prog.coreName, "".path, LinearMap([]))
+  set-env(env(gamma=gamma))
   val idefs = parse-many("inline", parse-inline-def)
   peof()
   idefs
 
-fun parse-program(s: source)
+fun parse-program(src-path: path, s: source)
   parse-many("semis", parse-semicolon)
-  val (prog, env, inlines) = parse-module()
+  val (prog, env, inlines) = parse-module(src-path)
   peof()
   (prog, fn(gamma) parse-inlines(prog, s, env, inlines, gamma))
 
-fun parse-module()
+fun parse-module(src-path: path)
   val (_, doc) = parse-doc-keyword("module")
   parse-keyword("interface")
   val (name0, _) = parse-module-path()
   parse-many("semis", parse-semicolon)
   braced
     val (imps, impAliases) = semis("import", parse-import-declaration).unzip
-    val impMap = impAliases.foldr(emptyImports) fn((asname, name'), m) 
-      match m.importsExtend(asname, name')
+    val impMap = impAliases.foldr(LinearMap([])) fn((asname, name'), m) 
+      match m.extend(asname, name')
         Just(imp') -> imp'
         Nothing -> m
     val externImports = semis("extern imports", parse-external-import-decl)
     val fixs = semis("fix decls", parse-fixity-declaration)
-    with withEnvInitial(name0, impMap)
+    with with-env-initial(name0, src-path, impMap)
     val impsyns = semis("import synonyms", parse-local-alias)
     val tdefs = semis("type decls", parse-type-declaration)
     val defs = semis("fun decls", pDefDecl)
@@ -108,19 +108,19 @@ fun parse-module()
     val inlines = parse-maybe("inlines", {parse-special("//.inline-section"); val rest = take-all(); put-all([]); rest}).default([]) // TODO: Read rest
     val tdef-groups = tdefs.map(fn(tdef) [tdef])
     val def-groups = defs.map(DefNonRec)
-    (Core(name0, imps, fixs.concat, tdef-groups, def-groups, externImports ++ externs, doc), getEnv(), inlines)
+    (Core(name0, imps, fixs.concat, tdef-groups, def-groups, externImports ++ externs, doc), get-env(), inlines)
 
 fun parse-local-alias()
-  parse-try("local alias", {parse-special-id("local"); parse-keyword("alias")})
-  val qname = pQTypeId().fst
-  val name = envQualify(qname)
+  parse-try({parse-special-id("local"); parse-keyword("alias")})
+  val qname = parse-qualified-type-id().fst
+  val name = env-qualify(qname)
   val params = parse-type-params()
   val kind = parse-kind-annot-full()
   parse-keyword("=")
   val tp = parse-type()
   val rank = parse-maybe("", {parse-keyword("="); parse-integer().fst}).default(0)
   val syn = SynInfo(name, kind, params, tp, rank, null, Private, "")
-  env-extendSynonym(syn)
+  env-extend-synonym(syn)
   syn
 
 fun default/parse-visibility()
@@ -149,22 +149,22 @@ fun parse-fixity()
 fun parse-type-declaration()
   parse-choices("type decl", [
     {
-      val (vis, (ddef, isExtend, sort, doc)) = parse-try({(parse-visibility(), parse-type-sort())})
-      val tn = if isExtend then
-          pQTypeId().fst
+      val (vis, (ddef, isRec, dataEff, sort, doc)) = parse-try({(parse-visibility(), parse-type-sort())})
+      val tn = if ddef.is-extend then
+          parse-qualified-type-id().fst
         else
-          qualify(modname, parse-choices("identifier", [pTBinderId, pIdOp]).fst)
+          qualify(modname, parse-choices("identifier", [parse-type-binder-id, parse-op-id]).fst)
       val params = parse-type-params()
       val kind = parse-kind-annot-full()
-      val cons = parse-maybe("constructor", {parse-semi-braces("contructor args", {parse-constructor-declaration(tn, params, sort)}).fst}).default([])
+      val cons = parse-maybe("constructor", {parse-semi-braces("contructor args", {parse-constructor-declaration(tn, params, sort)})}).default([])
       val cons1 = match cons
         [con1] -> [con1(singleton=True)]
         _ -> cons
-      val dataInfo = DataInfo(sort, tn, kind, params, cons1, null, ddef, vis, doc)
-      Data(dataInfo, isExtend)
+      val dataInfo = DataInfo(sort, tn, kind, params, cons1, null, ddef, dataEff, isRec, vis, doc)
+      Data(dataInfo)
     },{
       val (vis, doc) = parse-try({(parse-visibility(), parse-doc-keyword("alias").snd)})
-      val name = pTBinderId().fst
+      val name = parse-type-binder-id().fst
       val params = parse-type-params()
       val kind = parse-kind-annot-full()
       parse-keyword("=")
@@ -172,13 +172,20 @@ fun parse-type-declaration()
       val rank = parse-maybe("rank", {parse-keyword("="); parse-integer().fst}).default(0)
       val qname = qualify(modname, name)
       val syn = SynInfo(qname, kind, params, tp, rank, null, vis, doc)
-      env-extendSynonym(syn)
+      env-extend-synonym(syn)
       Synonym(syn)
     }
   ])
 
 fun parse-constructor-declaration(tname0: name, foralls: list<type-var>, sort: data-kind)
-  val (vis, mbLazy) = parse-try({(parse-visibility(), parse-doc-keyword("con").snd)})
+  val (vis, mbLazy) = parse-try
+    val vis = parse-visibility()
+    val mbLazy = parse-maybe("lazy")
+      parse-special-id("lazy")
+      val (fip, _) = parse-tail-fip()
+      fip
+    parse-keyword("con")
+    (vis, mbLazy)
   val (name, (_, doc)) = parse-doccon-id()
   val range = parse-range()
   val exists0 = parse-type-params()
@@ -194,26 +201,35 @@ fun parse-constructor-declaration(tname0: name, foralls: list<type-var>, sort: d
     params2, tp, sort, range, 
     params2.map(fn(_) range), 
     params2.map(fn(_) Public), False, 
-    orderedFields, vrepr, mbLazy, tag.from-integer, vis, doc)
+    orderedFields, vrepr, mbLazy, tag, vis, doc)
 
 fun parse-type-sort()
   val isRec = parse-maybe("recursive", {parse-special-id("recursive")}).is-just
-  val (ddef0, isExtend, sort) = parse-type-modifier()
+  val (ddef, sort, dataEff) = parse-type-modifier()
   val doc = parse-doc-keyword("type").snd
-  val ddef = match (isRec, ddef0)
-    (True, DataDefNormal) -> DataDefRec
-    _ -> ddef0
-  (ddef, isExtend, sort, doc)
+  (ddef, isRec, dataEff, sort, doc)
 
 fun parse-type-modifier()
   parse-choices("type modifier", [
-    {parse-special-id("open"); (DataDefOpen, False, Inductive)},
-    {parse-special-id("extend"); (DataDefOpen, True, Inductive)},
-    {parse-special-id("value"); (DataDefValue(parse-value-repr()), False, Inductive)},
-    {parse-special-id("co"); (DataDefNormal, False, CoInductive)},
-    {parse-special-id("rec"); (DataDefNormal, False, Retractive)},
-    {(DataDefNormal, False, Inductive)}
+    {parse-special-id("open"); (DataDefOpen(False), Inductive, DataNoEffect)},
+    {parse-special-id("extend"); (DataDefOpen(True), Inductive, DataNoEffect)},
+    {parse-special-id("value"); (DataDefValue(parse-value-repr()), Inductive, DataNoEffect)},
+    { val dataEff = parse-data-effect()
+      parse-choices("type modifier", [
+        {parse-special-id("co"); (DataDefNormal, CoInductive, dataEff)},
+        {parse-special-id("rec"); (DataDefNormal, Retractive, dataEff)},
+        {(DataDefNormal, Inductive, dataEff)}
+      ])
+    }
   ])
+
+fun parse-data-effect()
+  parse-maybe("data effect", {
+    val is-named = parse-maybe("named effect", {parse-keyword("named"); True}).default(False)
+    val is-linear = parse-maybe("linear effect", {parse-keyword("linear"); True}).default(False)
+    parse-keyword("effect")
+    DataEffect(is-named, is-linear)
+    }).default(DataNoEffect)
 
 fun parse-value-repr()
   braced
@@ -226,7 +242,7 @@ fun parse-value-repr()
 
 fun pDefDecl()
   val (vis, sort0, inl, doc) = parse-try({val vis = parse-visibility(); val (sort, inl, _, doc) = pDefSort(); (vis, sort, inl, doc)})
-  val (name, _) = parse-choices("decl name", [parse-fun-id, pIdOp])
+  val (name, _) = parse-choices("decl name", [parse-fun-id, parse-op-id])
   parse-keyword(":")
   val (tp, pinfos) = parse-def-type()
   val sort = match sort0
@@ -251,10 +267,10 @@ fun parse-inline-def()
   val (sort, inl, isRec, specArgs, _) = parse-inline-def-sort()
   val (name, _) = parse-fun-id()
   val e = parse-body()
-  InlineDef(envQualify(name), e, isRec, inl, if inl.is-inlineAlways then 0 else e.cost, sort, specArgs)
+  InlineDef(env-qualify(name), e, isRec, inl, if inl.is-inlineAlways then 0 else e.cost, sort, specArgs)
 
 fun parse-extern-decl()
-  val (vis, fipT, doc) = parse-try({(parse-visibility(), pFip(), parse-doc-keyword("extern").snd)})
+  val (vis, fipT, doc) = parse-try({(parse-visibility(), parse-tail-fip().fst, parse-doc-keyword("extern").snd)})
   val (name, rng) = parse-fun-id()
   parse-keyword(":")
   val (tp, pinfos) = parse-def-type()
@@ -264,7 +280,7 @@ fun parse-extern-decl()
 fun parse-external-body()
   parse-choices("external body", [
     {parse-keyword("="); [parse-external-entry()]},
-    {parse-semi-braces("external entry", parse-external-entry).fst}
+    {parse-semi-braces("external entry", parse-external-entry)}
   ])
 
 fun parse-external-entry()
@@ -293,7 +309,7 @@ fun parse-external-import-keyval()
 
 fun parse-external-import-entry()
   val target = parse-external-target()
-  (target, parse-semi-braces("external key value", parse-external-import-keyval).fst)
+  (target, parse-semi-braces("external key value", parse-external-import-keyval))
 
 fun parse-external-import-body()
   parse-choices("external import body", [
@@ -302,7 +318,7 @@ fun parse-external-import-body()
       [parse-external-import-entry()]
     },
     {
-      parse-semi-braces("external import entries",parse-external-import-entry).fst
+      parse-semi-braces("external import entries",parse-external-import-entry)
     }
   ])
 
@@ -313,9 +329,11 @@ fun parse-inline-def-sort()
   val pinfos = parse-maybe("inline borrow", {parse-special-id("borrow"); val (s, _) = parse-string-literal(); s.list.map(fn(c) if c == '^' then Borrow else Own)}).default([])
   parse-choices("fun or val inline", [
     {
-      val f = pFip()
-      val (_, doc) = parse-doc-keyword("fun")
-      (DefFun(pinfos, f), inl, isRec, spec, doc)
+      val (fip, doc) = parse-try
+        val (f, _) = parse-tail-fip()
+        val (_, doc) = parse-doc-keyword("fun")
+        (f, doc)
+      (DefFun(pinfos, fip), inl, isRec, spec, doc)
     },
     {
       val (_, doc) = parse-doc-keyword("val")
@@ -383,7 +401,7 @@ fun parse-match()
 
 fun parse-con()
   val name = pQualifiedConId()
-  val InfoCon(_, typ, repr) = envLookuparse-con(name)
+  val InfoCon(_, typ, repr) = env-lookup-parse-con(name)
   Con(TName(name, typ), repr)
 
 fun parse-var()
@@ -415,7 +433,7 @@ fun parse-def-group(): <parse,eenv,comp-flags,synonyms-eff> def-group
   val (name, _) = parse-choices("def group", [{parse-fun-id()}, {parse-wildcard(); (nil, null)}])
   val tp = parse-type-annotation()
   val expr = parse-body()
-  env-extendLocal(name, tp)
+  env-extend-local(name, tp)
   DefNonRec(Def(name, tp, expr, Private, sort, inl, null, doc))
 
 fun parse-range()
@@ -460,7 +478,7 @@ fun pPatCon()
   val args = parse-try({parse-left-paren(); val x = parse-patternArgs0(); parse-right-paren(); x})
   val (patArgs, argTypes) = args.unzip
   val resTp = parse-type-annotation()
-  val InfoCon(_, typ, repr, cons) = envLookuparse-con(cname)
+  val InfoCon(_, typ, repr, cons) = env-lookup-parse-con(cname)
   PatCon(TName(cname, typ), patArgs, repr, argTypes, exists0, resTp, cons, skip)
 
 fun parse-patternArgs0(): <parse,eenv,comp-flags,synonyms-eff> list<(pattern, ktype)>
@@ -478,7 +496,7 @@ fun parse-patternArg()
 fun pPatVar(pat: pattern)
   val (name, _) = parse-var-id()
   val tp = parse-type-annotation()
-  env-extendLocal(name, tp)
+  env-extend-local(name, tp)
   PatVar(TName(name, tp), pat)
 
 fun pPatLit()
@@ -504,7 +522,7 @@ fun pQualifiedConId()
 fun parse-parameters()
   val iparams = parse-maybe("parameters", {parse-parens-commas({parse-parameter(False)})}).default([])
   val (params, _) = iparams.unzip
-  params.map(fn((n, t)) env-extendLocal(n, t))
+  params.map(fn((n, t)) env-extend-local(n, t))
   params
 
 fun parse-parameter(allowBorrow: bool)
@@ -672,7 +690,7 @@ fun parse-synonym(tp, tps): <parse,eenv,comp-flags,synonyms-eff> ktype
       _ -> fail("illegal type alias expression " ++ tp.show)
   match res
     Just(t) -> t
-    Nothing -> env-typeApp(tp, tps)
+    Nothing -> env-type-app(tp, tps)
 
 fun parse-type-effect()
   with parse-try
@@ -717,17 +735,17 @@ fun env-range(l1: int, c1: int, l2: int, c2: int): eenv range
 effect eenv
   fun env-extend(name: name, kind: kind): ()
   fun env-type(name: name, kind: kind): ktype
-  fun envQualify(name: name): name
-  fun env-extendSynonym(syn-info: syn-info): ()
-  fun env-typeApp(tp: ktype, args: list<ktype>): ktype
-  fun env-extendLocal(name: name, tp: ktype): ()
+  fun env-qualify(name: name): name
+  fun env-extend-synonym(syn-info: syn-info): ()
+  fun env-type-app(tp: ktype, args: list<ktype>): ktype
+  fun env-extend-local(name: name, tp: ktype): ()
   fun env-lookup-local(name: name): ktype
-  fun envLookuparse-con(name: name): name-info
+  fun env-lookup-parse-con(name: name): name-info
   fun env-lookup-var(name: name): expr
   val modname : name
   val src-path : path
-  fun getEnv(): envv;
-  fun setEnv(env: envv): ()
+  fun get-env(): envv;
+  fun set-env(env: envv): ()
 
 struct envv
   bound: linearMap<name, type-var>
@@ -735,10 +753,10 @@ struct envv
   unique: int
   gamma: gamma
   locals: linearMap<name, ktype>
-  synonyms: name-map<syn-info>;
+  synonyms: name-map<syn-info>
 
-fun withEnvInitial(modName: name, srcPath: path, imports0, f: () -> <eenv,parse,comp-flags,synonyms-eff> a): <comp-flags,parse> a
-  with withSynonyms(synonyms/empty)
+fun with-env-initial(modName: name, srcPath: path, imports0, f: () -> <eenv,parse,comp-flags,synonyms-eff> a): <comp-flags,parse> a
+  with with-synonyms(synonyms/empty)
   var bound := LinearMap([])
   var imports := imports0
   var unique := 1000
@@ -746,34 +764,35 @@ fun withEnvInitial(modName: name, srcPath: path, imports0, f: () -> <eenv,parse,
   var locals := LinearMap([])
   fun qualify(n: name)
     if n.is-qualified then
-      match imports.importsExpand(n)
+      match imports.expand(n)
         Right((qname, _)) -> qname
         Left(amb) -> 
           trace("core/parse qualify: unable to expand name: " ++ n.show ++ ": " ++ amb.show-list(show))
           n
     else name/qualify(modName, n)
   with handler
-    fun getEnv()
-      Envv(bound, imports, unique, gamma, locals, getSynonyms())
-    fun setEnv(e)
+    val src-path = srcPath
+    fun get-env()
+      Envv(bound, imports, unique, gamma, locals, get-synonyms())
+    fun set-env(e)
       val Envv(b, i, u, g, l, s) = e
       bound := b
       imports := i
       unique := u
       gamma := g
       locals := l
-      setSynonyms(s)
+      set-synonyms(s)
     val modname = modName
     fun env-extend(n, k)
-      val id = newId(unique)
+      val id = unique.new-id
       unique := unique + 1
       val tv = TypeVar(id, k, Bound)
       bound := bound.add(n, tv)
-    fun env-extendLocal(n, k)
+    fun env-extend-local(n, k)
       unique := unique + 1
       locals := locals.set(n, k)
     fun env-type(n, k)
-      match bound.maybeGet(n)
+      match bound.lookup(n)
         Just(tv) -> TVar(tv)
         Nothing ->
           val qname = qualify(n)
@@ -781,34 +800,34 @@ fun withEnvInitial(modName: name, srcPath: path, imports0, f: () -> <eenv,parse,
             Just(info as SynInfo(name, kind, params, tp, rank)) | params.is-empty ->
               TSyn(TypeSyn(name, kind, rank, Just(info)), [], tp)
             _ -> TCon(TypeCon(qname, k))
-    fun envQualify(n)
+    fun env-qualify(n)
       qualify(n)
-    fun env-extendSynonym(syn-info)
-      synonymsExtend(syn-info.name, syn-info)
-    fun env-typeApp(tp, tps)
+    fun env-extend-synonym(syn-info)
+      synonyms-extend(syn-info)
+    fun env-type-app(tp, tps) 
       match tp
         TCon(TypeCon(name0, _)) ->
           match synonyms-lookup(name0)
             Just(syn-info as SynInfo(name, kind, params, syntp, rank)) | params.length == tps.length ->
-              TSyn(TypeSyn(name, kind, rank, Just(syn-info)), tps, subNew(params.zip(tps)) |-> syntp)
-            _ -> typeApp(tp, tps)
-        _ -> typeApp(tp, tps)
+              TSyn(TypeSyn(name, kind, rank, Just(syn-info)), tps, sub(params.zip(tps)) |-> syntp)
+            _ -> type-app(tp, tps)
+        _ -> type-app(tp, tps)
     fun env-lookup-local(n)
-      match locals.maybeGet(n)
+      match locals.lookup(n)
         Just(tp) -> tp
         Nothing -> fail("core/parse unbound local: " ++ n.show)
-    fun envLookuparse-con(n)
-      match gamma.gammaLookupExactCon(n)
+    fun env-lookup-parse-con(n)
+      match gamma.lookup-exact-con(n)
         [c as InfoCon] -> c
         res -> fail("unknown constructor " ++ n.show ++ ": " ++ res.show-list(show))
     fun env-lookup-var(n)
-      match gamma.gammaLookupCanonical(n)
-        [fnct as InfoFun] -> fnct.coreExpr(n)
-        [v as InfoVal] -> v.coreExpr(n)
-        [ex as assumption/InfoExternal] -> ex.coreExpr(n)
+      match gamma.lookup-canonical(n)
+        [fnct as InfoFun] -> fnct.core-expr(n)
+        [v as InfoVal] -> v.core-expr(n)
+        [ex as assumption/InfoExternal] -> ex.core-expr(n)
         [] | n == nameFieldAddrOf -> 
           val a = TypeVar(0, kindStar, Bound)
-          val fType = TForAll([a], [], TFun([(nil, TVar(a)), (nil, typeString), (nil, typeString)], typeTotal, TApp(typeFieldAddr, [TVar(a)])))
+          val fType = TForAll([a], TFun([(nil, TVar(a)), (nil, typeString), (nil, typeString)], typeTotal, TApp(typeFieldAddr, [TVar(a)])))
           Var(TName(nameFieldAddrOf, fType), compiler/core/core/InfoExternal([]))
-        res -> fail("unknown identifier: " ++ n.showPlain ++ ": " ++ res.show-list(show)) 
+        res -> fail("unknown identifier: " ++ n.show-plain ++ ": " ++ res.show-list(show)) 
   f()

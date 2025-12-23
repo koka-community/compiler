@@ -135,33 +135,33 @@ pub alias gamma = name-map<list<(name, name-info)>>
 pub val empty:gamma = LinearMap([])
 
 pub fun schemes(g: gamma): list<scheme>
-  g.gamma-list.map(_.snd.typ)
+  g.assumption/list.map(_.snd.typ)
 
 pub fun single(name: name, ni: name-info)
   assumption/empty.set(name, [(name, ni)])
 
 pub fun gamma/new(xs: list<(name, name-info)>): gamma
-  gamma-extends(empty, xs)
+  extends(empty, xs)
 
-pub fun gamma-extends(g: gamma, ls: list<(name,name-info)>): gamma
-  ls.foldl(g, fn(m, (name,tp)) m.gamma-extend(name, tp))
+pub fun extends(g: gamma, ls: list<(name,name-info)>): gamma
+  ls.foldl(g, fn(m, (name,tp)) m.extend(name, tp))
 
-pub fun gamma-extend(g: gamma, name: name, ni: name-info)
+pub fun extend(g: gamma, name: name, ni: name-info)
   g.update(name.unqualify-full, [(name, ni)], fn(old:list<_>, new) old ++ new) // TODO: Check for overlapping type schemes?
 
-pub fun gamma-lookup-canonical(g: gamma, name: name)
-  g.gamma-lookupQ(name).filter(_.canonical-name(nil) == name)
+pub fun lookup-canonical(g: gamma, name: name)
+  g.lookupQ(name).filter(_.canonical-name(nil) == name)
 
-pub fun gamma-lookup-exact-con(g: gamma, name: name)
-  g.gamma-lookupQ(name).filter(is-infoCon)
+pub fun lookup-exact-con(g: gamma, name: name)
+  g.lookupQ(name).filter(is-infoCon)
 
 // Return exactly matching qualified names
-pub fun gamma-lookupQ(g: gamma, name: name)
+pub fun lookupQ(g: gamma, name: name)
   match g.lookup(name.unqualify-full)
     Nothing -> []
     Just(xs) -> xs.filter(_.fst == name).map(snd)
 
-// @gamma-lookup name gamma@ looks up a potentially (partially) qualified name and returns all matches.
+// @lookup name gamma@ looks up a potentially (partially) qualified name and returns all matches.
 pub fun gamma-lookup(g: gamma, name: name)
   val stem-name = name.unqualify-full
   match g.lookup(stem-name)
@@ -204,41 +204,41 @@ pub fun split-rev-qualifiers(name: name): (list<string>, list<string>)
   val lpath = name.split-local-qual-name.reverse
   (mpath, lpath)
 
-pub fun gamma-lookup-prefix(g: gamma, name: name): list<(name, name-info)>
+pub fun lookup-prefix(g: gamma, name: name): list<(name, name-info)>
   val pre = name.unqualify.show-plain ++ "_"
   fun is-prefix(nm: name)
     nm == name || nm.name/name/starts-with(pre)
   g.filter(fn(n, ni) n.is-prefix).values.concat.filter(fn((_, ni)) ni.is-visible)
 
-pub fun gamma-map(g: gamma, f: (name-info -> name-info)): gamma
-  g.map(fn(k, xs) xs.map(fn((n, ni)) (n, f(ni))))
+pub fun map(g: gamma, f: (name-info -> name-info)): gamma
+  g.map(fn(k, xs) xs.list/map(fn((n, ni)) (n, f(ni))))
 
-pub fun gamma-list(g: gamma): list<(name, name-info)>
-  g.list.map(snd).concat.sort(?(<)=fn((n, _), (n2, _)) n.name/name/cmp(n2).is-lt)
+pub fun list(g: gamma): list<(name, name-info)>
+  g.linearmap/list.map(snd).concat.sort(?(<)=fn((n, _), (n2, _)) n.name/name/cmp(n2).is-lt)
 
-pub fun gamma-remove(g: gamma, name: name)
-  g.remove(name.unqualify)
+pub fun remove(g: gamma, name: name)
+  g.linearmap/remove(name.unqualify)
 
-pub fun gamma-union(g1: gamma, g2: gamma)
+pub fun union(g1: gamma, g2: gamma)
   g2.union-with(g1, fn(xs1: list<_>, xs2) xs1 ++ xs2)
 
-pub fun gamma-unions(gs: list<gamma>)
-  gs.foldl(compiler/type/assumption/empty, gamma-union)
+pub fun unions(gs: list<gamma>)
+  gs.foldl(compiler/type/assumption/empty, assumption/union)
 
 // Filter out signature belonging to a module
-pub fun gamma-filter(g: gamma, mod: name)
+pub fun filter(g: gamma, mod: name)
   g.filter(fn(k, _) k.qualifier == mod)
 
-pub fun gamma-names(g: gamma)
+pub fun names(g: gamma)
   g.keys
 
-pub fun gamma-public-names(g: gamma)
+pub fun public-names(g: gamma)
   g.filter(fn(n, nis) !n.is-hidden-name && nis.all(fn((_, ni)) ni.is-visible)).keys
 
 // Extract from core
 pub fun extract-gamma-imports(imports: list<(name,name)>, modName: name): gamma
   val modAlias = modName //.nameStem.list.reverse.take-while(_ != '.').reverse.string.new-name
-  imports.map(extract-import).gamma-unions.gamma-extend(modAlias, InfoImport(Private, typeVoid, modAlias, modName, null))
+  imports.map(extract-import).assumption/unions.extend(modAlias, InfoImport(Private, typeVoid, modAlias, modName, null))
 
 pub fun extract-import((name, qname))
   qname-map/single(name, InfoImport(Private, typeVoid, name, qname, null))
@@ -249,25 +249,25 @@ pub fun extract-gamma(isValue: (data-info -> bool), privateAsPublic: bool, c: co
     match vis
       Public -> Public
       _ -> if privateAsPublic then Public else vis
-  gamma-unions([
-    c.defs.map(_.extract-def-group(update-vis)).gamma-unions,
-    c.externals.map(_.extract-external(update-vis)).gamma-unions,
-    c.typedefs.map(_.extract-type-def-group(isValue, update-vis)).gamma-unions
+  assumption/unions([
+    c.defs.map(_.extract-def-group(update-vis)).assumption/unions,
+    c.externals.map(_.extract-external(update-vis)).assumption/unions,
+    c.typedefs.map(_.extract-type-def-group(isValue, update-vis)).assumption/unions
   ])
 
 fun extract-type-def-group(td: typedef-group, isValue: (data-info -> bool), update-vis)
-  td.map(extract-type-def(isValue, update-vis, _)).gamma-unions
+  td.map(extract-type-def(isValue, update-vis, _)).assumption/unions
 
 fun extract-type-def(isValue: (data-info -> bool), update-vis, td: typedef)
   fun extract-con-info((info, repr): (con-info, con-repr))
     qname-map/single(info.name, InfoCon(update-vis(info.vis), info.typeScheme, repr, info, info.range, info.doc))
   match td
-    Data(dataInfo) -> zip(dataInfo.constrs, dataInfo.data-repr(isValue).snd).map(extract-con-info).gamma-unions
+    Data(dataInfo) -> zip(dataInfo.constrs, dataInfo.data-repr(isValue).snd).map(extract-con-info).assumption/unions
     _ -> assumption/empty
 
 fun extract-def-group(d: def-group, update-vis)
   match d
-    DefRec(defs) -> defs.map(extract-def(_, update-vis)).gamma-unions
+    DefRec(defs) -> defs.map(extract-def(_, update-vis)).assumption/unions
     DefNonRec(v) -> extract-def(v, update-vis)
 
 fun extract-def(d: def, update-vis)
@@ -313,7 +313,7 @@ pub fun extract-external(external: external, update-vis)
 // Instances
 
 pub fun gamma/(|->)(sub: sub, g: gamma): pure gamma
-  g.map(fn(n, nis) nis.map(fn((n1, ni)) (n1, sub |-> ni)))
+  g.map(fn(n, nis) nis.list/map(fn((n1, ni: name-info)) (n1, sub |-> ni)))
 
 pub fun gamma/free-type-vars(g: gamma): pure tvs
   g.schemes.map(free-type-vars).unions
@@ -339,7 +339,7 @@ pub fun map-type(ni: name-info, f: (ktype) -> e ktype): e name-info
     InfoImport(vis, typ, nameAlias, fullName, range) -> InfoImport(vis, f(typ), nameAlias, fullName, range)
 
 fun pp-gamma-internal(g: gamma, showHidden: bool)
-  val nameSchemes = g.gamma-list.filter(fn((_, i)) !i.is-infoImport).map(fn((n, i)) (n, i.typ))
+  val nameSchemes = g.assumption/list.filter(fn((_, i)) !i.is-infoImport).map(fn((n, i)) (n, i.typ))
   val maxWidth = nameSchemes.map(fn((n, _)) n.show.count).maximum(0).min(12)
   fun nice(scheme: ktype)
     align(nice-types([scheme]).head.unjust)
