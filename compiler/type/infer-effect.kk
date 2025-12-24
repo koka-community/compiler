@@ -62,6 +62,9 @@ type implicit-select
   Amb(args: list<implicit-arg>)  // multiple solutions (failure)
   Infty(arg: implicit-arg)       // infinite chain (failure)
 
+pub val resolve-max-chain-depth = 32
+pub val decreasing-within = 4
+
 fun all-candidates(sel: implicit-select): list<implicit-arg>
   match sel
     None -> []
@@ -104,6 +107,54 @@ pub type name-context
 
 // A fixed argument that has been inferred
 alias fixed-arg = (range, ktype, keffect, core/core/expr)
+
+pub fun pure-match-shape-name-ctx(ctx1 : name-context, ctx2 : name-context) : <pure,unique> bool
+  match (ctx1, ctx2)
+    (CtxType(tp1), CtxType(tp2)) -> pure-match-shape(tp1, tp2)
+    (CtxFunTypes(some1, fixed1, named1, mbResTp1), CtxFunTypes(some2, fixed2, named2, mbResTp2)) ->
+      if (some1 == some2) && fixed1.zipwith(fixed2, pure-match-shape).all(id) && named1.is-nil && named2.is-nil then
+        match (mbResTp1, mbResTp2)
+          (Nothing, Nothing) -> True
+          (Just(tp1), Just(tp2)) -> pure-match-shape(tp1, tp2)
+          _ -> False
+      else False
+    _ -> False
+
+// Create a name context where the argument count is known (and perhaps some named arguments)
+pub fun fixed-count-context(propagated : maybe<(ktype, range)>, fixed-count : int, namedArgs : list<name>) : name-context
+  CtxFunArgs(False, fixed-count, namedArgs, propagated.map(fst))
+
+
+
+
+pub fun implicit-type-context(tp : ktype) : name-context
+  match tp.split-fun-type
+    Just((ppars, peff, prestp)) -> CtxFunTypes(False, ppars.map(snd), [], Just(prestp)) // can handle further implicits better
+    _ -> CtxType(tp)
+
+pub fun maybe-to-context(mb-type : maybe<ktype>) : name-context
+  match mb-type
+    Just(tp) -> CtxType(tp)
+    Nothing -> CtxNone
+
+pub fun maybe-r-to-context(mb-type-range : maybe<(ktype, range)>) : name-context
+  maybe-to-context(mb-type-range.map(fst))
+
+
+
+// Error Helpers
+
+
+pub fun pp-or(names : list<name>) : <pretty-eff> doc
+  match names
+    Nil -> pprint/empty
+    Cons(name, Nil) -> pp-name(name)
+    _ -> 
+      match names.reverse
+        Cons(last, rest) -> 
+          hcat(rest.reverse.map(pp-name(_) |.| ", ".text)) |+| "or".text |+| pp-name(last)
+        Nil -> pprint/empty
+
 
 /////////////////////////////////////
 // Implicit Constraints

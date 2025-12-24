@@ -1293,28 +1293,6 @@ ppNameContext penv ctx
 ppNameCtx :: Pretty.Env -> (Name,NameContext) -> Doc
 ppNameCtx penv (name,ctx) = Pretty.ppName penv name <+> text ":" <+> ppNameContext penv ctx
 
-
-pureMatchShapeNameCtx :: NameContext -> NameContext -> Bool
-pureMatchShapeNameCtx ctx1 ctx2
-  = case (ctx1,ctx2) of
-      (CtxType tp1, CtxType tp2)  -> pureMatchShape tp1 tp2
-      (CtxFunTypes some1 fixed1 named1 mbResTp1, CtxFunTypes some2 fixed2 named2 mbResTp2 )
-        -> (some1 == some2) && and (zipWith pureMatchShape fixed1 fixed2) && null named1 && null named2
-           && (case (mbResTp1,mbResTp2) of
-                 (Nothing,Nothing) -> True
-                 (Just tp1, Just tp2) -> pureMatchShape tp1 tp2
-                 _ -> False)
-      _ -> False
-
-
--- Create a name context where the argument count is known (and perhaps some named arguments)
-fixedCountContext :: Maybe (Type,Range) -> Int -> [Name] -> NameContext
-fixedCountContext propagated fixedCount named
-  = CtxFunArgs False fixedCount named (fmap fst propagated)
-
--- A fixed argument that has been inferred
-type FixedArg = (Range,Type,Effect,Core.Expr)
-
 -- A context where some fixed arguments have been inferred
 fixedContext :: Maybe (Type,Range) -> [(Int,FixedArg)] -> Int -> [Name] -> Inf NameContext
 fixedContext propagated fresolved fixedCount named
@@ -1338,23 +1316,6 @@ fixedContext propagated fresolved fixedCount named
     namedGuessed :: Inf [(Name,Type)]
     namedGuessed
       = mapM (\name -> do { tv <- Op.freshStar; return (name,tv) }) named
-
-implicitTypeContext :: Type -> NameContext
-implicitTypeContext tp
-  = case splitFunType tp of
-      Just (ppars,peff,prestp) -> CtxFunTypes False (map snd ppars) [] (Just prestp) -- can handle further implicits better
-      _                        -> CtxType tp
-
-maybeToContext :: Maybe Type -> NameContext
-maybeToContext mbType
-  = case mbType of
-      Just tp -> CtxType tp
-      Nothing -> CtxNone
-
-maybeRToContext :: Maybe (Type,Range) -> NameContext
-maybeRToContext mbTypeRange
-  = maybeToContext (fmap fst mbTypeRange)
-
 
 
 ----------------------------------------------------------------

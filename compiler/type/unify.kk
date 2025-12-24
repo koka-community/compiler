@@ -115,14 +115,10 @@ fun match-shape(tp1: ktype, tp2: ktype): <pure,unify,unique> ()
   if dom.length == codom.length then ()
   else unify-error(NoMatchType)
 
-// fun pure-match-shape(tp1: ktype, tp2: ktype): <pure,unique> bool
-//   with run-unique(0)
-//   val result =  
-//     with run-unify
-//     match-shape(tp1, tp2)
-//   match result
-//     (Right(_), unique) -> True
-//     _ -> False
+fun pure-match-shape(tp1: ktype, tp2: ktype): <pure,unique> bool
+  match run-unify({match-shape(tp1, tp2)})
+    (Right(_), _) -> True
+    _ -> False
 
 // Subsumption
 // subsume(free, t1, t2) holds if `t2` can be instantiated to `t1` where
