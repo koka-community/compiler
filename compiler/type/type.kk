@@ -701,7 +701,7 @@ pub fun eq-type(tp1: ktype, tp2: ktype)
     (TApp(t1, ts1), TApp(t2, ts2)) -> t1.eq-type(t2) && eq-types(ts1, ts2)
     _ -> False
 
-fun eq-types(t1: list<ktype>, t2: list<ktype>): pure bool
+pub fun eq-types(t1: list<ktype>, t2: list<ktype>): pure bool
   t1.zipwith(t2, eq-type).all(id)
 
 fun match-effect(eff1: tau, eff2: tau): pure bool

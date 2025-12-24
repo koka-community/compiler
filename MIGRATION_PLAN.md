@@ -20,6 +20,14 @@ This document outlines a structured plan to migrate the remaining functions from
   - `pure-match-shape-name-ctx`
   - `fixed-count-context`, `implicit-type-context`, `maybe-to-context`, `maybe-r-to-context`
   - `pp-or`
+- **Group 2 - Pure Type Manipulation Functions** (transferred):
+  - `normalize`, `normalizeX`, `normalizex`
+  - `nicefy-effect`, `match-aliases`, `try-alias`
+  - `find-insts`, `is-subset`, `split-effect`
+  - `empty-implicit-arg`, `pp-implicit-arg`, `pp-implicit-assign`
+  - `iarg-scope-depth`, `ia-scope-depth`, `to-implicit-arg-expr`
+  - `pp-typed-arg`, `to-implicit-arg`
+  - `pp-select`
 - **Group 5 - Hole & Context Management** (transferred):
   - `with-def`
   - `with-hole-allowed`
@@ -33,79 +41,6 @@ This document outlines a structured plan to migrate the remaining functions from
 ---
 
 ## 📋 Migration Groups (Priority Order)
-
-### GROUP 1: Simple Utility Functions (Fewest Changes, No Dependencies)
-**Effort: Minimal | Dependencies: None | Haskell→Koka Difficulty: Easy**
-
-These are pure functions that don't interact with the inference monad. Direct translation.
-
-1. **Variance-related** (lines 186-192 in InferMonad.hs)
-   - `Variance` type + `flip` function
-   - Status: Already in infer-effect.kk as `variance` type
-   - TODO: Verify completeness
-
-2. **Constants**
-   - `resolveMaxChainDepth = 32` (line 1013-1014)
-   - `decreasingWithin = 4` (line 1013-1014)
-
-3. **Simple predicates**
-   - `pureMatchShapeNameCtx`: Compares NameContext shapes (lines 1297-1309)
-   - Minimal logic, no Inf monad
-
-4. **Context builders**
-   - `fixedCountContext`: Creates NameContext from maybe type, int, names list (lines 1311-1313)
-   - `implicitTypeContext`: Pattern matches on splitFunType (lines 1342-1346)
-   - `maybeToContext`: Converts Maybe Type to NameContext (lines 1348-1352)
-   - `maybeRToContext`: Same but with Range (lines 1354-1358)
-
-5. **Pretty-printing utilities**
-   - `ppOr`: Formats list of names with "or" (lines 1399-1403)
-   - Requires Pretty.Env and ppName
-
-**Dependencies**: Basic type imports, Pretty.ppName, splitFunType
-
-**Estimated Lines**: ~100
-
----
-
-### GROUP 2: Pure Type Manipulation Functions
-**Effort: Low | Dependencies: Type operations | Haskell→Koka Difficulty: Low-Medium**
-
-Pure functions working with types/effects, minimal monad interaction.
-
-1. **Effect utilities**
-   - `nicefyEffect`: Orders and folds effects (lines 250-258)
-   - `findInsts`: Filters type variables from effects (lines 285-301)
-   - `isSubset`: Checks if one effect list is subset of another (lines 303-316)
-   - `splitEffect`: Extracts Tau from Effect (lines 318-320)
-
-2. **Type normalization**
-   - `normalize`: Normalizes type without free vars (lines 185-189)
-   - `normalizeX`: Full normalization with tvs context (lines 190-243)
-   - Variance handling, type folding
-   - **Note**: Uses recursion with `normalizex` helper
-
-3. **Implicit argument utilities**
-   - `emptyImplicitArg`: Constant value (lines 777-781)
-   - `prettyImplicitArg`: Pretty-prints implicit arg (lines 782-798)
-   - `prettyImplicitAssign`: Formats implicit assignments (lines 799-806)
-   - `iargScopeDepth`, `iaScopeDepth`: Extract scope depths (lines 807-814)
-   - `toImplicitArgExpr`: Converts ImplicitArg to Expr (lines 817-843)
-   - `prettyTypedArg`: Pretty-prints typed argument (lines 844-847)
-   - `toImplicitArg`: Constructs ImplicitArg from TypedArg (lines 849-851)
-
-4. **ImplicitSelect operations**
-   - Status: `all-candidates`, `map`, `merge` already done
-   - TODO: Add `prettySelect` (lines 892-897)
-
-**Dependencies**: 
-- Type system (fuv, ftv, expandSyn, quantifyType)
-- Core.Expr and Core.ConRepr
-- Pretty printing infrastructure
-
-**Estimated Lines**: ~250
-
----
 
 ### GROUP 3: Name/Context Resolution Helpers (Medium Complexity)
 **Effort: Medium | Dependencies: Gamma, NameInfo | Haskell→Koka Difficulty: Medium**

@@ -2,6 +2,7 @@ module compiler/type/infer-effect
 
 import compiler/common/range
 import compiler/common/name
+import compiler/common/name-prim
 import compiler/common/name-collections
 import compiler/common/syntax
 import compiler/common/failure
@@ -17,6 +18,7 @@ import compiler/type/assumption
 import compiler/type/infgamma
 import compiler/type/unify
 import compiler/type/pretty
+import compiler/type/operations
 import compiler/syntax/range-map
 import compiler/core/core
 import compiler/lib/pprint
@@ -32,6 +34,119 @@ fun flip(v : variance)
     Negative -> Positive
     Positive -> Negative
     Invariant -> Invariant
+
+pub fun normalize(close: bool, tp: rho): <infer|e> rho
+  val free = free-in-gamma()
+  normalizeX(close, free, tp)
+
+pub fun normalizeX(close: bool, free: tvs, tp: rho): <infer|e> rho
+  match tp
+    TForall([], t) -> normalizeX(close, free, t)
+    TSyn(syn, targs, t) ->
+      TSyn(syn, targs, normalizeX(close, free, t))
+    TFun(args, eff, res) ->
+      val (ls, tl) = nofail-unify(fn() eff.extract-normalize-effect)
+      val eff' = // remove tail variables in the result type
+        match tl.expand-syn
+          TVar(tv) | close && tv.is-meta && !free.member(tv) && !(Cons(res, args.map(snd))).free-type-vars.member(tv) ->
+            nofail-unify(fn() unify(type-total, tl))
+            eff.subst
+          _ ->
+            val ls' = ls.map(normalizex2(Positive, _))
+            val tl' = normalizex2(Positive, tl)
+            effect-extends(ls', tl')
+      
+      val args' = args.map fn((nm, arg))
+        (nm, normalizex2(Negative, arg))
+      val res' = normalizex2(Positive, res)
+      val nice-eff = nicefy-effect(eff')
+      TFun(args', nice-eff, res')
+    _ -> normalizex2(Positive, tp)
+
+fun normalizex2(v: variance, tp: rho): <infer|e> rho
+  match v
+    Invariant -> tp
+    _ -> match tp
+      TFun(args, eff, res) ->
+        val (ls, tl) = nofail-unify(fn() eff.extract-normalize-effect)
+        // we can only do this if 'tl' does not also occur anywhere else without
+        // the same label present...
+        // see 'catch' and 'run' for example
+        val eff' = 
+          val ls' = ls.map(fn(l) normalizex2(v, l))
+          val tl' = normalizex2(v, tl)
+          effect-extends(ls', tl')
+        val args' = args.map fn((nm, arg))
+          (nm, normalizex2(v.flip, arg))
+        val res' = normalizex2(v, res)
+        val nice-eff = nicefy-effect(eff')
+        TFun(args', nice-eff, res')
+      TForall(vars, t) ->
+        TForall(vars, normalizex2(v, t))
+      TApp(t, args) ->
+        TApp(normalizex2(v, t), args)
+      TSyn(syn, args, t) ->
+        TSyn(syn, args, normalizex2(v, t))
+      _ -> tp
+
+pub fun nicefy-effect(eff: keffect): <infer|e> keffect
+  fun try-alias(ls: list<tau>, nm: name): <infer|e> (list<tau>, list<tau>)
+    if ls.is-nil then ([], [])
+    else
+      match synonyms-lookup(nm)
+        Nothing -> ([], ls)
+        Just(syn) ->
+          val (ls2, tl2) = syn.t.extract-ordered-effect
+          if ls2.is-nil || !tl2.is-effect-empty then ([], ls)
+          else
+            val (sls, insts) = find-insts(syn.syn-info/params, ls2, ls)
+            match is-subset([], sls, ls)
+              Just(rest) ->
+                ([TSyn(TypeSyn(nm, syn.syn-info/kind, syn.syn-info/rank, Just(syn)), insts, effect-fixed(sls))], rest)
+              _ -> ([], ls)
+  fun match-aliases(names: list<name>, ls: list<tau>): <infer|e> list<tau>
+    match names
+      Nil -> ls
+      Cons(nm, ns) ->
+        val (pre, post) = try-alias(ls, nm)
+        val post' = match-aliases(ns, post)
+        pre ++ post'
+  val (ls, tl) = eff.extract-ordered-effect
+  val ls' = match-aliases([nameTpIO, nameTpST, nameTpPure, nameTpAsyncX], ls)
+  ls'.foldr(tl, fn(l, t) TApp(TCon(tconEffectExtend), [l, t]))
+
+
+fun find-insts(params: list<type-var>, ls1: list<tau>, ls2: list<tau>): pure (list<tau>, list<tau>)
+  if params.is-nil then (ls1, [])
+  else
+    fun match-params(tp)
+      match tp
+        TApp(_, args) -> eq-types(params.map(TVar), args)
+        _ -> False
+    
+    match ls1.filter(match-params)
+      Nil -> (ls1, params.map(TVar))
+      Cons(tp, _) ->
+        val nm = tp.label-name
+        match ls2.filter(fn(t) t.label-name == nm)
+          Cons(TApp(_, args), _) | args.length == params.length ->
+            (sub(params.zip(args)) |-> ls1, args)
+          _ -> (ls1, params.map(TVar))
+
+fun is-subset(acc: list<tau>, ls1: list<tau>, ls2: list<tau>): pure maybe<list<tau>>
+  match (ls1, ls2)
+    (Nil, Nil) -> Just(acc.reverse)
+    (Nil, Cons(l2, ll2)) -> Just(acc.reverse ++ ls2)
+    (Cons(l1, ll1), Nil) -> Nothing
+    (Cons(l1, ll1), Cons(l2, ll2)) ->
+      val cmp = name/cmp
+      if l1.label-name < l2.label-name then Nothing
+      else if l1.label-name > l2.label-name then is-subset(Cons(l2, acc), ls1, ll2)
+      else if eq-type(l1, l2) then is-subset(acc, ll1, ll2)
+      else Nothing
+
+pub fun split-effect(eff: keffect): <infer|e> (list<tau>, keffect)
+  nofail-unify(fn() eff.extract-normalize-effect)
 
 type infer-context
   Check(message: string, range: range)
@@ -52,6 +167,76 @@ type implicit-arg
     )
 
 alias typed-arg = (name, assumption/name-info, rho)
+
+// special empty implicit arg for display purposes (as "...")
+pub val empty-implicit-arg = 
+  ImplicitArg(nil, InfoVal(Private, nil, typeUnit, 0, null, True, False, ""), typeUnit, [])
+
+pub fun pp-implicit-arg(iarg: implicit-arg): <pretty-eff> doc
+  if iarg.name.is-nil then "...".text
+  else
+    val docargs = iarg.implicit-args.map fn((pname, arg))
+      pp-implicit-assign("", pname, arg, True)
+    
+    val fcount = match iarg.typ.split-fun-type
+      Just((ipars, _, _)) -> 
+        val (fixed, _, _) = ipars.split-optional-implicit
+        fixed.length
+      _ -> 0 // should never happen?
+    
+    val docfixed = list(1, fcount, fn(_) -> "_".text)
+    
+    iarg.name.pp-name-plain.color(colors.colorImplicitExpr) |.|
+      (if iarg.implicit-args.is-nil then pprint/empty
+       else (docfixed ++ docargs).intersperse(comma).hcat.parens)
+
+pub fun pp-implicit-assign(pfx: string, pname: name, iarg: implicit-arg, shorten: bool): <pretty-eff> doc
+  val pardoc = pname.pp-name-plain.color(colors.colorImplicitParameter) |.| "=".text
+  if (pname == iarg.name && iarg.implicit-args.is-nil) || pname.from-implicit-param-name == iarg.name.unqualify-full || iarg.name.is-nil then
+    (if shorten then pprint/empty else pardoc) |.| iarg.pp-implicit-arg
+  else
+    pardoc |.| iarg.pp-implicit-arg
+
+pub fun iarg-scope-depth(nm: name, info: assumption/name-info): int
+  if nm.is-implicit-constraint-evidence then -2 // never prefer compiler generated constraints
+  else info.scope-depth
+
+pub fun ia-scope-depth(iarg: implicit-arg): int
+  iarg-scope-depth(iarg.name, iarg.info)
+
+// Convert an implicit argument to an expression (that is supplied as the argument)
+pub fun to-implicit-arg-expr(xrange: range, iarg: implicit-arg): <unique> expr
+  val range = xrange.hide // don't add things in the expression to the rangemap
+  match iarg.implicit-args
+    Nil -> Var(iarg.name, False, range)
+    _ -> match iarg.typ.split-fun-type
+      Just((ipars, ieff, ires-tp)) | ipars.any(is-optional-or-implicit) -> // eta-expansion needed?
+        // eta-expand and resolve further implicit parameters
+        // todo: eta-expansion may become part of subsumption?
+        val (fixed, opt, implicits) = ipars.split-optional-implicit
+        // assertion "Type.InferMonad.toImplicitAppExpr" (implicits.length == iarg.implicit-args.length)
+        val name-fixed = fixed.map-indexed fn(i, _)
+          make-hidden-name("arg", new-name("x" ++ (i + 1).show))
+        val args-fixed = name-fixed.map fn(nm)
+          (Nothing, Var(nm, False, range))
+        val args-implicit = iarg.implicit-args.map fn((pname, arg))
+          (Just((pname, range)), to-implicit-arg-expr(range.end-of-range, arg))
+        
+        val body = App(Var(iarg.name, False, range), args-fixed ++ args-implicit, range)
+        if name-fixed.is-nil then body
+        else
+          val binders = name-fixed.map fn(nm)
+            ValueBinder(nm, Nothing, Nothing, range, range)
+          Lam(binders, body, False, range)
+      _ -> failure("compiler/type/infer-effect: to-implicit-arg-expr: illegal type for implicit? " ++ range.show ++ ", " ++ iarg.name.show)
+
+pub fun pp-typed-arg(targ: typed-arg): <pretty-eff> doc
+  val (nm, _, tp) = targ
+  pp-param((nm, tp))
+
+pub fun to-implicit-arg(iargs: list<(name, implicit-arg)>, targ: typed-arg): implicit-arg
+  val (nm, info, rho) = targ
+  ImplicitArg(nm, info, rho, iargs)
 
 // We can find a unique solution, or none, or surely ambiguous.
 // The `Infty` tracks infinite chains, while `Amb` ambigious ones. 
@@ -86,6 +271,13 @@ fun merge(sel1: implicit-select, sel2: implicit-select): implicit-select
     // Any other combination becomes ambiguous
     // in particular Infty + Found must be treated as ambiguous to be sound
     _ -> Amb(sel1.all-candidates ++ sel2.all-candidates)
+
+fun pp-select(sel: implicit-select): <pretty-eff> doc
+  match sel
+    None -> "None".text
+    Found(iarg) -> "Found".text |+| iarg.pp-implicit-arg
+    Infty(iarg) -> "Infty".text |+| iarg.pp-implicit-arg
+    Amb(xs) -> "Amb".text |+| xs.map(pp-implicit-arg).list
 
 /////////////////////////////////////
 // Name Context
@@ -209,7 +401,7 @@ pub struct inferEnv
 pub effect val scope-depth: int
 pub effect val local-depth: int
 
-pub alias infer = <range-map-eff, local-depth, scope-depth, def-infer-effect, infer-env, inf-gamma-eff, synonyms-eff, newtypes-eff, unify, unique>;
+pub alias infer = <pure, range-map-eff, local-depth, scope-depth, def-infer-effect, infer-env, inf-gamma-eff, synonyms-eff, newtypes-eff, unify, unique>;
 
 div type ic-params 
   ICParams(
