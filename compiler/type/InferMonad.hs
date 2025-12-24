@@ -211,17 +211,6 @@ inferSubsume context range expected tp
          Left err             -> do unifyError context range err sexp stp
                                     return (expected,id)
 
-nofailUnify :: Unify a -> Inf a
-nofailUnify u
-  = do res <- runUnify u
-       case res of
-         (Right x,sub)
-          -> do extendSub sub
-                return x
-         (Left err,sub)
-          -> do extendSub sub
-                failure ("Type.InferMonad.runUnify: should never fail!: " ++ show err)
-
 withSkolemized :: Range -> Type -> Maybe Doc -> (Type -> [TypeVar] -> Inf (a,Tvs)) -> Inf a
 withSkolemized rng tp mhint action
   = do (xvars,xrho,_) <- Op.skolemizeEx rng tp
@@ -612,8 +601,6 @@ ppAmbDocs docs
 -----------------------------------------------------------------------
 -- Resolving implicit names
 -----------------------------------------------------------------------
-resolveMaxChainDepth :: Int
-resolveMaxChainDepth = 32   -- just in case: prevent infinite expansion (not required anymore?)
 
 -- We can find a unique solution, or none, or surely ambiguous.
 -- The `selInfinite` tracks infinite chains, while `selCandidates` ambigious ones. Both are for error messages only.
@@ -622,39 +609,6 @@ data ImplicitSelect
   | Found !ImplicitArg    -- a single solution
   | Amb   ![ImplicitArg]  -- multiple solutions (failure)
   | Infty !ImplicitArg    -- infinite chain (failure)
-
-allCandidates :: ImplicitSelect -> [ImplicitArg]
-allCandidates sel
-  = case sel of
-      None    -> []
-      Found x -> [x]
-      Amb xs  -> xs
-      Infty x -> [x]
-
-mapCandidates :: (ImplicitArg -> ImplicitArg) -> ImplicitSelect -> ImplicitSelect
-mapCandidates f sel
-  = case sel of
-      None    -> None
-      Found x -> Found (f x)
-      Amb xs  -> Amb (map f xs)
-      Infty x -> Infty (f x)
-
-merge :: ImplicitSelect -> ImplicitSelect -> ImplicitSelect
-merge sel1 sel2
-  = case (sel1,sel2) of
-      (None, _)    -> sel2
-      (_,    None) -> sel1
-      -- any other combination becomes ambigious.
-      -- in particular, Infty + Found must be treated as ambigious to be sound
-      _            -> Amb (allCandidates sel1 ++ allCandidates sel2)
-
-
-prettySelect :: Pretty.Env -> ImplicitSelect -> Doc
-prettySelect penv None         = text "None"
-prettySelect penv (Found iarg) = text "Found" <+> prettyImplicitArg penv iarg
-prettySelect penv (Infty iarg) = text "Infty" <+> prettyImplicitArg penv iarg
-prettySelect penv (Amb xs)     = text "Amb" <+> list (map (prettyImplicitArg penv) xs)
-
 
 -- Resolve an implicit argument fully
 resolveImplicitArg :: Bool -> Bool -> NameContext -> Range -> [(NameInfo -> Bool, Name)] -> Inf (Either [Doc] (ImplicitArg))
@@ -768,10 +722,6 @@ resolveImplicitParameter allowDisambiguate allowInfiniteChains chain range (pnam
     in resolveImplicitArgEx allowDisambiguate True {- allow unit val -} allowInfiniteChains chain newctx
                             (endOfRange range) -- use end of range to deprioritize with hover info
                             [(isInfoValFunExt,pnameExpr)]
-
-
-decreasingWithin :: Int
-decreasingWithin = 4
 
 -- Have a previously tried to derive this parameter?
 isDecreasingChain :: [TypedArg] -> NameContext -> Name -> Type -> Bool
@@ -1029,30 +979,6 @@ data NameContext
   | CtxFunTypes Bool [Type] [(Name,Type)] (Maybe Type)  -- ^ are only some arguments supplied? fixed and named arguments, maybe a (propagated) result type
   deriving (Show)
 
-ppNameContext :: Pretty.Env -> NameContext -> Doc
-ppNameContext penv ctx
-  = case ctx of
-      CtxNone
-        -> text "_"
-      CtxType tp
-        -> Pretty.ppType penv tp
-      CtxFunArgs matchSome n names mbResTp
-        -> -- text "CtxFunArgs" <+> pretty n <+> list [Pretty.ppName penv name | name <- names] <+> ppMbType penv mbResTp
-           tupled ([text "?" | _ <- [1..n]] ++ [Pretty.ppName penv name <+> text ": ?" | name <- names]
-                   ++ (if matchSome then [text "..."] else []))
-           <+> text "->" <+> ppMaybeType mbResTp
-      CtxFunTypes some fixed named mbResTp
-        -> -- text "CtxFunTypes" <+> pretty some <+> list [Pretty.ppType penv atp | atp <- fixed]
-           -- <+> list [Pretty.ppParam penv nt | nt <- named] <+> ppMbType penv mbResTp
-           tupled ([Pretty.ppType penv ftp | ftp <- fixed] ++ [Pretty.ppParam penv nt | nt <- named]
-                   ++ (if some then [text "..."] else [])) <+> text "->" <+> ppMaybeType mbResTp
-  where
-    ppMaybeType Nothing   = text "_"
-    ppMaybeType (Just tp) = Pretty.ppType penv tp
-
-ppNameCtx :: Pretty.Env -> (Name,NameContext) -> Doc
-ppNameCtx penv (name,ctx) = Pretty.ppName penv name <+> text ":" <+> ppNameContext penv ctx
-
 -- A context where some fixed arguments have been inferred
 fixedContext :: Maybe (Type,Range) -> [(Int,FixedArg)] -> Int -> [Name] -> Inf NameContext
 fixedContext propagated fresolved fixedCount named
@@ -1089,74 +1015,6 @@ checkCasingOverlaps range name matches
     -- .. but I think it is better to only complain if the actual definition
     -- used has a different casing to reduce potential conflicts between modules
     return ()
-
-checkCasingOverlap :: Range -> Name -> Name -> NameInfo -> Inf ()
-checkCasingOverlap range name qname info
-  = do case caseOverlaps name qname info of
-         Just qname1
-           -> do env <- getEnv
-                 infError range (text (infoElement info) <+> Pretty.ppName (prettyEnv env) (unqualify name) <+> text "is already in scope with a different casing as" <+> Pretty.ppName (prettyEnv env) (importsAlias qname1 (imports env)))
-         _ -> return ()
-
-checkCasing :: Range -> Name -> Name -> NameInfo -> Inf ()
-checkCasing range name qname info
-  = do case caseOverlaps name qname info of
-         Nothing -> return ()
-         Just qname1
-          -> do env <- getEnv
-                infError range (text (infoElement info) <+> Pretty.ppName (prettyEnv env) (unqualify name) <+> text "should be cased as" <+> Pretty.ppName (prettyEnv env) (importsAlias qname1 (imports env)))
-
-
-caseOverlaps :: Name -> Name -> NameInfo -> (Maybe Name)
-caseOverlaps name qname info
-  = let qname1 = case info of
-                   InfoImport{infoAlias = alias} -> alias
-                   _                             -> qname
-    in if not (isLocallyQualified qname) && -- TODO: fix casing check for internally qualified names
-          (nameCaseOverlap ((if isQualified name then id else unqualify) ({- nonCanonicalName -} qname1)) name)
-        then Just qname1
-        else Nothing
-
-ppAmbiguous :: Env -> String -> [(Name,NameInfo)] -> Doc
-ppAmbiguous env hint infos
-  = vcat ([text ". Possible candidates: ",
-           ppCandidates env infos]
-          ++
-          (if (null hint) then [] else [text "hint:" <+> text hint]))
-
-
-ppCandidates :: Env -> [(Name,NameInfo)] -> Doc
-ppCandidates env nameInfos
-   = align $ table $ (if null rest
-          then map (ppNameInfo env) defs
-          else map (ppNameInfo env) (init defs) ++ [(text "...", text "or" <+> pretty (length rest + 1) <+> text "other definitions")])
-  where
-    penv = prettyEnv env
-    modName = context env
-    n = 10
-    sorted      = sortBy (\(name1,info1) (name2,info2) ->
-                          if (qualifier name1 == modName && qualifier name2 /= modName)
-                            then LT
-                          else if (qualifier name1 /= modName && qualifier name2 == modName)
-                            then GT
-                          else compare (not (isRho (infoType info1))) (not (isRho (infoType info2)))
-                        ) nameInfos
-    (defs,rest) = splitAt n sorted
-
-ppImplicitsHint :: Env -> [(Name,NameInfo)] -> [(Doc, Doc)]
-ppImplicitsHint env nameInfos =
-  case allRequiredMissingImplicits of
-    [] -> []
-    _  -> [(text "missing implicits" , hsep (map (Pretty.ppName penv) allRequiredMissingImplicits)),
-            (text "hint", text "ensure implicit functions are defined prior to functions that require them")]
-  where
-    penv = prettyEnv env
-    candidateMissingImplicits = map (map fst . requiresImplicits . infoType . snd) nameInfos
-    allMissingImplicits = S.fromList (concat candidateMissingImplicits)
-    allRequiredMissingImplicits = filter (\imp -> all (imp `elem`) candidateMissingImplicits) (S.toList allMissingImplicits)
-
-ppNameInfo env (name,info)
-  = (Pretty.ppName (prettyEnv env) (importsAlias name (imports env)), Pretty.ppType (prettyEnv env) (infoType info))
 
 {--------------------------------------------------------------------------
   Implicit Constraints
@@ -1232,11 +1090,6 @@ checkHeapDivConstraint name tp
       TApp (TCon tcon) [tpHeap,tpVal,tpEff]  | typeConName tcon == nameTypeHeapDiv
         -> Just (canResolveHeapDivConstraint,resolveHeapDivConstraint)
       _ -> Nothing
-
-ppTvs :: Pretty.Env -> Tvs -> Doc
-ppTvs penv tvs
-  = list (map (Pretty.ppTypeVar penv) (tvsList tvs))
-
 
 canResolveHeapDivConstraint :: Tvs -> ImplicitConstraint -> Inf Bool
 canResolveHeapDivConstraint free ic

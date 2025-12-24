@@ -310,6 +310,21 @@ pub type name-context
     namedTypes: list<(name, ktype)>, // given named argument types
     mbResTp: maybe<ktype>) // possible result type
 
+pub fun pp-name-context(nctx: name-context): <pretty-eff> doc
+  match nctx
+    CtxNone -> "_".text
+    CtxType(tp) -> tp.pp-type
+    CtxFunArgs(matchSome, n, names, mbResTp) ->
+      val args = list(1, n, fn(_) -> "?".text) ++ names.map(fn(nm) nm.pp-name |.| ": ?".text) ++ (if matchSome then ["...".text] else [])
+      args.tupled |+| "->".text |+| mbResTp.map(pp-type).default("_".text)
+    CtxFunTypes(matchSome, fixed, namedArgs, mbResTp) ->
+      val args = fixed.map(pp-type) ++ namedArgs.map(pp-param) ++ (if matchSome then ["...".text] else [])
+      args.tupled |+| "->".text |+| mbResTp.map(pp-type).default("_".text)
+
+pub fun pp-name-ctx(nm: name, nctx: name-context): <pretty-eff> doc
+  nm.pp-name |+| ":".text |+| pp-name-context(nctx)
+
+
 // A fixed argument that has been inferred
 alias fixed-arg = (range, ktype, keffect, core/core/expr)
 
@@ -330,7 +345,8 @@ pub fun fixed-count-context(propagated : maybe<(ktype, range)>, fixed-count : in
   CtxFunArgs(False, fixed-count, namedArgs, propagated.map(fst))
 
 
-
+pub fun pp-tvs(tvs: tvs): <pretty-eff> doc
+  tvs.list.map(pp-type-var).list
 
 pub fun implicit-type-context(tp : ktype) : name-context
   match tp.split-fun-type
@@ -345,20 +361,6 @@ pub fun maybe-to-context(mb-type : maybe<ktype>) : name-context
 pub fun maybe-r-to-context(mb-type-range : maybe<(ktype, range)>) : name-context
   maybe-to-context(mb-type-range.map(fst))
 
-
-
-// Error Helpers
-
-
-pub fun pp-or(names : list<name>) : <pretty-eff> doc
-  match names
-    Nil -> pprint/empty
-    Cons(name, Nil) -> pp-name(name)
-    _ -> 
-      match names.reverse
-        Cons(last, rest) -> 
-          hcat(rest.reverse.map(pp-name(_) |.| ", ".text)) |+| "or".text |+| pp-name(last)
-        Nil -> pprint/empty
 
 
 /////////////////////////////////////
@@ -396,6 +398,87 @@ fun pp-constraint(ic: implicit-constraint): <pretty-eff> doc
 fun pp-constraints(ics: list<implicit-constraint>): <pretty-eff> doc
   ics.map(pp-constraint).list
 
+/////////////////////////////
+// Error Helpers
+/////////////////////////////
+
+// Casing checks
+pub fun case-overlaps(nm: name, qname: name, info: assumption/name-info): maybe<name>
+  val qname1 = match info
+    InfoImport(_, _, infoAlias, _, _) -> infoAlias
+    _ -> qname
+  
+  if !qname.is-locally-qualified && // TODO: fix casing check for internally qualified names
+     name-case-overlap(if nm.is-qualified then qname1 else qname1.unqualify, nm) 
+  then Just(qname1)
+  else Nothing
+
+pub fun check-casing-overlap(rng: range, nm: name, qname: name, info: assumption/name-info): <infer> ()
+  match case-overlaps(nm, qname, info)
+    Just(qname1) ->
+      val env = infer-env
+      inf-error(rng, info.element.text |+| nm.unqualify.pp-name |+| "is already in scope with a different casing as".text |+| env.importsMap.get-alias(qname1).pp-name)
+    Nothing -> ()
+
+pub fun check-casing(rng: range, nm: name, qname: name, info: assumption/name-info): <infer> ()
+  match case-overlaps(nm, qname, info)
+    Just(qname1) ->
+      val env = infer-env
+      inf-error(rng, info.element.text |+| nm.unqualify.pp-name |+| "should be cased as".text |+| env.importsMap.get-alias(qname1).pp-name)
+    Nothing -> ()
+
+
+pub fun pp-ambiguous(hint: string, infos: list<(name, assumption/name-info)>): <pretty-eff> doc
+  vcat([". Possible candidates: ".text, pp-candidates(infos)] ++
+       (if hint.is-empty then [] else ["hint: ".text |+| hint.text]))
+
+
+pub fun pp-candidates(nameInfos: list<(name, assumption/name-info)>): <pretty-eff> doc
+  val env = infer-env
+  val modName = env.contxt
+  val n = 10
+  val sorted = nameInfos.sort-by fn((nm1, info1), (nm2, info2))
+    if nm1.qualifier == modName && nm2.qualifier != modName then Lt
+    else if nm1.qualifier != modName && nm2.qualifier == modName then Gt
+    else cmp(!info1.info-type.is-rho, !info2.info-type.is-rho)
+  
+  val (defs, rest) = sorted.split(n)
+  val rows = defs.map fn((nm, info)) pp-name-info(nm, info)
+  val finalRows = 
+    if rest.is-nil then rows
+    else rows ++ [("...".text, "or".text |+| rest.length.show.text |+| "other definitions".text)]
+  finalRows.table.align
+
+pub fun pp-implicits-hint(nameInfos: list<(name, assumption/name-info)>): <pretty-eff> list<(doc, doc)>
+  val candidateMissingImplicits = nameInfos.map fn((_, info))
+    info.info-type.requires-implicits.map(fst)
+  
+  val allMissingImplicits = candidateMissingImplicits.concat.linearset
+  val allRequiredMissingImplicits = allMissingImplicits.list.filter fn(imp)
+    candidateMissingImplicits.all(fn(missing) missing.any(fn(m) m == imp))
+  
+  match allRequiredMissingImplicits
+    Nil -> []
+    _ -> [("missing implicits".text, allRequiredMissingImplicits.map(pp-name).hsep),
+          ("hint".text, "ensure implicit functions are defined prior to functions that require them".text)]
+
+pub fun pp-name-info(nm: name, info: assumption/name-info): <pretty-eff> (doc, doc)
+  val env = infer-env
+  (env.importsMap.get-alias(nm).pp-name, info.info-type.pp-type)
+
+pub fun pp-or(names : list<name>) : <pretty-eff> doc
+  match names
+    Nil -> pprint/empty
+    Cons(name, Nil) -> pp-name(name)
+    _ -> 
+      match names.reverse
+        Cons(last, rest) -> 
+          hcat(rest.reverse.map(pp-name(_) |.| ", ".text)) |+| "or".text |+| pp-name(last)
+        Nil -> pprint/empty
+
+
+
+
 /////////////////////////////////////
 // Inference Effect
 /////////////////////////////////////
@@ -410,11 +493,12 @@ pub struct inferEnv
   localDepth: int
   allowInfiniteChains: bool
   niceNames: name-map<doc>
+  importsMap: import-map
 
 pub effect val scope-depth: int
 pub effect val local-depth: int
 
-pub alias infer = <pure, range-map-eff, local-depth, scope-depth, def-infer-effect, infer-env, inf-gamma-eff, synonyms-eff, newtypes-eff, unify, unique>;
+pub alias infer = <pretty-eff, infer-eff, range-map-eff, local-depth, scope-depth, def-infer-effect, infer-env, inf-gamma-eff, synonyms-eff, newtypes-eff, unify, unique>;
 
 fun free-in-gamma()
   (sub/(|->)(get-subst(), inf-gamma-list().map(snd))).free-type-vars
@@ -476,3 +560,7 @@ pub fun with-no-local-scope(action: () -> <infer|e> a): <infer|e> a
   action()
 
 pub effect val infer-env: inferEnv
+
+pub effect infer-eff 
+  fun inf-error(rng: range, msg: doc): ()
+  fun inf-warning(rng: range, msg: doc): ()
