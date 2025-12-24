@@ -333,12 +333,14 @@ fun match-kinds(kinds1: list<kind>, kinds2: list<kind>): <div,unify> ()
 effect unify
   final ctl unify-error(e: unifyErr): a
   fun extend-sub(tv: type-var, t: ktype): ()
+  fun add-sub(sub: sub): ()
   fun get-subst(): sub
 
 fun with-err(e: unifyErr -> unifyErr, f: () -> <unify|e> a): <unify|e> a
   with override
     final ctl unify-error(er) unify-error(e(er))
     fun extend-sub(tv, t) extend-sub(tv, t)
+    fun add-sub(sub) add-sub(sub)
     fun get-subst() get-subst() 
   f()
 
@@ -349,6 +351,8 @@ fun run-unify(action: () -> <pure,unique,unify|e> a): <pure,unique|e> (either<un
     final ctl unify-error(e) (Left(e), subst)
     fun extend-sub(tv, t) 
       subst := subst.extend(tv, t)
+    fun add-sub(sub) 
+      subst := subst.compose(sub)
     fun get-subst() subst
   action()
 

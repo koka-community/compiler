@@ -5,6 +5,7 @@ import compiler/common/name
 import compiler/common/name-prim
 import compiler/common/name-collections
 import compiler/common/syntax
+import compiler/common/color-scheme
 import compiler/common/failure
 import compiler/common/unique
 import compiler/platform/config
@@ -19,10 +20,14 @@ import compiler/type/infgamma
 import compiler/type/unify
 import compiler/type/pretty
 import compiler/type/operations
+import compiler/syntax/syntax
 import compiler/syntax/range-map
 import compiler/core/core
 import compiler/lib/pprint
 import std/data/linearmap
+import std/data/linearset
+import std/core/undiv
+import std/core/unsafe
 
 pub type variance
   Negative
@@ -41,15 +46,15 @@ pub fun normalize(close: bool, tp: rho): <infer|e> rho
 
 pub fun normalizeX(close: bool, free: tvs, tp: rho): <infer|e> rho
   match tp
-    TForall([], t) -> normalizeX(close, free, t)
+    TForAll([], t) -> normalizeX(close, free, t)
     TSyn(syn, targs, t) ->
       TSyn(syn, targs, normalizeX(close, free, t))
     TFun(args, eff, res) ->
       val (ls, tl) = nofail-unify(fn() eff.extract-normalize-effect)
       val eff' = // remove tail variables in the result type
         match tl.expand-syn
-          TVar(tv) | close && tv.is-meta && !free.member(tv) && !(Cons(res, args.map(snd))).free-type-vars.member(tv) ->
-            nofail-unify(fn() unify(type-total, tl))
+          TVar(tv) | pretend-no-div{ close && tv.is-meta && !free.member(tv) && !(Cons(res, args.map(snd))).free-type-vars.member(tv)} ->
+            nofail-unify(fn() unify(typeTotal, tl))
             eff.subst
           _ ->
             val ls' = ls.map(normalizex2(Positive, _))
@@ -81,8 +86,8 @@ fun normalizex2(v: variance, tp: rho): <infer|e> rho
         val res' = normalizex2(v, res)
         val nice-eff = nicefy-effect(eff')
         TFun(args', nice-eff, res')
-      TForall(vars, t) ->
-        TForall(vars, normalizex2(v, t))
+      TForAll(vars, t) ->
+        TForAll(vars, normalizex2(v, t))
       TApp(t, args) ->
         TApp(normalizex2(v, t), args)
       TSyn(syn, args, t) ->
@@ -123,7 +128,6 @@ fun find-insts(params: list<type-var>, ls1: list<tau>, ls2: list<tau>): pure (li
       match tp
         TApp(_, args) -> eq-types(params.map(TVar), args)
         _ -> False
-    
     match ls1.filter(match-params)
       Nil -> (ls1, params.map(TVar))
       Cons(tp, _) ->
@@ -136,8 +140,8 @@ fun find-insts(params: list<type-var>, ls1: list<tau>, ls2: list<tau>): pure (li
 fun is-subset(acc: list<tau>, ls1: list<tau>, ls2: list<tau>): pure maybe<list<tau>>
   match (ls1, ls2)
     (Nil, Nil) -> Just(acc.reverse)
-    (Nil, Cons(l2, ll2)) -> Just(acc.reverse ++ ls2)
-    (Cons(l1, ll1), Nil) -> Nothing
+    (Nil, Cons()) -> Just(acc.reverse ++ ls2)
+    (Cons(), Nil) -> Nothing
     (Cons(l1, ll1), Cons(l2, ll2)) ->
       val cmp = name/cmp
       if l1.label-name < l2.label-name then Nothing
@@ -147,6 +151,15 @@ fun is-subset(acc: list<tau>, ls1: list<tau>, ls2: list<tau>): pure maybe<list<t
 
 pub fun split-effect(eff: keffect): <infer|e> (list<tau>, keffect)
   nofail-unify(fn() eff.extract-normalize-effect)
+
+fun nofail-unify(action: () -> <infer,unify|e> a, ?kk-file-line: string): <infer|e> a
+  match run-unify(action)
+    (Right(v), sub) -> 
+      add-sub(sub)
+      v
+    (Left(err), sub) -> 
+      add-sub(sub)
+      fail("should never fail!: " ++ err.show ++ " " ++ kk-file-line)
 
 type infer-context
   Check(message: string, range: range)
@@ -205,30 +218,30 @@ pub fun ia-scope-depth(iarg: implicit-arg): int
   iarg-scope-depth(iarg.name, iarg.info)
 
 // Convert an implicit argument to an expression (that is supplied as the argument)
-pub fun to-implicit-arg-expr(xrange: range, iarg: implicit-arg): <unique> expr
+pub fun to-implicit-arg-expr(xrange: range, iarg: implicit-arg): <unique,pure> user-expr
   val range = xrange.hide // don't add things in the expression to the rangemap
   match iarg.implicit-args
-    Nil -> Var(iarg.name, False, range)
+    Nil -> syntax/Var(iarg.name, False, range)
     _ -> match iarg.typ.split-fun-type
-      Just((ipars, ieff, ires-tp)) | ipars.any(is-optional-or-implicit) -> // eta-expansion needed?
+      Just((ipars, _, _)) | ipars.any(is-optional-or-implicit) -> // eta-expansion needed?
         // eta-expand and resolve further implicit parameters
         // todo: eta-expansion may become part of subsumption?
-        val (fixed, opt, implicits) = ipars.split-optional-implicit
+        val (fixed, _, _) = ipars.split-optional-implicit
         // assertion "Type.InferMonad.toImplicitAppExpr" (implicits.length == iarg.implicit-args.length)
         val name-fixed = fixed.map-indexed fn(i, _)
           make-hidden-name("arg", new-name("x" ++ (i + 1).show))
         val args-fixed = name-fixed.map fn(nm)
-          (Nothing, Var(nm, False, range))
+          (Nothing, syntax/Var(nm, False, range))
         val args-implicit = iarg.implicit-args.map fn((pname, arg))
           (Just((pname, range)), to-implicit-arg-expr(range.end-of-range, arg))
         
-        val body = App(Var(iarg.name, False, range), args-fixed ++ args-implicit, range)
+        val body = App(syntax/Var(iarg.name, False, range), args-fixed ++ args-implicit, range)
         if name-fixed.is-nil then body
         else
           val binders = name-fixed.map fn(nm)
             ValueBinder(nm, Nothing, Nothing, range, range)
           Lam(binders, body, False, range)
-      _ -> failure("compiler/type/infer-effect: to-implicit-arg-expr: illegal type for implicit? " ++ range.show ++ ", " ++ iarg.name.show)
+      _ -> fail("compiler/type/infer-effect: to-implicit-arg-expr: illegal type for implicit? " ++ range.show ++ ", " ++ iarg.name.show)
 
 pub fun pp-typed-arg(targ: typed-arg): <pretty-eff> doc
   val (nm, _, tp) = targ
@@ -321,7 +334,7 @@ pub fun fixed-count-context(propagated : maybe<(ktype, range)>, fixed-count : in
 
 pub fun implicit-type-context(tp : ktype) : name-context
   match tp.split-fun-type
-    Just((ppars, peff, prestp)) -> CtxFunTypes(False, ppars.map(snd), [], Just(prestp)) // can handle further implicits better
+    Just((ppars, _, prestp)) -> CtxFunTypes(False, ppars.map(snd), [], Just(prestp)) // can handle further implicits better
     _ -> CtxType(tp)
 
 pub fun maybe-to-context(mb-type : maybe<ktype>) : name-context
@@ -359,7 +372,7 @@ pub div type implicit-constraint
     contxt: range,
     range: range,
     canSolve: (tvs, implicit-constraint) -> infer bool,
-    solve: (tvs, implicit-constraint) -> infer (expr, ktype)
+    solve: (tvs, implicit-constraint) -> infer (core/core/expr, ktype)
   )
 
 fun show(ic: implicit-constraint): string
@@ -403,12 +416,15 @@ pub effect val local-depth: int
 
 pub alias infer = <pure, range-map-eff, local-depth, scope-depth, def-infer-effect, infer-env, inf-gamma-eff, synonyms-eff, newtypes-eff, unify, unique>;
 
+fun free-in-gamma()
+  (sub/(|->)(get-subst(), inf-gamma-list().map(snd))).free-type-vars
+
 div type ic-params 
   ICParams(
     nm: name,
     tp: ktype,
     can-solve: (tvs, implicit-constraint) -> infer bool,
-    solve: (tvs, implicit-constraint) -> infer (expr, ktype),
+    solve: (tvs, implicit-constraint) -> infer (core/core/expr, ktype),
     rngCtx: range,
     rng: range
   )
