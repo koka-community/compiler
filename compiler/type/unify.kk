@@ -356,12 +356,8 @@ fun run-unify(action: () -> <pure,unique,unify|e> a): <pure,unique|e> (either<un
     fun get-subst() subst
   action()
 
-fun type/subst(x: ktype): <pure,unify> ktype
-  get-subst() |-> x
-
-fun list/subst(xs: list<ktype>): <pure,unify> list<ktype>
-  xs.map() fn(x)
-    get-subst() |-> x
+fun substitute/subst(x: a, ?substitute: (sub, a) -> <pure,unify|e> a): <pure,unify|e> a
+  substitute(get-subst(), x)
 
 type unifyErr
   NoMatchType

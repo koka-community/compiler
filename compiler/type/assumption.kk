@@ -353,8 +353,8 @@ pub fun pp-gamma(g: gamma)
 pub fun pp-gamma-hidden(g: gamma)
   pp-gamma-internal(g, True)
 
-pub fun pretty(g: gamma): <pp-type-eff> doc
+pub fun pretty(g: gamma): <pretty-eff> doc
   pp-gamma(g)
 
-pub fun show-gamma(g: gamma): pp-type-eff string
+pub fun show-gamma(g: gamma): pretty-eff string
   pretty(g).show

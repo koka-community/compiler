@@ -62,7 +62,9 @@ fun default-pp-env(f)
 
 // Pretty print environment for types
 
-alias pp-type-eff = <pp-type-env,documentation,colors,pure,nice-eff<type-var>,comp-flags>
+alias pretty-eff = <pp-type-eff,documentation,colors,pure,nice-eff<type-var>,comp-flags>
+
+alias pp-type-eff = <pretty-type-eff,pp-env,pp-prec>
 
 effect val pp-prec: prec;
 
@@ -88,8 +90,6 @@ effect indent
 fun default-indent(f)
   with val indent = 0
   f()
-
-alias pp-type-env = <pretty-type-eff,pp-env,pp-prec>
 
 effect pretty-type-eff
   val ranked: tv-scheme
@@ -133,11 +133,11 @@ fun list/compress(l: list<char>): list<char>
 fun nice-type(tp: ktype)
   nice-types([tp]).head.unjust
 
-fun nice-types(tps: list<ktype>): pp-type-eff list<doc>
+fun nice-types(tps: list<ktype>): pretty-eff list<doc>
   tps.niceList fn(tp)
     tp.pp-type.color(colors.colorType)
 
-fun niceList(schemes: list<ktype>, f: (ktype) -> pp-type-eff doc): pp-type-eff list<doc>
+fun niceList(schemes: list<ktype>, f: (ktype) -> pretty-eff doc): pretty-eff list<doc>
   schemes.map(free-type-vars).unions.list.map(extend-nice)
   schemes.map(f)
 

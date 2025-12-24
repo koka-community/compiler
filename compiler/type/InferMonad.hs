@@ -1,149 +1,3 @@
------------------------------------------------------------------------------
--- Copyright 2012-2021, Microsoft Research, Daan Leijen.
---
--- This is free software; you can redistribute it and/or modify it under the
--- terms of the Apache License, Version 2.0. A copy of the License can be
--- found in the LICENSE file at the root of this distribution.
------------------------------------------------------------------------------
-
-module Type.InferMonad( Inf, InfGamma
-                      , runInfer, tryRun
-                      , traceDoc, traceDefDoc, traceIndent
-
-                      -- * substitutation
-                      , zapSubst
-                      , subst, extendSub
-
-                      -- * Environment
-                      , getGamma
-                      , extendGamma, extendGammaCore
-                      , extendInfGamma, extendInfGammaEx, extendInfGammaCore
-                      , withGammaType
-
-                      -- * Name resolution
-
-                      , resolveName
-                      , resolveRhsName
-                      , resolveFunName
-                      , resolveConName, resolveConPatternName
-                      , resolveImplicitName
-
-                      , lookupAppName
-                      , lookupFunName
-                      , lookupLocalName
-                      , lookupNameCtx
-                      , lookupInfName
-                      , NameContext(..), maybeToContext
-
-                      , qualifyName
-                      , getModuleName
-                      , findDataInfo
-                      , withDefName
-                      , currentDefName, currentDefNames
-                      , isNamedLam
-                      , getLocalVars
-
-                      , FixedArg
-                      , fixedContext, fixedCountContext
-
-                      -- * Misc.
-                      , allowReturn, isReturnAllowed
-                      , useHole, allowHole, disallowHole
-                      , withLhs, isLhs
-                      , getPrettyEnv
-                      , splitEffect
-                      , occursInContext
-
-                      -- * Operations
-                      , generalize
-                      , improve
-                      , instantiate, instantiateNoEx, instantiateEx
-                      , checkCasing
-                      , normalize
-                      , getNewtypes
-
-                      -- * Unification
-                      , Context(..)
-                      , inferUnify, inferUnifies
-                      , inferSubsume
-                      , withSkolemized, checkSkolemEscape
-                      , substImplicitConstraints
-                      , scopeImplicitConstraints
-
-                      , typeError
-                      , contextError
-                      , termError
-                      , infError, infWarning
-                      , withHiddenTermDoc, inHiddenTermDoc
-
-                      -- run-local
-                      , withLocalScope, withNoLocalScope, localScopeDepth
-
-                      -- scope depth
-                      , withScope, getScopeDepth
-
-                      -- * Documentation, Intellisense
-                      , addRangeInfo, withNoRangeInfo
-                      , withNiceNames, lookupNiceName
-
-
-                      , freeInGamma, ppTvs, ignoreErrors
-
-                      ) where
-
-import Data.Maybe(isNothing)
-import Data.List( partition, sortBy, nub, nubBy, intersperse, foldl', find)
-import Data.Ord(comparing)
-import qualified Data.Set as S
-import Control.Applicative
-import Control.Monad
-
-import Lib.PPrint
-import Common.Range hiding (Pos)
-import Common.Unique
-import Common.Failure
-import Common.Error
-import Common.Syntax( Visibility(..), DefSort(..))
-import Common.File(endsWith,normalizeWith, seqqList)
-import Common.Name
-import Common.NamePrim(nameTpVoid,nameTpPure,nameTpIO,nameTpST,nameTpAsyncX,
-                       nameTpRead,nameTpWrite,nameTypeHeapDiv,nameHeapDiv,nameEvHeapDiv,nameEvHeapNoDiv,
-                       nameReturn,nameTpLocal, nameCopy)
-
-import qualified Common.NameMap as NM
-
--- import Common.Syntax( DefSort(..) )
-import Common.ColorScheme
-import Kind.Kind
-import Kind.ImportMap
-import Kind.Newtypes
-import Kind.Synonym
-import Type.Type
-import Type.TypeVar
-import Type.Kind
-import qualified Type.Pretty as Pretty
-import qualified Core.Core as Core
-import Core.Pretty
-
-import Type.Operations hiding (instantiate, instantiateNoEx, instantiateEx)
-import qualified Type.Operations as Op
-import Type.Assumption
-import Type.InfGamma
-
-import Type.Unify
-import Common.Message( docFromRange, table, tablex)
-
-import Core.Pretty()
-
-import Syntax.RangeMap( RangeMap, RangeInfo(..), rangeMapInsert )
-import Syntax.Syntax(Expr(..),ValueBinder(..))
-
-import qualified Debug.Trace as DT
-import Type.Pretty (ppTypeVar)
-
-trace s x =
-  DT.trace (" " ++ s)
-   x
 
 {--------------------------------------------------------------------------
   Generalization
@@ -1593,39 +1447,6 @@ ppNameInfo env (name,info)
   Implicit Constraints
 --------------------------------------------------------------------------}
 
-data ImplicitConstraint = ImplicitConstraint{ icName :: Name,     -- implicit constraint name (e.g. @hdiv)
-                                              icType :: Type,
-                                              icEvidence :: Name, -- fresh name for the implicit constraint evidence
-                                              icContext :: Range,
-                                              icRange :: Range,
-                                              icCanSolve :: Tvs -> ImplicitConstraint -> Inf Bool,
-                                              icSolve :: Tvs -> ImplicitConstraint -> Inf (Core.Expr,Type)
-                                            }
-
-
-instance HasTypeVar ImplicitConstraint where
-  sub `substitute` ic
-    = ic{ icType = sub `substitute` (icType ic) }
-  ftv ic
-    = ftv (icType ic)
-  btv ic
-    = btv (icType ic)
-  ftc ic
-    = ftc (icType ic)
-
-
-instance Show ImplicitConstraint where
-  show ic = show (icName ic)
-
-
-ppConstraints :: Pretty.Env -> [ImplicitConstraint] -> Doc
-ppConstraints penv ics
-  = list (map (ppConstraint penv) ics)
-
-ppConstraint :: Pretty.Env -> ImplicitConstraint -> Doc
-ppConstraint penv ic
-  = Pretty.ppName penv (icEvidence ic) <.> text "=" <+> Pretty.ppParam penv (icName ic, icType ic)
-
 implicitConstraints :: [(Name,Name -> Type -> Maybe (Tvs -> ImplicitConstraint -> Inf Bool, Tvs -> ImplicitConstraint -> Inf (Core.Expr, Type)))]
 implicitConstraints
   = [(nameHeapDiv, checkHeapDivConstraint)]
@@ -1689,47 +1510,6 @@ tryResolveImplicitConstraints close free
 {--------------------------------------------------------------------------
   heap divergence constraints
 --------------------------------------------------------------------------}
-
-heapNeverContainedIn :: Tvs -> Type -> Type -> Bool
-heapNeverContainedIn free hp0 tp
-  = neverContainedIn tp
-  where
-    hp = expandSyn hp0
-    neverContainedIn tp
-      = case tp of
-          TForall _ t           -> neverContainedIn t
-          TFun tpars teff tres  -> all neverContainedIn (map snd tpars ++ [teff,tres])
-          TApp t targs          -> all neverContainedIn (t:targs)
-          TSyn _ targs t        -> all neverContainedIn (t:targs)
-          TCon tcon             -> case hp of
-                                     TCon hcon -> tcon /= hcon
-                                     _ -> getKind tcon /= kindHeap
-          TVar tvar             -> case hp of
-                                     TVar htv -> -- if we are generalizing htv but not tvar, tvar can never contain htv
-                                                 typevarFlavour tvar /= Meta ||
-                                                 not (tvsMember htv free) && (tvsMember tvar free)
-                                     _        -> -- but in all other case tvar might get a type containing htv
-                                                  typevarFlavour tvar /= Meta
-
-
-heapAlwaysContainedIn :: Tvs -> Type -> Type -> Bool
-heapAlwaysContainedIn free hp0 tp
-  = heapAlwaysContainedIn tp
-  where
-    hp = expandSyn hp0
-    heapAlwaysContainedIn tp
-      = case tp of
-          TForall _ t           -> heapAlwaysContainedIn t
-          TFun tpars teff tres  -> any heapAlwaysContainedIn (map snd tpars ++ [teff,tres])
-          TApp t targs          -> any heapAlwaysContainedIn (t:targs)
-          TSyn _ targs t        -> any heapAlwaysContainedIn (t:targs)
-          TCon tcon             -> case hp of
-                                     TCon hcon -> tcon == hcon
-                                     _ -> False
-          TVar tvar             -> case hp of
-                                     TVar htv -> tvar == htv
-                                     _        -> False
-
 
 checkHeapDivConstraint :: Name -> Type -> Maybe (Tvs -> ImplicitConstraint -> Inf Bool, Tvs -> ImplicitConstraint -> Inf (Core.Expr, Type))
 checkHeapDivConstraint name tp
@@ -1849,31 +1629,10 @@ zapSubst
                             st{ sub = subNull, iconstraints = [], mbRangeMap = (sub st) |-> mbRangeMap st } ) -- this can be optimized further by splitting the rangemap into a 'substited part' and a part that needs to be done..
            return ()
 
-instance Functor Inf where
-  fmap f (Inf i)  = Inf (\env st -> case i env st of
-                                      Ok x st1 w -> Ok (f x) st1 w
-                                      Err err w  -> Err err w)
-
-instance Applicative Inf where
-  pure x = Inf (\env st -> Ok x st [])
-  (<*>)  = ap
-
-instance Monad Inf where
-  -- return = pure
-  (Inf i) >>= f   = Inf (\env st0 -> case i env st0 of
-                                       Ok x st1 w1 -> case f x of
-                                                        Inf j -> case j env st1 of
-                                                                   Ok y st2 w2 -> Ok y st2 (w1++w2)
-                                                                   Err err w2 -> Err err (w1++w2)
-                                       Err err w -> Err err w)
-
 tryRun :: Inf a -> Inf (Maybe a)
 tryRun (Inf i) = Inf (\env st -> case i env st of
                                    Ok x st1 w -> Ok (Just x) st1 w
                                    Err err w  -> Ok Nothing st [])
-
-instance HasUnique Inf where
-  updateUnique f  = Inf (\env st -> Ok (uniq st) st{uniq = f (uniq st)} [])
 
 ignoreErrors :: Inf a -> Inf a -> Inf a
 ignoreErrors (Inf defaultRes) (Inf f)
@@ -1882,18 +1641,6 @@ ignoreErrors (Inf defaultRes) (Inf f)
                                        Ok x st1 ws1 -> Ok x st1 ([err] ++ ws ++ ws1)
                                        Err err1 ws1 -> Err err1 ([err] ++ ws ++ ws1)
                        ok         -> ok)
-
-getEnv :: Inf Env
-getEnv
-  = Inf (\env st -> Ok env st [])
-
-withEnv :: (Env -> Env) -> Inf a -> Inf a
-withEnv f (Inf i)
-  = Inf (\env st -> i (f env) st)
-
-updateSt :: (St -> St) -> Inf St
-updateSt f
-  = Inf (\env st -> Ok st (f st) [])
 
 infError :: Range -> Doc -> Inf a
 infError range doc
@@ -1904,16 +1651,6 @@ infWarning :: Range -> Doc -> Inf ()
 infWarning range doc
   = do addRangeInfo range (Warning doc)
        Inf (\env st -> Ok () st [(range,doc)])
-
-getPrettyEnv :: Inf Pretty.Env
-getPrettyEnv
-  = do env <- getEnv
-       return (prettyEnv env)
-
-lookupSynonym :: Name -> Inf (Maybe SynInfo)
-lookupSynonym name
-  = do env <- getEnv
-       return (synonymsLookup name (synonyms env) )
 
 addRangeInfo :: Range -> RangeInfo -> Inf ()
 addRangeInfo rng info
@@ -1931,27 +1668,6 @@ withNoRangeInfo inf
        updateSt ( \st -> st{ mbRangeMap = rm0 })
        return x
 
-withLocalScope :: Inf a -> Inf a
-withLocalScope inf
-  = withEnv (\env -> env{ localDepth = localDepth env + 1 }) inf
-
-withNoLocalScope :: Inf a -> Inf a
-withNoLocalScope inf
-  = withEnv (\env -> env{ localDepth = 0 }) inf
-
-localScopeDepth :: Inf Int
-localScopeDepth
-  = do env <- getEnv
-       return (localDepth env)
-
-withScope :: Inf a -> Inf a
-withScope inf
-  = withEnv (\env -> env{ scopeNestingDepth = scopeNestingDepth env + 1 }) inf
-
-getScopeDepth :: Inf Int
-getScopeDepth
-  = do env <- getEnv
-       return (scopeNestingDepth env)
 
 withNiceNames :: (Name -> Int -> Doc) -> [Name] -> ([Doc] -> Inf a) -> Inf a
 withNiceNames create names finf
@@ -1971,22 +1687,6 @@ lookupNiceName name
   Helpers
 --------------------------------------------------------------------------}
 
-getSt :: Inf St
-getSt
-  = updateSt id
-
-setSt :: St -> Inf St
-setSt st
-  = updateSt (const st)
-
-allowReturn :: Bool -> Inf a -> Inf a
-allowReturn allow inf
-  = withEnv (\env -> env{ returnAllowed = allow }) inf
-
-withLhs :: Inf a -> Inf a
-withLhs inf
-  = withEnv (\env -> env{ inLhs = True }) inf
-
 withHiddenTermDoc :: Range -> Doc -> Inf a -> Inf a
 withHiddenTermDoc range doc inf
   = withEnv (\env -> env{ hiddenTermDoc = Just (range,doc) }) inf
@@ -1997,16 +1697,6 @@ inHiddenTermDoc
        case hiddenTermDoc env of
          Just _ -> return True
          _      -> return False
-
-isLhs :: Inf Bool
-isLhs
-  = do env <- getEnv
-       return (inLhs env)
-
-isReturnAllowed :: Inf Bool
-isReturnAllowed
-  = do env <- getEnv
-       return (returnAllowed env)
 
 getTermDoc :: String -> Range -> Inf (Doc,Doc)
 getTermDoc term range
@@ -2036,35 +1726,6 @@ allowHole action
        return (x,not allowed)
 
 
--- implicit constraint evidence name?
-isImplicitConstraintEvidenceName :: Name -> Bool
-isImplicitConstraintEvidenceName name
-  = nameStartsWith name "iev@"
-
--- add a new implicit constraint with a fresh name (to be solved at generalization time)
-addImplicitConstraint :: Name -> Type -> (Tvs -> ImplicitConstraint -> Inf Bool) -> (Tvs -> ImplicitConstraint -> Inf (Core.Expr, Type)) -> Range -> Range -> Inf TypedArg
-addImplicitConstraint name tp canSolve solve context rng
-  = do evName <- Core.freshName "iev"
-       let ic       = ImplicitConstraint name tp evName context rng canSolve solve
-           nameInfo = createNameInfoX Public evName 2 DefVal rng tp ""
-           iarg     = (evName,nameInfo,tp)
-       updateSt (\st -> st{ iconstraints = ic : iconstraints st,
-                            iconstraintsGamma = infgammaExtend evName nameInfo (iconstraintsGamma st) })
-       -- traceDefDoc $ \penv -> text "add implicit constraint:" <+> ppConstraint penv ic
-       return iarg
-
-solvedImplicitConstraint :: Name -> Type -> Inf ()
-solvedImplicitConstraint evName evTp
-  = do -- traceDefDoc $ \penv -> text "discharge implicit constraint:" <+> Pretty.ppParam penv (evName,evTp)
-       updateSt (\st -> st{ iconstraintsGamma = infgammaDelete evName (iconstraintsGamma st) })
-       return ()
-
-
-getImplicitConstraints :: Inf [ImplicitConstraint]
-getImplicitConstraints
-  = do st <- getSt
-       subst (iconstraints st)
-
 mapImplicitConstraints :: ([ImplicitConstraint] -> Inf (a,[ImplicitConstraint])) -> Inf a
 mapImplicitConstraints f
   = do ics0 <- iconstraints <$> updateSt (\st -> st{ iconstraints = [] })
@@ -2089,32 +1750,6 @@ substImplicitConstraints sksub
        ig <- iconstraintsGamma <$> getSt
        -- traceDefDoc $ \penv -> text "subst ics:" <+> Pretty.ppSub penv sksub <-> indent 2 (ppInfGamma penv{Pretty.showIds=True} ig)
        return ()
-
-
-
-getSub :: Inf Sub
-getSub
-  = do st <- getSt
-       return (sub st)
-
-subst :: (HasCallStack,HasTypeVar a) => a -> Inf a
-subst x
-  = do sub <- getSub
-       return (sub |-> x)
-
-extendSub :: Sub -> Inf ()
-extendSub s
-  = do -- trace ("Type.InferMonad.extendSub: " ++ show (subList s)) $
-       updateSt (\st -> st{ sub = s @@ (sub st) })
-       return ()
-
-substWatch :: Inf a -> Inf (Bool,a)
-substWatch inf
-  = do sub1 <- getSub
-       x <- inf
-       sub2 <- getSub
-       return (subCount sub1 /= subCount sub2, x)
-
 
 getGamma :: Inf Gamma
 getGamma
@@ -2248,11 +1883,6 @@ currentDefName
          (dname:_) -> return dname
          _         -> return (newName "")
 
-currentDefNames :: Inf [Name]
-currentDefNames
-  = do env <- getEnv
-       return (currentDefs env)
-
 withDefName :: Name -> Inf a -> Inf a
 withDefName name inf
   = withEnv (\env -> env{ currentDefs = name : currentDefs env, namedLam = not (nameIsNil name || isWildcard name) }) inf
@@ -2277,12 +1907,6 @@ freeInGamma
   = do env <- getEnv
        sub <- getSub
        return (ftv (sub |-> (infgamma env)))  -- TODO: fuv?
-
-
-getNewtypes :: Inf Newtypes
-getNewtypes
- = do env <- getEnv
-      return (types env)
 
 
 getLocalVars :: Inf [(Name,Type)]
@@ -2323,6 +1947,3 @@ traceDoc f
 
 ppNameType penv (name,tp)
   = Pretty.ppName penv name <+> colon <+> Pretty.ppType penv tp
-
-concatMapM :: Monad m => (a -> m [b]) -> [a] -> m [b]
-concatMapM f xs = seqqList . concat <$> mapM f xs

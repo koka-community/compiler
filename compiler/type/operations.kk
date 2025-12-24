@@ -9,6 +9,7 @@ import compiler/type/assumption
 import compiler/common/syntax
 import compiler/platform/config
 import std/data/linearset
+import std/core/undiv
 // Updated 11/19/25 to commit #7083c02
 
 pub infixr 5 (|->)
@@ -117,3 +118,44 @@ fun fresh-effect()
 fun fresh-star()
   fresh-tvar(kindStar, Meta)
 
+
+
+// Heap divergence constraints
+fun heap-never-contained-in(free : tvs, hp0: ktype, tp0: ktype) : bool
+  val hp = hp0.expand-syn
+  fun never-contained-in(tp: ktype)
+    match tp
+      TForAll(_, t) -> t.never-contained-in
+      TFun(tpars, teff, tres) -> (tpars.map(snd) ++ [teff, tres]).all(_.pretend-decreasing.never-contained-in)
+      TApp(t, args) -> Cons(t, args).all(_.pretend-decreasing.never-contained-in)
+      TSyn(_, targs, t) -> Cons(t, targs).all(_.pretend-decreasing.never-contained-in)
+      TCon(tcon) -> 
+        match hp
+          TCon(hcon) -> tcon != hcon
+          _ -> tcon.kind != kindHeap
+      TVar(tvar) -> 
+        match hp
+          TVar(htv) -> // if we are generalizing htv but not tvar, tvar can never contain htv
+            tvar.flavour != Meta || (!free.member(htv) && free.member(tvar))
+          _ -> //  but in all other case tvar might get a type containing htv
+            tvar.flavour != Meta
+  never-contained-in(tp0)
+
+
+fun heap-always-contained-in(free : tvs, hp0: ktype, tp0: ktype) : bool
+  val hp = hp0.expand-syn
+  fun always-contained-in(tp: ktype)
+    match tp
+      TForAll(_, t) -> t.always-contained-in
+      TFun(tpars, teff, tres) -> (tpars.map(snd) ++ [teff, tres]).any(_.pretend-decreasing.always-contained-in)
+      TApp(t, args) -> Cons(t, args).any(_.pretend-decreasing.always-contained-in)
+      TSyn(_, targs, t) -> Cons(t, targs).any(_.pretend-decreasing.always-contained-in)
+      TCon(tcon) -> 
+        match hp
+          TCon(hcon) -> tcon == hcon
+          _ -> False
+      TVar(tvar) -> 
+        match hp
+          TVar(htv) -> tvar == htv
+          _ -> False
+  always-contained-in(tp0)

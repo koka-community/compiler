@@ -7,14 +7,14 @@ import compiler/common/syntax
 import compiler/common/failure
 import compiler/common/unique
 import compiler/platform/config
-import compiler/type/type
-import compiler/type/typevar
-import compiler/type/assumption
-import compiler/type/infgamma
 import compiler/kind/kind
 import compiler/kind/synonyms
 import compiler/kind/newtypes
 import compiler/kind/import-map
+import compiler/type/type
+import compiler/type/typevar
+import compiler/type/assumption
+import compiler/type/infgamma
 import compiler/type/unify
 import compiler/type/pretty
 import compiler/syntax/range-map
@@ -119,6 +119,26 @@ pub div type implicit-constraint
     solve: (tvs, implicit-constraint) -> infer (expr, ktype)
   )
 
+fun show(ic: implicit-constraint): string
+  ic.name.show
+
+fun ic/substitute(sub: sub, ic: implicit-constraint)
+  ic(typ = ktype/substitute(sub, ic.typ))
+fun ic/free-type-vars(ic: implicit-constraint): div tvs
+  ic.typ.free-type-vars
+fun ic/free-type-constructors(ic: implicit-constraint): div type-cons
+  ic.typ.free-type-constructors
+
+
+// implicit constraint evidence name?
+fun is-implicit-constraint-evidence(name: name): bool
+  name.name/starts-with("iev@")
+
+fun pp-constraint(ic: implicit-constraint): <pretty-eff> doc 
+  pp-name(ic.evidence) |.| "=".text |+| pp-param((ic.name, ic.typ))
+
+fun pp-constraints(ics: list<implicit-constraint>): <pretty-eff> doc
+  ics.map(pp-constraint).list
 
 /////////////////////////////////////
 // Inference Effect
@@ -132,21 +152,68 @@ pub struct inferEnv
   inLhs: bool
   hiddenTermDoc: maybe<(range, doc)>
   localDepth: int
-  scopeNestingDepth: int
   allowInfiniteChains: bool
   niceNames: name-map<doc>
 
-pub alias infer = <range-map-eff, def-infer-effect, infer-env, infGammaEff, synonymsEff, newtypes-eff, unify>
+pub effect val scope-depth: int
+pub effect val local-depth: int
 
-pub effect def-infer-effect
+pub alias infer = <range-map-eff, local-depth, scope-depth, def-infer-effect, infer-env, inf-gamma-eff, synonyms-eff, newtypes-eff, unify, unique>;
+
+div type ic-params 
+  ICParams(
+    nm: name,
+    tp: ktype,
+    can-solve: (tvs, implicit-constraint) -> infer bool,
+    solve: (tvs, implicit-constraint) -> infer (expr, ktype),
+    rngCtx: range,
+    rng: range
+  )
+
+pub div effect def-infer-effect
   fun get-iconstraints(): list<implicit-constraint>
-  fun add-iconstraint(ic: implicit-constraint): ()
+  // add a new implicit constraint with a fresh name (to be solved at generalization time)
+  fun add-iconstraint(ic: ic-params): (name, assumption/name-info, ktype)
+  fun solve-iconstraint(nm : name, tp : ktype): ()
+
+// TODO: incorporate generalization into here?
+fun with-def(action)
+  var iconstraints : list<implicit-constraint> := []
+  var iconstraints-gamma := inf-gamma/empty
+  with override
+    fun get-iconstraints() iconstraints.subst
+    fun add-iconstraint(ic: ic-params) 
+      val evName = fresh-name("iev")
+      val icx = ImplicitConstraint(ic.nm, ic.tp, evName, ic.rngCtx, ic.rng, ic.can-solve, ic.solve)
+      val icNameInfo = create-name-infoX(Public, evName, 2, DefVal, ic.rng, ic.tp, "")
+      val iarg = (evName, icNameInfo, ic.tp)
+      iconstraints := iconstraints ++ [icx]
+      iconstraints-gamma := iconstraints-gamma.extend(evName, icNameInfo)
+      iarg
+    fun solve-iconstraint(nm : name, tp : ktype)
+      iconstraints := iconstraints.remove(fn(ic) ic.name == nm)
+  action()
 
 fun with-hole-allowed(allowed: bool, action: () -> <infer|e> a): <infer|e> a
   with override val infer-env = infer-env(holeAllowed = allowed)
   action()
 pub fun with-context(nm: name, action: () -> <infer|e> a): <infer|e> a
   with override val infer-env = infer-env(contxt = nm)
+  action()
+pub fun with-lhs(action: () -> <infer|e> a): <infer|e> a
+  with override val infer-env = infer-env(inLhs = True)
+  action()
+pub fun with-return-allowed(allowed: bool, action: () -> <infer|e> a): <infer|e> a
+  with override val infer-env = infer-env(returnAllowed = allowed)
+  action()
+pub fun with-scope(action: () -> <infer|e> a): <infer|e> a
+  with override val scope-depth = infer-effect/scope-depth + 1
+  action()
+pub fun with-local-scope(action: () -> <infer|e> a): <infer|e> a
+  with override val local-depth = local-depth + 1
+  action()
+pub fun with-no-local-scope(action: () -> <infer|e> a): <infer|e> a
+  with override val local-depth = 0
   action()
 
 pub effect val infer-env: inferEnv
