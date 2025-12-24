@@ -8,6 +8,7 @@ import compiler/common/syntax
 import compiler/common/color-scheme
 import compiler/common/failure
 import compiler/common/unique
+import compiler/common/message
 import compiler/platform/config
 import compiler/kind/kind
 import compiler/kind/synonyms
@@ -26,6 +27,7 @@ import compiler/core/core
 import compiler/lib/pprint
 import std/data/linearmap
 import std/data/linearset
+import std/data/sort
 import std/core/undiv
 import std/core/unsafe
 
@@ -346,7 +348,7 @@ pub fun fixed-count-context(propagated : maybe<(ktype, range)>, fixed-count : in
 
 
 pub fun pp-tvs(tvs: tvs): <pretty-eff> doc
-  tvs.list.map(pp-type-var).list
+  tvs.list.map(pp-typevar).list
 
 pub fun implicit-type-context(tp : ktype) : name-context
   match tp.split-fun-type
@@ -428,19 +430,19 @@ pub fun check-casing(rng: range, nm: name, qname: name, info: assumption/name-in
     Nothing -> ()
 
 
-pub fun pp-ambiguous(hint: string, infos: list<(name, assumption/name-info)>): <pretty-eff> doc
+pub fun pp-ambiguous(hint: string, infos: list<(name, assumption/name-info)>): infer doc
   vcat([". Possible candidates: ".text, pp-candidates(infos)] ++
        (if hint.is-empty then [] else ["hint: ".text |+| hint.text]))
 
 
-pub fun pp-candidates(nameInfos: list<(name, assumption/name-info)>): <pretty-eff> doc
+pub fun pp-candidates(nameInfos: list<(name, assumption/name-info)>): infer doc
   val env = infer-env
   val modName = env.contxt
   val n = 10
-  val sorted = nameInfos.sort-by fn((nm1, info1), (nm2, info2))
-    if nm1.qualifier == modName && nm2.qualifier != modName then Lt
-    else if nm1.qualifier != modName && nm2.qualifier == modName then Gt
-    else cmp(!info1.info-type.is-rho, !info2.info-type.is-rho)
+  val sorted = nameInfos.sort fn((nm1, info1), (nm2, info2))
+    if nm1.qualifier == modName && nm2.qualifier != modName then True
+    else if nm1.qualifier != modName && nm2.qualifier == modName then False
+    else cmp(!info1.scheme.is-rho, !info2.scheme.is-rho).is-lt
   
   val (defs, rest) = sorted.split(n)
   val rows = defs.map fn((nm, info)) pp-name-info(nm, info)
@@ -449,11 +451,11 @@ pub fun pp-candidates(nameInfos: list<(name, assumption/name-info)>): <pretty-ef
     else rows ++ [("...".text, "or".text |+| rest.length.show.text |+| "other definitions".text)]
   finalRows.table.align
 
-pub fun pp-implicits-hint(nameInfos: list<(name, assumption/name-info)>): <pretty-eff> list<(doc, doc)>
+pub fun pp-implicits-hint(nameInfos: list<(name, assumption/name-info)>): infer list<(doc, doc)>
   val candidateMissingImplicits = nameInfos.map fn((_, info))
-    info.info-type.requires-implicits.map(fst)
+    info.scheme.requires-implicits.map(fst)
   
-  val allMissingImplicits = candidateMissingImplicits.concat.linearset
+  val allMissingImplicits = candidateMissingImplicits.concat.linear-set
   val allRequiredMissingImplicits = allMissingImplicits.list.filter fn(imp)
     candidateMissingImplicits.all(fn(missing) missing.any(fn(m) m == imp))
   
@@ -462,9 +464,9 @@ pub fun pp-implicits-hint(nameInfos: list<(name, assumption/name-info)>): <prett
     _ -> [("missing implicits".text, allRequiredMissingImplicits.map(pp-name).hsep),
           ("hint".text, "ensure implicit functions are defined prior to functions that require them".text)]
 
-pub fun pp-name-info(nm: name, info: assumption/name-info): <pretty-eff> (doc, doc)
+pub fun pp-name-info(nm: name, info: assumption/name-info): infer (doc, doc)
   val env = infer-env
-  (env.importsMap.get-alias(nm).pp-name, info.info-type.pp-type)
+  (env.importsMap.get-alias(nm).pp-name, info.scheme.pp-type)
 
 pub fun pp-or(names : list<name>) : <pretty-eff> doc
   match names

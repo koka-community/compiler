@@ -35,6 +35,14 @@ pub fun update-type(ni : name-info, tp: scheme): name-info
     InfoExternal(vis, cname, _, format, fipt, range, doc) -> InfoExternal(vis, cname, tp, format, fipt, range, doc)
     InfoImport(vis, _, nameAlias, fullName, range) -> InfoImport(vis, tp, nameAlias, fullName, range)
 
+pub fun scheme(ni: name-info): scheme
+  match ni
+    InfoVal(_, _, typ, _, _, _, _, _) -> typ
+    InfoFun(_, _, typ, _, _, _, _, _) -> typ
+    InfoCon(_, typ, _, _, _, _) -> typ
+    InfoExternal(_, _, typ, _, _, _, _) -> typ
+    InfoImport(_, typ, _, _, _) -> typ
+
 pub fun (==)(ni1: name-info, ni2: name-info)
   range/(==)(ni1.range, ni2.range)
 
