@@ -154,15 +154,6 @@ fun is-subset(acc: list<tau>, ls1: list<tau>, ls2: list<tau>): pure maybe<list<t
 pub fun split-effect(eff: keffect): <infer|e> (list<tau>, keffect)
   nofail-unify(fn() eff.extract-normalize-effect)
 
-fun nofail-unify(action: () -> <infer,unify|e> a, ?kk-file-line: string): <infer|e> a
-  match run-unify(action)
-    (Right(v), sub) -> 
-      add-sub(sub)
-      v
-    (Left(err), sub) -> 
-      add-sub(sub)
-      fail("should never fail!: " ++ err.show ++ " " ++ kk-file-line)
-
 type infer-context
   Check(message: string, range: range)
   Infer(range: range)
@@ -522,7 +513,7 @@ pub div effect def-infer-effect
   fun solve-iconstraint(nm : name, tp : ktype): ()
 
 // TODO: incorporate generalization into here?
-fun with-def(action)
+fun with-def(def-name,action)
   var iconstraints : list<implicit-constraint> := []
   var iconstraints-gamma := inf-gamma/empty
   with override
@@ -563,6 +554,73 @@ pub fun with-no-local-scope(action: () -> <infer|e> a): <infer|e> a
 
 pub effect val infer-env: inferEnv
 
+pub fun infer-eff(action)
+  with override
+    fun inf-error(rng: range, msg: doc)
+      add-range-info(rng, RIError(msg))
+      fail(msg.show ++ " at " ++ rng.show)
+    fun inf-warning(rng: range, msg: doc)
+      add-range-info(rng, RIWarning(msg))
+      ()
+  action()
+
 pub effect infer-eff 
   fun inf-error(rng: range, msg: doc): ()
   fun inf-warning(rng: range, msg: doc): ()
+
+
+pub fun type-error(rng: range, err: unifyErr, msg: doc): infer-eff ()
+  inf-error(rng, msg |-| err.show.text)
+
+
+//////////////////////////////////////
+// Unify helpers
+//////////////////////////////////////
+
+fun nofail-unify(action: () -> <infer,unify|e> a, ?kk-file-line: string): <infer|e> a
+  match run-unify(action)
+    (Right(v), sub) -> 
+      add-sub(sub)
+      v
+    (Left(err), sub) -> 
+      add-sub(sub)
+      fail("should never fail!: " ++ err.show ++ " " ++ kk-file-line)
+
+fun do-unify(action)
+  match run-unify(action)
+    (Right(x), sub) -> 
+      add-sub(sub)
+      Right(x)
+    (Left(err), sub) -> 
+      add-sub(sub)
+      Left(err)
+
+pub fun infer-unify(ctxt: infer-context, rng: range, expected: ktype, tp: ktype): <infer-eff,pure,unique> ()
+  val (sexp, stp) = (expected.subst, tp.subst)
+  match do-unify({ unify(expected, tp) })
+    Left(err) -> unify-error(ctxt, rng, err, sexp, stp)
+    Right(_) -> ()
+
+pub fun infer-unifies(ctxt: infer-context, tps: list<(range, ktype)>): <infer-eff,pure,unique> ktype
+  match tps
+    Cons((rng, tp), Nil) -> tp
+    Cons((rng1, tp1), Cons(rng2, tp2), rst) -> 
+      val r = rng1.combine(rng2)
+      infer-unify(ctxt, r, tp1, tp2)
+      val tp = tp1.subst
+      infer-unifies(ctxt, Cons((r, tp), rst))
+
+pub fun infer-subsume(ctxt: infer-context, rng: range, expected: ktype, tp: ktype): <infer-eff,pure,unique> (ktype, core/core/expr -> pure core/core/expr)
+  val free = free-in-gamma()
+  val (sexp, stp) = (expected.subst, tp.subst)
+  match do-unify({ subsume(range, free, sexp, stp) })
+    Left(err) -> 
+      unify-error(ctxt, rng, err, sexp, stp)
+      (expected, fn(e) e) // never reached
+    Right((t, _, coref)) -> (t, coref)
+  
+
+
+//////////////////////////////////////
+// Unification Errors
+//////////////////////////////////////

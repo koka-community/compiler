@@ -178,38 +178,6 @@ isolate rng close free ics eff
   Unify Helpers
 --------------------------------------------------------------------------}
 
-inferUnify :: Context -> Range -> Type -> Type -> Inf ()
-inferUnify context range expected tp
-  = do (sexp,stp) <- subst (expected,tp)
-       -- trace ("infer unify: " ++ show (Pretty.niceTypes Pretty.defaultEnv [sexp,stp])) $ return ()
-       res <- doUnify (unify sexp stp)
-       case res of
-         Right () -> return ()
-         Left err -> unifyError context range err sexp stp
-
-
-inferUnifies :: Context -> [(Range,Type)] -> Inf Type
-inferUnifies context tps
-  = case tps of
-      [] -> matchFailure "Type.InferMonad.inferUnifies"
-      [(rng,tp)] -> return tp
-      ((rng1,tp1):(rng2,tp2):rest)
-        -> do let rng = combineRange rng1 rng2
-              inferUnify context rng tp1 tp2
-              tp <- subst tp1
-              inferUnifies context ((rng,tp):rest)
-
-inferSubsume :: Context -> Range -> Type -> Type -> Inf (Type,Core.Expr -> Core.Expr)
-inferSubsume context range expected tp
-  = do free <- freeInGamma
-       (sexp,stp) <- subst (expected,tp)
-       -- trace ("inferSubsume: " ++ show (tupled [pretty sexp,pretty stp]) ++ " with free " ++ show (tvsList free)) $ return ()
-       res <- doUnify (subsume range free sexp stp)
-       case res of
-         Right (t,_,coref)   -> do
-                                    return (t,coref)
-         Left err             -> do unifyError context range err sexp stp
-                                    return (expected,id)
 
 withSkolemized :: Range -> Type -> Maybe Doc -> (Type -> [TypeVar] -> Inf (a,Tvs)) -> Inf a
 withSkolemized rng tp mhint action
@@ -249,18 +217,6 @@ checkSkolemEscape rng tp mhint skolems extraFree
                                       (\hint -> [(text "hint",hint)]) mhint)
 
 
-
-
-doUnify :: Unify a -> Inf (Either UnifyError a)
-doUnify u
-  = do res <- runUnify u
-       case res of
-         (Right x,sub)
-          -> do extendSub sub
-                return (Right x)
-         (Left err,sub)
-          -> do extendSub sub
-                return (Left err)
 
 occursInContext :: TypeVar -> Tvs -> Inf Bool
 occursInContext tv extraFree

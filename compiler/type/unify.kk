@@ -99,7 +99,7 @@ fun match-arguments(matchSome: bool, rng: range, free: tvs, tp: ktype, fixed: li
         else unify-error(NoMatchType)
 
 
-fun subsume-subst(rng: range, free: tvs, tp1: ktype, tp2: ktype): <unify,pure,comp-flags,unique|e> (ktype, rho, expr -> <unify,pure|e> expr)
+fun subsume-subst(rng: range, free: tvs, tp1: ktype, tp2: ktype): <unify,pure,comp-flags,unique> (ktype, rho, expr -> <pure> expr)
   subsume(rng, free, tp1.subst, tp2.subst)
 
 // See if two types match exactly up to renaming of free type variables
@@ -126,7 +126,7 @@ fun pure-match-shape(tp1: ktype, tp2: ktype): <pure,unique> bool
 // Returns a core transformer that needs to be
 // applied to the expression of type `t2`. Also returns a new type for the expected type `tp1` where 'some'
 // types have been properly substituted (and may be quantified).
-fun subsume(rng: range, free: tvs, tp1: ktype, tp2: ktype): <unify,pure,comp-flags,unique|e> (ktype, rho, expr -> <unify,pure|e> expr)
+fun subsume(rng: range, free: tvs, tp1: ktype, tp2: ktype): <unify,pure,comp-flags,unique> (ktype, rho, expr -> <pure> expr)
   // skolemize, instantiate and unify
   val (sks, rho1, _) = skolemize-ex(tp1, rng)
   val (tvs, rho2, _) = skolemize-ex(tp2, rng)

@@ -5,88 +5,16 @@ This document outlines a structured plan to migrate the remaining functions from
 
 ---
 
-## ✅ Already Done (In infer-effect.kk)
-- `implicit-arg` type definition
-- `typed-arg` alias
-- `implicit-select` type
-- `all-candidates`, `map`, `merge` (ImplicitSelect helpers)
-- `implicit-constraint` type (div type)
-- Helper functions: `show`, `ic/substitute`, `ic/free-type-vars`, `ic/free-type-constructors`
-- `is-implicit-constraint-evidence`, `pp-constraint`, `pp-constraints`
-- Basic effect setup: `inferEnv` struct, effects
-- **Group 1 - Simple Utility Functions** (transferred):
-  - `variance` type + `flip` function
-  - `resolve-max-chain-depth`, `decreasing-within` constants
-  - `pure-match-shape-name-ctx`
-  - `fixed-count-context`, `implicit-type-context`, `maybe-to-context`, `maybe-r-to-context`
-  - `pp-or`
-- **Group 2 - Pure Type Manipulation Functions** (transferred):
-  - `normalize`, `normalizeX`, `normalizex`
-  - `nicefy-effect`, `match-aliases`, `try-alias`
-  - `find-insts`, `is-subset`, `split-effect`
-  - `empty-implicit-arg`, `pp-implicit-arg`, `pp-implicit-assign`
-  - `iarg-scope-depth`, `ia-scope-depth`, `to-implicit-arg-expr`
-  - `pp-typed-arg`, `to-implicit-arg`
-  - `pp-select`
-- **Group 5 - Hole & Context Management** (transferred):
-  - `with-def`
-  - `with-hole-allowed`
-  - `with-context`
-  - `with-lhs`
-  - `with-return-allowed`
-  - `with-scope`
-  - `with-local-scope`
-  - `with-no-local-scope`
-
----
 
 ## 📋 Migration Groups (Priority Order)
 
 ### GROUP 3: Name/Context Resolution Helpers (Medium Complexity)
 **Effort: Medium | Dependencies: Gamma, NameInfo | Haskell→Koka Difficulty: Medium**
 
-Functions for checking and transforming name contexts. Some monadic, but straightforward.
-
-1. **Casing check functions**
-   - `checkCasingOverlaps`: Checks multiple casing overlaps (lines 1364-1371)
-   - `checkCasingOverlap`: Single overlap check (lines 1372-1379)
-   - `checkCasing`: Main casing check (lines 1380-1388)
-   - `caseOverlaps`: Detects case-sensitive name issues (lines 1389-1398)
-   - Produces error messages
-
-2. **Error/diagnostic formatting**
-   - `ppAmbiguous`: Shows ambiguous candidates with context (lines 1405-1412)
-   - `ppCandidates`: Lists candidate definitions (lines 1413-1430)
-   - `ppImplicitsHint`: Hints about missing implicits (lines 1431-1449)
-   - `ppNameInfo`: Formats name and type (line 1450)
-   - `ppNameContext`: Pretty-prints NameContext (lines 1272-1292)
-   - `ppNameCtx`: Formats name with context (lines 1293-1294)
-   - `ppTvs`: Formats type variable list (lines 1521-1523)
-
-3. **Basic gamma operations**
-   - `getGamma`: Returns current gamma from Inf monad (lines 1754-1758)
-   - Trivial monadic wrapper
-
-**Dependencies**:
-- Gamma operations (gammaLookup, gammaExtend)
-- NameInfo utilities
-- Pretty.Env
-
-**Estimated Lines**: ~200
-
-**Note**: Many depend on imports and pretty infrastructure already present
-
----
-
 ### GROUP 4: Error Reporting (Medium Complexity)
 **Effort: Medium | Dependencies: Error/Range infrastructure | Haskell→Koka Difficulty: Medium**
 
 Error and warning generation functions.
-
-1. **Basic error/warning**
-   - `infError`: Generate type error (lines 1645-1649)
-   - `infWarning`: Generate type warning (lines 1650-1654)
-   - `addRangeInfo`: Add diagnostic to range map (lines 1655-1662)
 
 2. **Range-aware error messages**
    - `withNoRangeInfo`: Temporarily disable range map (lines 1663-1671)
@@ -166,7 +94,6 @@ Complex inference operations that require careful handling.
    - `inferUnify`: Unify expected vs actual type (lines 333-342)
    - `inferUnifies`: Unify multiple types (lines 343-352)
    - `inferSubsume`: Subsumption checking (lines 354-365)
-   - `nofailUnify`: Run unification, fail on error (lines 366-375)
 
 2. **Skolemization**
    - `withSkolemized`: Apply type with fresh skolem variables (lines 377-396)
