@@ -184,7 +184,7 @@ fun unify(t1: ktype, t2: ktype): <pure,unify,unique> ()
     // functions
     (TFun(args1, eff1, res1), TFun(args2, eff2, res2)) | args1.length == args2.length ->
       unifies([res1] ++ args1.map(snd), [res2] ++ args2.map(snd))
-      fun effErr(e: unifyErr)
+      fun effErr(e: unify-error)
         match e
           NoMatchType  -> NoMatchEffect(eff1, eff2)
           NoMatchEffect -> NoMatchEffect(eff1, eff2)
@@ -331,12 +331,12 @@ fun match-kinds(kinds1: list<kind>, kinds2: list<kind>): <div,unify> ()
     _ -> unify-error(NoMatchKind)
 
 effect unify
-  final ctl unify-error(e: unifyErr): a
+  final ctl unify-error(e: unify-error): a
   fun extend-sub(tv: type-var, t: ktype): ()
   fun add-sub(sub: sub): ()
   fun get-subst(): sub
 
-fun with-err(e: unifyErr -> unifyErr, f: () -> <unify|e> a): <unify|e> a
+fun with-err(e: unify-error -> unify-error, f: () -> <unify|e> a): <unify|e> a
   with override
     final ctl unify-error(er) unify-error(e(er))
     fun extend-sub(tv, t) extend-sub(tv, t)
@@ -344,7 +344,7 @@ fun with-err(e: unifyErr -> unifyErr, f: () -> <unify|e> a): <unify|e> a
     fun get-subst() get-subst() 
   f()
 
-fun run-unify(action: () -> <pure,unique,unify|e> a): <pure,unique|e> (either<unifyErr, a>, sub)
+fun run-unify(action: () -> <pure,unique,unify|e> a): <pure,unique|e> (either<unify-error, a>, sub)
   var subst := sub/null
   with handler
     return(x) (Right(x), subst)
@@ -359,7 +359,7 @@ fun run-unify(action: () -> <pure,unique,unify|e> a): <pure,unique|e> (either<un
 fun substitute/subst(x: a, ?substitute: (sub, a) -> <pure,unify|e> a): <pure,unify|e> a
   substitute(get-subst(), x)
 
-type unifyErr
+type unify-error
   NoMatchType
   NoMatchKind
   NoMatchSkolem(k: kind)
@@ -368,7 +368,7 @@ type unifyErr
   Infinite
   NoArgMatch(i1: int, i2: int)
 
-pub fun show(e: unifyErr): string
+pub fun show(e: unify-error): string
   match e
     NoMatchType -> "types do not match"
     NoMatchKind -> "kinds do not match"

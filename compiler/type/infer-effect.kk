@@ -10,6 +10,7 @@ import compiler/common/failure
 import compiler/common/unique
 import compiler/common/message
 import compiler/platform/config
+import compiler/type/kind
 import compiler/kind/kind
 import compiler/kind/synonyms
 import compiler/kind/newtypes
@@ -154,6 +155,25 @@ fun is-subset(acc: list<tau>, ls1: list<tau>, ls2: list<tau>): pure maybe<list<t
 pub fun split-effect(eff: keffect): <infer|e> (list<tau>, keffect)
   nofail-unify(fn() eff.extract-normalize-effect)
 
+//////////////////////////////////////
+// Generalization
+//////////////////////////////////////
+
+pub fun instantiate(tp: ktype, rng: range)
+  if tp.is-rho then 
+    val (rho, coref) = tp.extend
+    (rho, [], coref)
+  else 
+    val (tvars, rho, coref) = tp.instantiate-ex(rng)
+    (rho, tvars, coref)
+
+pub fun instantiate-no-ex(tp: ktype, rng: range)
+  if tp.is-rho then 
+    (tp, [], id)
+  else 
+    val (tvars, rho, coref) = tp.instantiate-noex(rng)
+    (rho, tvars, coref)
+
 type infer-context
   Check(message: string, range: range)
   Infer(range: range)
@@ -284,6 +304,58 @@ fun pp-select(sel: implicit-select): <pretty-eff> doc
     Found(iarg) -> "Found".text |+| iarg.pp-implicit-arg
     Infty(iarg) -> "Infty".text |+| iarg.pp-implicit-arg
     Amb(xs) -> "Amb".text |+| xs.map(pp-implicit-arg).list
+
+/////////////////////////////////////
+// Variable Name Resolution
+/////////////////////////////////////
+
+// lookup names in the local and global scope that match the given name context
+// Returns also an instantiated rho required to match the name context
+fun lookup-names(info-filter: (assumption/name-info) -> pure bool, name: name, nctx: name-context, rng: range): infer list<(name, assumption/name-info, rho)>
+  val matches = 
+    match lookup-local-name(info-filter, name)
+      Right(local) -> [local] // a local name that matches exactly was found; use it always
+      Left(locals) -> 
+        // otherwise consider globals as well besides the locally qualified locals that matched
+        // todo: should we prioritize local locally qualified names when disambiguating?
+        val globals = lookup-global-name(info-filter, name)
+        locals ++ globals
+  filter-match-name-context-ex(matches, nctx, rng)
+
+fun lookup-local-name(info-filter: (assumption/name-info) -> pure bool, name: name): pure either<(name, assumption/name-info, rho), list<(name, assumption/name-info, rho)>>
+  if name.is-implicit-constraint-evidence then 
+    infgamma-lookup(name, get-iconstraints())
+  else infgamma-lookup-ex(info-filter, name).subst
+
+fun lookup-global-names(info-filter: (assumption/name-info) -> pure bool, name: name): pure list<(name, assumption/name-info, rho)>
+  val find = fn(nm) gamma-lookup(nm).filter(fn((_, info)) info-filter(info))
+  match imports-expand(name, inf-env.importMap)
+    Right(name') -> 
+      match find(name') // First look by aliased import name
+        Nil -> find(name) // If not found, look by original import name
+        ni -> ni
+    Left([]) -> find(name) // If no import alias, look by original name
+    Left(nis) -> 
+      // If multiple aliases match, ideally we look through all of them
+      // However, that runs into issue #719 where the original module name is not included in `names`
+      find(name)
+
+fun filter-match-name-context(matches: list<(name, assumption/name-info)>, nctx: name-context, rng: range): infer list<(name, assumption/name-info)>
+  filter-match-name-context-ex(matches, nctx, rng).map(fn((nm, info, _)) (nm, info))
+
+fun filter-match-name-context-ex(matches: list<(name, assumption/name-info)>, nctx: name-context, rng: range): infer list<(name, assumption/name-info, rho)>
+  fun match-type(ex: ktype, (nm, info): (name, assumption/name-info)): infer list<(name, assumption/name-info, rho)>
+    val free = free-in-gamma()
+    match run-unify({subsume(rng, free, ex, info.typ)})
+      (Right((rho, _, _)), _) -> [(nm, info, rho)]
+      _ -> []
+  // TODO: 
+  
+  match nctx 
+    CtxNone -> matches.map(fn((nm, info: assumption/name-info)) (nm, info, info.typ))
+    CtxType(expect) -> matches.map(match-type(expect, _)).concat
+
+  // TODO: 
 
 /////////////////////////////////////
 // Name Context
@@ -569,10 +641,6 @@ pub effect infer-eff
   fun inf-warning(rng: range, msg: doc): ()
 
 
-pub fun type-error(rng: range, err: unifyErr, msg: doc): infer-eff ()
-  inf-error(rng, msg |-| err.show.text)
-
-
 //////////////////////////////////////
 // Unify helpers
 //////////////////////////////////////
@@ -595,32 +663,160 @@ fun do-unify(action)
       add-sub(sub)
       Left(err)
 
-pub fun infer-unify(ctxt: infer-context, rng: range, expected: ktype, tp: ktype): <infer-eff,pure,unique> ()
+pub fun infer-unify(ctxt: infer-context, rng: range, expected: ktype, tp: ktype): infer ()
   val (sexp, stp) = (expected.subst, tp.subst)
   match do-unify({ unify(expected, tp) })
-    Left(err) -> unify-error(ctxt, rng, err, sexp, stp)
+    Left(err) -> infer-unify-error(ctxt, rng, err, sexp, stp)
     Right(_) -> ()
 
-pub fun infer-unifies(ctxt: infer-context, tps: list<(range, ktype)>): <infer-eff,pure,unique> ktype
+pub fun infer-unifies(ctxt: infer-context, tps: list<(range, ktype)>): infer ktype
   match tps
-    Cons((rng, tp), Nil) -> tp
-    Cons((rng1, tp1), Cons(rng2, tp2), rst) -> 
+    Cons((_, tp), Nil) -> tp
+    Cons((rng1, tp1), Cons((rng2, tp2), rst)) -> 
       val r = rng1.combine(rng2)
       infer-unify(ctxt, r, tp1, tp2)
       val tp = tp1.subst
       infer-unifies(ctxt, Cons((r, tp), rst))
 
-pub fun infer-subsume(ctxt: infer-context, rng: range, expected: ktype, tp: ktype): <infer-eff,pure,unique> (ktype, core/core/expr -> pure core/core/expr)
+pub fun infer-subsume(ctxt: infer-context, rng: range, expected: ktype, tp: ktype): infer (ktype, core/core/expr -> pure core/core/expr)
   val free = free-in-gamma()
   val (sexp, stp) = (expected.subst, tp.subst)
-  match do-unify({ subsume(range, free, sexp, stp) })
+  match do-unify({ subsume(rng, free, sexp, stp) })
     Left(err) -> 
-      unify-error(ctxt, rng, err, sexp, stp)
+      infer-unify-error(ctxt, rng, err, sexp, stp)
       (expected, fn(e) e) // never reached
     Right((t, _, coref)) -> (t, coref)
-  
+
+pub fun check-skolem-escape(rng: range, tp: ktype, mhint: maybe<doc>, skolems: list<type-var>, extra-free: tvs): infer ()
+  match skolems
+    Nil -> ()
+    _ -> 
+      val free = free-in-gamma() + extra-free
+      if free.disjoint(skolems.linear-set) then
+        val stp = tp.subst
+        val escaped = skolems.filter(fn(skm) free.member(skm))
+        val hintDocs = match mhint
+          Just(h) -> [("hint".text, h)]
+          Nothing -> [("hint".text, "give a higher-rank type annotation to a function parameter?".text)]
+        term-error(rng, "abstract type(s) escape(s) into the context".text, stp, hintDocs)
+
+pub fun with-skolemized(rng: range, tp: ktype, mhint: maybe<doc>, action: (ktype, list<type-var>) -> infer (a, tvs)): infer a
+  val (xvars, xrho, _) = skolemize-ex(tp, rng)
+  val (x, extra-free) = action(xrho, xvars)
+  check-skolem-escape(rng, tp, mhint, xvars, extra-free)
+  x
+
+pub fun occurs-in-context(tv: type-var, extraFree: tvs): infer bool
+  val free = free-in-gamma() + extraFree
+  free.member(tv)
 
 
 //////////////////////////////////////
 // Unification Errors
 //////////////////////////////////////
+
+fun get-term-doc(term: string, rng: range): <infer-env,colors,exn> (doc, doc)
+  val env = infer-env
+  match env.hiddenTermDoc
+    Just((_, doc)) -> 
+      ("implicit".text |+| term.text, doc)
+    Nothing -> 
+      (term.text, doc-from-range(rng))
+
+fun infer-unify-error(ctxt: infer-context, rng: range, err: unify-error, xtp1: ktype, xtp2: ktype): infer ()
+  match err
+    NoMatchEffect(eff1, eff2) ->
+      infer-unify-error(ctxt, rng, NoMatchType, eff2, eff1)
+    _ ->
+      val free = free-in-gamma()
+      val tp1: ktype = normalizeX(False, free, xtp1.subst)
+      val tp2: ktype = normalizeX(False, free, xtp2.subst)
+      with no-full-names
+      with val pp-env = if err.is-noMatchKind then pp-env(showKinds=True) else pp-env
+
+      // Get context range and extra info
+      val (rangeContext, extra) = match ctxt
+        Check(msg, rng2) -> (rng2, [("because".text, msg.text)])
+        Infer(rng2) -> (rng2, [])
+      
+      // Get term documentation
+      val termInfo = get-term-doc("term", rng)
+      // Pretty print the types
+      val [nice1, nice2]= nice-types([tp1, tp2])
+      
+      
+      // Determine if we're dealing with effects or types
+      val name-type = if tp1.kind == kindEffect then "effect" else "type"
+       
+      // Determine match messages
+      val nomatch = match err
+        NoSubsume -> [("is less general than".text, nice1)]
+        NoArgMatch(_, _) -> []
+        _ -> [("expected ".text |.| name-type.text, nice1)]
+      
+      // Determine main message and hints
+      val (message, hint) = match err
+        NoMatchType -> (name-type ++ "s do not match", [])
+        NoMatchKind -> ("kinds do not match", [])
+        NoMatchSkolem(kind) ->
+          if extra.is-empty then
+            ("abstract types do not match", 
+              [("hint".text, if kind == kindHeap || kind == kindScope 
+                then "a local variable or reference escapes its scope?".text
+                else "an higher-rank type escapes its scope?".text)])
+          else
+            ("abstract types do not match", [])
+        NoSubsume -> 
+          ("type is not polymorphic enough", 
+            [("hint".text, "give a higher-rank type annotation to a function parameter?".text)])
+        Infinite ->
+          ("types do not match (due to an infinite type)",
+            [("hint".text, "give a type to the function definition?".text)])
+        NoMatchEffect(_, _) -> ("effects do not match", [])
+        NoArgMatch(n, m) ->
+          if m < 0 then
+            ("only functions can be applied", [])
+          else
+            val exp-str = (if n > m then "few" else "many")
+            val arg-str = if n == 1 then "argument" else "arguments"
+            val hint-msg = "expecting " ++ n.show ++ " " ++ arg-str ++ " but has been given " ++ m.show
+            ("application has too " ++ exp-str ++ " arguments",
+              [("hint".text, hint-msg.text)])
+      
+      // Build the error message table
+      val rows = 
+        [("context".text, doc-from-range(rangeContext)),
+         termInfo,
+         ("inferred ".text |.| name-type.text, nice2)]
+        ++ nomatch ++ extra ++ hint
+      
+      // Report the error
+      inf-error(rng, message.text |-| table(rows))
+
+
+pub fun type-error(ctxRng: range, rng: range, message: doc, xtp: ktype, extra: list<(doc,doc)>): infer ()
+  val free = free-in-gamma()
+  val tp: ktype = normalizeX(False, free, xtp.subst)
+  val termInfo = get-term-doc("term", rng)
+  val rows = 
+    [("context".text, doc-from-range(ctxRng)),
+     termInfo,
+     ("inferred type".text, nice-type(tp))]
+    ++ extra
+  inf-error(rng, message |-| table(rows))
+
+pub fun context-error(ctxRng: range, rng: range, message: doc, extra: list<(doc,doc)>): infer ()
+  val termInfo = get-term-doc("term", rng)
+  val rows = 
+    [("context".text, doc-from-range(ctxRng)),
+     termInfo]
+    ++ extra
+  inf-error(rng, message |-| table(rows))
+
+pub fun term-error(rng: range, message: doc, tp: ktype, extra: list<(doc,doc)>): infer ()
+  val termInfo = get-term-doc("term", rng)
+  val rows = 
+    [termInfo,
+     ("inferred type".text, nice-type(tp))]
+    ++ extra
+  inf-error(rng, message |-| table(rows))

@@ -52,16 +52,16 @@ fun is-handled-effect(tp: ktype)
 fun handled-to-label(e: ktype): exn ktype
   if e.kind == kindHandled1 then TApp(tconHandled1, [e]) else TApp(tconHandled, [e])
 
-type handledSort
+type handled-sort
   ResumeOnce
   ResumeMany
 
 // What effect does an operatoin have? Used for monadic translation.
 // Note: this includes named effects even though these are not in the evidence vector.
-fun get-operation-effect(tp: ktype): pure maybe<(handledSort, name)>
+fun get-operation-effect(tp: ktype): pure maybe<(handled-sort, name)>
   get-operation-effectx(tp, [])
 
-fun get-operation-effectx(tp: ktype, exclude: list<name>): pure maybe<(handledSort, name)>
+fun get-operation-effectx(tp: ktype, exclude: list<name>): pure maybe<(handled-sort, name)>
   match tp.expand-syn
     TApp(TCon(TypeCon(name)), [t])
       | name == nameTpHandled || name == nameTpNHandled -> get-operation-effect-of(ResumeMany, exclude, t)
@@ -76,7 +76,7 @@ fun get-operation-effectx(tp: ktype, exclude: list<name>): pure maybe<(handledSo
     //   | kind == kindHandled1 && exclude.find(_ == hxName).is-nothing -> Just((ResumeOnce, hxName))
     _ -> Nothing
 
-fun get-operation-effect-of(hsort: handledSort, exclude: list<name>, tp: ktype)
+fun get-operation-effect-of(hsort: handled-sort, exclude: list<name>, tp: ktype)
   match tp.expand-syn
     TCon(TypeCon(hxName)) -> 
       if !exclude.any(_ == hxName) then Just((hsort, hxName)) else Nothing
@@ -84,7 +84,7 @@ fun get-operation-effect-of(hsort: handledSort, exclude: list<name>, tp: ktype)
       if !exclude.any(_ == hxName) then Just((hsort, hxName)) else Nothing
     _ -> Nothing
 
-fun kind(tp: ktype): exn kind
+pub fun ktype/kind(tp: ktype): exn kind
   match tp
     TForAll(_, t) -> t.kind
     TFun -> kindStar

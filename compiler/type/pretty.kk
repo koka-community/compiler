@@ -84,6 +84,11 @@ type pretty-env
     coreShowDef: bool = False // show definition body
   )
 
+fun no-full-names(f)
+  with handler
+    val pp-env = pp-env(fullNames=False)
+  f()
+
 effect indent 
   val indent : int
 
