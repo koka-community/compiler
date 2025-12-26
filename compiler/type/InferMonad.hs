@@ -371,14 +371,6 @@ ppAmbDocs docs
 -- Resolving implicit names
 -----------------------------------------------------------------------
 
--- We can find a unique solution, or none, or surely ambiguous.
--- The `selInfinite` tracks infinite chains, while `selCandidates` ambigious ones. Both are for error messages only.
-data ImplicitSelect
-  = None                  -- no solution
-  | Found !ImplicitArg    -- a single solution
-  | Amb   ![ImplicitArg]  -- multiple solutions (failure)
-  | Infty !ImplicitArg    -- infinite chain (failure)
-
 -- Resolve an implicit argument fully
 resolveImplicitArg :: Bool -> Bool -> NameContext -> Range -> [(NameInfo -> Bool, Name)] -> Inf (Either [Doc] (ImplicitArg))
 resolveImplicitArg allowDisambiguate allowUnitFunVal ctx range roots
@@ -639,92 +631,6 @@ lookupNameCtx infoFilter name ctx range
             sd2 = infoScopeDepth info2
         in compare sd1 sd2
 
-filterMatchNameContext :: HasCallStack => Range -> NameContext -> [(Name,NameInfo)] -> Inf [(Name,NameInfo)]
-filterMatchNameContext range ctx candidates
-  = do xs <- filterMatchNameContextEx range ctx candidates
-       return [(name,info) | (name,info,_) <- xs]
-
-filterMatchNameContextEx :: HasCallStack => Range -> NameContext -> [(Name,NameInfo)] -> Inf [(Name,NameInfo,Rho)]
-filterMatchNameContextEx range ctx candidates
-  = case ctx of
-      CtxNone         -> return [(name,info,infoType info) | (name,info) <- candidates]
-      CtxType expect  -> do mss <- mapM (matchType expect) candidates
-                            return (concat mss)
-      CtxFunArgs partial n named mbResTp
-                      -> do mss1 <- mapM (matchNamedArgs partial n named mbResTp) candidates
-                            mss2 <- case mbResTp of
-                                      Just tp | (partial && n==0) -> mapM (matchType tp) candidates -- for partial constructor like `Nil`
-                                      _ -> return []
-                            return (concat (mss1 ++ mss2))
-      CtxFunTypes partial fixed named mbResTp
-                      -> do mss <- mapM (matchArgs partial fixed named mbResTp) candidates
-                            return (concat mss)
-  where
-    matchType :: HasCallStack => Type -> (Name,NameInfo) -> Inf [(Name,NameInfo,Rho)]
-    matchType expect (name,info)
-      = do free <- freeInGamma
-           res <- do -- traceDefDoc $ \penv0 -> let penv = penv0{Pretty.showIds=True} in text "matchType:" <+> Pretty.ppName penv name <.> text "," <+> Pretty.ppType penv expect <+> text "~" <+> Pretty.ppType penv (infoType info)
-                     runUnify (subsume range free expect (infoType info))
-           case res of
-             (Right (rho,_,_),_)  -> return [(name,info,rho)]
-             (Left _,_)             -> return []
-
-    matchNamedArgs :: Bool -> Int -> [Name] -> Maybe Type -> (Name,NameInfo) -> Inf [(Name,NameInfo,Rho)]
-    matchNamedArgs matchSome n named mbResTp (name,info)
-      = do free <- freeInGamma
-           res <- runUnify (matchNamed matchSome range free (infoType info) n named mbResTp)
-           case res of
-             (Right rho,_)  -> return [(name,info,rho)]
-             (Left _,_)     -> return []
-
-    matchArgs :: Bool -> [Type] -> [(Name,Type)] -> Maybe Type -> (Name,NameInfo) -> Inf [(Name,NameInfo,Rho)]
-    matchArgs matchSome fixed named mbResTp (name,info)
-      = do free <- freeInGamma
-          --  traceDefDoc $ \penv -> text "  match args fixed:" <+> list [Pretty.ppType penv fix | fix <- fixed]
-          --                                 <+> text ", named" <+> list [Pretty.ppParam penv nametp | nametp <- named]
-          --                                 <+> text "on" <+> Pretty.ppParam penv (name,infoType info)
-           res <- runUnify (matchArguments matchSome range free (infoType info) fixed named mbResTp)
-           case res of
-             (Right rho,_) -> return [(name,info,rho)]
-             (Left _,_)    -> return []
-
-
-
-----------------------------------------------------------------
--- Name Context
-----------------------------------------------------------------
-
-data NameContext
-  = CtxNone       -- ^ just a name
-  | CtxType Type  -- ^ a name that can appear in a context with this type
-  | CtxFunArgs Bool Int [Name] (Maybe Type)         -- ^ are only some arguments supplied?  @n@ fixed arguments and followed by the given named arguments and a possible result type.
-  | CtxFunTypes Bool [Type] [(Name,Type)] (Maybe Type)  -- ^ are only some arguments supplied? fixed and named arguments, maybe a (propagated) result type
-  deriving (Show)
-
--- A context where some fixed arguments have been inferred
-fixedContext :: Maybe (Type,Range) -> [(Int,FixedArg)] -> Int -> [Name] -> Inf NameContext
-fixedContext propagated fresolved fixedCount named
-  = do fargs <- fixedGuessed fresolved
-       nargs <- namedGuessed
-       return (CtxFunTypes (fixedCount > length fresolved) fargs nargs (fmap fst propagated))
-  where
-    tvars :: Int -> Inf [Type]
-    tvars n  = mapM (\_ -> Op.freshStar) [1..n]
-
-    fixedGuessed :: [(Int,FixedArg)] -> Inf [Type]
-    fixedGuessed xs   = fill 0 (sortBy (comparing fst) xs)
-                      where
-                        fill j []  = tvars (fixedCount - j)
-                        fill j ((i,(_,tp,_,_)):rest)
-                          = do post <- fill (i+1) rest
-                               pre  <- tvars (i - j)
-                               stp  <- subst tp
-                               return (pre ++ [stp] ++ post)
-
-    namedGuessed :: Inf [(Name,Type)]
-    namedGuessed
-      = mapM (\name -> do { tv <- Op.freshStar; return (name,tv) }) named
-
 
 ----------------------------------------------------------------
 -- Error Helpers
@@ -866,36 +772,6 @@ resolveHeapDivConstraint free ic
   Inference monad
 --------------------------------------------------------------------------}
 
-data Inf a  = Inf (Env -> St -> Res a)
-
-data Res a  = Ok !a !St ![(Range,Doc)]
-            | Err !(Range,Doc) ![(Range,Doc)]
-
-data Env    = Env{ prettyEnv :: !Pretty.Env
-                 , context  :: !Name  -- | current module name
-                 , currentDefs :: ![Name]
-                 , namedLam :: !Bool
-                 , types :: !Newtypes
-                 , synonyms :: !Synonyms
-                 , gamma :: !Gamma
-                 , infgamma :: !InfGamma
-                 , imports :: !ImportMap
-                 , returnAllowed :: !Bool
-                 , inLhs :: !Bool
-                 , hiddenTermDoc :: !(Maybe (Range,Doc))
-                 , localDepth :: !Int   -- number of run-local scope's
-                 , scopeNestingDepth :: !Int   -- nested scope level
-                 , allowInfiniteChains :: !Bool
-                 , niceNames :: !(NM.NameMap Doc)
-                 }
-data St     = St{ uniq :: !Int
-                , sub :: !Sub                            -- current substitution
-                , iconstraints :: ![ImplicitConstraint]  -- output
-                , iconstraintsGamma :: !InfGamma         -- adding a constraint adds an implicit local evidence variable
-                , holeAllowed :: !Bool                   -- is a hole allowed for a constructor context?
-                , mbRangeMap :: !(Maybe RangeMap)         -- used for errors and IDE integration
-                }
-
 
 runInfer :: Pretty.Env -> Maybe RangeMap -> Synonyms -> Newtypes -> ImportMap -> Gamma -> Name -> Bool -> Int -> Inf a -> Error b (a,Int,Maybe RangeMap)
 runInfer env mbrm syns newTypes imports assumption context allowInfiniteChains unique (Inf f)
@@ -932,23 +808,6 @@ ignoreErrors (Inf defaultRes) (Inf f)
                                        Err err1 ws1 -> Err err1 ([err] ++ ws ++ ws1)
                        ok         -> ok)
 
-infError :: Range -> Doc -> Inf a
-infError range doc
-  = do addRangeInfo range (Error doc)
-       Inf (\env st -> Err (range,doc) [])
-
-infWarning :: Range -> Doc -> Inf ()
-infWarning range doc
-  = do addRangeInfo range (Warning doc)
-       Inf (\env st -> Ok () st [(range,doc)])
-
-addRangeInfo :: Range -> RangeInfo -> Inf ()
-addRangeInfo rng info
-  = Inf (\env st -> Ok () (st{
-          mbRangeMap = case (mbRangeMap st) of
-                        Just rm -> Just (rangeMapInsert rng info rm)
-                        rm      -> rm
-        }) [])
 
 withNoRangeInfo :: Inf a -> Inf a
 withNoRangeInfo inf
@@ -957,7 +816,6 @@ withNoRangeInfo inf
        x   <- inf
        updateSt ( \st -> st{ mbRangeMap = rm0 })
        return x
-
 
 withNiceNames :: (Name -> Int -> Doc) -> [Name] -> ([Doc] -> Inf a) -> Inf a
 withNiceNames create names finf
@@ -1032,11 +890,6 @@ substImplicitConstraints sksub
        ig <- iconstraintsGamma <$> getSt
        -- traceDefDoc $ \penv -> text "subst ics:" <+> Pretty.ppSub penv sksub <-> indent 2 (ppInfGamma penv{Pretty.showIds=True} ig)
        return ()
-
-getGamma :: Inf Gamma
-getGamma
-  = do env <- getEnv
-       return (gamma env)
 
 extendGammaCore :: Bool -> [Core.DefGroup] -> Inf a -> Inf (a)
 extendGammaCore isAlreadyCanonical [] inf
@@ -1183,13 +1036,6 @@ getModuleName :: Inf Name
 getModuleName
   = do env <- getEnv
        return (context env)
-
-freeInGamma :: Inf Tvs
-freeInGamma
-  = do env <- getEnv
-       sub <- getSub
-       return (ftv (sub |-> (infgamma env)))  -- TODO: fuv?
-
 
 getLocalVars :: Inf [(Name,Type)]
 getLocalVars

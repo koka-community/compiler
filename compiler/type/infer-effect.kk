@@ -311,26 +311,32 @@ fun pp-select(sel: implicit-select): <pretty-eff> doc
 
 // lookup names in the local and global scope that match the given name context
 // Returns also an instantiated rho required to match the name context
-fun lookup-names(info-filter: (assumption/name-info) -> pure bool, name: name, nctx: name-context, rng: range): infer list<(name, assumption/name-info, rho)>
+fun lookup-names(info-filter: (assumption/name-info) -> bool, name: name, nctx: name-context, rng: range): infer list<(name, assumption/name-info, rho)>
   val matches = 
     match lookup-local-name(info-filter, name)
       Right(local) -> [local] // a local name that matches exactly was found; use it always
       Left(locals) -> 
         // otherwise consider globals as well besides the locally qualified locals that matched
         // todo: should we prioritize local locally qualified names when disambiguating?
-        val globals = lookup-global-name(info-filter, name)
+        val globals = lookup-global-name(info-filter, name) 
         locals ++ globals
   filter-match-name-context-ex(matches, nctx, rng)
 
-fun lookup-local-name(info-filter: (assumption/name-info) -> pure bool, name: name): pure either<(name, assumption/name-info, rho), list<(name, assumption/name-info, rho)>>
-  if name.is-implicit-constraint-evidence then 
-    infgamma-lookup(name, get-iconstraints())
-  else infgamma-lookup-ex(info-filter, name).subst
+fun name-info/subst(ni: assumption/name-info)
+  update-type(ni, ni.typ.subst)
 
-fun lookup-global-names(info-filter: (assumption/name-info) -> pure bool, name: name): pure list<(name, assumption/name-info, rho)>
-  val find = fn(nm) gamma-lookup(nm).filter(fn((_, info)) info-filter(info))
-  match imports-expand(name, inf-env.importMap)
-    Right(name') -> 
+fun lookup-local-name(info-filter: (assumption/name-info) -> bool, name: name): infer either<list<(name, assumption/name-info)>, (name, assumption/name-info)>
+  if name.is-implicit-constraint-evidence then 
+    get-iconstraints-gamma().inf-gamma/lookup(name)
+  else 
+    match gamma-lookup-ex(info-filter, name)
+      Left(all) -> Left(all.map(fn((n, ni: assumption/name-info)) (n, ni.subst)))
+      Right((n, ni)) -> Right((n, ni.subst))
+
+fun lookup-global-name(info-filter: (assumption/name-info) -> bool, name: name): infer list<(name, assumption/name-info)>
+  val find = fn(nm) gamma-lookup(infer-env.gamma, nm).filter(fn((_, info)) info-filter(info))
+  match infer-env.importsMap.expand(name)
+    Right((name', _)) -> 
       match find(name') // First look by aliased import name
         Nil -> find(name) // If not found, look by original import name
         ni -> ni
@@ -349,12 +355,28 @@ fun filter-match-name-context-ex(matches: list<(name, assumption/name-info)>, nc
     match run-unify({subsume(rng, free, ex, info.typ)})
       (Right((rho, _, _)), _) -> [(nm, info, rho)]
       _ -> []
-  // TODO: 
+  fun match-named-args(matchSome: bool, n: int, namedPars: list<name>, mbResTp: maybe<ktype>, (nm, info): (name, assumption/name-info)): _ list<(name, assumption/name-info, rho)>
+    val free = free-in-gamma()
+    match run-unify({match-named(matchSome, rng, free, info.typ, n, namedPars, mbResTp)})
+      (Right(rho), _) -> [(nm, info, rho)]
+      _ -> []
+  fun match-args(matchSome: bool, fixedTypes: list<ktype>, namedPars: list<(name, ktype)>, mbResTp: maybe<ktype>, (nm, info): (name, assumption/name-info)): _ list<(name, assumption/name-info, rho)>
+    val free = free-in-gamma()
+    match run-unify({match-arguments(matchSome, rng, free, info.typ, fixedTypes, namedPars, mbResTp)})
+      (Right(rho), _) -> [(nm, info, rho)]
+      _ -> []
   
   match nctx 
     CtxNone -> matches.map(fn((nm, info: assumption/name-info)) (nm, info, info.typ))
     CtxType(expect) -> matches.map(match-type(expect, _)).concat
-
+    CtxFunArgs(partial, n, namedPars, mbResTp) -> 
+      val mss1 = matches.map(match-named-args(partial, n, namedPars, mbResTp, _)).concat
+      val mss2 = match mbResTp
+        Just(tp) | partial && n == 0 -> matches.map(match-type(tp, _)) // for partial constructor like `Nil`
+        _ -> []
+      (mss1 ++ mss2.concat)
+    CtxFunTypes(partial, fixed, namedPars, mbResTp) -> 
+      matches.map(match-args(partial, fixed, namedPars, mbResTp, _)).concat
   // TODO: 
 
 /////////////////////////////////////
@@ -374,6 +396,25 @@ pub type name-context
     fixedTypes: list<ktype>,  // `n` fixed (given without name) argument types
     namedTypes: list<(name, ktype)>, // given named argument types
     mbResTp: maybe<ktype>) // possible result type
+
+// A context where some fixed arguments have been inferred
+pub fun fixed-context(propagated: maybe<(ktype, range)>, fixed-resolved: list<(int, fixed-arg)>, fixed-count: int, namedArgs: list<name>): infer name-context
+  fun tvars(i: int)
+    list(1, i).map(fn(_) fresh-star())
+  fun fill(j, l: list<(int, fixed-arg)>)
+    match l
+      [] -> tvars(fixed-count - j)
+      Cons((i,(_, tp, _, _)), rst) -> 
+        val post = fill(i + 1, rst)
+        val pre = tvars(i - j)
+        val stp = tp.subst()
+        (pre ++ [stp] ++ post)
+  val fargs = fill(0, fixed-resolved.sort(fn((i1, _), (i2, _)) i1 < i2))
+  val nargs = namedArgs.map(fn(nm) (nm, fresh-star()))
+  CtxFunTypes(fixed-count > fixed-resolved.length, fargs, nargs, propagated.map(fst))
+
+    
+  
 
 pub fun pp-name-context(nctx: name-context): <pretty-eff> doc
   match nctx
@@ -559,6 +600,7 @@ pub struct inferEnv
   allowInfiniteChains: bool
   niceNames: name-map<doc>
   importsMap: import-map
+  gamma: gamma
 
 pub effect val scope-depth: int
 pub effect val local-depth: int
@@ -580,6 +622,7 @@ div type ic-params
 
 pub div effect def-infer-effect
   fun get-iconstraints(): list<implicit-constraint>
+  fun get-iconstraints-gamma(): inf-gamma
   // add a new implicit constraint with a fresh name (to be solved at generalization time)
   fun add-iconstraint(ic: ic-params): (name, assumption/name-info, ktype)
   fun solve-iconstraint(nm : name, tp : ktype): ()
@@ -590,6 +633,7 @@ fun with-def(def-name,action)
   var iconstraints-gamma := inf-gamma/empty
   with override
     fun get-iconstraints() iconstraints.subst
+    fun get-iconstraints-gamma() iconstraints-gamma
     fun add-iconstraint(ic: ic-params) 
       val evName = fresh-name("iev")
       val icx = ImplicitConstraint(ic.nm, ic.tp, evName, ic.rngCtx, ic.rng, ic.can-solve, ic.solve)
