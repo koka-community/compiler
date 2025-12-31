@@ -135,7 +135,7 @@ fun subsume(rng: range, free: tvs, tp1: ktype, tp2: ktype): <unify,pure,comp-fla
   val sub = get-subst()
   val tvs1 : tvs = (free + tp1.free-type-vars)
   val allfree = tvs1.list
-  val escaped = sub.list.filter(fn((tv, _)) allfree.any(_ == tv)).map(snd).free-type-vars.fsv
+  val escaped = sub.list.filter(fn((tv, _)) allfree.any(_ == tv)).map(snd).fsv
   if escaped.disjoint(sks.new/tvs) then ()
   else unify-error(NoSubsume)
   // final type
@@ -222,7 +222,7 @@ fun unify-tvar(tv: type-var, tp: ktype): <pure,unify> ()
   match tv
     TypeVar(id, k, Meta) -> 
       val etp = tp.expand-syn
-      if etp.free-type-vars.fuv.list.any(fn(tv') tv == tv') then
+      if etp.fuv.list.any(fn(tv') tv == tv') then
         match etp
           TVar(tv') | tv == tv' -> () // i.e. a ~ id<a>
           _ -> unify-error(Infinite)
@@ -356,7 +356,7 @@ fun run-unify(action: () -> <pure,unique,unify|e> a): <pure,unique|e> (either<un
     fun get-subst() subst
   action()
 
-fun substitute/subst(x: a, ?substitute: (sub, a) -> <pure,unify|e> a): <pure,unify|e> a
+fun substitute/subst(x: a, ?substitute: (sub, a) -> pure a): <pure,unify> a
   substitute(get-subst(), x)
 
 type unify-error

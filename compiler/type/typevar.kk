@@ -16,14 +16,14 @@ import std/core-extras // list.contains
 pub infixr 5 (|->)
 
 // The free unifiable (e.g. 'Meta') type variables
-pub fun fuv(tvs: tvs): tvs
-  tvs.filter(_.flavour.is-meta)
+pub fun fuv(a: a, ?free-type-vars: a -> e tvs): e tvs
+  a.free-type-vars.filter(_.flavour.is-meta)
 // The free 'Skolem' type variables
-pub fun fsv(tvs: tvs): tvs
-  tvs.filter(_.flavour.is-skolem)
+pub fun fsv(a: a, ?free-type-vars: a -> e tvs): e tvs
+  a.free-type-vars.filter(_.flavour.is-skolem)
 // The free 'Bound' type variables
-pub fun fbv(tvs: tvs): tvs
-  tvs.filter(_.flavour.is-bound)
+pub fun fbv(a: a, ?free-type-vars: a -> e tvs): e tvs
+  a.free-type-vars.filter(_.flavour.is-bound)
 // All type variables (including the bound ones)
 pub fun all-tv(a: a, ?bound-type-vars: (a) -> e tvs, ?free-type-vars: (a) -> e tvs): e tvs
   a.bound-type-vars.union(a.free-type-vars)
@@ -187,6 +187,7 @@ pub fun sub/(|->)(s: sub, a: a, ?substitute: (sub, a) -> e a): e a
   if s.is-null then a
   else substitute(s, a)
 
+
 // Substitute a substitution into another substitution
 pub fun sub/substitute(sub: sub, Sub(s, tvs2): sub): pure sub
   val Sub(_, tvs1) = sub
@@ -199,6 +200,8 @@ pub fun list/bound-type-vars(ps: list<a>, ?bound-type-vars: (a) -> div tvs): div
   ps.map(bound-type-vars).unions
 pub fun list/free-type-constructors(ps: list<a>, ?free-type-constructors: (a) -> div type-cons): div type-cons
   ps.map(free-type-constructors).unions
+pub fun assoclist/substitute(s: sub, al: list<(k, a)>, ?substitute: (sub, a) -> pure a): pure list<(k, a)>
+  al.map(fn((k, v)) (k, substitute(s, v)))
 pub fun list/substitute(s: sub, ps: list<a>, ?substitute: (sub, a) -> pure a): pure list<a>
   ps.map(substitute(s, _))
 
@@ -234,6 +237,16 @@ pub fun ktype/substitute(s: sub, tp: ktype): pure tau
     TVar(tv) -> s.find(tv)
     TApp(t, args) -> TApp(s |-> t, args.map(s |-> _))
     TSyn(syn, xs, t) -> TSyn(syn, s |-> xs, s |-> t)
+pub fun ktype/odftv(tp: ktype): pure list<type-var>
+  match tp
+    TForAll(vars, tp) -> tp.odftv.filter(fn(t) !vars.any(_ == t))
+    TFun(args, eff, res) -> (args.map(_.snd) ++ [eff, res]).map(odftv).concat
+    TCon -> []
+    TVar(tv) -> [tv]
+    TApp(t, args) -> t.odftv ++ args.odftv
+    TSyn(_, xs, t) -> t.odftv ++ xs.odftv
+pub fun list/odftv(ps: list<ktype>): pure list<type-var>
+  ps.map(odftv).concat
 
 // Type utilities for expressions
 pub fun exp/free-type-vars(e0: expr): div tvs

@@ -62,7 +62,7 @@ fun default-pp-env(f)
 
 // Pretty print environment for types
 
-alias pretty-eff = <pp-type-eff,documentation,colors,pure,nice-eff<type-var>,comp-flags>
+alias pretty-eff = <pp-type-eff,indent,documentation,colors,pure,nice-eff<type-var>,comp-flags>
 
 alias pp-type-eff = <pretty-type-eff,pp-env,pp-prec>
 
@@ -89,12 +89,10 @@ fun no-full-names(f)
     val pp-env = pp-env(fullNames=False)
   f()
 
-effect indent 
-  val indent : int
+effect val indent : int
 
 fun trace-indent(f)
-  with handler
-    val indent = type/pretty/indent + 2
+  with override val indent = type/pretty/indent + 2
   f()
 
 fun trace-doc(d: () -> doc)
@@ -118,8 +116,8 @@ fun override-prec(p: prec, f)
   f()
 
 fun handle-pretty-eff(f)
-  with handler
-    val pp-prec = precTopTop
+  with val pp-prec = precTopTop
+  with val indent = 0
   with handler 
     val ranked = rankedDefault
     val moduleContext = "Main".new-name

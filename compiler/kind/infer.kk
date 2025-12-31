@@ -21,6 +21,7 @@ import compiler/syntax/syntax
 import compiler/syntax/promote
 import compiler/syntax/range-map
 import compiler/core/core
+import compiler/lib/core
 import compiler/kind/import-map
 import compiler/kind/kind
 import compiler/kind/assumption
@@ -173,11 +174,6 @@ fun ci/has-accessor(ci: con-info, nm: name, tp: ktype)
 fun con-info/has-accessor(nm: name, tp: ktype)
   val tvs = tp.free-type-vars
   !(nm.is-field-name || nm == nil) && con-info.existentials.all(!tvs.member(_))
-
-fun nub-by(xs: list<a>, f: (a, a) -> bool): list<a>
-  match xs
-    Cons(x1, rst) -> Cons(x1, rst.filter(!f(x1, _)))
-    Nil -> Nil
 
 fun is-alphanum(c: char)
   c.is-alpha || c.is-digit

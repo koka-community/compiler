@@ -101,7 +101,7 @@ fun inf-gamma/lookup-ex(ig: inf-gamma, guard: (name-info) -> bool, name: name): 
 fun inf-gamma-eff/lookup-ex(guard: (name-info) -> bool, name: name): <inf-gamma-eff> either<list<(name, name-info)>, (name, name-info)>
   gamma-lookup-ex(guard, name)
 
-fun inf-gamma/map(ig: inf-gamma, f: (ktype) -> ktype): inf-gamma
+fun inf-gamma/map(ig: inf-gamma, f: (ktype) -> e ktype): e inf-gamma
   ig.map(fn(a, infos) infos.list/map(fn(i : name-info) i.update-type(f(i.typ))))
 
 fun inf-gamma/union(ig1: inf-gamma, ig2: inf-gamma): <exn> inf-gamma
@@ -144,3 +144,6 @@ fun infgamma/bound-type-vars(ig: inf-gamma): pure tvs
 
 fun infgamma/free-type-constructors(ig: inf-gamma): pure type-cons
   ig.inf-gamma/list().map(snd).free-type-constructors
+
+fun infgamma/substitute(s: sub, ig: inf-gamma): pure inf-gamma
+  ig.inf-gamma/map(fn(tp) s.substitute(tp))

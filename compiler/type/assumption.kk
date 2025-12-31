@@ -27,7 +27,7 @@ pub type name-info
   InfoExternal(vis: visibility, cname: name, typ: scheme, format: list<(target, string)>, fipt: fipT, range: range, doc: string)
   InfoImport(vis: visibility, typ: scheme, nameAlias: name, fullName: name, range: range)
 
-pub fun update-type(ni : name-info, tp: scheme): name-info
+pub fun tp/update-type(ni : name-info, tp: scheme): name-info
   match ni
     InfoVal(vis, cname, _, scopeDepthX, range, isVar, allowImplicitMaskX, doc) -> InfoVal(vis, cname, tp, scopeDepthX, range, isVar, allowImplicitMaskX, doc)
     InfoFun(vis, cname, _, scopeDepthX, arity, fipt, range, doc) -> InfoFun(vis, cname, tp, scopeDepthX, arity, fipt, range, doc)
@@ -320,8 +320,8 @@ pub fun extract-external(external: external, update-vis)
 // TODO: ftc
 // Instances
 
-pub fun gamma/(|->)(sub: sub, g: gamma): pure gamma
-  g.map(fn(n, nis) nis.list/map(fn((n1, ni: name-info)) (n1, sub |-> ni)))
+pub fun gamma/substitute(sub: sub, g: gamma): pure gamma
+  g.map(fn(n, nis) nis.list/map(fn((n1, ni: name-info)) (n1, sub.substitute(ni))))
 
 pub fun gamma/free-type-vars(g: gamma): pure tvs
   g.schemes.map(free-type-vars).unions
@@ -329,7 +329,7 @@ pub fun gamma/free-type-vars(g: gamma): pure tvs
 pub fun gamma/bound-type-vars(g: gamma): pure tvs
   g.schemes.map(bound-type-vars).unions
 
-pub fun ni/(|->)(sub: sub, ni: name-info): pure name-info
+pub fun ni/substitute(sub: sub, ni: name-info): pure name-info
   ni.map-type(sub |-> _)
 
 pub fun ni/free-type-vars(info: name-info): pure tvs
