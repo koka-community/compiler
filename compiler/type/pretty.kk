@@ -95,7 +95,7 @@ fun trace-indent(f)
   with override val indent = type/pretty/indent + 2
   f()
 
-fun trace-doc(d: () -> doc)
+fun trace-doc(d: () -> <indent,div|e> doc): <indent,div|e> ()
   trace(d().indent(type/pretty/indent).show)
 
 fun pp-name-type((name, tp): (name, ktype)): <pretty-eff> doc

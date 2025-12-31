@@ -1,5 +1,3 @@
-
-
 improve :: Range -> Range -> Bool -> Effect -> Rho -> Inf (Rho,Effect,Core.Expr -> Core.Expr )
 improve contextRange range close eff0 rho0
   = do seff  <- subst eff0
@@ -389,13 +387,6 @@ withGammaType range tp inf
        d <- getScopeDepth
        extendInfGamma [(name,(InfoVal Public name tp d range False False ""))] inf
 
-currentDefName :: Inf Name
-currentDefName
-  = do dnames <- currentDefNames
-       case dnames of
-         (dname:_) -> return dname
-         _         -> return (newName "")
-
 withDefName :: Name -> Inf a -> Inf a
 withDefName name inf
   = withEnv (\env -> env{ currentDefs = name : currentDefs env, namedLam = not (nameIsNil name || isWildcard name) }) inf
@@ -421,8 +412,3 @@ findDataInfo typeName
        case newtypesLookupAny typeName (types env) of
          Just info -> return info
          Nothing   -> failure ("Type.InferMonad.findDataInfo: unknown type: " ++ show typeName ++ "\n in: " ++ show (types env))
-
-traceDefDoc :: (Pretty.Env -> Doc) -> Inf ()
-traceDefDoc f
-  = do dnames <- currentDefNames
-       traceDoc (\penv -> hcat (intersperse (text ".") (map (Pretty.ppName penv) dnames)) <+> text ":" <+> f penv)

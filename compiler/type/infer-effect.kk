@@ -341,27 +341,27 @@ fun resolve-name-ex(info-filter: (assumption/name-info -> bool), mb-info-filter-
 // Resolving of implicit expressions
 /////////////////////////////////////
 
-//lookup an application name `f(...)` where the name context usually contains (partially) inferred
+// lookup an application name `f(...)` where the name context usually contains (partially) inferred
 // argument types. We reuse the lookup for implicit arguments as it works the same
 // (except that for implicit arguments we allow value types to be resolved with unit functions (for conversions))
-fun lookup-app-name(allow-disambiguate : bool, name: name, name-ctx: name-context, ctx-range: range, rng: range): _ either<list<doc>, (ktype, syntax/syntax/expr<ktype>, list<((name, range), syntax/syntax/expr<ktype>, bool -> doc)>)>
+fun lookup-app-name(allow-disambiguate : bool, name: name, name-ctx: name-context, ctx-range: range, rng: range): infer either<list<doc>, (ktype, syntax/syntax/expr<ktype>, list<((name, range), syntax/syntax/expr<ktype>, bool -> pretty-eff doc)>)>
   val roots = 
     if !name.is-constructor-name then // normal identifiers
       [(is-info-val-fun-ext, name)]
     else // constructor application: we need to consider creator functions too (for default fields)
       val cname = name.new-creator-name
       val def-name = current-def-name()
-      if cname.unqualify == def-name || def-name == name-copy then // a bit hacky, but ensure we don't call the creator function inside itself or the copy function
+      if cname.unqualify == def-name || def-name == nameCopy then // a bit hacky, but ensure we don't call the creator function inside itself or the copy function
         [(is-infoCon, name)]
       else [(is-infoFun, cname), (is-infoCon, name)]
   // try to find a unique solution
   val res = resolve-implicit-arg(allow-disambiguate, !allow-disambiguate, /* allow unitFunVal: at first, when allowDisambiguate is False, we like to see all possible instantiations */
                                  name-ctx, rng, roots)
   match res
-    Right(iarg as ImplicitArg(qname, _, rho, iargs)) ->
-      val implicits = iargs.map fn((pname, iarg))
-        ((pname, rng), iarg.to-implicit-arg-expr(rng.end-of-range), iarg.pretty-implicit-assign("", pname)) 
-      Right(rho, Var(qname, False, rng), implicits)
+    Right(ImplicitArg(qname, _, rho, iargs)) ->
+      val implicits = iargs.map fn((pname, iarg'))
+        ((pname, rng), iarg'.to-implicit-arg-expr(rng.end-of-range), fn(b) pp-implicit-assign("", pname, iarg', b)) 
+      Right((rho, Var(qname, False, rng), implicits))
     Left(docs) ->
       if allow-disambiguate && !docs.is-empty then 
         val term-doc = get-term-doc("context", ctx-range)
@@ -380,7 +380,7 @@ fun resolve-implicit-name(name: name, tp: ktype, ctx-range: range, rng: range): 
        tp.implicit-type-context, rng, [(is-info-val-fun-ext, name)])
   match res
     Right(iarg) -> // TODO: Trace
-      (iarg.implicit-arg-expr(rng), pretty-implicit-arg(iarg))
+      (iarg.to-implicit-arg-expr(rng), pp-implicit-arg(iarg))
     Left(docs) -> 
       val ctx-term = get-term-doc("context", ctx-range)
       inf-error(rng, "cannot resolve implicit parameter".text |-|
@@ -395,10 +395,10 @@ fun resolve-implicit-name(name: name, tp: ktype, ctx-range: range, rng: range): 
 
 // Resolve an implicit argument fully
 fun resolve-implicit-arg(allow-disambiguate: bool, allow-unit-fun-val: bool, ctx-name: name-context, rng: range, roots: list<(assumption/name-info -> bool, name)>): _ either<list<doc>, implicit-arg>
-  val sel = resolve-implicit-arg-ex(allow-disambiguate, allow-unit-fun-val, [], ctx-name, range, roots)
+  val sel = resolve-implicit-arg-ex(allow-disambiguate, allow-unit-fun-val, [], ctx-name, rng, roots)
   match sel
     Found(iarg) -> Right(iarg)
-    _ -> Left(sel.all-candidates.map(pretty-implicit-arg))
+    _ -> Left(sel.all-candidates.map(pp-implicit-arg))
 
 // always prefer a creator definition over a plain constructor if it exists
 fun exists-con-creator(candidates: list<typed-arg>, (name, info, _): typed-arg): bool
@@ -410,13 +410,13 @@ fun exists-con-creator(candidates: list<typed-arg>, (name, info, _): typed-arg):
 fun resolve-implicit-arg-ex(allow-disambiguate: bool, allow-unit-fun-val: bool, chain: list<typed-arg>, ctx-name: name-context, rng: range, roots: list<(assumption/name-info -> bool, name)>): _ implicit-select
   val candidates = roots.flatmap(fn((filter, name)) lookup-implicit-arg(allow-unit-fun-val, filter, name, ctx-name, rng))
   val candidates2 = candidates.filter(!candidates.exists-con-creator(_))
-  fun sort-candidates(candidates: list<typed-arg>)
+  fun sort-candidates(unsorted: list<typed-arg>)
     // find for each candidate which further implicits need to be resolved
-    val icandidates = candidates.map(implicits-to-resolve(ctx-name))
+    val icandidates = unsorted.map(implicits-to-resolve(ctx-name, _))
     // now we can sort them according to their cost 
-    fun cost((name, info, _), iargs)
+    fun cost(((name, info, _), iargs))
       (0 - (iarg-scope-depth(name, info)), // inner scopes first
-        iargs.length) // least further implicits arguments first
+        iargs.list/length) // least further implicits arguments first
     icandidates.sort(fn(x, y) x.cost.cmp(y.cost).is-lt)
   val sorted = candidates2.sort-candidates
   resolve-uniquely(allow-disambiguate, chain, ctx-name, rng, None, sorted)
@@ -426,26 +426,26 @@ fun resolve-uniquely(allow-disambiguate: bool, chain: list<typed-arg>, ctx-name:
   match (current, others) 
     (_, []) -> current // nothing further to explore
     (Amb(ambs as Cons(_, Cons(_, _))), _) -> //once we are ambiguous with 2 or more (possible) solutions, we don't need to explore further options
-      val extra = candidates.map(_.fst.to-implicit-arg([])) // include all remaining potential candidates in the error message?
+      val extra = others.map(_.fst.to-implicit-arg([])) // include all remaining potential candidates in the error message?
       Amb(ambs ++ extra)
     (Found(found), Cons(((qname, info, _), _))) | allow-disambiguate && found.ia-scope-depth > iarg-scope-depth(qname, info) ->
       // if we can disambiguate, the inner scope is always preferred (assuming sorted candidates)
       Found(found)
-    (_, Cons(next as ((qname, info, rho), ipars), candidates)) ->
-      if !inf-env.allowInfiniteChains && !is-decreasing-chain(chain, ctx-name, qname, rho) then
+    (_, Cons(next as ((qname, _, rho), ipars), candidates)) ->
+      if !infer-env.allowInfiniteChains && !is-decreasing-chain(chain, ctx-name, qname, rho) then
         val iarg = next.fst.to-implicit-arg(ipars.map(fn((pname, _)) (pname, empty-implicit-arg)))
         val sel = Infty(iarg)
         resolve-uniquely(allow-disambiguate, chain, ctx-name, rng, current.merge(sel), candidates)
       elif chain.length > resolve-max-chain-depth then 
         // TODO: Trace
-        val sels = candidates.map(Infty(_.fst.to-implicit-arg([])))
+        val sels = candidates.map(fn(c) Infty(c.fst.to-implicit-arg([])))
         sels.foldr(None, merge)
       else
         val sel = resolve-implicit-parameters(allow-disambiguate, chain, rng, next)
         resolve-uniquely(allow-disambiguate, chain, ctx-name, rng, current.merge(sel), candidates)
 
 // Resolve recursively any further required implicit parameters
-fun resolve-implicit-parameters(allow-disambiguate: bool, chain: list<typed-arg>, rng: range, current as ((qname, info, rho), ipars): (typed-arg, list<(name, ktype)>)): _ implicit-select
+fun resolve-implicit-parameters(allow-disambiguate: bool, chain: list<typed-arg>, rng: range, current as ((name, info, rho), ipars): (typed-arg, list<(name, ktype)>)): _ implicit-select
   val new-chain = Cons(current.fst, chain)
   fun resolve(acc: list<(name, implicit-arg)>, pars: list<(name, ktype)>): _ implicit-select
     match pars
@@ -456,7 +456,7 @@ fun resolve-implicit-parameters(allow-disambiguate: bool, chain: list<typed-arg>
           Found(iarg) -> // keep resolving
             resolve(Cons((par.fst, iarg), acc), pars')
           _ -> // give up early if we cannot resolve a parameter
-            sel.map-candidates fn(iarg)
+            sel.map fn(iarg)
               ImplicitArg(name, info, rho, acc.reverse ++ [(par.fst, iarg)] ++ pars.map(fn((pname, _)) (pname, empty-implicit-arg)))
   resolve([], ipars)
 
@@ -470,22 +470,22 @@ fun resolve-implicit-parameter(allow-disambiguate: bool, chain: list<typed-arg>,
                    [(is-info-val-fun-ext, pname-expr)])
 
 // Find for an typed argument if it needs further implicits to be solved
-fun implicits-to-resolve(ctx-name: name-context, targ as (name, info, rho): typed-arg): _ (typed-arg, list<(name, ktype)>)
+fun implicits-to-resolve(ctx-name: name-context, targ as (_, _, rho): typed-arg): _ (typed-arg, list<(name, ktype)>)
   match split-fun-scheme(rho)
     Just((_, pars, _, _)) -> 
       fun implicits-of(ipars: list<(name, ktype)>): list<(name, ktype)>
         // only return implicits that were not already given explicitly by the user (in `named`)
         val (fixed, optional, implicits) = ipars.split-optional-implicit
         val already-given = match ctx-name
-          CtxFunType(_, fixedArgs, namedArgs, _) -> 
+          CtxFunTypes(_, fixedArgs, namedArgs, _) -> 
             val namedAsFixed = implicits.take(fixedArgs.length - fixed.length - optional.length).map(fst) 
             namedAsFixed ++ namedArgs.map(fst)
           CtxFunArgs(_, n, namedArgs, _) ->
             val namedAsFixed = implicits.take(n - fixed.length - optional.length).map(fst)
-            namedAsFixed ++ namedArgs.map(fst)
+            namedAsFixed ++ namedArgs
           _ -> []
-        implicits.filter fn((name, _))
-          val (pname, _) = name.split-implicit-param-name
+        implicits.filter fn((iname, _))
+          val (pname, _) = iname.split-implicit-param-name
           !already-given.any(_ == pname)
       if pars.any(is-optional-or-implicit) then // recursively resolve further required implicits
         (targ, implicits-of(pars))
@@ -646,7 +646,7 @@ pub fun ia-scope-depth(iarg: implicit-arg): int
   iarg-scope-depth(iarg.name, iarg.info)
 
 // Convert an implicit argument to an expression (that is supplied as the argument)
-pub fun to-implicit-arg-expr(xrange: range, iarg: implicit-arg): <unique,pure> user-expr
+pub fun to-implicit-arg-expr(iarg: implicit-arg, xrange: range): <unique,pure> syntax/syntax/expr<ktype>
   val range = xrange.hide // don't add things in the expression to the rangemap
   match iarg.implicit-args
     Nil -> syntax/Var(iarg.name, False, range)
@@ -661,7 +661,7 @@ pub fun to-implicit-arg-expr(xrange: range, iarg: implicit-arg): <unique,pure> u
         val args-fixed = name-fixed.map fn(nm)
           (Nothing, syntax/Var(nm, False, range))
         val args-implicit = iarg.implicit-args.map fn((pname, arg))
-          (Just((pname, range)), to-implicit-arg-expr(range.end-of-range, arg))
+          (Just((pname, range)), to-implicit-arg-expr(arg, range.end-of-range))
         
         val body = App(syntax/Var(iarg.name, False, range), args-fixed ++ args-implicit, range)
         if name-fixed.is-nil then body
@@ -675,7 +675,7 @@ pub fun pp-typed-arg(targ: typed-arg): <pretty-eff> doc
   val (nm, _, tp) = targ
   pp-param((nm, tp))
 
-pub fun to-implicit-arg(iargs: list<(name, implicit-arg)>, targ: typed-arg): implicit-arg
+pub fun to-implicit-arg(targ: typed-arg, iargs: list<(name, implicit-arg)>): implicit-arg
   val (nm, info, rho) = targ
   ImplicitArg(nm, info, rho, iargs)
 
@@ -878,111 +878,6 @@ pub fun maybe-to-context(mb-type : maybe<ktype>) : name-context
 pub fun maybe-r-to-context(mb-type-range : maybe<(ktype, range)>) : name-context
   maybe-to-context(mb-type-range.map(fst))
 
-/////////////////////////////////////
-// Implicit Constraints
-/////////////////////////////////////
-pub div type implicit-constraint
-  ImplicitConstraint(
-    name: name, // name of the implicit constraint (e.g. @hdiv)
-    typ: ktype,
-    evidence: name, // fresh name for the evidence
-    contxt: range,
-    range: range,
-    canSolve: (tvs, implicit-constraint) -> infer bool,
-    solve: (tvs, implicit-constraint) -> infer (core/core/expr, ktype)
-  )
-
-div type ic-params 
-  ICParams(
-    nm: name,
-    tp: ktype,
-    canSolve: (tvs, implicit-constraint) -> infer bool,
-    solve: (tvs, implicit-constraint) -> infer (core/core/expr, ktype),
-    rngCtx: range,
-    rng: range
-  )
-
-pub div effect def-infer-effect
-  fun get-iconstraints(): list<implicit-constraint>
-  fun get-iconstraints-gamma(): inf-gamma
-  // add a new implicit constraint with a fresh name (to be solved at generalization time)
-  fun add-iconstraint(ic: ic-params): (name, assumption/name-info, ktype)
-  fun solve-iconstraint(nm : name, tp : ktype): ()
-
-alias can-resolve-constraint = (tvs, implicit-constraint) -> infer bool
-alias resolve-constraint = (tvs, implicit-constraint) -> infer (core/core/expr, ktype)
-alias check-constraint = (name, ktype) -> maybe<(can-resolve-constraint, resolve-constraint)>
-
-val implicit-constraints : list<(name, check-constraint)> = [] // TODO: fill this in
-
-fun check-implicit-constraint(name: name, tp: ktype, ctx-range: range, rng: range): infer maybe<typed-arg>
-  match implicit-constraints.lookup(name)
-    Just(check) -> match check(name, tp)
-      Just((can-resolve, resolve)) -> 
-        val iarg = add-iconstraint(ICParams(name, tp, can-resolve, resolve, ctx-range, rng))
-        Just(iarg)
-      Nothing -> Nothing
-    Nothing -> Nothing
-
-// TODO: incorporate generalization into here?
-// This is essentially scope-implicit-constraints
-fun scope-implicit-constraints(action: () -> <infer|e> a): <infer|e> a
-  var iconstraints : list<implicit-constraint> := []
-  var iconstraints-gamma := inf-gamma/empty
-  with override
-    fun get-iconstraints() iconstraints.subst(list/substitute) 
-    fun get-iconstraints-gamma() iconstraints-gamma.subst // apply skolem substitution to unresolved implicit constraints
-    fun add-iconstraint(ic: ic-params) 
-      val ICParams(nm, tp, canSolve: can-resolve-constraint, solve, rngCtx, rng) = ic
-      val evName = fresh-name("iev")
-      val icx = ImplicitConstraint(nm, tp, evName, rngCtx, rng, canSolve : can-resolve-constraint, solve)
-      val icNameInfo = create-name-infoX(Public, evName, 2, DefVal, rng, tp, "")
-      val iarg = (evName, icNameInfo, tp)
-      iconstraints := iconstraints ++ [icx]
-      iconstraints-gamma := iconstraints-gamma.extend(evName, icNameInfo)
-      iarg
-    fun solve-iconstraint(nm : name, tp : ktype)
-      iconstraints := iconstraints.remove(fn(ic) ic.name == nm)
-  trace-indent(action) 
-
-fun show(ic: implicit-constraint): string
-  ic.name.show
-
-fun ic/substitute(sub: sub, ic: implicit-constraint): pure implicit-constraint
-  ic(typ = ktype/substitute(sub, ic.typ))
-fun ic/free-type-vars(ic: implicit-constraint): div tvs
-  ic.typ.free-type-vars
-fun ic/free-type-constructors(ic: implicit-constraint): div type-cons
-  ic.typ.free-type-constructors
-
-
-// implicit constraint evidence name?
-fun is-implicit-constraint-evidence(name: name): bool
-  name.name/starts-with("iev@")
-
-fun pp-constraint(ic: implicit-constraint): <pretty-eff> doc 
-  pp-name(ic.evidence) |.| "=".text |+| pp-param((ic.name, ic.typ))
-
-fun pp-constraints(ics: list<implicit-constraint>): <pretty-eff> doc
-  ics.map(pp-constraint).list
-
-fun try-resolve-implicit-constraints(close: bool, free: tvs): infer (core/core/expr -> core/core/expr)
-  // TODO: 
-  id
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 /////////////////////////////
 // Error Helpers
 /////////////////////////////
@@ -1075,7 +970,7 @@ pub fun pp-or(names : list<name>) : <pretty-eff> doc
 /////////////////////////////////////
 pub struct inferEnv
   contxt: name // module name
-  currentDefs: list<name>
+  currentDefNames: list<name>
   namedLam: bool
   returnAllowed: bool
   inLhs: bool
@@ -1085,6 +980,11 @@ pub struct inferEnv
   niceNames: name-map<doc>
   importsMap: import-map
   gamma: gamma
+
+fun current-def-name()
+  match infer-env.currentDefNames
+    Cons(n, _) -> n
+    Nil -> nil
 
 pub effect infer-state
   fun hole-allowed(): bool
@@ -1157,6 +1057,11 @@ pub fun infer-eff(action)
 pub effect infer-eff 
   fun inf-error(rng: range, msg: doc): a
   fun inf-warning(rng: range, msg: doc): ()
+
+fun trace-def-doc(f: () -> <infer|e> doc): <infer|e> ()
+  val names = infer-env.currentDefNames
+  with trace-doc 
+  hcat(intersperse(names.map(pp-name), ".".text)) |+| ":".text |+| f()
 
 
 //////////////////////////////////////
@@ -1339,3 +1244,95 @@ pub fun term-error(rng: range, message: doc, tp: ktype, extra: list<(doc,doc)>):
      ("inferred type".text, nice-type(tp))]
     ++ extra
   inf-error(rng, message |-| table(rows))
+
+
+/////////////////////////////////////
+// Implicit Constraints
+/////////////////////////////////////
+
+pub div type implicit-constraint
+  ImplicitConstraint(
+    name: name, // name of the implicit constraint (e.g. @hdiv)
+    typ: ktype,
+    evidence: name, // fresh name for the evidence
+    contxt: range,
+    range: range,
+    canSolve: (tvs, implicit-constraint) -> bool,
+    solve: (tvs, implicit-constraint) -> (core/core/expr, ktype)
+  )
+
+alias can-resolve-constraint = (tvs, implicit-constraint) -> bool
+alias resolve-constraint = (tvs, implicit-constraint) -> (core/core/expr, ktype)
+alias check-constraint = (name, ktype) -> maybe<(can-resolve-constraint, resolve-constraint)>
+
+div type ic-params 
+  ICParams(
+    nm: name,
+    tp: ktype,
+    rngCtx: range,
+    rng: range
+  )
+
+pub div effect def-infer-effect
+  fun get-iconstraints(): list<implicit-constraint>
+  fun get-iconstraints-gamma(): inf-gamma
+  // add a new implicit constraint with a fresh name (to be solved at generalization time)
+  fun add-iconstraint(ic: ic-params, can-solve: (tvs, implicit-constraint) -> bool, resolve: (tvs, implicit-constraint) -> (core/core/expr, ktype)): (name, assumption/name-info, ktype)
+  fun solve-iconstraint(nm : name, tp : ktype): ()
+
+val implicit-constraints : list<(name, check-constraint)> = [] // TODO: fill this in
+
+fun check-implicit-constraint(name: name, tp: ktype, ctx-range: range, rng: range): infer maybe<typed-arg>
+  match implicit-constraints.lookup(name)
+    Just(check) -> match check(name, tp)
+      Just((can-resolve, resolve)) -> 
+        val iarg = add-iconstraint(ICParams(name, tp, ctx-range, rng), can-resolve, resolve)
+        Just(iarg)
+      Nothing -> Nothing
+    Nothing -> Nothing
+
+// TODO: incorporate generalization into here?
+// This is essentially scope-implicit-constraints
+fun scope-implicit-constraints(action: () -> <infer|e> a): <infer|e> a
+  var iconstraints : list<implicit-constraint> := []
+  var iconstraints-gamma := inf-gamma/empty
+  with override
+    fun get-iconstraints() iconstraints.subst(list/substitute) 
+    fun get-iconstraints-gamma() iconstraints-gamma.subst // apply skolem substitution to unresolved implicit constraints
+    fun add-iconstraint(ic: ic-params, canSolve, solve) 
+      val ICParams(nm, tp, rngCtx, rng) = ic
+      val evName = fresh-name("iev")
+      val icx = ImplicitConstraint(nm, tp, evName, rngCtx, rng, canSolve : can-resolve-constraint, solve)
+      val icNameInfo = create-name-infoX(Public, evName, 2, DefVal, rng, tp, "")
+      val iarg = (evName, icNameInfo, tp)
+      iconstraints := iconstraints ++ [icx]
+      iconstraints-gamma := iconstraints-gamma.extend(evName, icNameInfo)
+      iarg
+    fun solve-iconstraint(nm : name, tp : ktype)
+      iconstraints := iconstraints.remove(fn(ic) ic.name == nm)
+  trace-indent(action) 
+
+fun show(ic: implicit-constraint): string
+  ic.name.show
+
+fun ic/substitute(sub: sub, ic: implicit-constraint): pure implicit-constraint
+  ic(typ = ktype/substitute(sub, ic.typ))
+fun ic/free-type-vars(ic: implicit-constraint): div tvs
+  ic.typ.free-type-vars
+fun ic/free-type-constructors(ic: implicit-constraint): div type-cons
+  ic.typ.free-type-constructors
+
+
+// implicit constraint evidence name?
+fun is-implicit-constraint-evidence(name: name): bool
+  name.name/starts-with("iev@")
+
+fun pp-constraint(ic: implicit-constraint): <pretty-eff> doc 
+  pp-name(ic.evidence) |.| "=".text |+| pp-param((ic.name, ic.typ))
+
+fun pp-constraints(ics: list<implicit-constraint>): <pretty-eff> doc
+  ics.map(pp-constraint).list
+
+fun try-resolve-implicit-constraints(close: bool, free: tvs): infer (core/core/expr -> core/core/expr)
+  // TODO: 
+  id
