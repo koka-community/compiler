@@ -92,6 +92,17 @@ fun no-full-names(f)
 effect indent 
   val indent : int
 
+fun trace-indent(f)
+  with handler
+    val indent = type/pretty/indent + 2
+  f()
+
+fun trace-doc(d: () -> doc)
+  trace(d().indent(type/pretty/indent).show)
+
+fun pp-name-type((name, tp): (name, ktype)): <pretty-eff> doc
+  name.pp-name |+| colon |+| tp.pp-type
+
 fun default-indent(f)
   with val indent = 0
   f()

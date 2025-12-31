@@ -44,6 +44,11 @@ fun ni/combine(nis: list<name-info>, nis2: list<name-info>): exn list<name-info>
 fun inf-gamma/delete(ig: inf-gamma, n : name): inf-gamma
   ig.remove(n)
 
+
+fun get-local-vars(): <pure,inf-gamma-eff> list<(name, ktype)>
+  inf-gamma-list().filter(fn((_, info)) info.is-type-localvar)
+
+
 // TODO: Update
 // note: qualified names can get inserted into gamma due to recursive definitions, or
 // during inference by inserting fully qualified expressions (in resolveApp-name)

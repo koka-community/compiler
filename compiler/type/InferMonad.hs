@@ -632,18 +632,6 @@ lookupNameCtx infoFilter name ctx range
         in compare sd1 sd2
 
 
-----------------------------------------------------------------
--- Error Helpers
-----------------------------------------------------------------
-
-checkCasingOverlaps :: Range -> Name -> [(Name,NameInfo)] -> Inf ()
-checkCasingOverlaps range name matches
-  = -- this is called when various definitions (possibly from different modules) match with a name
-    -- we could check here that all these definitions agree on the casing
-    -- .. but I think it is better to only complain if the actual definition
-    -- used has a different casing to reduce potential conflicts between modules
-    return ()
-
 {--------------------------------------------------------------------------
   Implicit Constraints
 --------------------------------------------------------------------------}
@@ -835,37 +823,6 @@ lookupNiceName name
   Helpers
 --------------------------------------------------------------------------}
 
-withHiddenTermDoc :: Range -> Doc -> Inf a -> Inf a
-withHiddenTermDoc range doc inf
-  = withEnv (\env -> env{ hiddenTermDoc = Just (range,doc) }) inf
-
-inHiddenTermDoc :: Inf Bool
-inHiddenTermDoc
-  = do env <- getEnv
-       case hiddenTermDoc env of
-         Just _ -> return True
-         _      -> return False
-
-useHole :: Inf Bool
-useHole
-  = holeAllowed <$> updateSt (\st -> st{ holeAllowed = False } )
-
-disallowHole :: Inf a -> Inf a
-disallowHole action
-  = do st0 <- updateSt (\st -> st{ holeAllowed = False })
-       let prev = holeAllowed st0
-       x <- action
-       updateSt (\st -> st{ holeAllowed = prev })
-       return x
-
-allowHole :: Inf a -> Inf (a,Bool {- was the hole used? -})
-allowHole action
-  = do prev <- holeAllowed <$> updateSt (\st -> st{ holeAllowed = True })
-       x <- action
-       allowed <- holeAllowed <$> updateSt (\st -> st{ holeAllowed = prev })
-       return (x,not allowed)
-
-
 mapImplicitConstraints :: ([ImplicitConstraint] -> Inf (a,[ImplicitConstraint])) -> Inf a
 mapImplicitConstraints f
   = do ics0 <- iconstraints <$> updateSt (\st -> st{ iconstraints = [] })
@@ -1027,21 +984,6 @@ isNamedLam action
     = do env <- getEnv
          withEnv (\env -> env{ namedLam = False }) (action (namedLam env))
 
-qualifyName :: Name -> Inf Name
-qualifyName name
-  = do env <- getEnv
-       return (qualify (context env) name)
-
-getModuleName :: Inf Name
-getModuleName
-  = do env <- getEnv
-       return (context env)
-
-getLocalVars :: Inf [(Name,Type)]
-getLocalVars
-  = do env <- getEnv
-       return (filter (isTypeLocalVar . snd) (infgammaList (infgamma env)))
-
 lookupInfName :: Name -> Inf (Maybe (Name,Type))
 lookupInfName name
   = do env <- getEnv
@@ -1059,19 +1001,7 @@ findDataInfo typeName
          Just info -> return info
          Nothing   -> failure ("Type.InferMonad.findDataInfo: unknown type: " ++ show typeName ++ "\n in: " ++ show (types env))
 
-traceIndent :: Inf a -> Inf a
-traceIndent inf
-  = withEnv (\env -> env{ prettyEnv = (prettyEnv env){ Pretty.indentation = Pretty.indentation (prettyEnv env) + 2 } }) inf
-
 traceDefDoc :: (Pretty.Env -> Doc) -> Inf ()
 traceDefDoc f
   = do dnames <- currentDefNames
        traceDoc (\penv -> hcat (intersperse (text ".") (map (Pretty.ppName penv) dnames)) <+> text ":" <+> f penv)
-
-traceDoc :: (Pretty.Env -> Doc) -> Inf ()
-traceDoc f
-  = do penv <- getPrettyEnv
-       trace (show (indent (Pretty.indentation penv) $ f penv)) $ return ()
-
-ppNameType penv (name,tp)
-  = Pretty.ppName penv name <+> colon <+> Pretty.ppType penv tp

@@ -265,7 +265,7 @@ pub fun to-implicit-arg(iargs: list<(name, implicit-arg)>, targ: typed-arg): imp
   ImplicitArg(nm, info, rho, iargs)
 
 // We can find a unique solution, or none, or surely ambiguous.
-// The `Infty` tracks infinite chains, while `Amb` ambigious ones. 
+// The `Infty` tracks infinite chains, while `Amb` ambiguous ones. 
 // Both are for error messages only.
 type implicit-select
   None                           // no solution
@@ -341,7 +341,7 @@ fun lookup-global-name(info-filter: (assumption/name-info) -> bool, name: name):
         Nil -> find(name) // If not found, look by original import name
         ni -> ni
     Left([]) -> find(name) // If no import alias, look by original name
-    Left(nis) -> 
+    Left() -> 
       // If multiple aliases match, ideally we look through all of them
       // However, that runs into issue #719 where the original module name is not included in `names`
       find(name)
@@ -377,7 +377,6 @@ fun filter-match-name-context-ex(matches: list<(name, assumption/name-info)>, nc
       (mss1 ++ mss2.concat)
     CtxFunTypes(partial, fixed, namedPars, mbResTp) -> 
       matches.map(match-args(partial, fixed, namedPars, mbResTp, _)).concat
-  // TODO: 
 
 /////////////////////////////////////
 // Name Context
@@ -589,10 +588,9 @@ pub fun pp-or(names : list<name>) : <pretty-eff> doc
 // Inference Effect
 /////////////////////////////////////
 pub struct inferEnv
-  contxt: name
+  contxt: name // module name
   currentDefs: list<name>
   namedLam: bool
-  holeAllowed: bool
   returnAllowed: bool
   inLhs: bool
   hiddenTermDoc: maybe<(range, doc)>
@@ -602,10 +600,27 @@ pub struct inferEnv
   importsMap: import-map
   gamma: gamma
 
+pub effect infer-state
+  fun hole-allowed(): bool
+  fun use-hole(): ()
+
+fun module-name()
+  infer-env.contxt
+
+fun with-hidden-term-doc(rng: range, doc: doc, action: () -> <infer|e> a): <infer|e> a
+  with override val infer-env = infer-env(hiddenTermDoc = Just((rng, doc)))
+  action()
+
+fun in-hidden-term-doc(): infer-env bool
+  infer-env.hiddenTermDoc.is-just
+
+fun qualify-name(nm: name)
+  qualify(module-name(), nm)
+
 pub effect val scope-depth: int
 pub effect val local-depth: int
 
-pub alias infer = <pretty-eff, infer-eff, range-map-eff, local-depth, scope-depth, def-infer-effect, infer-env, inf-gamma-eff, synonyms-eff, newtypes-eff, unify, unique>;
+pub alias infer = <pretty-eff, infer-state, infer-eff, range-map-eff, local-depth, scope-depth, def-infer-effect, infer-env, inf-gamma-eff, synonyms-eff, newtypes-eff, unify, unique>;
 
 fun free-in-gamma()
   (sub/(|->)(get-subst(), inf-gamma-list().map(snd))).free-type-vars
@@ -646,9 +661,17 @@ fun with-def(def-name,action)
       iconstraints := iconstraints.remove(fn(ic) ic.name == nm)
   action()
 
-fun with-hole-allowed(allowed: bool, action: () -> <infer|e> a): <infer|e> a
-  with override val infer-env = infer-env(holeAllowed = allowed)
+fun with-hole-allowed(allowed0: bool, action: () -> <infer|e> a): <infer|e> a
+  var allowed := allowed0
+  with override 
+    fun hole-allowed() allowed
+    fun use-hole() allowed := False
   action()
+pub fun disallow-hole(action: () -> <infer|e> a): <infer|e> a
+  with-hole-allowed(False, action)
+// Returns the value of the action and whether a hole was used
+pub fun allow-hole(action: () -> <infer|e> a): <infer|e> (a, bool)
+  with-hole-allowed(True, {(action(), !hole-allowed())})
 pub fun with-context(nm: name, action: () -> <infer|e> a): <infer|e> a
   with override val infer-env = infer-env(contxt = nm)
   action()
