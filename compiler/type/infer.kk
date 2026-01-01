@@ -219,8 +219,55 @@ type fun-match-type-args
     fcore: (core/core/expr, list<core/core/expr>) -> core/core/expr
   )
 
+fun wrap-delay(e: syntax/syntax/expr<ktype>, r): _ syntax/syntax/expr<ktype>
+  fun is-delayed(expr: syntax/syntax/expr<ktype>): _ bool
+    match expr
+      Lam([]) -> True
+      Var(n) -> 
+        match lookup-name-ctx(is-info-val-fun-ext, n, CtxFunArgs(False, 0, [], Nothing), expr.range)
+          [(_, info)] -> info.scheme.is-delayed-type
+          _ -> False
+      _ -> False
+  if is-delayed(e) then e
+  else Lam([], e, False, e.range)
+
 fun match-fun-type-args(ctx-range: range, f: syntax/syntax/expr<ktype>, tp: ktype, fresolved: list<(int, fixed-arg)>, fixed: list<syntax/syntax/expr<ktype>>, named-args: list<((name, range), syntax/syntax/expr<ktype>)>): _ fun-match-type-args
-  throw("Unimplemented")
+  val rng = f.range
+  fun report-non-callable()
+    fun shadow-hint((nm: name, name-info: assumption/name-info))
+      [("hint".text, nm.pp-name |+| "at position".text |+| name-info.range.show.text |+| "might be shadowing another function".text)]
+    val hints = 
+      match f
+        Var(name) ->
+          match lookup-local-name(is-infoVal, name)
+            Right((nm, nm-info)) -> shadow-hint((nm, nm-info))
+            Left(results) -> results.flatmap(shadow-hint) //  Multiple locals with the same name?
+        _ -> []
+    type-error(ctx-range, rng, "only functions or types with a copy constructor can be applied".text, tp, hints)
+    FunMatchTypeArgs((fixed ++ named-args.map(snd)).map-indexed(fn(i, x) (i, ArgExpr(x, True))), [], typeTotal, typeUnit, core/core/App)
+  match tp
+    TFun(pars, eff, res) -> 
+      val iargs = match-parameters(pars, fresolved, fixed, named-args)
+      FunMatchTypeArgs(iargs, pars, eff, res, core/core/App)
+    TSyn(_, _, t) -> match-fun-type-args(ctx-range, f, t, fresolved, fixed, named-args)
+    TVar(tv) -> 
+      if !named-args.is-empty then // TODO: take fresolved into account
+        inf-error(rng, "cannot use named arguments on an inferred function".text |-| 
+                        " hint: annotate the parameters".text)
+      val targs = fixed.map(fn(_) (nil, fresh-star())) ++ named-args.map(fn(n) (n.fst, fresh-star()))
+      val teff = fresh-effect()
+      val tres = fresh-star()
+      extend-sub([tv, TFun(targs, teff, tres)].single)
+      FunMatchTypeArgs((fixed ++ named-args.map(snd)).map-indexed(fn(i, x) (i, ArgExpr(x, False))), targs, teff, tres, core/core/App)
+    _ -> 
+      // apply the copy constructor if we can find it
+      val matches = lookup-name-ctx(is-info-val-fun-ext, nameCopy, CtxFunTypes(True, [tp], [], Nothing), rng)
+      match matches
+        [(qname, info)] ->
+          val (contp, _, coreInst) = info.scheme.instantiate-ex(rng)
+          val FunMatchTypeArgs(iargs, pars, eff, res, _) = match-fun-type-args(ctx-range, f, contp, fresolved, Cons(f, fixed), named-args)
+          FunMatchTypeArgs(iargs, pars, eff, res, fn(c, cargs) core/core/App(coreInst(info.core-expr(qname)), cargs))
+        _ -> report-non-callable()
 
 fun match-fun(nargs: int, mb-type: maybe<(ktype, range)>): _ fun-match-result
   match mb-type

@@ -559,7 +559,7 @@ fun lookup-implicit-arg(allow-unit-fun-val: bool, info-filter: (assumption/name-
 // Lookup names
 ///////////////////////////////////////////////////////////
 
-fun lookup-fun-name(name: name, mb-type: maybe<(ktype, range)>, rng: range)
+pub fun lookup-fun-name(name: name, mb-type: maybe<(ktype, range)>, rng: range)
   match lookup-name-ctx(is-infoFun, name, maybe-r-to-context(mb-type), rng)
     Nil -> Nothing
     [(qname, info)] -> Just((qname, info.scheme, info))
@@ -570,7 +570,7 @@ fun lookup-fun-name(name: name, mb-type: maybe<(ktype, range)>, rng: range)
 fun cmp-scope-depth((_, info1): (name, assumption/name-info), (_, info2): (name, assumption/name-info)): order
   cmp(info1.scope-depth, info2.scope-depth)    
 
-fun lookup-name-ctx(info-filter: (assumption/name-info -> bool), name: name, ctx-name: name-context, rng: range): _ list<(name, assumption/name-info)>
+pub fun lookup-name-ctx(info-filter: (assumption/name-info -> bool), name: name, ctx-name: name-context, rng: range): _ list<(name, assumption/name-info)>
   val candidates0 = lookup-names(info-filter, name, ctx-name, rng)
   val candidates = candidates0.map(fn((qname, info, _)) (qname, info))
   fun filter-inner-scopes(cands: list<(name, assumption/name-info)>): list<(name, assumption/name-info)>
@@ -737,7 +737,7 @@ fun lookup-names(info-filter: (assumption/name-info) -> bool, name: name, nctx: 
         locals ++ globals
   filter-match-name-context-ex(matches, nctx, rng)
 
-fun lookup-local-name(info-filter: (assumption/name-info) -> bool, name: name): infer either<list<(name, assumption/name-info)>, (name, assumption/name-info)>
+pub fun lookup-local-name(info-filter: (assumption/name-info) -> bool, name: name): infer either<list<(name, assumption/name-info)>, (name, assumption/name-info)>
   if name.is-implicit-constraint-evidence then 
     get-iconstraints-gamma().inf-gamma/lookup(name)
   else 

@@ -1839,31 +1839,6 @@ data ArgExpr
 matchFunTypeArgs :: Range -> Expr Type -> Type -> [(Int,FixedArg)] -> [Expr Type] -> [((Name,Range),Expr Type)]
                      -> Inf ([(Int,ArgExpr)], [(Name,Type)], Effect, Type, Core.Expr -> [Core.Expr] -> Core.Expr)
 matchFunTypeArgs context fun tp fresolved fixed named
-  = case tp of
-       TFun pars eff res   -> do iargs <- matchParameters pars fresolved fixed named
-                                 return (iargs,pars,eff,res,Core.App)
-       TSyn _ _ t          -> matchFunTypeArgs context fun t fresolved fixed named
-       TVar tv             -> do if (null named)  -- TODO: take fresolved into account
-                                  then return ()
-                                  else infError range (text "cannot used named arguments on an inferred function" <-> text " hint: annotate the parameters")
-                                 targs <- mapM (\name -> do{ tv <- Op.freshStar; return (name,tv)}) ([nameNil | a <- fixed] ++ map (fst . fst) named)
-                                 teff  <- Op.freshEffect
-                                 tres  <- Op.freshStar
-                                 extendSub (subSingle tv (TFun targs teff tres))
-                                 return (zip [0..] (map (\x -> ArgExpr x False) (fixed ++ map snd named)), targs,teff,tres,Core.App)
-       _  -> do -- apply the copy constructor if we can find it
-                matches <- lookupNameCtx isInfoValFunExt nameCopy (CtxFunTypes True [tp] [] Nothing) range
-                case matches of
-                  [(qname,info)]
-                    -> do (contp,_,coreInst) <- instantiateEx range (infoType info)
-                          (iargs,pars,eff,res,_) <- matchFunTypeArgs context fun contp fresolved (fun:fixed) named
-                          let coreAddCopy core coreArgs
-                                = let coreVar = coreExprFromNameInfo qname info
-                                  in (Core.App (coreInst coreVar) (seqqList coreArgs))
-                          return (iargs,pars,eff,res,coreAddCopy)
-                  _ -> reportNonCallable
-  where
-    range = getRange fun
 
     matchParameters :: [(Name,Type)] -> [(Int,FixedArg)] -> [Expr Type] -> [((Name,Range),Expr Type)] -> Inf [(Int,ArgExpr)]
     matchParameters pars fresolved fixed named
@@ -1936,41 +1911,3 @@ matchFunTypeArgs context fun tp fresolved fixed named
       = if (name == parName || name == fst (splitImplicitParamName parName))
          then Just (i,parType,reverse acc ++ pars)
          else extract name (par:acc) pars
-
-    wrapDelay :: Expr Type -> Inf (Expr Type)
-    wrapDelay expr
-      = do delayed <- isDelayed expr
-           if delayed
-            then return expr
-            else return (Lam [] expr False (getRange expr))
-      where
-        isDelayed expr
-          = case expr of
-              Lam [] _ _ _ -> return True
-              Var name _ _ -> do matches <- lookupNameCtx isInfoValFunExt name (CtxFunArgs False 0 [] Nothing) (getRange expr)
-                                 case matches of
-                                   [(_,info)] -> return (isDelayedType (infoType info))
-                                   _          -> return False
-              _            -> return False
-
-    reportNonCallable
-      = do
-         hints <- shadowHints
-         typeError context range (text "only functions or types with a copy constructor can be applied") tp hints
-         return (zip [1..] (map (\x -> ArgExpr x True) (fixed ++ map snd named)), [], typeTotal, typeUnit, Core.App)
-      where
-        shadowHints
-          = case fun of
-              Var name _ nameRange -> do
-                vals <- lookupLocalName isInfoVal name
-                ppEnv <- getPrettyEnv
-                case vals of
-                  Right (nm, nameInfo) ->
-                    return $ shadowHint ppEnv (nm, nameInfo)
-                  Left results -> return (concatMap (shadowHint ppEnv) results) -- Multiple locals with the same name?
-              _ -> return []
-        shadowHint ppEnv (nm, nameInfo) =
-          [(
-            text "hint",
-            ppName ppEnv nm <+> text "at position" <+> text (show (infoRange nameInfo)) <+> text "might be shadowing another function"
-          )]
