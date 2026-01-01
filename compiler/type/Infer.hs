@@ -248,14 +248,6 @@ addDivergentEffect coreDefs0
   Definition
 --------------------------------------------------------------------------}
 
-unskolemize :: Type -> Inf Type
-unskolemize tp
-  = do let svs = tvsList (fsv tp)
-       uvs <- mapM (\tv -> Op.freshTVar (typevarKind tv) Meta) svs
-       let sub = subNew (zip svs uvs)
-           tpu = sub |-> tp
-       -- substImplicitConstraints sub
-       return tpu
 
 -- TODO: for multiple recursive definitions, the "typeapp" substitution fails; we should
 -- collect all substitions and apply them all definitions afterwards; similarly for the
@@ -388,16 +380,9 @@ inferBindDef def@(Def (ValueBinder name () expr nameRng vrng) rng vis sort inl d
         return (stp,seff,coreDef)
 
 
-checkValue        = Check "Values cannot have an effect"
-checkPolyValue    = Check "Polymorphic values cannot have an effect"
-unusedWarning rng = infWarning rng (text "expression has no effect and is unused" <-->
-                                    text " hint: did you forget an operator? or used \"fun\" instead of \"fn\"?" )
 {--------------------------------------------------------------------------
   Expression
 --------------------------------------------------------------------------}
-data Expect = Generalized Bool
-            | Instantiated
-            deriving (Show,Eq)
 
 inferIsolated :: Range -> Range -> Expr a -> Inf (Type,Effect,Core.Expr) -> Inf (Type,Effect,Core.Expr)
 inferIsolated contextRange range body inf
@@ -1352,9 +1337,7 @@ compilationConstants
 {--------------------------------------------------------------------------
   infer match, branches and patterns
 --------------------------------------------------------------------------}
-data PatternKind
-  = PatternOutermost{ matchIsLazy :: !Bool }
-  | PatternNested
+
 
 inferCase :: Maybe (Type, Range) -> Expect -> Expr Type -> [Branch Type] -> Bool -> Range -> Inf (Type, Effect, Core.Expr)
 inferCase propagated expect expr branches isLazyMatch rng
@@ -1705,29 +1688,6 @@ inferOptionals scopeDepth allowImplictMask eff infgamma (par:pars)
             (infgamma2,sub2,defs2) <- inferOptionals scopeDepth allowImplictMask eff infgamma' pars
             return (infgamma2,sub ++ sub2,def : ((CoreVar.|~>) sub defs2))
 
-checkFun        = Check "function type does not match the argument types"
-checkMatch      = Check "branch has not the same type as previous branches"
-checkAnn        = Check "type cannot be instantiated to match the annotation"
-checkRec        = Check "recursive invocations do not match the assumed type; add a type annotation?"
-checkGuardTotal = Check "guard expressions must be total"
-checkGuardBool  = Check "guard expressions must be of a boolean type"
-checkConMatch   = Check "constructor must have the same the type as the matched term"
-checkLitMatch   = Check "literal pattern does not match the type of the matched term"
-checkConTotal   = Check "constructor in a pattern must have a total effect type"
-checkLit        = Check "literal does not match the expected type"
-checkOptional   = Check "default value does not match the parameter type"
-checkOptionalTotal = Check "default value expression must be total"
-checkInject     = Check "inject expects a parameter-less function argument"
-checkEffect        = Infer
-checkEffectSubsume = Check "effect cannot be subsumed"
-checkReturnResult  = Check "function returns values of different types"
-checkReturn        = Check "return type does not match an earlier return type"
-checkOp         = Check "operator type does not match the parameter types"
-checkMakeHandler= Check "handler types do not match the handler maker; please report this as a bug!"
-checkMakeHandlerBranch = Check "handle branch types do not match the handler branch maker; please report this as a bug!"
-checkEffectTp   = Check "operator type does not match the effect type"
-checkLocalScope = Check "a reference to a local variable escapes it's scope"
-
 {--------------------------------------------------------------------------
   infer arguments
 --------------------------------------------------------------------------}
@@ -1871,27 +1831,10 @@ matchPatterns context nameRange conTp conParTypes patterns0
          then Just (i,reverse acc ++ pars)
          else remove name (par:acc) pars
 
--- Match given fixed arguments and named arguments with a function type.
--- some fixed arguments may already have been inferred (`fresolved`).
--- also returns a list of implicit arguments that need to be resolved.
--- returns:
--- - iargs: a list of indexed argument terms, either user expressions, already resolved (from `fresolved`), or implicit names
---          the indices indicate the required evaluation order (due to named arguments).
--- - pars: list of the full function parameters (name,type)
--- - effect of the function
--- - the result type of the function
--- - a core transformer that modifies the application appropriately (for constructor copy)
 data ArgExpr
   = ArgExpr (Expr Type) Bool {- hide range info -}
   | ArgCore FixedArg
   | ArgImplicit Name Range {- application range -} Range {- name range -}
-
-ppArgExpr :: Env -> ArgExpr -> Doc
-ppArgExpr penv arg
-  = case arg of
-      ArgExpr expr _ -> text "ArgExpr" <+> ppSyntaxExpr penv expr
-      ArgCore (_,tp,_,cexpr) -> text "ArgCore" <+> ppType penv tp
-      ArgImplicit name _ _ -> text "ArgImplicit" <+> ppName penv name
 
 matchFunTypeArgs :: Range -> Expr Type -> Type -> [(Int,FixedArg)] -> [Expr Type] -> [((Name,Range),Expr Type)]
                      -> Inf ([(Int,ArgExpr)], [(Name,Type)], Effect, Type, Core.Expr -> [Core.Expr] -> Core.Expr)

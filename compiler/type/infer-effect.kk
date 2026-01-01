@@ -229,7 +229,7 @@ pub fun instantiate-no-ex(tp: ktype, rng: range)
     val (tvars, rho, coref) = tp.instantiate-noex(rng)
     (rho, tvars, coref)
 
-type infer-context
+pub type infer-context
   Check(message: string, range: range)
   Infer(range: range)
 
@@ -843,7 +843,7 @@ pub fun pp-name-ctx(nm: name, nctx: name-context): <pretty-eff> doc
 
 
 // A fixed argument that has been inferred
-alias fixed-arg = (range, ktype, keffect, core/core/expr)
+pub alias fixed-arg = (range, ktype, keffect, core/core/expr)
 
 pub fun pure-match-shape-name-ctx(ctx1 : name-context, ctx2 : name-context) : <pure,unique> bool
   match (ctx1, ctx2)
