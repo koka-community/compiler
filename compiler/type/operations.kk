@@ -47,8 +47,7 @@ fun instantiate-ex(tp: ktype, r: range)
 // Instantiate a type and return the instantiated quantifiers, name/predicate pairs for evidence,
 // the instantiated type, and a core transformer function (which applies type arguments and evidence)
 fun instantiate-noex(tp: ktype, r: range)
-  val (ids, rho, coref) = tp.instantiate-exfl(Meta, r)
-  (ids, rho, coref)
+  tp.instantiate-exfl(Meta, r)
 
 //  Ensure the result of function always gets an extensible effect type
 // This is necessary to do on instantiation since we simplify such effect variables
@@ -78,7 +77,7 @@ fun skolemize-ex(tp: ktype, r: range)
   tp.instantiate-exfl(Skolem, r)
 
 // General instantiation for skolemize and instantiate
-fun instantiate-exfl(tp: ktype, fl: flavour, r: range): <unique, comp-flags, pure> (list<type-var>, ktype, expr -> e expr)
+fun instantiate-exfl(tp: ktype, fl: flavour, r: range): <unique, comp-flags, pure> (list<type-var>, ktype, expr -> expr)
   match tp.split-type-scheme
     ([], rho) -> ([], rho, id)
     (vars, rho) ->

@@ -160,7 +160,7 @@ pub fun split-effect(eff: keffect): <infer|e> (list<tau>, keffect)
 // Generalization
 //////////////////////////////////////
 
-fun generalize(contextRng: range, rng: range, close: bool, f: () -> <infer|e> (rho,keffect,core/core/expr)): <infer|e> (rho, keffect, core/core/expr)
+pub fun generalize(contextRng: range, rng: range, close: bool, f: () -> <infer|e> (rho,keffect,core/core/expr)): <infer|e> (rho, keffect, core/core/expr)
   fun generalizeX(tp: ktype, eff0: keffect, core0: core/core/expr)
     match tp 
       TForAll(_, _) ->
@@ -214,7 +214,7 @@ fun generalize(contextRng: range, rng: range, close: bool, f: () -> <infer|e> (r
 // TODO: improve / isolate
 
 
-pub fun instantiate(tp: ktype, rng: range)
+pub fun instantiate(tp: ktype, rng: range): _ (ktype, list<type-var>, core/core/expr -> core/core/expr)
   if tp.is-rho then 
     val (rho, coref) = tp.extend
     (rho, [], coref)
@@ -222,7 +222,7 @@ pub fun instantiate(tp: ktype, rng: range)
     val (tvars, rho, coref) = tp.instantiate-ex(rng)
     (rho, tvars, coref)
 
-pub fun instantiate-no-ex(tp: ktype, rng: range)
+pub fun instantiate-no-ex(tp: ktype, rng: range): _ (ktype, list<type-var>, core/core/expr -> core/core/expr)
   if tp.is-rho then 
     (tp, [], id)
   else 
@@ -238,7 +238,7 @@ pub type infer-context
 /////////////////////////////////////
 
 // Lookup a name with a certain type and return the fully qualified name and its type
-fun resolve-name(name: name, mb-type: maybe<(ktype, range)>, rng: range): _ (name, ktype, assumption/name-info)
+pub fun resolve-name(name: name, mb-type: maybe<(ktype, range)>, rng: range): _ (name, ktype, assumption/name-info)
   match mb-type
     Just((tp, ctx-range)) -> resolve-name-ex(is-info-val-fun-ext, Just(fn(x) !x.is-infoImport), name, CtxType(tp), ctx-range, rng)
     Nothing -> resolve-name-ex(is-info-val-fun-ext, Just(fn(x) !x.is-infoImport), name, CtxNone, rng, rng)
@@ -246,7 +246,7 @@ fun resolve-name(name: name, mb-type: maybe<(ktype, range)>, rng: range): _ (nam
 // Lookup a name with a certain type and return the fully qualified name and its type
 // because of local variables and references a typed lookup may fail as we need to
 // dereference first. So we do a typed lookup first and fall back to untyped lookup
-fun resolve-rhs-name(name: name, (tp, ctx-range): (ktype, range), rng: range): _ (name, ktype, assumption/name-info)
+pub fun resolve-rhs-name(name: name, (tp, ctx-range): (ktype, range), rng: range): _ (name, ktype, assumption/name-info)
   val candidates = lookup-name-ctx(is-info-val-fun-ext, name, CtxType(tp), rng)
   match candidates
     [(qname, info)] -> // unambiguous and matched
@@ -258,14 +258,14 @@ fun resolve-rhs-name(name: name, (tp, ctx-range): (ktype, range), rng: range): _
       resolve-name(name, Just((tp, ctx-range)), rng)
 
 // Lookup a name with a number of arguments and return the fully qualified name and its type
-fun resolve-fun-name(name: name, ctx-name: name-context, ctx-range: range, rng: range)
+pub fun resolve-fun-name(name: name, ctx-name: name-context, ctx-range: range, rng: range)
   resolve-name-ex(is-info-val-fun-ext, Just(fn(x) !x.is-infoImport), name, ctx-name, ctx-range, rng)
 
-fun resolve-con-name(name: name, mb-type: maybe<ktype>, rng: range): _ (name, ktype, con-repr, con-info)
+pub fun resolve-con-name(name: name, mb-type: maybe<ktype>, rng: range): _ (name, ktype, con-repr, con-info)
   val (qname, tp, InfoCon(_, _, repr, info)) = resolve-name-ex(is-infoCon, Nothing, name, maybe-to-context(mb-type), rng, rng)
   (qname, tp, repr, info)
 
-fun resolve-con-pattern-name(name: name, match-type: ktype, pattern-count: int, rng: range): _ (name, ktype, con-repr, con-info)
+pub fun resolve-con-pattern-name(name: name, match-type: ktype, pattern-count: int, rng: range): _ (name, ktype, con-repr, con-info)
   val (qname, tp, InfoCon(_, _, repr, info)) = resolve-name-ex(is-infoCon, Nothing, name, CtxFunArgs(True /* partial */, pattern-count, [], Just(match-type)), rng, rng)
   (qname, tp, repr, info)
 

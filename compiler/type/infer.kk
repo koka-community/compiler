@@ -200,10 +200,83 @@ fun pp-arg-expr(ae: arg-expr): _ doc
 
 
 
+// Try to match the propagated type with a function type,
+// returning the propagated argument, effect, and result type, and the expected instantiation of the result
+type fun-match-result
+  FunMatchResult(
+    mb-args: list<maybe<(name, ktype)>>,
+    mb-eff: maybe<(ktype, range)>,
+    mb-body: maybe<(ktype, range)>,
+    mb-skolems: list<type-var>,
+    expect: expect
+  )
+type fun-match-type-args
+  FunMatchTypeArgs(
+    mb-args: list<(int, arg-expr)>,
+    mb-named: list<(name, ktype)>,
+    eff: keffect,
+    res: ktype,
+    fcore: (core/core/expr, list<core/core/expr>) -> core/core/expr
+  )
+
+fun match-fun-type-args(ctx-range: range, f: syntax/syntax/expr<ktype>, tp: ktype, fresolved: list<(int, fixed-arg)>, fixed: list<syntax/syntax/expr<ktype>>, named-args: list<((name, range), syntax/syntax/expr<ktype>)>): _ fun-match-type-args
+  throw("Unimplemented")
+
+fun match-fun(nargs: int, mb-type: maybe<(ktype, range)>): _ fun-match-result
+  match mb-type
+    Nothing -> FunMatchResult(Nothing.replicate(nargs), Nothing, Nothing, [], Instantiated)
+    Just((tp, rng)) -> 
+      val (skolems, rho, _) = tp.skolemize-ex(rng)
+      match rho.split-fun-type
+        Nothing -> FunMatchResult(Nothing.replicate(nargs), Nothing, Nothing, skolems, Instantiated)
+        Just((args, eff, res)) -> 
+          val m = args.length 
+          // can happen: see test/type/wrong/hm4 and hm4a
+          FunMatchResult((args.map(Just) ++ Nothing.replicate(nargs - m)).take(nargs), 
+                          Just((eff, rng)), Just((res, rng)), skolems, 
+                          if res.is-rho then Instantiated else Generalized(False))
+
 
 
 
 //////////////////////////////////////////
 // Helpers
 //////////////////////////////////////////
+fun instantiate-binder(b: value-binder<maybe<ktype>, e>): _ value-binder<ktype, e>
+  match b
+    ValueBinder(name, Just(tp), e, nrng, rng) -> ValueBinder(name, tp, e, nrng, rng)
+    ValueBinder(name, Nothing, e, nrng, rng) -> ValueBinder(name, fresh-star(), e, nrng, rng)
 
+// Maybe generalize. The effect is the current effect context and should not be generalized over.
+fun maybe-generalize(ctx-range: range, rng: range, expect: expect, f: () -> _ (ktype, keffect, core/core/expr)): _ (scheme, keffect, core/core/expr)
+  match expect
+    Instantiated -> f()
+    Generalized(close) -> generalize(ctx-range, rng, close, f) 
+
+fun maybe-instantiate(rng: range, expect: expect, tp: scheme): _ (rho, core/core/expr -> core/core/expr)
+  match expect
+    Generalized() -> (tp, id)
+    Instantiated -> 
+      val (rho, _, coref) = tp.infer-effect/instantiate(rng)
+      (rho, coref)
+
+fun maybe-instantiate-or-generalize(ctx-range: range, rng: range, expect: expect, f: () -> (ktype, keffect, core/core/expr)): _ (ktype, keffect, core/core/expr)
+  match expect
+    Generalized(close) -> generalize(ctx-range, rng, close, f)
+    Instantiated -> 
+      val (tp, eff, core) = f()
+      val (itp, _, icore) = tp.infer-effect/instantiate(rng)
+      (itp, eff, icore(core))
+
+fun core-vector(cs: list<core/core/expr>, tp: ktype): _ core/core/expr
+  val (vecName, _, vecInfo) = resolve-fun-name(nameVector, CtxFunArgs(False, 0, ["xs".new-name], Nothing), null, null) // TODO: lookup vector less fragile?
+  val vecx = TypeApp(vecInfo.core-expr(vecName), [tp])
+  core/core/App(vecx, [cs.core-list(tp)])
+
+fun core-list(cs: list<core/core/expr>, tp: ktype): _ core/core/expr 
+  val (consName, consTp, consRepr, _) = resolve-con-name(nameCons, Nothing, null)
+  val (nilName, nilTp, nilRepr, _) = resolve-con-name(nameListNil, Nothing, null)
+  val consx = TypeApp(core/core/Con(TName(consName, consTp), consRepr), [tp])
+  val nil = TypeApp(core/core/Con(TName(nilName, nilTp), nilRepr), [tp])
+  cs.foldr(nil) fn(c, acc)
+    core/core/App(consx, [c, acc])
