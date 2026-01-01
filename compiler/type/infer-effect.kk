@@ -463,7 +463,7 @@ fun resolve-implicit-parameters(allow-disambiguate: bool, chain: list<typed-arg>
 // recursively resolve an implicit parameter
 fun resolve-implicit-parameter(allow-disambiguate: bool, chain: list<typed-arg>, rng: range, (pname, ptp): (name, ktype)): _ implicit-select
   // recursively resolve an implicit parameter
-  val (pnameName, pname-expr) = pname.split-implicit-param-name
+  val (_, pname-expr) = pname.split-implicit-param-name
   val newctx = ptp.implicit-type-context
   resolve-implicit-arg-ex(allow-disambiguate, True, // allow unit val
                    chain, newctx, rng.end-of-range, // use end of range to deprioritize with hover info
@@ -1002,6 +1002,16 @@ fun in-hidden-term-doc(): infer-env bool
 
 fun qualify-name(nm: name)
   qualify(module-name(), nm)
+fun find-data-info(nm: name): infer data-info
+  newtypes-lookup-any(nm).expect("type/infer-effect/find-data-info: unknown type: " ++ nm.show ++ "\nin: " ++ newtypes-list().show)
+fun lookup-inf-name(nm: name)
+  match inf-gamma-eff/lookup(nm.unqualify) 
+    Right((qname, info)) -> Just((qname, info.scheme))
+    Left([]) -> Nothing
+    Left(infos) -> fail("infer-effect/lookup-inf-name: ambiguous local? " ++ current-def-name().show ++ ": " ++ nm.show ++ ":\n" ++ infos.show)
+// TODO: Remove, not needed anymore
+fun create-canonical-name(nm-ctx: name, gamma: gamma, qname: name)
+  qname
 
 pub effect val scope-depth: int
 pub effect val local-depth: int
@@ -1040,6 +1050,9 @@ pub fun with-local-scope(action: () -> <infer|e> a): <infer|e> a
   action()
 pub fun with-no-local-scope(action: () -> <infer|e> a): <infer|e> a
   with override val local-depth = 0
+  action()
+pub fun with-def-name(nm: name, action: () -> <infer|e> a): <infer|e> a
+  with override val infer-env = infer-env(currentDefNames = Cons(nm, infer-env.currentDefNames), namedLam = !(nm.is-nil || nm.is-wildcard) )
   action()
 
 pub effect val infer-env: inferEnv
@@ -1261,8 +1274,8 @@ pub div type implicit-constraint
     solve: (tvs, implicit-constraint) -> (core/core/expr, ktype)
   )
 
-alias can-resolve-constraint = (tvs, implicit-constraint) -> bool
-alias resolve-constraint = (tvs, implicit-constraint) -> (core/core/expr, ktype)
+alias can-resolve-constraint = (tvs, implicit-constraint) -> <> bool
+alias resolve-constraint = (tvs, implicit-constraint) -> <> (core/core/expr, ktype)
 alias check-constraint = (name, ktype) -> maybe<(can-resolve-constraint, resolve-constraint)>
 
 div type ic-params 

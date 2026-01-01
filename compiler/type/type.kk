@@ -264,6 +264,11 @@ pub fun split-type-scheme(tp: ktype): (list<type-var>, rho)
     TForAll(vars, t) -> (vars, t)
     _ -> if tp.must-split then tp.pretend-decreasing.split-type-scheme else ([], tp)
 
+fun split-con-tp(tp: ktype): (list<(name, ktype)>, keffect, ktype)
+  match tp.expand-syn
+    TFun(args, eff, res) -> (args, eff, res)
+    res -> ([], typeTotal, res)
+
 // Find all quantified type variables, but do not expand synonyms
 fun shallow-split-vars(tp: ktype)
   match tp
@@ -434,6 +439,10 @@ pub fun extract-ordered-effect(tp: tau): pure (list<tau>, tau)
     label-name/cmp(l1.label-name, l2.label-name).is-lt
   val slabs = labss.sort()
   (slabs, tl)
+
+pub fun contains-local-effect(eff: tau): pure bool
+  val (ls,_) = eff.extract-ordered-effect
+  ls.any(_.label-name == nameTpLocal)
 
 pub fun label-name(tp: tau): exn name
   tp.label-name-ex.fst
@@ -669,6 +678,36 @@ pub fun un-optional(tp: ktype): ktype
   match tp.expand-syn
     TApp(TCon(tc), [t]) | tc == tconOptional -> t
     _ -> tp
+
+// From Infer.hs
+// A delay ?type
+pub fun is-delay(tp: ktype): bool
+  match tp
+    TSyn(syn, [_, _], _) -> syn.name == nameTpDelay
+    _ -> False
+// A unit function type
+pub fun is-delayed-type(tp: ktype): bool
+  match tp.expand-syn
+    TFun([]) -> True
+    _ -> False
+pub fun get-type-name(tp: ktype, ?kk-file-line: string): pure name
+  match tp.expand-syn
+    TApp(TCon(tc)) -> tc.name 
+    TCon(tc) -> tc.name
+    _ -> fail("compiler/compiler/type/get-type-name " ++ tp.show ++ " : " ++ ?kk-file-line)
+pub fun type-is-case-legal(tp: ktype): bool
+  match tp.expand-syn
+    TApp(TCon()) -> True
+    TCon() -> True
+    _ -> False
+pub fun effect-name-from-label(eff: keffect): pure name
+  match eff.expand-syn
+    TApp(TCon(tc), [hx]) | tc.name == nameTpHandled || tc.name == nameTpHandled1 || tc.name == nameTpNHandled || tc.name == nameTpNHandled1 -> hx.effect-name-from-label
+    TCon(tc) -> tc.name
+    TSyn(syn) -> syn.name
+    TApp(TCon(tc)) -> tc.name
+    _ -> fail("compiler/type/type/effect-name-from-label: invalid effect: " ++ eff.show) 
+
 
 // Remove type synonym indirections
 fun prune-syn(rho: rho): rho

@@ -374,11 +374,6 @@ extendInfGammaEx topLevel ignores tnames inf
                       _ -> return ()
            extend ctx gamma (x:seen) rest (infgammaExtend qname (info{ infoCName =  if topLevel then createCanonicalName ctx gamma qname else qname}) infgamma)
 
-createCanonicalName ctx gamma qname
-  = let matches = gammaLookup (unqualify qname) gamma
-        localMatches = [(qname,info) | (qname,info) <- matches, not (isInfoImport info), qualifier qname == ctx || qualifier qname == nameNil ]
-        cname = {- canonicalName (length localMatches) -} qname
-    in cname
 
 withGammaType :: Range -> Type -> Inf a -> Inf a
 withGammaType range tp inf
@@ -386,29 +381,3 @@ withGammaType range tp inf
        name <- uniqueNameFrom defName
        d <- getScopeDepth
        extendInfGamma [(name,(InfoVal Public name tp d range False False ""))] inf
-
-withDefName :: Name -> Inf a -> Inf a
-withDefName name inf
-  = withEnv (\env -> env{ currentDefs = name : currentDefs env, namedLam = not (nameIsNil name || isWildcard name) }) inf
-
-isNamedLam :: (Bool -> Inf a) -> Inf a
-isNamedLam action
-    = do env <- getEnv
-         withEnv (\env -> env{ namedLam = False }) (action (namedLam env))
-
-lookupInfName :: Name -> Inf (Maybe (Name,Type))
-lookupInfName name
-  = do env <- getEnv
-       case infgammaLookup (unqualify name) (infgamma env) of
-         Right (name,info)  -> return (Just (name,infoType info))
-         Left []            -> return Nothing
-         Left infos -> do def <- currentDefName
-                          failure ("InferMonad.lookupInfName: ambigous local? " ++ show def ++ ": " ++ show name ++ ":\n" ++ unlines (map show infos))
-
-
-findDataInfo :: Name -> Inf DataInfo
-findDataInfo typeName
-  = do env <- getEnv
-       case newtypesLookupAny typeName (types env) of
-         Just info -> return info
-         Nothing   -> failure ("Type.InferMonad.findDataInfo: unknown type: " ++ show typeName ++ "\n in: " ++ show (types env))

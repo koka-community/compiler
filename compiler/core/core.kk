@@ -27,6 +27,22 @@ fun is-false(e: expr): bool
 
 val exprUnit = Con(TName(nameUnit, typeUnit), ConEnum(nameTpUnit, DataEnum, zero, 0))
 
+fun short-circuit(f: expr, args: list<expr>): maybe<expr>
+  match args
+    [e1, e2] -> 
+      fun is-and-or(e: expr)
+        match e
+          App(TypeApp(Var(open)), [body]) -> 
+            if open.get-name == nameEffectOpen then is-and-or(body)
+            else Nothing
+          Var(nm) ->
+            if nm.get-name == nameAnd then Just(make-if-expr(e1, exprTrue, e2))
+            elif nm.get-name == nameOr then Just(make-if-expr(e1, e2, exprFalse))
+            else Nothing
+          _ -> Nothing 
+      is-and-or(f)
+    _ -> Nothing
+
 val pEFalse = pat-expr-bool(nameFalse, 0)
 val patFalse = pEFalse.fst
 val exprFalse = pEFalse.snd

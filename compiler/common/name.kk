@@ -343,6 +343,9 @@ fun qualify-locally(nl: name, n: name): <exn> name
 fun requalify-locally(n: name): name
   if n.nameModule == "" then n else new-locally-qualified("", join(n.nameModule, n.nameLocalQual), n.nameStem)
 
+fun qualify-unpacked(pname: name, fname: name)
+  qualify-locally(pname.from-implicit-param-name.name-as-module-name, fname)
+
 // Only keep the stem
 fun unqualify-full(n: name): name
   Name("", 0, "", 0, n.nameStem, n.hashStem)

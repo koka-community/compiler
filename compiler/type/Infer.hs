@@ -352,10 +352,6 @@ inferDef topLevel expect (Def (ValueBinder name mbTp expr nameRng vrng) rng vis 
 
            subst (Core.Def name resTp resCore vis sort inl nameRng doc)  -- must 'subst' since the total unification can cause substitution. (see test/type/hr1a)
 
-isAnnotatedBinder :: ValueBinder (Maybe Type) x -> Bool
-isAnnotatedBinder (ValueBinder _ Just{} _ _ _) = True
-isAnnotatedBinder _                                 = False
-
 inferBindDef :: Def Type -> Inf (Type,Effect,Core.Def)
 inferBindDef def@(Def (ValueBinder name () expr nameRng vrng) rng vis sort inl doc)
   = withDefName name $ withScope $ disallowHole $ 
@@ -821,7 +817,6 @@ inferHandler propagated expect handlerSort handlerScoped allowMask
                         Just ([_,_,actionTp],_,_)
                           -> subst (snd actionTp)
                         _ -> failure ("Type.Infer: unexpected handler type: " ++ show (ppType penv handleRho))
-       -- traceDoc $ \penv -> text " the handler action type: " <+> ppType penv actionTp <.> text ", prop: " <+> ppProp penv propagated
        let handlerExpr = Parens (Lam [ValueBinder actionName (Just actionTp) Nothing rng rng]
                                      (handleExpr (Var actionName False rng)) False hrng) (newName "handler") "expr" rng
 
@@ -855,17 +850,6 @@ inferHandler propagated expect handlerSort handlerScoped allowMask
                            else Lam [ValueBinder actionName (Just actionTp2) Nothing rng rng]
                                   (handleExpr (Lam [] (Inject (TApp typeLocal [hp]) (Var actionName False rng) False hrng) False hrng)) False hrng
                  inferExpr propagated expect handlerExprMask  -- and re-infer :-)
-
-containsLocalEffect eff
-  = let (ls,tl) = extractOrderedEffect eff
-    in not (null (filter (\l -> labelName l == nameTpLocal) ls))
-
-removeLocalEffect penv funTp
-  = case splitFunScheme  funTp of
-      Just (foralls,argTps,eff,resTp)
-        -> let (ls,tl) = extractOrderedEffect eff
-           in quantifyType foralls (TFun argTps (foldr effectExtend tl (filter (\l -> labelName l /= nameTpLocal) ls)) resTp)
-      _ -> failure $ "Type.Infer.removeLocaEffect: unexpected type:" ++ show (ppType penv funTp)
 
 checkLinearity effectName heffect branches hrng rng
   = do checkLinearClauses
@@ -993,19 +977,6 @@ effectNameCore effect range
       -- builtin effect
       _ -> do let effName = effectNameFromLabel effect
               return (Nothing,effName)
-
-effectNameFromLabel :: Effect -> Name
-effectNameFromLabel effect
-  = case expandSyn effect of
-      TApp (TCon tc) [hx]
-        | (typeConName tc == nameTpHandled || typeConName tc == nameTpHandled1 ||
-           typeConName tc == nameTpNHandled || typeConName tc == nameTpNHandled1) -> effectNameFromLabel hx
-      TCon tc -> typeConName tc
-      TSyn syn _ _ -> typeSynName syn
-      TApp (TCon tc) targs -> typeConName tc
-      _ -> failure ("Type.Infer.effectNameFromLabel: invalid effect: " ++ show effect)
-
-
 
 {--------------------------------------------------------------------------
   infer applications and resolve overloaded identifiers
@@ -1378,14 +1349,6 @@ compilationConstants
      (nameCoreFileModule, (typeString, \mod rng -> Core.Lit (Core.LitString (showPlain mod))))
    ]
 
-etaExpand :: Int -> Range -> ((Expr t -> Expr t) -> Expr t) -> Expr t
-etaExpand n range fbody
-  = let nameFixed = [makeHiddenName "arg" (newName ("x" ++ show i)) | i <- [1..n]]
-        argsFixed = [(Nothing,Var name False range) | name <- nameFixed]
-        body      = fbody (\funexpr -> App funexpr argsFixed range)
-        eta       = Lam [ValueBinder name Nothing Nothing range range | name <- nameFixed] body False range
-    in eta
-
 {--------------------------------------------------------------------------
   infer match, branches and patterns
 --------------------------------------------------------------------------}
@@ -1462,31 +1425,6 @@ inferCase propagated expect expr branches isLazyMatch rng
        core    <- subst (Core.Case [ccore1] cbranches)
        sresEff <- subst resEff
        return (resTp, sresEff, core)
-  where
-    typeIsCaseLegal tp
-      = case expandSyn tp of
-          TApp (TCon _) _  -> True
-          TCon _           -> True
-          _                -> False
-
-    extractMatchedNames expr
-      = case expr of
-          Parens e _ _ _              -> extractMatchedNames e
-          App (Var tname _ _) args _  | isNameTuple tname -> concat (map (extractMatchedNamesX . snd) args)
-          _                           -> extractMatchedNamesX expr
-
-    extractMatchedNamesX expr
-      = case expr of
-          Var name _ _ -> [name]
-          _            -> []
-
-getTypeName :: Type -> Name
-getTypeName tp
-  = case expandSyn tp of
-      TApp (TCon tc) _  -> typeconName tc
-      TCon tc           -> typeconName tc
-      _                 -> failure ("Type.Infer.inferExpr.Case.getTypeName: not a valid scrutinee? " ++ show tp)
-
 
 inferBranch :: PatternKind -> Maybe (Type,Range) -> Type -> Range -> [Name] -> Branch Type -> Inf ([(Type,Effect)],Core.Branch)
 inferBranch patkind propagated matchType matchRange matchedNames branch@(Branch pattern guards)
@@ -1634,13 +1572,6 @@ inferPattern patkind matchType branchRange (PatLit lit) withPattern inferPart
           res <- withPattern pat x
           return (btpeffs,res)
 
-splitConTp :: Type -> ([(Name,Type)],Effect,Type)
-splitConTp tp
-  = case expandSyn tp of
-      TFun args eff res -> (args,eff,res)
-      res               -> ([],typeTotal,res)
-
-
 inferBinders :: Int -> [(Name,NameInfo)] -> [ValueBinder Type ()] -> [(Name,NameInfo)]
 inferBinders scopeDepth infgamma binders
   = case binders of
@@ -1663,9 +1594,6 @@ inferImplicitParam par
               return (par{ -- leave the binder name locally qualified as `@implicit/name` -- binderName = pname,
                            binderExpr = Nothing }, unpack)
      else return (par, id)
-
-qualifyUnpacked :: Name -> Name -> Name
-qualifyUnpacked pname fname = (qualifyLocally (nameAsModuleName $ fromImplicitParamName pname) fname)
 
 inferImplicitUnpack :: Range -> Range -> Name -> Name -> Inf (Expr Type -> Expr Type)
 inferImplicitUnpack rng nrng pname qname
@@ -1800,11 +1728,6 @@ checkMakeHandlerBranch = Check "handle branch types do not match the handler bra
 checkEffectTp   = Check "operator type does not match the effect type"
 checkLocalScope = Check "a reference to a local variable escapes it's scope"
 
-rootExpr expr
-  = case expr of
-      Parens e _ _ r -> rootExpr e
-      _              -> expr
-
 {--------------------------------------------------------------------------
   infer arguments
 --------------------------------------------------------------------------}
@@ -1891,13 +1814,6 @@ etaExpandExpr name nameRange argCount parTps resTp makeApp argexpr
                   _ -> return argexpr
         _ -> return argexpr
 
--- | Is an expression annotated?
-isAnnot (Parens expr _ _ rng) = isAnnot expr
-isAnnot (Ann expr tp rng)     = True
-isAnnot (Let defs body rng)   = isAnnot body
-isAnnot (Bind defs body rng)  = isAnnot body
-isAnnot _                     = False
-
 splitNamedArgs :: Ranged e => [(Maybe (Name,Range),e)] -> Inf ([e],[((Name,Range),e)])
 splitNamedArgs nargs
   = do let nfixed      = filter (isNothing . fst) nargs
@@ -1916,10 +1832,6 @@ splitNamedArgs nargs
                 then do env <- getPrettyEnv
                         infError rng (text "named argument" <+> ppName env name <+> text "is given more than once")
                 else checkDuplicates (name:seen) named
-
-isNothing Nothing = True
-isNothing _       = False
-
 
 matchPatterns :: Range -> Range -> Type -> [(Name,Type)] -> [(Maybe (Name,Range),Pattern Type)] -> Inf [Pattern Type]
 matchPatterns context nameRange conTp conParTypes patterns0
@@ -2082,11 +1994,6 @@ matchFunTypeArgs context fun tp fresolved fixed named
          then Just (i,parType,reverse acc ++ pars)
          else extract name (par:acc) pars
 
-    wrapOptional :: Expr Type -> Expr Type
-    wrapOptional expr
-      = App (Var nameOptional False (rangeNull {- getRange expr -}))  -- use a null range so it doesn't show in the documentation
-            [(Nothing,expr)] (getRange expr)
-
     wrapDelay :: Expr Type -> Inf (Expr Type)
     wrapDelay expr
       = do delayed <- isDelayed expr
@@ -2102,21 +2009,6 @@ matchFunTypeArgs context fun tp fresolved fixed named
                                    [(_,info)] -> return (isDelayedType (infoType info))
                                    _          -> return False
               _            -> return False
-
-        isDelayedType tp
-          = case expandSyn tp of
-              TFun [] _ _ -> True
-              _           -> False
-
-    makeOptionalNone :: Expr Type
-    makeOptionalNone
-      = Var nameOptionalNone False rangeNull
-
-    isDelay :: Type -> Bool
-    isDelay tp
-      = case tp of
-          TSyn syn [_,_] _ -> (typesynName syn == nameTpDelay)
-          _ -> False
 
     reportNonCallable
       = do
@@ -2190,15 +2082,6 @@ matchFun nArgs mbType
                                                Just (eff,rng), Just (res,rng), skolems,
                                                  if isRho res then Instantiated else Generalized False)
 
-monotonic :: [Int] -> Bool
-monotonic []  = True
-monotonic [i] = True
-monotonic (i:j:xs) = (i < j && monotonic (j:xs))
-
-before range
-  = makeRange (rangeStart range) (rangeStart range)
-
-
 find :: Range -> M.Map Range a -> a
 find range rm
   = case M.lookup range rm of
@@ -2211,7 +2094,6 @@ coreVector tp cs
        xs <- coreList tp cs
        return (Core.App (Core.TypeApp (coreExprFromNameInfo vecName vecInfo) [tp]) [xs])
 
-
 coreList :: Type -> [Core.Expr] -> Inf Core.Expr
 coreList tp cs
   = do (consName,consTp,consRepr,_) <- resolveConName nameCons Nothing rangeNull
@@ -2220,69 +2102,3 @@ coreList tp cs
            cons x xs = Core.App consx (seqqList [x,xs])
            nil  = Core.TypeApp (Core.Con (Core.TName nilName nilTp) nilRepr) [tp]
        return (foldr cons nil cs)
-
-unzip4 xs = unzipx4 [] [] [] [] xs
-unzipx4 acc1 acc2 acc3 acc4 []           = (reverse acc1, reverse acc2, reverse acc3, reverse acc4)
-unzipx4 acc1 acc2 acc3 acc4 ((x,y,z,zz):xs) = unzipx4 (x:acc1) (y:acc2) (z:acc3) (zz:acc4) xs
-
-ppProp env Nothing = text "(nothing)"
-ppProp env (Just (tp,_))  = ppType env tp
-
-
-usesLocals :: S.NameSet -> Expr Type -> Bool
-usesLocals lvars expr
-  = case expr of
-      App (Var newLocal False rng) [_,(_, Parens (Lam [ValueBinder name _ _ _ _] body _ _) _ _ _)] _  -- fragile: expects this form from the parser
-         | newLocal == nameLocalVar
-         -> usesLocals (S.delete name lvars) body
-      Lam    binds expr _ rng  -> usesLocals lvars expr
-      Let    defs expr range -> usesLocalsDefs lvars defs || usesLocals lvars expr
-      Bind   def expr range  -> usesLocalsDef lvars def || usesLocals lvars expr
-      App    fun nargs range -> any (usesLocals lvars) (fun : map snd nargs)
-      Ann    expr tp range   -> usesLocals lvars expr
-      Case   expr brs _ range  -> usesLocals lvars expr || any (usesLocalsBranch lvars) brs
-      Parens expr name pre range -> usesLocals lvars expr
-      Handler shallow scoped override allowMask eff pars reinit ret final ops hrng rng
-                             -> or (usesLocalsMb lvars reinit : usesLocalsMb lvars ret : usesLocalsMb lvars final : map (usesLocalsOp lvars) ops)
-      Inject tp expr b range -> usesLocals lvars expr
-      Var name _ _           -> S.member name lvars
-      _                      -> False
-
-usesLocalsDefs :: S.NameSet -> DefGroup Type -> Bool
-usesLocalsDefs lvars (DefRec defs) = any (usesLocalsDef lvars) defs
-usesLocalsDefs lvars (DefNonRec d) = usesLocalsDef lvars d
-
-usesLocalsDef :: S.NameSet -> Def Type -> Bool
-usesLocalsDef lvars d = usesLocals lvars (binderExpr (defBinder d))
-
-usesLocalsBranch :: S.NameSet -> Branch Type -> Bool
-usesLocalsBranch lvars b = any (usesLocalsGuard lvars) (branchGuards b)
-
-usesLocalsGuard :: S.NameSet -> Guard Type -> Bool
-usesLocalsGuard lvars (Guard e1 e2) = (usesLocals lvars e1) || (usesLocals lvars e2)
-
-usesLocalsMb :: S.NameSet -> Maybe (Expr Type) -> Bool
-usesLocalsMb lvars Nothing = False
-usesLocalsMb lvars (Just expr) = usesLocals lvars expr
-
-usesLocalsOp :: S.NameSet -> HandlerBranch Type -> Bool
-usesLocalsOp lvars b = usesLocals lvars (hbranchExpr b)
-
-
-shortCircuit :: Core.Expr -> [Core.Expr] -> Maybe Core.Expr
-shortCircuit fun [expr1,expr2]
-  = isAndOr fun
-  where
-    exprAnd = Just (Core.makeIfExpr expr1 expr2 Core.exprFalse)
-    exprOr  = Just (Core.makeIfExpr expr1 Core.exprTrue expr2)
-    isAndOr expr
-      = case expr of
-          Core.App (Core.TypeApp (Core.Var open _) _) [body]  | Core.getName open == nameEffectOpen
-            -> isAndOr body
-          Core.Var name _ | Core.getName name == nameAnd
-            -> exprAnd
-          Core.Var name _ | Core.getName name == nameOr
-            -> exprOr
-          _ -> Nothing
-shortCircuit fun args
-  = Nothing

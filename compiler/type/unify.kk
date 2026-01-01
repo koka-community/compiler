@@ -373,8 +373,8 @@ pub fun show(e: unify-error): string
     NoMatchType -> "types do not match"
     NoMatchKind -> "kinds do not match"
     NoMatchSkolem(k) -> "skolem variables do not match (kind " ++ k.show ++ ")"
-    NoMatchEffect(e1, e2) -> "effects do not match" // ++ e1.show ++ " and " ++ e2.show
+    NoMatchEffect() -> "effects do not match" // ++ e1.show ++ " and " ++ e2.show
     NoSubsume -> "types do not subsume"
     Infinite -> "infinite type"
-    NoArgMatch(i1, i2) -> "argument types do not match"
+    NoArgMatch() -> "argument types do not match"
 

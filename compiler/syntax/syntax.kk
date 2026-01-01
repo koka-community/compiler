@@ -268,6 +268,81 @@ fun expr/show(expr: expr<t>, ?show: (t) -> <div|e> string): <div|e> string
       // initially.show ++ " " ++ hReturn.show ++ " " ++ fin.show ++ " " ++
       // branches.list/show ++ " " ++ declRange.show ++ " " ++ rng.show
 
+// FROM Infer.hs
+fun is-annot(e: expr<t>): bool
+  match e 
+    Parens(e') -> e'.is-annot
+    Ann() -> True
+    Let(_, e') -> e'.is-annot
+    Bind(_, e') -> e'.is-annot
+    _ -> False
+
+fun root-expr(e: expr<t>): expr<t>
+  match e
+    Parens(e') -> e'.root-expr
+    _ -> e
+
+fun wrap-optional(expr: expr<t>): expr<t>
+  App(Var(nameOptional, False, null), [(Nothing, expr)], expr.range)
+
+val optional-none = Var(nameOptionalNone, False, null)
+
+fun expr/uses-locals(expr: expr<t>, lvars : name-set): pure bool
+  match expr
+    App(Var(newLocal, False), [_, (_, Parens(Lam([ValueBinder(name)], body)))]) | newLocal == nameLocalVar -> body.uses-locals(lvars.remove(name)) // Fragile, expects this form from the parser
+    Lam(_, e) -> e.uses-locals(lvars)
+    Let(defs, e) -> defs.uses-locals(lvars) || e.uses-locals(lvars)
+    Bind(def, e) -> def.uses-locals(lvars) || e.uses-locals(lvars)
+    App(f, nargs) -> Cons(f, nargs.map(snd)).uses-locals(lvars)
+    Ann(e) -> e.uses-locals(lvars)
+    Case(e, brs) -> e.uses-locals(lvars) || brs.uses-locals(lvars)
+    Parens(e) -> e.uses-locals(lvars)
+    Handler(_, _, _, _, _, _, reinit, ret, fin, ops) -> 
+      reinit.uses-locals(lvars) || ret.uses-locals(lvars) || fin.uses-locals(lvars) || ops.uses-locals(lvars)
+    Inject(_, e) -> e.uses-locals(lvars)
+    Var(n, _, _) -> lvars.member(n)
+    _ -> False
+
+fun list/uses-locals(l: list<a>, lvars: name-set, ?uses-locals: (a, name-set) -> pure bool): pure bool
+  match l
+    Cons(x, xs) -> x.uses-locals(lvars) || xs.uses-locals(lvars)
+    Nil -> False
+fun maybe/uses-locals(m: maybe<a>, lvars: name-set, ?uses-locals: (a, name-set) -> pure bool): pure bool
+  match m
+    Just(x) -> x.uses-locals(lvars)
+    Nothing -> False
+fun def-group/uses-locals(dg: def-group<t>, lvars: name-set): pure bool
+  match dg
+    DefRec(defs) -> defs.uses-locals(lvars)
+    DefNonRec(d) -> d.uses-locals(lvars)
+fun def/uses-locals(d: def<t>, lvars: name-set): pure bool
+  d.binder.expr.uses-locals(lvars)
+fun guard/uses-locals(g: guard<t>, lvars: name-set): pure bool
+  g.guardTest.uses-locals(lvars) || g.guardExpr.uses-locals(lvars)
+fun branch/uses-locals(b: branch<t>, lvars: name-set): pure bool
+  b.branchGuard.uses-locals(lvars)
+fun op/uses-locals(o: handler-branch<t>, lvars: name-set): pure bool
+  o.branchExpr.uses-locals(lvars)
+
+fun extract-matched-names(e: expr<t>)
+  fun extract-matched-namesx(expr: expr<t>)
+    match expr
+      Var(name, _, _) -> [name]
+      _ -> []
+  match e
+    Parens(e') -> e'.extract-matched-names
+    App(Var(name), args) | name.is-name-tuple -> args.map(_.snd.extract-matched-namesx).concat
+    _ -> e.extract-matched-namesx
+
+fun eta-expand(n: int, rng: range, fbody: (expr<t> -> expr<t>) -> expr<t>): expr<t>
+  val nameFixed = list(1, n).map(fn(i) make-hidden-name("arg", ("x" ++ i.show).new-name))
+  val argsFixed = nameFixed.map((Nothing, Var(_, False, rng)))
+  val body = fbody(fn(f') App(f', argsFixed, rng))
+  Lam(nameFixed.map(ValueBinder(_, Nothing, Nothing, rng, rng)), body, False, rng)
+
+fun is-annotated-binder(vb: value-binder<maybe<t>,e>): bool
+  vb.binderType.is-just
+
 type handler-override
   HandlerOverride
   HandlerNoOverride
