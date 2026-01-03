@@ -231,6 +231,13 @@ fun wrap-delay(e: syntax/syntax/expr<ktype>, r): _ syntax/syntax/expr<ktype>
   if is-delayed(e) then e
   else Lam([], e, False, e.range)
 
+fun extract(name: name, acc: list<(int, (name, ktype))>, args: list<(int, (name, ktype))>): maybe<(int, ktype, list<(int, (name, ktype))>)>
+  match args
+    [] -> Nothing
+    Cons(par as (i, (n, tp)), rest) -> 
+      if n == name || name == n.split-implicit-param-name.fst then Just((i, tp, acc.reverse ++ rest))
+      else extract(name, Cons(par, acc), rest)
+
 fun match-fun-type-args(ctx-range: range, f: syntax/syntax/expr<ktype>, tp: ktype, fresolved: list<(int, fixed-arg)>, fixed: list<syntax/syntax/expr<ktype>>, named-args: list<((name, range), syntax/syntax/expr<ktype>)>): _ fun-match-type-args
   val rng = f.range
   fun report-non-callable()
@@ -245,9 +252,65 @@ fun match-fun-type-args(ctx-range: range, f: syntax/syntax/expr<ktype>, tp: ktyp
         _ -> []
     type-error(ctx-range, rng, "only functions or types with a copy constructor can be applied".text, tp, hints)
     FunMatchTypeArgs((fixed ++ named-args.map(snd)).map-indexed(fn(i, x) (i, ArgExpr(x, True))), [], typeTotal, typeUnit, core/core/App)
+  fun match-fixed(pars, fixed, fresolved)
+    match (pars, fixed)
+      (pars, []) -> (pars, [])
+      (Cons((name, tp), pars'), Cons((i, arg), fixed')) -> 
+        match fresolved.lookup(i)
+          Just((crng, ctp, ceff, carg)) -> 
+            val (newtp, newarg) = 
+                  if tp.is-optional then (ctp.make-optional-type, ctp.wrap-optional(carg))
+                  else (ctp, carg)
+            val (prest, rest) = match-fixed(pars', fixed', fresolved)
+            (prest, Cons((i, ArgCore((crng, newtp, ceff, newarg))), rest))
+          Nothing -> 
+            val newarg = if tp.is-optional then wrap-optional(arg) elif tp.is-delay then arg.wrap-delay else arg
+            val (prest, rest) = match-fixed(pars', fixed', fresolved)
+            (prest, Cons((i, ArgExpr(newarg, False)), rest))
+      _ -> 
+        type-error(ctx-range, rng, "function is applied to too many arguments".text, tp, [])
+        ([], [])
+  // in the result, the first int is position of the parameter `j`, the second int `i` is the original position of
+  // the argument (so we can evaluate in argument order)
+  fun match-named(pars, named-args)
+    match (pars, named-args)
+      ([], []) -> []
+      ([], Cons()) -> 
+        type-error(ctx-range, rng, "function is applied to too many arguments".text, tp, [])
+        []
+      (_, Cons((i, ((name, rng), arg)), named-rest)) -> 
+        match extract(name, [], pars)
+          Just((j, tp, pars-rest)) -> 
+            val newarg = if tp.is-optional then wrap-optional(arg) elif tp.is-delay then arg.wrap-delay else arg
+            Cons((j, (i, ArgExpr(newarg, rng.is-null))), match-named(pars-rest, named-rest))
+          Nothing -> 
+            type-error(ctx-range, rng, "there is no parameter with name".text |+| name.pp-name, tp, [])
+            match-named(pars, named-rest)
+      (_, []) -> 
+        if pars.all(_.snd.is-optional-or-implicit) then 
+          val (optionals, implicits) = pars.span(_.snd.snd.is-optional)
+          val ops = zip(list(fixed.length + named-args.length, pars.length), optionals) // TODO Fix the list()
+            .map fn(i, (j, (n, tpar)))
+            (j, (i, ArgExpr(make-optional-none(True))))
+          val imps = zip(list(fixed.length + named-args.length + ops.length, pars.length), implicits)
+            .map fn(i, (j, (n, tpar)))
+            (j, (i, ArgImplicit(n, rng, rng)))
+          ops ++ imps
+        else 
+          val hints = match f.root-expr
+            Var(name, is-op, nm-range) | name == "resume".new-name ->
+              [("hint".text, "cannot use \"resume\" inside a val/fun/except clause")]
+            _ -> []
+          type-error(ctx-range, rng, "function does not have enough arguments".text, tp, hints)
+          [] 
+  fun match-parameters(pars)
+    val (pars1, args1) = match-fixed(pars, fixed.indexed, fresolved)
+    val indexed = list(fixed.length, fixed.length + pars1.length)
+    val iargs2 = match-named(zip(indexed, pars1), zip(indexed, named-args))
+    args1 ++ iargs2.sort(fn((i1, _), (i2, _)) cmp(i1, i2).lt).map(snd)
   match tp
     TFun(pars, eff, res) -> 
-      val iargs = match-parameters(pars, fresolved, fixed, named-args)
+      val iargs = match-parameters(pars)
       FunMatchTypeArgs(iargs, pars, eff, res, core/core/App)
     TSyn(_, _, t) -> match-fun-type-args(ctx-range, f, t, fresolved, fixed, named-args)
     TVar(tv) -> 
