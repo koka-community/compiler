@@ -285,7 +285,7 @@ fun root-expr(e: expr<t>): expr<t>
 fun wrap-optional(expr: expr<t>): expr<t>
   App(Var(nameOptional, False, null), [(Nothing, expr)], expr.range)
 
-val optional-none = Var(nameOptionalNone, False, null)
+val optionalNone = Var(nameOptionalNone, False, null)
 
 fun expr/uses-locals(expr: expr<t>, lvars : name-set): pure bool
   match expr

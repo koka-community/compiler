@@ -9,3 +9,11 @@ fun monotonic(l: list<int>)
     [] -> True
     [_] -> True
     Cons(i,Cons(j,xs)) -> i < j && monotonic(Cons(j,xs))
+
+fun indexed(l : list<a>): list<(int, a)>
+  l.map-indexed(fn(i, x) (i, x))
+
+fun contains(l: list<a>, x: a, ?(==): (a, a) -> e bool): e bool
+  match l
+    Cons(y, rst) -> (x == y) || contains(rst, x)
+    Nil -> False

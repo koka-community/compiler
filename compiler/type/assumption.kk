@@ -135,6 +135,7 @@ pub fun core-expr(info: name-info, qname: name)
     InfoFun(_, cname, tp, _, (m, n), _) -> Var(TName(cname, tp), InfoArity(m ,n))
     InfoCon(_, tp, repr) -> Con(TName(qname, tp), repr)
     assumption/InfoExternal(_, cname, tp, format) -> Var(TName(cname, tp), compiler/core/core/InfoExternal(format))
+    _ -> impossible()
 
 // Names to type schemes.
 // Due to overloading there may be multiple entries for the same qualified name
