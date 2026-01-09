@@ -25,14 +25,14 @@ pub infixr 5 (|->)
 
 effect range-map-eff
   fun add-range-info(rng: range, ri: range-info): ()
-  fun get-rangemap(): range-map
+  fun get-range-map(): range-map
 
 fun build-range-map(f)
   var rm := new/range-map
   with handler
     fun add-range-info(rng: range, ri: range-info)
       rm := rm.insert(rng, ri)
-    fun get-rangemap() rm
+    fun get-range-map() rm
   f()
 
 alias range-map = list<(range, range-info)>

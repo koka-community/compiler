@@ -375,7 +375,7 @@ fun lookup-app-name(allow-disambiguate : bool, name: name, name-ctx: name-contex
         Left(docs)
 
 // resolve an implicit argument name to an expression
-fun resolve-implicit-name(name: name, tp: ktype, ctx-range: range, rng: range): _ (syntax/syntax/expr<ktype>,doc)
+pub fun resolve-implicit-name(name: name, tp: ktype, ctx-range: range, rng: range): _ (syntax/syntax/expr<ktype>,doc)
   val res = resolve-implicit-arg(True /* disambiguate */, True /* allow unit fun val for conversions */, 
        tp.implicit-type-context, rng, [(is-info-val-fun-ext, name)])
   match res
@@ -993,10 +993,6 @@ pub effect infer-state
 fun module-name()
   infer-env.contxt
 
-fun with-hidden-term-doc(rng: range, doc: doc, action: () -> <infer|e> a): <infer|e> a
-  with override val infer-env = infer-env(hiddenTermDoc = Just((rng, doc)))
-  action()
-
 fun in-hidden-term-doc(): infer-env bool
   infer-env.hiddenTermDoc.is-just
 
@@ -1028,6 +1024,10 @@ fun with-hole-allowed(allowed0: bool, action: () -> <infer|e> a): <infer|e> a
     fun hole-allowed() allowed
     fun use-hole() allowed := False
   action()
+
+pub fun hidden-term-doc(rng: range, doc: doc, action: () -> <infer|e> a): <infer|e> a
+  with override val infer-env = infer-env(hiddenTermDoc = Just((rng, doc)))
+  action()
 pub fun disallow-hole(action: () -> <infer|e> a): <infer|e> a
   with-hole-allowed(False, action)
 // Returns the value of the action and whether a hole was used
@@ -1039,9 +1039,11 @@ pub fun with-context(nm: name, action: () -> <infer|e> a): <infer|e> a
 pub fun with-lhs(action: () -> <infer|e> a): <infer|e> a
   with override val infer-env = infer-env(inLhs = True)
   action()
-pub fun with-return-allowed(allowed: bool, action: () -> <infer|e> a): <infer|e> a
+pub fun return-allowed(allowed: bool, action: () -> <infer|e> a): <infer|e> a
   with override val infer-env = infer-env(returnAllowed = allowed)
   action()
+pub fun allow-return(action: () -> <infer|e> a): <infer|e> a
+  return-allowed(True, action)
 pub fun with-scope(action: () -> <infer|e> a): <infer|e> a
   with override val scope-depth = infer-effect/scope-depth + 1
   action()
@@ -1066,6 +1068,12 @@ pub fun infer-eff(action)
       add-range-info(rng, RIWarning(msg))
       ()
   action()
+
+pub fun no-range-info(f)
+  with override 
+    fun get-range-map() get-range-map()
+    fun add-range-info(rng: range, ri: range-info) ()
+  f()
 
 pub effect infer-eff 
   fun inf-error(rng: range, msg: doc): a
