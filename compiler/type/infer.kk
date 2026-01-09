@@ -167,17 +167,20 @@ fun checkLocalScope(rng: range)
 // infer arguments
 //////////////////////////////////////////
 
+// infer the types of argument expressions, some of which may have already been inferred (`:FixedArg`).
+
+
 // Possibly eta-expand an (variable) argument to resolve any optional and implicit parameters
 fun eta-expand-var-arg(tp: ktype, arg-expr: syntax/syntax/expr<ktype>): _ syntax/syntax/expr<ktype>
   fun is-named-arg(arg)
     match arg
-      Just(_) -> True
+      (Just(_), _) -> True
       _ -> False
   match (arg-expr, tp.split-fun-type) // not for polymorphic types (e.g. `type/hr1.kk`)
     (Var(name, _, vrng), Just((par-tps, _, res-tp))) | !par-tps.has-optional-or-implicits -> 
       // variable argument with an expected function type without optional parameters
       eta-expand-expr(name, vrng, 0, par-tps, res-tp, fn(extra-args, rng) App(arg-expr, extra-args, rng), arg-expr)
-    (App(v as Var(name, _, vrng), args, arng), Just((par-tps, _, res-tp))) | !par-tps.has-optional-or-implicits && args.all(is-named-arg) ->
+    (App(v as Var(name, _, vrng), args, _), Just((par-tps, _, res-tp))) | !par-tps.has-optional-or-implicits && args.all(is-named-arg) ->
       eta-expand-expr(name, vrng, args.length, par-tps, res-tp, fn(extra-args, rng) App(v, extra-args ++ args, rng), arg-expr)
     _ -> arg-expr
 
