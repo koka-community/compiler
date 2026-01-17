@@ -80,6 +80,13 @@ pub fun canonical-name(info: name-info, name: name)
     assumption/InfoExternal(cname=c) -> c
     _ -> name
 
+pub fun update-canonical-name(info: name-info, cname: name)
+  match info
+    InfoVal(vis, _, typ, scopeDepthX, range, isVar, allowImplicitMaskX, doc) -> InfoVal(vis, cname, typ, scopeDepthX, range, isVar, allowImplicitMaskX, doc)
+    InfoFun(vis, _, typ, scopeDepthX, arity, fipt, range, doc) -> InfoFun(vis, cname, typ, scopeDepthX, arity, fipt, range, doc)
+    assumption/InfoExternal(vis, _, typ, format, fipt, range, doc) -> assumption/InfoExternal(vis, cname, typ, format, fipt, range, doc)
+    _ -> info
+
 pub fun cname(info: name-info)
   match info
     InfoVal(cname=c) -> c

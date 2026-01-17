@@ -741,7 +741,7 @@ pub fun lookup-local-name(info-filter: (assumption/name-info) -> bool, name: nam
   if name.is-implicit-constraint-evidence then 
     get-iconstraints-gamma().inf-gamma/lookup(name)
   else 
-    match gamma-lookup-ex(info-filter, name)
+    match infer-env.inf-gamma.lookup-ex(info-filter, name)
       Left(all) -> Left(all.subst)
       Right((n, ni)) -> Right((n, ni.subst))
 
@@ -979,6 +979,7 @@ pub struct inferEnv
   allowInfiniteChains: bool
   niceNames: name-map<doc>
   importsMap: import-map
+  inf-gamma: inf-gamma
   gamma: gamma
 
 fun current-def-name()
@@ -1001,7 +1002,7 @@ fun qualify-name(nm: name)
 fun find-data-info(nm: name): infer data-info
   newtypes-lookup-any(nm).expect("type/infer-effect/find-data-info: unknown type: " ++ nm.show ++ "\nin: " ++ newtypes-list().show)
 fun lookup-inf-name(nm: name)
-  match inf-gamma-eff/lookup(nm.unqualify) 
+  match infer-env.inf-gamma.inf-gamma/lookup(nm.unqualify) 
     Right((qname, info)) -> Just((qname, info.scheme))
     Left([]) -> Nothing
     Left(infos) -> fail("infer-effect/lookup-inf-name: ambiguous local? " ++ current-def-name().show ++ ": " ++ nm.show ++ ":\n" ++ infos.show)
@@ -1009,14 +1010,17 @@ fun lookup-inf-name(nm: name)
 fun create-canonical-name(nm-ctx: name, gamma: gamma, qname: name)
   qname
 
+fun get-local-vars(): <pure,infer-env> list<(name, ktype)>
+  infer-env.inf-gamma.inf-gamma/list.filter(fn((_, info)) info.is-type-localvar)
+
 pub effect val scope-depth: int
 pub effect val local-depth: int
 
 effect val ctxt : infer-context
-pub alias infer = <pretty-eff, ctxt, infer-state, infer-eff, range-map-eff, local-depth, scope-depth, def-infer-effect, infer-env, inf-gamma-eff, synonyms-eff, newtypes-eff, unify, unique>;
+pub alias infer = <pretty-eff, ctxt, infer-state, infer-eff, range-map-eff, local-depth, scope-depth, def-infer-effect, infer-env, synonyms-eff, newtypes-eff, unify, unique>;
 
 fun free-in-gamma()
-  (sub/(|->)(get-subst(), inf-gamma-list().map(snd))).free-type-vars
+  (sub/(|->)(get-subst(), infer-env.inf-gamma.inf-gamma/list.map(snd))).free-type-vars
 
 fun with-hole-allowed(allowed0: bool, action: () -> <infer|e> a): <infer|e> a
   var allowed := allowed0
@@ -1058,6 +1062,9 @@ pub fun with-def-name(nm: name, action: () -> <infer|e> a): <infer|e> a
   action()
 
 pub effect val infer-env: inferEnv
+pub fun with-env(env: inferEnv, action: () -> <infer|e> a): <infer|e> a
+  with override val infer-env = env
+  action()
 
 pub fun infer-eff(action)
   with override
@@ -1357,3 +1364,81 @@ fun pp-constraints(ics: list<implicit-constraint>): <pretty-eff> doc
 fun try-resolve-implicit-constraints(close: bool, free: tvs): infer (core/core/expr -> core/core/expr)
   // TODO: 
   id
+
+
+/////////////////////////////////////
+// Helpers for gamma
+/////////////////////////////////////
+
+fun extend-gamma-core(is-already-canonical: bool, defs: list<core/core/def-group>, act: () -> _ a): _ a
+  match defs
+    Nil -> act()
+    Cons(dg, rest) -> 
+      val depth = infer-effect/scope-depth
+      val to-add = match dg
+        DefRec(dfs) -> dfs.map(_.core-def-infoX(depth))
+        DefNonRec(def) -> [def.core-def-infoX(depth)]
+      extend-gamma(is-already-canonical, to-add, fn() extend-gamma-core(is-already-canonical, rest, act))
+
+// Specialized for recursive defs where we sometimes get InfoVal even though we want InfoFun? is this correct for the csharp backend?
+fun core-def-infoX(def : core/core/def, scope-depth: int)
+  match def 
+    Def(name, tp, _, _, sort, _, rng, doc) -> 
+     (name, create-name-infoX(Public, name, scope-depth, sort, rng, tp, doc))
+
+// extend gamma with qualified names
+fun extend-gamma(is-already-canonical: bool, defs: list<(name, assumption/name-info)>, act: () -> _ a): _ a
+  val e = infer-env
+  fun extend(ctxt: name, to-add: list<(name, assumption/name-info)>, gamma: gamma): _ gamma
+    match to-add
+      Nil -> gamma
+      Cons((name, info), rest) -> 
+        val matches = gamma.gamma-lookup(name)
+        val local-matches = matches.list/filter fn((qname, qinfo))
+          !qinfo.is-infoImport && (qname.qualifier == ctxt || qname.qualifier == nil) && name.unqualify == qname.unqualify && is-same-namespace(qname, name)
+        match local-matches
+          Cons((_, qinfo), _) -> 
+            inf-error(info.range, "definition".text |+| name.pp-name |+| "is already defined in this module, at".text |+| qinfo.range.start.show.text 
+              |-| " hint: use a local qualifier".text)
+          Nil -> ()
+        extend(ctxt, rest, gamma.assumption/extend(name, info))
+  val gamma' = extend(e.contxt, defs, e.gamma)
+  with-env(infer-env(gamma=gamma'), act)
+            
+fun extend-inf-gamma-core(top-level: bool, defs: list<core/core/def-group>, act: () -> _ a): _ a
+  match defs
+    Nil -> act()
+    Cons(dg, rest) -> 
+      val depth = infer-effect/scope-depth
+      val to-add = match dg
+        DefRec(dfs) -> dfs.map(_.core-def-info(depth))
+        DefNonRec(def) -> [def.core-def-info(depth)]
+      extend-inf-gamma-ex(top-level, [], to-add, fn() extend-inf-gamma-core(top-level, rest, act))
+
+fun extend-inf-gamma(tnames: list<(name, assumption/name-info)>, act: () -> _ a): _ a
+  extend-inf-gamma-ex(False, [], tnames, act)
+
+fun extend-inf-gamma-ex(top-level: bool, ignores: list<name>, tnames: list<(name, assumption/name-info)>, act: () -> _ a): _ a
+  val e = infer-env
+  fun extend(ctxt: name, gamma: gamma, seen: list<(name, assumption/name-info)>, to-add: list<(name, assumption/name-info)>, inf-gamma: inf-gamma): _ inf-gamma
+    match to-add
+      Nil -> inf-gamma
+      Cons(x as (name, info), rest) -> 
+        val qname = info.canonical-name(name)
+        val rng = info.range
+        val tp = info.scheme
+        match seen.lookup(name)
+          Just(info2) -> 
+            check-casing-overlap(rng, name, info2.canonical-name(name), info2)
+            inf-error(rng, name.pp-name |+| "is already defined at".text |+| info2.range.show.text |-| 
+             " hint: if these are potentially recursive definitions, give them a full type signature to disambiguate.".text )
+          Nothing -> 
+            match inf-gamma.inf-gamma/lookup(name)
+              Right((cname, info2)) | cname != nameReturn -> // TODO: Adapt to multiple matches?
+                check-casing-overlap(rng, name, cname, info2)
+                if !name.is-hidden-name && name.show != "resume" && name.show != "resume-shallow" && !ignores.any(_ == name) then 
+                  inf-warning(rng, name.pp-name |+| "shadows an earlier local definition or parameter".text)
+              _ -> ()
+        extend(ctxt, gamma, Cons(x, seen), rest, inf-gamma.inf-gamma/extend(qname, info.update-canonical-name(qname)))
+  val inf-gamma' = extend(e.contxt, e.gamma, [], tnames.filter(!_.fst.is-wildcard).map(fn((nm, info)) (nm.unqualify, info)), e.inf-gamma)
+  with-env(infer-env(inf-gamma=inf-gamma'), act)

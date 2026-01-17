@@ -163,6 +163,27 @@ fun checkEffectTp(rng: range)
 fun checkLocalScope(rng: range) 
   Check("a reference to a local variable escapes it's scope", rng)
 
+// Infer automatic unwrapping for parameters with default values, and adjust their type from optional<a> to a
+// Takes an accumulated InfGamma (initially empty), a list of parameters (as value binders) and returns
+// the new InfGamma and a substitution from optional parameter names to the local unique names (of type a)
+// and a list of core (non-recursive) bindings (where the substitution has already been applied)
+// fun infer-optionals(eff : keffect, inf-gamma: list<(name, name-info)>, params: list<value-binder<ktype, maybe<syntax/syntax/expr<ktype>>>>): _ (list<(name, assumption/name-info)>, list<(tname, core/core/expr)>, list<core/core/def>)
+//   match params 
+//     [] -> (inf-gamma, [], [])
+//     Cons(par, pars) -> 
+//       match par.expr
+//         Nothing -> infer-optionals(eff, inf-gamma ++ [(par.name, create-name-info-ex(Public, par.name, scope-depth, DefVal, allow-implicit-mask, par.range, par.tp, ""))], pars)
+//         Just(def-expr) -> // default value
+//           val full-range = par.range.combine(expr.range)
+//           val opt-tp = par.tp
+//           // infer parameter type from optional
+//           val tvar = fresh-star()
+//           with val cntxt = Infer(full-range)
+//           infer-unify(par.range, opt-tp, tvar.make-optional)
+//           val partp = tvar.subst
+//           // infer expression
+//           val (expr-tp, expr-eff, core-expr) = 
+
 //////////////////////////////////////////
 // infer arguments
 //////////////////////////////////////////

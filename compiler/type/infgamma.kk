@@ -21,21 +21,6 @@ pub infixr 5 (|->)
 // there may be multiple entries for the same name
 alias inf-gamma = name-map<list<name-info>>
 
-effect inf-gamma-eff
-  fun gamma-extend(name: name, ni: name-info): ()
-  fun gamma-lookup-ex(guard: (name-info) -> bool, name: name): either<list<(name, name-info)>, (name, name-info)>
-  fun gamma-set(inf: inf-gamma): ()
-  fun gamma-get(): inf-gamma
-
-fun inf-gamma(ig0: inf-gamma, f: () -> <inf-gamma-eff,exn,comp-flags|e> a): <exn,comp-flags|e> a
-  var ig := ig0
-  with handler
-    fun gamma-extend(name: name, ni: name-info) ig := ig.inf-gamma/extend(name, ni)
-    fun gamma-lookup-ex(guard, name) ig.inf-gamma/lookup-ex(guard, name)
-    fun gamma-set(inf: inf-gamma) ig := inf
-    fun gamma-get() ig
-  f()
-
 fun ni/combine(nis: list<name-info>, nis2: list<name-info>): exn list<name-info>
   match nis
     [] -> nis2
@@ -43,11 +28,6 @@ fun ni/combine(nis: list<name-info>, nis2: list<name-info>): exn list<name-info>
 
 fun inf-gamma/delete(ig: inf-gamma, n : name): inf-gamma
   ig.remove(n)
-
-
-fun get-local-vars(): <pure,inf-gamma-eff> list<(name, ktype)>
-  inf-gamma-list().filter(fn((_, info)) info.is-type-localvar)
-
 
 // TODO: Update
 // note: qualified names can get inserted into gamma due to recursive definitions, or
@@ -57,18 +37,12 @@ fun get-local-vars(): <pure,inf-gamma-eff> list<(name, ktype)>
 fun inf-gamma/extend(ig: inf-gamma, name: name, ni: name-info): <exn> inf-gamma
   ig.update(name.unqualify-full, [ni], ni/combine)
 
-fun inf-gamma-eff/extends(tnames: list<(name,ktype,int,string)>)
-  tnames.foreach(fn((name,tp,scope-depth,doc)) extend-tp(name, name, tp, scope-depth, doc))
 fun inf-gamma/extends(ig: inf-gamma, tnames: list<(name,ktype,int,string)>)
   tnames.foldl(ig, fn(ig', (name,tp,scope-depth,doc)) ig'.extend-tp(name, name, tp, scope-depth, doc))
 
-fun inf-gamma-eff/extend-tp(name: name, cname: name, tp: ktype, scope-depth: int, doc: string)
-  extend-x(name, cname, tp, scope-depth, range/null, False, doc)
 fun inf-gamma/extend-tp(ig: inf-gamma, name: name, cname: name, tp: ktype, scope-depth: int, doc: string)
   ig.extend-x(name, cname, tp, scope-depth, range/null, False, doc)
 
-fun inf-gamma-eff/extend-x(name: name, cname: name, tp: ktype, scope-depth, rng: range, isVar: bool, doc: string)
-  gamma-extend(name, InfoVal(Public, cname, tp, scope-depth, rng, isVar, False, doc))
 fun inf-gamma/extend-x(ig: inf-gamma, name: name, cname: name, tp: ktype, scope-depth, rng: range, isVar: bool, doc: string)
   ig.extend(name, InfoVal(Public, cname, tp, scope-depth, rng, isVar, False, doc))
 
@@ -77,11 +51,6 @@ fun inf-gamma/extend-x(ig: inf-gamma, name: name, cname: name, tp: ktype, scope-
 // in that case we also consider it an exact match with just the stem.
 fun inf-gamma/lookup(ig: inf-gamma, name: name): exn either<list<(name, name-info)>, (name, name-info)>
   match ig.lookup-ex(fn(_) True, name)
-    Left([(name', info)]) -> Right((name', info))
-    other -> other
-
-fun inf-gamma-eff/lookup(name: name): <inf-gamma-eff,exn> either<list<(name, name-info)>, (name, name-info)>
-  match gamma-lookup-ex(fn(_) True, name)
     Left([(name', info)]) -> Right((name', info))
     other -> other
 
@@ -97,9 +66,6 @@ fun inf-gamma/lookup-ex(ig: inf-gamma, guard: (name-info) -> bool, name: name): 
         [] ->
           val matches = infos.filter(fn(info) guard(info) && match-qualifiers(name, info.cname))
           Left(matches.map(fn(info) (info.cname, info)))
-
-fun inf-gamma-eff/lookup-ex(guard: (name-info) -> bool, name: name): <inf-gamma-eff> either<list<(name, name-info)>, (name, name-info)>
-  gamma-lookup-ex(guard, name)
 
 fun inf-gamma/map(ig: inf-gamma, f: (ktype) -> e ktype): e inf-gamma
   ig.map(fn(a, infos) infos.list/map(fn(i : name-info) i.update-type(f(i.typ))))
@@ -121,9 +87,6 @@ fun inf-gamma/new(tnames: list<(name,ktype,int,string)>): <exn> inf-gamma
 
 fun inf-gamma/list(ig: inf-gamma): pure list<(name, ktype)>
   ig.linearmap/list.flatmap(fn((_, infos)) infos.map(fn(info) (info.cname, info.typ)))
-    
-fun inf-gamma-list()
-  gamma-get().inf-gamma/list
 
 val inf-gamma/empty: inf-gamma = LinearMap([])
 
