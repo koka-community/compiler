@@ -219,7 +219,7 @@ pub type syn-info
     name: name,
     kind: kind,
     params: list<type-var>, // type parameters
-    t: ktype, // result type
+    tp: ktype, // result type
     rank: synonym-rank,
     range: range,
     pub vis: visibility,

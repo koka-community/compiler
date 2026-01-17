@@ -105,7 +105,7 @@ pub fun nicefy-effect(eff: keffect): <infer|e> keffect
       match synonyms-lookup(nm)
         Nothing -> ([], ls)
         Just(syn) ->
-          val (ls2, tl2) = syn.t.extract-ordered-effect
+          val (ls2, tl2) = syn.tp.extract-ordered-effect
           if ls2.is-nil || !tl2.is-effect-empty then ([], ls)
           else
             val (sls, insts) = find-insts(syn.syn-info/params, ls2, ls)
@@ -1325,6 +1325,7 @@ fun scope-implicit-constraints(action: () -> <infer|e> a): <infer|e> a
   var iconstraints : list<implicit-constraint> := []
   var iconstraints-gamma := inf-gamma/empty
   with override
+    return(x) if iconstraints.is-empty then x else throw("unresolved implicit constraints: " ++ pp-constraints(iconstraints).show)
     fun get-iconstraints() iconstraints.subst(list/substitute) 
     fun get-iconstraints-gamma() iconstraints-gamma.subst // apply skolem substitution to unresolved implicit constraints
     fun add-iconstraint(ic: ic-params, canSolve, solve) 
@@ -1361,6 +1362,9 @@ fun pp-constraint(ic: implicit-constraint): <pretty-eff> doc
 fun pp-constraints(ics: list<implicit-constraint>): <pretty-eff> doc
   ics.map(pp-constraint).list
 
+fun resolve-implicit-constraints(free: tvs, ics : list<implicit-constraint>): infer (core/core/expr -> core/core/expr)
+  // TODO: 
+  id
 fun try-resolve-implicit-constraints(close: bool, free: tvs): infer (core/core/expr -> core/core/expr)
   // TODO: 
   id
@@ -1370,18 +1374,18 @@ fun improve(ctx-range: range, rng: range, close: bool, eff0: keffect, rho0: rho)
   val srho = rho0.subst
   val free0 = free-in-gamma()
   val (eff1, coref) = 
-    val ics = get-iconstraints()
-    val free = free0.union(srho.ftv)
-    val (ics1, eff1, coref) = isolate(ctx-range, close, free, ics, seff)
-    ((eff1, coref), ics1)
-  val nrho = normalizeX(clos, free0, srho) // use free0 or otherwise function results are not closed, see `test/type/talpin-jouvelot1/#t1`
+    // TODO: We need to scope implicit constraints?
+    val free = free0.union(srho.free-type-vars)
+    val (_, eff1, coref) = isolate(ctx-range, close, free, get-iconstraints(), seff)
+    (eff1, coref)
+  val nrho = normalizeX(close, free0, srho) // use free0 or otherwise function results are not closed, see `test/type/talpin-jouvelot1/#t1`
   (nrho, eff1, coref)
 
 // Automatically remove heap effects when safe to do so
 fun isolate(rng: range, close: bool, free: tvs, ics: list<implicit-constraint>, eff: keffect): _ (list<implicit-constraint>, keffect, core/core/expr -> core/core/expr)
-  val (ls, tl) = eff.extract-ordered-effect
+  val (ls, _) = eff.extract-ordered-effect
   match ls.filter(fn(l) [nameTpLocal, nameTpRead, nameTpWrite].any(_ == l.label-name))
-    Cons(lab as TApp(labcon, [TVar(h)])) -> 
+    Cons(lab as TApp(_, [TVar(h)])) -> 
       // has heap variable 'h' in it's effect
       val (poly-ics, ics1) = split-hdiv(h, ics)
       val is-local = lab.label-name == nameTpLocal
@@ -1389,14 +1393,14 @@ fun isolate(rng: range, close: bool, free: tvs, ics: list<implicit-constraint>, 
         // we can isolate, and discharge the poly-ics hdiv predicates
         val tv = fresh-effect()
         if is-local then 
-          if scope-depth == 0 then no-fail-unify({unify(effect-extend(lab, tv), eff)})
+          if infer-effect/scope-depth == 0 then nofail-unify({unify(effect-extend(lab, tv), eff)})
           else ()
         else 
-          val syn = lookup-synonym(nameTpST).unjust
-          val bvar = syn.params.first
-          val st = sub/new([(bvar, TVar(h))]) |-> syn.tp
-          no-fail-unify({unify(effect-extend(lab, st), eff)})
-        val coref = resolve-implicit-constraints(free, poly-ics)
+          val syn = synonyms-lookup(nameTpST).unjust
+          val bvar = syn.syn-info/params.head.unjust
+          val st = new/sub([(bvar, TVar(h))]) |-> syn.tp
+          nofail-unify({unify(effect-extend(lab, st), eff)})
+        val coref = resolve-implicit-constraints(free,poly-ics)
         val new-eff = tv.subst
         val sics = ics1.subst
         // and try again
@@ -1406,7 +1410,7 @@ fun isolate(rng: range, close: bool, free: tvs, ics: list<implicit-constraint>, 
         val coref = try-resolve-implicit-constraints(close,free)
         (ics, eff, coref)
       
-    Cons(lab as TApp(labcon, TCon(global))) -> 
+    Cons(TApp(_, [TCon(_global)])) -> 
       // maybe has global heap effect 
       val coref = try-resolve-implicit-constraints(close, free)
       (ics, eff, coref)
