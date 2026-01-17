@@ -1365,6 +1365,71 @@ fun try-resolve-implicit-constraints(close: bool, free: tvs): infer (core/core/e
   // TODO: 
   id
 
+fun improve(ctx-range: range, rng: range, close: bool, eff0: keffect, rho0: rho): _ (keffect, rho, core/core/expr -> core/core/expr)
+  val seff = eff0.subst
+  val srho = rho0.subst
+  val free0 = free-in-gamma()
+  val (eff1, coref) = 
+    val ics = get-iconstraints()
+    val free = free0.union(srho.ftv)
+    val (ics1, eff1, coref) = isolate(ctx-range, close, free, ics, seff)
+    ((eff1, coref), ics1)
+  val nrho = normalizeX(clos, free0, srho) // use free0 or otherwise function results are not closed, see `test/type/talpin-jouvelot1/#t1`
+  (nrho, eff1, coref)
+
+// Automatically remove heap effects when safe to do so
+fun isolate(rng: range, close: bool, free: tvs, ics: list<implicit-constraint>, eff: keffect): _ (list<implicit-constraint>, keffect, core/core/expr -> core/core/expr)
+  val (ls, tl) = eff.extract-ordered-effect
+  match ls.filter(fn(l) [nameTpLocal, nameTpRead, nameTpWrite].any(_ == l.label-name))
+    Cons(lab as TApp(labcon, [TVar(h)])) -> 
+      // has heap variable 'h' in it's effect
+      val (poly-ics, ics1) = split-hdiv(h, ics)
+      val is-local = lab.label-name == nameTpLocal
+      if !free.member(h) then 
+        // we can isolate, and discharge the poly-ics hdiv predicates
+        val tv = fresh-effect()
+        if is-local then 
+          if scope-depth == 0 then no-fail-unify({unify(effect-extend(lab, tv), eff)})
+          else ()
+        else 
+          val syn = lookup-synonym(nameTpST).unjust
+          val bvar = syn.params.first
+          val st = sub/new([(bvar, TVar(h))]) |-> syn.tp
+          no-fail-unify({unify(effect-extend(lab, st), eff)})
+        val coref = resolve-implicit-constraints(free, poly-ics)
+        val new-eff = tv.subst
+        val sics = ics1.subst
+        // and try again
+        val (ics', eff', coref') = isolate(rng, close, free, sics, new-eff)
+        (ics', eff', fn(x) coref'(coref(x)))
+      else 
+        val coref = try-resolve-implicit-constraints(close,free)
+        (ics, eff, coref)
+      
+    Cons(lab as TApp(labcon, TCon(global))) -> 
+      // maybe has global heap effect 
+      val coref = try-resolve-implicit-constraints(close, free)
+      (ics, eff, coref)
+    _ -> (ics, eff, id) 
+
+// split-hdiv(h,ics') splits constraints 'ics'. Constraints of the form hdiv<h,tp,e> where tp does
+// not contain h are returned as the first element, all others as the second. This includes
+// constraints where hdiv<h,a,e> for example where a is polymorphic. Normally, we need to assume
+// divergence conservatively in such case; however, when we isolate, we know it cannot be instatiated
+// to contain a reference to h and it is safe to discharge them during isolation without implying
+// divergence. See test\type\talpin-jouvelot1 for an example: fun rid(x) { val r = ref(x) in !r }
+fun split-hdiv(htv: type-var, ics: list<implicit-constraint>): _ (list<implicit-constraint>, list<implicit-constraint>)
+  match ics 
+    Nil -> (Nil, Nil)
+    Cons(ic, rest) -> 
+      val (ics1, ics2) = split-hdiv(htv, rest)
+      val default-res = (ics1, Cons(ic, ics2))
+      match ic.typ.expand-syn
+        TApp(TCon(tc), [htp, _, _]) | tc.name == nameTypeHeapDiv ->
+          match htp.subst.expand-syn
+            TVar(tv) | tv == htv -> (Cons(ic, ics1), ics2)
+            _ -> default-res
+        _ -> default-res
 
 /////////////////////////////////////
 // Helpers for gamma
