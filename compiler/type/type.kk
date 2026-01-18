@@ -32,7 +32,7 @@ pub type ktype
   // final `ktype` is the "real" type (expanded)
   TSyn(syn: type-syn, args: list<ktype>, t: ktype)
 
-pub fun ktype/show(tp: ktype): div string
+pub fun ktype/show(tp: ktype): _ string
   match tp
     TForAll(vars, t) -> "forall " ++ vars.show-list(show) ++ " => " ++ t.show
     TFun(args, eff, t) -> "(" ++ args.show-list(fn((name, tp1)) name.name/name/show ++ tp1.pretend-decreasing.show) ++ " -> " ++ eff.show ++ " " ++ t.show ++ ")"
@@ -167,7 +167,7 @@ pub fun is-literal(d: data-info): bool
 pub fun di/is-lazy(d: data-info): bool
   d.def.datadef/is-lazy
 
-pub fun lazy-name(di: data-info, stem: string): exn name
+pub fun lazy-name(di: data-info, stem: string): _ name
   type-qualified-name(di.name, "lazy-" ++ stem).unqualify
 
 // Constructor information: constructor name, name of the newtype, field types, and the full type of the constructor

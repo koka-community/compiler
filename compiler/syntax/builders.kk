@@ -69,6 +69,7 @@ pub type effect-extra
   EffectExtra(extra: list<user-type>) // Extra operation effects besides the regular effect (partial for non-scoped)
   EffectReplace(replace: list<user-type>) // Replace operation effect by these (umbrella type, and partial)
 
+alias parse = <token-parse, parse-error, pure>
 pub value type statement
   StatFun(e: (user-expr -> <parse> user-expr))
   StatExpr(e: user-expr)
@@ -120,7 +121,7 @@ pub fun make-effect-empty(rng: range): kuser-type<k>
 pub fun make-effect-extend(label: kuser-type<k>, ext: kuser-type<k>, rng: range, ?range: (k) -> range): kuser-type<k>
   TpApp(TpCon(nameEffectExtend, rng), [label, ext], label.range.combine(ext.range))
 
-pub fun type-from-params(rng:range, pars: list<value-binder<user-type, maybe<user-expr>>>, teff: user-type, tres: user-type): _ user-type
+pub fun type-from-params(rng:range, pars: list<value-binder<user-type, maybe<user-expr>>>, teff: user-type, tres: user-type): div user-type
   promote-type(TpFun(pars.map(fn(p) (p.name, p.binderType)), teff, tres, rng))
 
 pub fun gen-args(pars: list<value-binder<user-type, maybe<user-expr>>>): list<(maybe<(name, range)>, user-expr)>
@@ -171,7 +172,7 @@ pub fun split-top-defs(dfs: list<top-def>): (list<user-def>, list<user-typedef>,
       Nil -> (user-defs ++. Nil, typedefs ++. Nil, externDefs ++. Nil)
   dfs.split(ctx hole, ctx hole, ctx hole)
 
-pub fun make-effect-decl(decl: effect-decl): _ list<top-def>
+pub fun make-effect-decl(decl: effect-decl): <parse-error,pure> list<top-def>
   // TODO: Use record operations
   val EffectDecl(vis, _, vrng, erng, doc, tpSort, singleShot, isInstance, isScoped, id, irng, tpars, effkind, _, effectsExtra, operations, oprng) = decl
   val rng = vrng.combine(erng).combine(irng)
@@ -268,7 +269,7 @@ pub fun make-effect-decl(decl: effect-decl): _ list<top-def>
 pub fun make-operation-decl(opCount: int, vis: visibility, forallsScoped: list<user-type-binder>, forallsNonScoped: list<user-type-binder>, 
                        docEffect: string, docEffectDecl: string, hndName: name, effName: name, isInstance: bool,
                        effectsExtra: effect-extra, effTp: user-type, hndTp: user-type, hndTpVars: list<user-type-binder>, 
-                       opx: (int, op-decl)): _ (value-binder<user-type, maybe<user-expr>>, user-def, user-def, maybe<user-def>) 
+                       opx: (int, op-decl)): <parse-error,pure> (value-binder<user-type, maybe<user-expr>>, user-def, user-def, maybe<user-def>) 
   val foralls = forallsScoped ++ forallsNonScoped
   // todo: use record operations
   val (opIndex, op) = opx
@@ -294,7 +295,7 @@ pub fun make-operation-decl(opCount: int, vis: visibility, forallsScoped: list<u
   // create a constructor field for the operation as `clauseId : clauseN<a1,..,aN,b,e,r>`
   val forallParams = foralls.map(fn(par) TpVar(par.name, krng))
   val tpParams = forallParams ++ exists1.map(fn(par) TpVar(par.name, krng))
-  fun make-clause-field-name(name: name): _ name
+  fun make-clause-field-name(name: name): exn name
     make-hidden-name(opSort.show, if name.is-value-operation-name then name.from-value-operation-name else name)
   val clauseId = make-clause-field-name(id)
   val (clauseName, clauseParsTp) = 
@@ -393,7 +394,7 @@ pub fun local-scope(vdef: user-def, exp: user-expr): user-expr
   val nrng = vdef.binder.name-range
   App(Var(nameRunLocal, False, nrng.hide), [(Nothing, Lam([], exp, False, erng))], drng)
 
-pub fun combine(e1: statement, exp: user-expr): _ user-expr
+pub fun combine(e1: statement, exp: user-expr): <parse> user-expr
   match e1
     StatFun(f) -> f(exp)
     StatExpr(e) ->
@@ -451,8 +452,8 @@ pub fun extract-binders(l: list<binder>): (list<clause>, (user-expr -> user-expr
       (clause, Nothing) -> (Cons(clause, cs), binders)
       (clause, Just(binder)) -> (Cons(clause, cs), fn(e) binders(binder(e)))
 
-pub fun partition-clauses(clauses: list<clause>, rng: range): _ (maybe<user-expr>, maybe<user-expr>, maybe<user-expr>, list<user-handler-branch>)
-  fun separate(clauses': list<clause>, ret: maybe<user-expr>, fin: maybe<user-expr>, init: maybe<user-expr>, br: ctx<list<user-handler-branch>>): _ (maybe<user-expr>, maybe<user-expr>, maybe<user-expr>, list<user-handler-branch>)
+pub fun partition-clauses(clauses: list<clause>, rng: range): parse-error (maybe<user-expr>, maybe<user-expr>, maybe<user-expr>, list<user-handler-branch>)
+  fun separate(clauses': list<clause>, ret: maybe<user-expr>, fin: maybe<user-expr>, init: maybe<user-expr>, br: ctx<list<user-handler-branch>>): <parse-error> (maybe<user-expr>, maybe<user-expr>, maybe<user-expr>, list<user-handler-branch>)
     match clauses'
       Cons(ClauseRet(e), rst) -> 
         if ret.is-just then

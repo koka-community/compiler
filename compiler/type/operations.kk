@@ -77,7 +77,7 @@ fun skolemize-ex(tp: ktype, r: range)
   tp.instantiate-exfl(Skolem, r)
 
 // General instantiation for skolemize and instantiate
-fun instantiate-exfl(tp: ktype, fl: flavour, r: range): <unique, comp-flags, pure> (list<type-var>, ktype, expr -> expr)
+fun instantiate-exfl(tp: ktype, fl: flavour, r: range): _ (list<type-var>, ktype, expr -> expr)
   match tp.split-type-scheme
     ([], rho) -> ([], rho, id)
     (vars, rho) ->
@@ -105,10 +105,10 @@ fun fresh-typevarx(k: kind, fl: flavour, exclude: tvs)
 fun fresh-skolems(k: kind, n: int)
   fresh-tvars(k, Skolem, n)
 
-fun fresh-tvars(k: kind, fl: flavour, n: int): unique list<ktype>
+fun fresh-tvars(k: kind, fl: flavour, n: int): _ list<ktype>
   list(1, n).map(fn(_) fresh-tvar(k, fl))
 
-fun fresh-tvar(k: kind, fl: flavour): unique ktype
+fun fresh-tvar(k: kind, fl: flavour): _ ktype
   TVar(fresh-typevar(k, fl))
 
 fun fresh-effect()

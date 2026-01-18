@@ -19,7 +19,7 @@ import std/data/linearmap
 // Updated 12/19/25 to commit #f2a9c90
 
 /// Do two types overlap on the argument types? Used to check for overlapping definitions of overloaded identifiers.
-fun overlaps(rng: range, free: tvs, tp1: ktype, tp2: ktype): <unify,pure,comp-flags,unique> ()
+fun overlaps(rng: range, free: tvs, tp1: ktype, tp2: ktype): _ ()
   val rho1 = instantiate(tp1, rng)
   val rho2 = instantiate(tp2, rng)
   match (rho1.split-fun-type, rho2.split-fun-type)
@@ -40,7 +40,7 @@ fun overlaps(rng: range, free: tvs, tp1: ktype, tp2: ktype): <unify,pure,comp-fl
 
 
 /// Does a type have the given named arguments? Return the instantiated type if successful
-fun match-named(match-some: bool, rng: range, free: tvs, tp: ktype, n: int, namedArgs : list<name>, mb-res-tp: maybe<ktype>): <unify,pure,comp-flags,unique> rho
+fun match-named(match-some: bool, rng: range, free: tvs, tp: ktype, n: int, namedArgs : list<name>, mb-res-tp: maybe<ktype>): _ rho
   val rho1 = instantiate(tp, rng)
   match rho1.split-fun-type
     Nothing -> unify-error(NoMatchType)
@@ -63,7 +63,7 @@ fun match-named(match-some: bool, rng: range, free: tvs, tp: ktype, n: int, name
 
 /// Does a function type match the given arguments? if the first argument `matchSome` is `True`,
 /// it is considered a match even if not all arguments to the function are supplied
-fun match-arguments(matchSome: bool, rng: range, free: tvs, tp: ktype, fixed: list<ktype>, namedArgs: list<(name,ktype)>, mb-res-tp: maybe<ktype>): <unify,pure,comp-flags,unique> rho
+fun match-arguments(matchSome: bool, rng: range, free: tvs, tp: ktype, fixed: list<ktype>, namedArgs: list<(name,ktype)>, mb-res-tp: maybe<ktype>): _ rho
   val rho1 = instantiate(tp, rng)
   match rho1.split-fun-type
     Nothing -> 
@@ -99,11 +99,11 @@ fun match-arguments(matchSome: bool, rng: range, free: tvs, tp: ktype, fixed: li
         else unify-error(NoMatchType)
 
 
-fun subsume-subst(rng: range, free: tvs, tp1: ktype, tp2: ktype): <unify,pure,comp-flags,unique> (ktype, rho, expr -> <pure> expr)
+fun subsume-subst(rng: range, free: tvs, tp1: ktype, tp2: ktype): _ (ktype, rho, expr -> _ expr)
   subsume(rng, free, tp1.subst, tp2.subst)
 
 // See if two types match exactly up to renaming of free type variables
-fun match-shape(tp1: ktype, tp2: ktype): <pure,unify,unique> ()
+fun match-shape(tp1: ktype, tp2: ktype): _ ()
   unify(tp1, tp2)
   val s = get-subst()
   val dom = s.dom.list
@@ -115,7 +115,7 @@ fun match-shape(tp1: ktype, tp2: ktype): <pure,unify,unique> ()
   if dom.length == codom.length then ()
   else unify-error(NoMatchType)
 
-fun pure-match-shape(tp1: ktype, tp2: ktype): <pure,unique> bool
+fun pure-match-shape(tp1: ktype, tp2: ktype): _ bool
   match run-unify({match-shape(tp1, tp2)})
     (Right(_), _) -> True
     _ -> False
@@ -126,7 +126,7 @@ fun pure-match-shape(tp1: ktype, tp2: ktype): <pure,unique> bool
 // Returns a core transformer that needs to be
 // applied to the expression of type `t2`. Also returns a new type for the expected type `tp1` where 'some'
 // types have been properly substituted (and may be quantified).
-fun subsume(rng: range, free: tvs, tp1: ktype, tp2: ktype): <unify,pure,comp-flags,unique> (ktype, rho, expr -> <pure> expr)
+fun subsume(rng: range, free: tvs, tp1: ktype, tp2: ktype): _ (ktype, rho, expr -> _ expr)
   // skolemize, instantiate and unify
   val (sks, rho1, _) = skolemize-ex(tp1, rng)
   val (tvs, rho2, _) = skolemize-ex(tp2, rng)
@@ -153,7 +153,7 @@ fun subsume(rng: range, free: tvs, tp1: ktype, tp2: ktype): <unify,pure,comp-fla
 /////////////////
 
 // Unify two types
-fun unify(t1: ktype, t2: ktype): <pure,unify,unique> ()
+fun unify(t1: ktype, t2: ktype): _ ()
   match (t1, t2)
     // effects
     (TApp(TCon(tc1)), TApp(TCon(tc2))) | tc2 == tconEffectExtend && tc1 == tconEffectExtend ->
@@ -218,7 +218,7 @@ fun unify(t1: ktype, t2: ktype): <pure,unify,unique> ()
     _ -> unify-error(NoMatchType)
 
 // Unify a type variable with a type
-fun unify-tvar(tv: type-var, tp: ktype): <pure,unify> ()
+fun unify-tvar(tv: type-var, tp: ktype): _ ()
   match tv
     TypeVar(id, k, Meta) -> 
       val etp = tp.expand-syn
@@ -241,7 +241,7 @@ fun unify-tvar(tv: type-var, tp: ktype): <pure,unify> ()
 
 
 // Unify two equal length lists of types, and apply a substitution before each unification
-fun unifies(l1: list<ktype>, l2: list<ktype>): <pure,unify,unique> ()
+fun unifies(l1: list<ktype>, l2: list<ktype>): _ ()
   match (l1, l2)
     (Nil, Nil) -> ()
     (Cons(t1, ts1), Cons(t2, ts2)) ->
@@ -250,7 +250,7 @@ fun unifies(l1: list<ktype>, l2: list<ktype>): <pure,unify,unique> ()
     _ -> throw("type/unify unifies")
 
 // Unify effects
-fun unify-effect(tp1: ktype, tp2: ktype): <unify,pure,unique> ()
+fun unify-effect(tp1: ktype, tp2: ktype): _ ()
   val (ls1, tl1) = tp1.extract-normalize-effect
   val (ls2, tl2) = tp2.extract-normalize-effect
   val (ds1, ds2) = unify-labels(ls1, ls2, tl1.is-effect-empty, tl2.is-effect-empty)
@@ -273,10 +273,10 @@ fun unify-effect(tp1: ktype, tp2: ktype): <unify,pure,unique> ()
       tp2.subst
       ()
 
-fun extract-normalize-effect(tp: ktype): <pure,unify> (list<ktype>, ktype)
+fun extract-normalize-effect(tp: ktype): _ (list<ktype>, ktype)
   tp.subst.extract-ordered-effect
 
-fun unify-effect-var(tv1: type-var, tp2: ktype): <pure,unify,unique> ()
+fun unify-effect-var(tv1: type-var, tp2: ktype): _ ()
   val (ls2, tl2) = tp2.extract-ordered-effect // ls2 must be non-empty
   match tl2.expand-syn 
     // e ~ <div,exn|e> ~> e := <div,exn|e'>
@@ -285,7 +285,7 @@ fun unify-effect-var(tv1: type-var, tp2: ktype): <pure,unify,unique> ()
       unify-tvar(tv1, effect-extends(ls2, tl2))
 
 // Unify lists of ordered labels; return the difference
-fun unify-labels(ls1: list<ktype>, ls2: list<ktype>, closed1: bool, closed2: bool): <unify,pure,unique> (list<ktype>, list<ktype>)
+fun unify-labels(ls1: list<ktype>, ls2: list<ktype>, closed1: bool, closed2: bool): _ (list<ktype>, list<ktype>)
   match (ls1, ls2)
     (Nil, Nil) -> (Nil, Nil)
     (Cons, Nil) -> ([], ls1)
@@ -320,7 +320,7 @@ fun compare-label(l1: ktype, l2: ktype)
   name1.label-name/cmp(name2)
 
 // Match a list of kinds
-fun match-kinds(kinds1: list<kind>, kinds2: list<kind>): <div,unify> ()
+fun match-kinds(kinds1: list<kind>, kinds2: list<kind>): _ ()
   match (kinds1, kinds2)
     (Nil, Nil) -> ()
     (Cons(k1, k1s), Cons(k2, k2s)) -> 
@@ -336,7 +336,7 @@ effect unify
   fun add-sub(sub: sub): ()
   fun get-subst(): sub
 
-fun with-err(e: unify-error -> unify-error, f: () -> <unify|e> a): <unify|e> a
+fun with-err(e: unify-error -> unify-error, f: () -> _ a): _ a
   with override
     final ctl unify-error(er) unify-error(e(er))
     fun extend-sub(tv, t) extend-sub(tv, t)
@@ -344,7 +344,7 @@ fun with-err(e: unify-error -> unify-error, f: () -> <unify|e> a): <unify|e> a
     fun get-subst() get-subst() 
   f()
 
-fun run-unify(action: () -> <pure,unique,unify|e> a): <pure,unique|e> (either<unify-error, a>, sub)
+fun run-unify(action: () -> _ a): _ (either<unify-error, a>, sub)
   var subst := sub/null
   with handler
     return(x) (Right(x), subst)
@@ -356,7 +356,7 @@ fun run-unify(action: () -> <pure,unique,unify|e> a): <pure,unique|e> (either<un
     fun get-subst() subst
   action()
 
-fun substitute/subst(x: a, ?substitute: (sub, a) -> pure a): <pure,unify> a
+fun substitute/subst(x: a, ?substitute: (sub, a) -> _ a): _ a
   substitute(get-subst(), x)
 
 type unify-error

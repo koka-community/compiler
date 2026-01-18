@@ -340,10 +340,10 @@ pub fun gamma/bound-type-vars(g: gamma): _ tvs
 pub fun ni/substitute(sub: sub, ni: name-info): _ name-info
   ni.map-type(sub |-> _)
 
-pub fun ni/free-type-vars(info: name-info): pure tvs
+pub fun ni/free-type-vars(info: name-info): _ tvs
   info.typ.free-type-vars
 
-pub fun ni/bound-type-vars(info: name-info): pure tvs
+pub fun ni/bound-type-vars(info: name-info): _ tvs
   info.typ.bound-type-vars
 
 pub fun map-type(ni: name-info, f: (ktype) -> e ktype): e name-info
@@ -369,8 +369,8 @@ pub fun pp-gamma(g: gamma)
 pub fun pp-gamma-hidden(g: gamma)
   pp-gamma-internal(g, True)
 
-pub fun pretty(g: gamma): <pretty-eff> doc
+pub fun pretty(g: gamma): _ doc
   pp-gamma(g)
 
-pub fun show-gamma(g: gamma): pretty-eff string
+pub fun show-gamma(g: gamma): _ string
   pretty(g).show

@@ -16,16 +16,16 @@ import std/core-extras // list.contains
 pub infixr 5 (|->)
 
 // The free unifiable (e.g. 'Meta') type variables
-pub fun fuv(a: a, ?free-type-vars: a -> e tvs): e tvs
+pub fun fuv(a: a, ?free-type-vars: a -> _ tvs): _ tvs
   a.free-type-vars.filter(_.flavour.is-meta)
 // The free 'Skolem' type variables
-pub fun fsv(a: a, ?free-type-vars: a -> e tvs): e tvs
+pub fun fsv(a: a, ?free-type-vars: a -> _ tvs): _ tvs
   a.free-type-vars.filter(_.flavour.is-skolem)
 // The free 'Bound' type variables
-pub fun fbv(a: a, ?free-type-vars: a -> e tvs): e tvs
+pub fun fbv(a: a, ?free-type-vars: a -> _ tvs): _ tvs
   a.free-type-vars.filter(_.flavour.is-bound)
 // All type variables (including the bound ones)
-pub fun all-tv(a: a, ?bound-type-vars: (a) -> e tvs, ?free-type-vars: (a) -> e tvs): e tvs
+pub fun all-tv(a: a, ?bound-type-vars: (a) -> _ tvs, ?free-type-vars: (a) -> _ tvs): _ tvs
   a.bound-type-vars.union(a.free-type-vars)
 
 //--------------------------------------------------------------------------
@@ -60,7 +60,7 @@ pub val sub/null = Sub(LinearMap([]), LinearSet([]))
 pub fun sub/is-null(Sub(sub): sub): bool
   sub.list.is-empty
 
-pub fun new/sub(sub: list<(type-var, ktype)>): pure sub
+pub fun new/sub(sub: list<(type-var, ktype)>): _ sub
   if sub.all(fn((tv, t)) tv.kind == t.kind) then
     Sub(LinearMap([]) + sub, sub.map(fst).tvs.union(sub.map(snd).free-type-vars))
   else
@@ -162,11 +162,11 @@ pub fun tvs/max(tvs: tvs): int
 // Entities with type variables
 
 // Return the free unifiable type variables in a particular order
-pub fun ofuv(x: a, ?odftv: (a) -> e list<type-var>): e list<type-var>
+pub fun ofuv(x: a, ?odftv: (a) -> _ list<type-var>): _ list<type-var>
   x.oftv.filter(is-meta)
 
 // Return the free type variables in a particular order
-pub fun oftv(x: a, ?odftv: (a) -> e list<type-var>): e list<type-var>
+pub fun oftv(x: a, ?odftv: (a) -> _ list<type-var>): _ list<type-var>
   val vs = x.odftv.nub 
   fun is-special(k : kind)
     k == kindEffect || k == kindHeap || k == kindLabel || k == kind-fun(kindLabel, kindEffect)
@@ -183,13 +183,13 @@ pub alias type-cons = linearSet<type-con>
 /////////////////////////////////////////////////////////////////////////////////////////////
 
 // Substitution operator
-pub fun sub/(|->)(s: sub, a: a, ?substitute: (sub, a) -> e a): e a
+pub fun sub/(|->)(s: sub, a: a, ?substitute: (sub, a) -> _ a): _ a
   if s.is-null then a
   else substitute(s, a)
 
 
 // Substitute a substitution into another substitution
-pub fun sub/substitute(sub: sub, Sub(s, tvs2): sub): pure sub
+pub fun sub/substitute(sub: sub, Sub(s, tvs2): sub): _ sub
   val Sub(_, tvs1) = sub
   Sub(s.map(fn(k, v) sub.substitute(v)), tvs1.union(tvs2))
 

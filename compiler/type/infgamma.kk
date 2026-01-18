@@ -99,14 +99,14 @@ fun pp-inf-gamma(ig: inf-gamma)
     fill(name.show-plain.text |.| type-colon().color(colors.colorSep) |+| align(nice(scheme)), max-width)
   ))
 
-fun infgamma/free-type-vars(ig: inf-gamma): pure tvs
+fun infgamma/free-type-vars(ig: inf-gamma): _ tvs
   ig.inf-gamma/list().map(snd).free-type-vars
 
-fun infgamma/bound-type-vars(ig: inf-gamma): pure tvs
+fun infgamma/bound-type-vars(ig: inf-gamma): _ tvs
   ig.inf-gamma/list().map(snd).bound-type-vars
 
-fun infgamma/free-type-constructors(ig: inf-gamma): pure type-cons
+fun infgamma/free-type-constructors(ig: inf-gamma): _ type-cons
   ig.inf-gamma/list().map(snd).free-type-constructors
 
-fun infgamma/substitute(s: sub, ig: inf-gamma): pure inf-gamma
+fun infgamma/substitute(s: sub, ig: inf-gamma): _ inf-gamma
   ig.inf-gamma/map(fn(tp) s.substitute(tp))
