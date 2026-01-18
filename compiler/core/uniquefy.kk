@@ -34,7 +34,7 @@ fun start/run-unique(start: int, f: () -> <unique,uniquefy|e> a): e a
   f()
 
 val eqName = fn(n1: name, n2: name) n1 == n2
-fun fun/run-unique(f: () -> <unique,uniquefy|e> a): <unique|e> a
+fun fun/run-unique(f: () -> _ a): _ a
   var locals := names/empty
   var renaming := LinearMap([])
   with handler
@@ -44,10 +44,10 @@ fun fun/run-unique(f: () -> <unique,uniquefy|e> a): <unique|e> a
     fun get-renaming() renaming
   f()
 
-fun expr/uniquefy(e: expr): pure expr
+fun expr/uniquefy(e: expr): _ expr
   uniquefy(e, tnames/empty)
 
-fun free/uniquefy(e: expr, free: linearSet<tName>): pure expr
+fun free/uniquefy(e: expr, free: linearSet<tName>): _ expr
   val locals = LinearSet(free.union(e.free-locals).list.map(get-name))
   with start/run-unique(0)
   set-locals(locals)
@@ -58,10 +58,10 @@ fun uniquefyExprU(e: expr)
   val e' = e.uniquefyx
   (e', get-unique())
 
-fun core/uniquefy(c: core): pure core
+fun core/uniquefy(c: core): _ core
   c(defs=uniquefy(c.defs))
 
-fun dgs/uniquefy(dgs: def-groups): pure def-groups
+fun dgs/uniquefy(dgs: def-groups): _ def-groups
   with start/run-unique(0)
   val locals = get-locals()
   val topLevelDefs = dgs.flatten.map(def-name).filter(fn(n:name) !n.is-nil)
@@ -73,7 +73,7 @@ fun dg/uniquefyDG(dg: def-group)
     DefNonRec(d) -> DefNonRec(d(defExpr=d.defExpr.uniquefyx))
     DefRec(ds) -> DefRec(ds.map(fn(d) d(defExpr=d.defExpr.uniquefyx)))
 
-fun dg/uniquefy(dg: def-group): pure def-group
+fun dg/uniquefy(dg: def-group): _ def-group
   with start/run-unique(0)
   match dg
     DefNonRec(d) -> DefNonRec(d.uniquefy)
@@ -163,7 +163,7 @@ fun name/uniquefy(n:name)
       set-locals(locals.add(n))
       n
 
-fun find-unique-name(i: int, n: name, locals: name-set): div name
+fun find-unique-name(i: int, n: name, locals: name-set): _ name
   val name1 = to-unique-name(i, n)
   if locals.member(name1) then find-unique-name(i+1, n, locals)
   else name1

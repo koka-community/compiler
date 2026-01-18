@@ -17,7 +17,7 @@ effect synonyms-eff
   fun get-synonyms(): synonyms
   fun set-synonyms(syns: synonyms): ()
 
-fun with-synonyms(synonyms0: synonyms, f: () -> <synonyms-eff,pure,comp-flags|e> a): <pure,comp-flags|e> a
+fun with-synonyms(synonyms0: synonyms, f: () -> _ a): _ a
   var synonyms := synonyms0
   with handler
     fun get-synonyms() synonyms
@@ -57,13 +57,13 @@ fun single(name: name, s: syn-info): synonyms
   LinearMap([(name, s)])
 val empty:synonyms = LinearMap([])
 
-fun core/extract-synonyms(c: core): <pure,comp-flags> synonyms
+fun core/extract-synonyms(c: core): _ synonyms
   c.typedefs.map(extract-synonyms).unions
 
-fun tdg/extract-synonyms(g: typedef-group): <pure,comp-flags> synonyms
+fun tdg/extract-synonyms(g: typedef-group): _ synonyms
   g.map(extract-synonyms).unions
 
-fun td/extract-synonyms(d: typedef): <pure,comp-flags> synonyms
+fun td/extract-synonyms(d: typedef): _ synonyms
   match d
     Synonym(syn-info) -> single(syn-info.name, syn-info)
     _ -> empty

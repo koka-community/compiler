@@ -25,23 +25,23 @@ alias id-set = linearSet<int>
 alias id = int;
 
 /// Show quotes around the id
-fun show-id(id: id): <> string
+fun show-id(id: id): string
   "\"" ++ id.int/show ++ "\""
 
 /// Generate an 'Id' with a certain base name (which is ignored :-)
-fun gen-id(baseName: string, i: int): <> id
+fun gen-id(baseName: string, i: int): id
   i.new-id
 
 /// Create a fresh identifier
-fun new-id(i: int): <> id
+fun new-id(i: int): id
   i
 
-fun new-id-from(id: id): <> id
+fun new-id-from(id: id): id
   id + 1
 
 /// Dummy identifier
 val id-nil = 0.new-id
 
 /// Only used internally to guarantee unique identifiers
-fun id-number(id: id): <> int
+fun id-number(id: id): int
   id

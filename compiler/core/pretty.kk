@@ -36,7 +36,7 @@ fun source(d: doc)
   // val importsMap: import-map // import aliases
   // val fullNames: bool
 
-fun set-env(env: pretty-env, f: () -> <pp-env|e> a): <pp-env|e> a
+fun set-env(env: pretty-env, f: () -> _ a): _ a
   with override val pp-env = env
   f()
 
@@ -361,7 +361,7 @@ fun extract-imports-from-synonyms(imps: list<kimport>, syns: list<syn-info>)
 
 // extract from type signatures the synonyms so we can compress .kki files
 // by locally defining imported synonyms
-fun extract-synonym(tp: ktype): pure name-map<syn-info>
+fun extract-synonym(tp: ktype): _ name-map<syn-info>
   match tp
     TSyn(syn, args, body) ->
       val syns = Cons(body, args).extract-synonyms
@@ -373,7 +373,7 @@ fun extract-synonym(tp: ktype): pure name-map<syn-info>
     TForAll(_, b) -> b.extract-synonym
     _ -> synonyms/empty
 
-fun extract-synonyms(tps: list<ktype>): pure name-map<syn-info>
+fun extract-synonyms(tps: list<ktype>): _ name-map<syn-info>
   tps.map(extract-synonym).foldr(synonyms/empty, fn(s1, s2) s2.union(s1))
 
 fun extract-imported-synonyms(c: core)

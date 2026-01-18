@@ -47,7 +47,7 @@ fun body/unroll(d: def, tpars: list<type-var>, pars: list<tName>, eff: keffect, 
         _ -> []
     _ -> [] // TODO: small let bindings?
 
-fun extract-nonrec-branches(dname: tName, recs: list<branch>, bs: list<branch>): div (list<branch>, list<branch>)
+fun extract-nonrec-branches(dname: tName, recs: list<branch>, bs: list<branch>): _ (list<branch>, list<branch>)
   match bs
     // Stop on end
     Nil -> (Nil, recs)
@@ -98,5 +98,5 @@ fun dont-skip(Branch(pats, guards): branch)
       _ -> pat 
   Branch(pats.map(no-skip), guards)
 
-fun unique-tname-from(tn: tName): <ndet,unique> tName
+fun unique-tname-from(tn: tName): _ tName
   TName(to-hidden-unique-name(unique(), "unroll", tn.get-name), tn.type-of)

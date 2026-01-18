@@ -33,11 +33,11 @@ fun list(imp: import-map): list<(name, name)>
 // it to its real fully qualified name (@std/core/int@). It also returns
 // the declared alias suffix (used to find case-errors). 
 // On ambiguity, or if not found at all, it returns Left with a list of candidates.
-fun expand(imp: import-map, name: name): exn either<list<name>, (name, name)>
+fun expand(imp: import-map, name: name): _ either<list<name>, (name, name)>
   val rpath = name.qualifier.split-module-name.reverse
   imp.resolve-path(name.unqualify, rpath)
 
-fun resolve-path(imp: import-map, basename: name, rpath: list<string>): exn either<list<name>, (name, name)>
+fun resolve-path(imp: import-map, basename: name, rpath: list<string>): _ either<list<name>, (name, name)>
   if rpath.length == 0 then return Right((basename, nil)) // unqualified
   match imp.entries.filter(fn((ralias, _)) -> rpath.is-prefix(ralias))
     [] -> // No match - assume local qualification (note: rpath cannot be null)

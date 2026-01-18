@@ -674,7 +674,7 @@ fun lazy-fip(di: data-info)
     _ -> fail("kind/infer/lazy-fip: not a lazy data type? " ++ di.name.show)
 
 // Types for constructors
-fun constructor-gamma(dis: list<data-info>, is-value: (data-info) -> bool): exn gamma
+fun constructor-gamma(dis: list<data-info>, is-value: (data-info) -> bool): _ gamma
   fun gamma(cis: list<(con-info, con-repr)>)
     cis.map(fn((ci: con-info, crepr)) (ci.name, InfoCon(ci.vis, ci.typeScheme, crepr, ci, ci.range, ci.doc))).gamma/new
   dis.flatmap(fn(di) di.constrs.zip(data-repr(di, is-value).snd)).gamma

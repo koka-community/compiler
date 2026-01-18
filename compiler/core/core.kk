@@ -84,16 +84,16 @@ fun make-list(tp: ktype, exprs: list<expr>): expr
     App(TypeApp(consCon, [tp]), [e, xs])
   exprs.foldr(nil, cons)
 
-fun make-def(nm: name, e: expr): pure def
+fun make-def(nm: name, e: expr): _ def
   Def(nm, type-of(e), e, Private, DefVal, InlineNever, null, "")
 
-fun make-tdef(TName(nm, tp): tName, e: expr): pure def
+fun make-tdef(TName(nm, tp): tName, e: expr): _ def
   Def(nm, tp, e, Private, DefVal, InlineNever, null, "")
 
 fun make-def-expr(expr: expr)
   make-def(name/nil, expr)
 
-fun make-stats(l: list<expr>): pure expr
+fun make-stats(l: list<expr>): _ expr
   match l
     Nil -> throw("core/core make-stats: no expression")
     Cons(e, Nil) -> e
@@ -126,7 +126,7 @@ struct core
   externals: externals = []
   doc: string = ""
 
-fun core/show(c: core): div string
+fun core/show(c: core): _ string
   "Core(" ++ c.coreName.name/name/show ++ "," ++ c.imports.show-list(show) ++ "," ++ c.fix-defs.show-list(show) ++ 
   "," ++ c.typedefs.show-list(fn(g) g.show-list(show)) ++ "," ++ c.defs.show-list(show) ++ "," ++ c.externals.show-list(show) ++ "," ++ c.doc.show ++ ")"
 
@@ -163,7 +163,7 @@ type external
     imports: list<(target,list<(string, string)>)>
     rng: range
 
-fun external/show(e: external): div string
+fun external/show(e: external): _ string
   match e
     External(name, typeScheme, params, format, visibility, fipT, rng, doc) -> 
       "External(" ++ name.name/name/show ++ "," ++ typeScheme.show ++ "," ++ params.show-list(show) ++ "," ++ 
@@ -285,7 +285,7 @@ type con-repr
   ConAsCons(n: name, repr: data-repr, vrepr: value-repr, asNil: name, ctxPath: ctx-path, tag: int) // constructor is the cons node of a list-like datatype  (may have one or more fields)
   ConOpen(n: name, repr: data-repr, vrepr: value-repr, ctxPath: ctx-path) // constructor of open data type
   ConNormal(n: name, repr: data-repr, vrepr: value-repr, ctxPath: ctx-path, tag: int); // a regular constructor
-fun tag(c: con-repr): exn int
+fun tag(c: con-repr): _ int
   match c
     ConEnum(tag=tag) -> tag
     ConIso(tag=tag) -> tag
@@ -376,7 +376,7 @@ fun con-repr(d: data-info, c: con-info)
     [crepr] -> crepr
     _ -> throw("core/core: conRepr: constructor not in the datatype")
 
-fun data-repr(i: data-info, is-val: (data-info) -> bool): exn (data-repr, list<con-repr>)
+fun data-repr(i: data-info, is-val: (data-info) -> bool): _ (data-repr, list<con-repr>)
   val typeName = i.name
   val conInfos = i.constrs
   val tags = list(0, conInfos.length - 1)
@@ -438,7 +438,7 @@ type def-group
   DefRec(defs: list<def>)
   DefNonRec(d: def)
 
-fun dg/show(d: def-group): div string
+fun dg/show(d: def-group): _ string
   match d
     DefRec(defs) -> "DefRec(" ++ defs.show-list(show) ++ ")"
     DefNonRec(d') -> "DefNonRec(" ++ d'.show ++ ")"
@@ -454,7 +454,7 @@ struct def
   nameRange: range
   doc: string;
 
-fun def/show(d: def): div string
+fun def/show(d: def): _ string
   "Def(" ++ d.def-name.name/name/show ++ "," ++ d.ktype.show ++ "," ++ d.defExpr.show ++ "," ++ d.vis.show ++ "," ++
   d.sort.show ++ "," ++ d.kinline.show ++ "," ++ d.nameRange.show ++ "," ++ d.doc.show ++ ")"
 
@@ -472,7 +472,7 @@ type inline-def
 fun idef/(==)(inl1: inline-def, inl2: inline-def): bool
   name/(==)(inl1.def-name, inl2.def-name)
 
-fun idef/show(inl: inline-def): div string
+fun idef/show(inl: inline-def): _ string
   "InlineDef(" ++ inl.def-name.name/name/show ++ "," ++ inl.expr.show ++ "," ++ inl.is-rec.show ++ "," ++ inl.kind.show ++ "," ++ inl.cost.int/show ++ "," ++ inl.sort.show ++ "," ++ inl.paramSpecialize.show-list(show) ++ ")"
 
 fun def/is-val(d: def): bool
@@ -509,7 +509,7 @@ type expr
   // Case expressions
   Case(exprs: list<expr>, branches: list<branch>);
 
-fun expr/show(e0: expr): div string
+fun expr/show(e0: expr): _ string
   match e0
     Lam(names, eff, e) -> "Lam(" ++ names.show-list(show) ++ "," ++ eff.show ++ "," ++ e.show ++ ")"
     Var(n, info) -> "Var(" ++ n.show ++ "," ++ info.show ++ ")"
@@ -525,14 +525,14 @@ struct branch
   patterns: list<pattern> // length = length exprs in the match
   guards: list<guard>; // any number (>= 1) of guarded expressions
 
-fun branch/show(b: branch): div string
+fun branch/show(b: branch): _ string
   "Branch(" ++ b.patterns.show-list(show) ++ "," ++ b.guards.show-list(show) ++ ")"
 
 struct guard
   test: expr // boolean
   body: expr; // body of the branch
 
-fun guard/show(g: guard): div string
+fun guard/show(g: guard): _ string
   "Guard(" ++ g.test.show ++ "," ++ g.body.show ++ ")"
 
 type pattern
@@ -549,7 +549,7 @@ type pattern
   PatLit(lit: lit)
   PatWild
 
-fun pattern/show(p: pattern): div string
+fun pattern/show(p: pattern): _ string
   match p
     PatCon(name, pattern, repr, typeArgs, kexists, typeRes, info, skip) -> 
       "PatCon(" ++ name.show ++ "," ++ pattern.show-list(show) ++ "," ++ repr.show ++ "," ++ 
@@ -637,7 +637,7 @@ fun is-local(i: var-info): bool
 fun isRefCounted(i: var-info)
   i.is-local
 
-fun expr/is-total(e: expr): div bool
+fun expr/is-total(e: expr): _ bool
   match e
     Lam -> True
     Var -> True
@@ -649,13 +649,13 @@ fun expr/is-total(e: expr): div bool
     Case(exps, brnchs) -> exps.all(is-total) && brnchs.all(is-total)
     App(f, args) -> f.is-total && args.all(is-total)
 
-fun branch/is-total(b: branch): div bool
+fun branch/is-total(b: branch): _ bool
   b.guards.all(is-total)
 
-fun guard/is-total(g: guard): div bool
+fun guard/is-total(g: guard): _ bool
   g.body.is-total
 
-fun expr/is-total-fun(e: expr): pure bool
+fun expr/is-total-fun(e: expr): _ bool
   match e
     Lam(_, _, b) -> b.is-total
     TypeLam(_, ex) -> ex.is-total-fun
@@ -667,32 +667,32 @@ fun expr/is-total-fun(e: expr): pure bool
     App(f, args) -> e.type-of.has-total-effect && f.is-total-fun && args.all(is-total)
     Var(v) -> v.get-name == nameBox || v.get-name == nameUnbox
 
-fun branch/is-total-fun(b: branch): pure bool
+fun branch/is-total-fun(b: branch): _ bool
   b.guards.all(is-total-fun)
 
-fun guard/is-total-fun(g: guard): pure bool
+fun guard/is-total-fun(g: guard): _ bool
   g.body.is-total-fun
 
-fun def/is-total(d: def): div bool
+fun def/is-total(d: def): _ bool
   d.defExpr.is-total
 
-fun has-total-effect(tp: ktype): bool
+fun has-total-effect(tp: ktype): _ bool
   match tp.split-fun-scheme
     Nothing -> False
     Just((_, _, eff, _)) -> eff.is-type-total
 
-fun is-mon-type(tp: ktype): pure bool
+fun is-mon-type(tp: ktype): _ bool
   if tp.kind == kindEffect then tp.is-mon-effect
   else match tp.expand-syn
     TForAll(_, t) -> t.is-mon-type
     TFun(_, eff, _) -> eff.is-mon-effect
     _ -> False
 
-fun is-mon-effect(eff: ktype): pure bool
+fun is-mon-effect(eff: ktype): _ bool
   val (ls, tl) = eff.extract-effect-extend
   !tl.is-effect-empty || ls.any(fn(l) match l.get-operation-effect() {Just((ResumeMany, _)) -> True; _ -> False})
 
-fun is-inlineable(d: def, max: int): div bool
+fun is-inlineable(d: def, max: int): _ bool
   match d.kinline
     InlineAlways -> True
     InlineNever -> False
@@ -700,19 +700,19 @@ fun is-inlineable(d: def, max: int): div bool
 
 val costInf = 1000
 
-fun def/cost(d: def): div int
+fun def/cost(d: def): _ int
   val n = d.cost-local
   if d.is-val then if n == 0 then 0 else costInf else n
 
-fun cost-local(d: def): div int
+fun cost-local(d: def): _ int
   d.defExpr.cost
 
-fun dg/cost(dg: def-group): div int
+fun dg/cost(dg: def-group): _ int
   match dg
     DefRec(defs) -> defs.map(cost).sum
     DefNonRec(def) -> cost(def)
 
-fun expr/cost(e0: expr): div int
+fun expr/cost(e0: expr): _ int
   match e0
     Var(tn) | tn.get-name.is-hidden-external-name -> costInf
     Lam(_, _, b) -> 0 + b.cost
@@ -725,16 +725,16 @@ fun expr/cost(e0: expr): div int
     Let(dgs, b) -> dgs.map(cost).sum + b.cost
     Case(exprs, branches) -> (branches.length - 1) + exprs.map(cost).sum + branches.map(cost).sum
 
-fun branch/cost(b: branch): div int
+fun branch/cost(b: branch): _ int
   b.guards.map(cost).sum
 
-fun guard/cost(g: guard): div int
+fun guard/cost(g: guard): _ int
   g.body.cost
 
-fun expr/type-arity(e: expr): pure int
+fun expr/type-arity(e: expr): _ int
   e.type-of.type-arities.fst
 
-fun param-arity(e: expr): pure int
+fun param-arity(e: expr): _ int
   e.type-of.type-arities.snd
 
 fun get-effect(e: expr): keffect
@@ -882,7 +882,7 @@ fun def/type-of(d: def): ktype
 fun tn/type-of(tn: tName): ktype
   tn.tNameType
 
-fun expr/type-of(expr: expr): pure ktype
+fun expr/type-of(expr: expr): _ ktype
   match expr
     Lam(pars, eff, expr) -> TFun(pars.map(fn((TName(name, tp))) (name, tp)), eff, expr.type-of)
     Var(tn) -> type-of(tn)
@@ -902,12 +902,12 @@ fun expr/type-of(expr: expr): pure ktype
     Let(_, e) -> e.type-of
     Case(_, branches) -> branches.head.unjust.type-of
 
-fun branch/type-of(Branch(_, guards): branch): pure ktype
+fun branch/type-of(Branch(_, guards): branch): _ ktype
     match guards
       Cons(g, _) -> g.type-of
       _ -> throw("core/core type-of(Branch..) branch with no guards")
 
-fun guard/type-of(Guard(_, expr): guard): pure ktype
+fun guard/type-of(Guard(_, expr): guard): _ ktype
   expr.type-of
 
 fun lit/type-of(l: lit): ktype
@@ -929,12 +929,12 @@ fun dgs/extract-signatures(d: def-groups): list<ktype>
 fun core/extract-signatures(c: core): list<ktype>
   extract-signatures(c.externals) ++ extract-signatures(c.defs)
 
-fun split-fun(tp: ktype): <exn> (list<(name, ktype)>, ktype)
+fun split-fun(tp: ktype): _ (list<(name, ktype)>, ktype)
   match tp.expand-syn
     TFun(args, _, res) -> (args, res)
     _ -> throw("core/core split-fun: expected function type")
 
-fun split-tforall(tp: ktype): <exn> (list<type-var>, ktype)
+fun split-tforall(tp: ktype): _ (list<type-var>, ktype)
   match tp.expand-syn
     TForAll(tvs, t) -> (tvs, t)
     _ -> throw("core/core split-tforall: expected forall type")
@@ -947,23 +947,23 @@ fun tname/dep(t: tName): deps
 fun name/dep(n: name): deps
   if n.is-qualified then LinearSet([n.qualifier]) else LinearSet([])
 
-fun idefscore/deps(l: list<inline-def>, c: core): div deps
+fun idefscore/deps(l: list<inline-def>, c: core): _ deps
   deps/unions(l.map(_.expr.dep)) + c.deps
 
-fun idefs/deps(l: list<inline-def>): div deps
+fun idefs/deps(l: list<inline-def>): _ deps
   deps/unions(l.map(_.expr.dep))
 
-fun core/deps(c: core): div deps
+fun core/deps(c: core): _ deps
   val x0 : deps = deps/unions(c.defs.flatten.map(dep)) + deps/unions(c.typedefs.flatten.map(dep))
   val x1 : deps = LinearSet(c.imports.filter(_.visibility.is-public).map(importName))
   x0 + x1 - c.coreName
 
-fun td/dep(td: typedef): div deps
+fun td/dep(td: typedef): _ deps
   match td
     Synonym(info) -> info.tp.dep
     Data(info) -> deps/unions(info.constrs.map(_.typeScheme.dep))
 
-fun ktype/dep(t: ktype): div deps
+fun ktype/dep(t: ktype): _ deps
   match t
     TForAll(_, rho) -> rho.dep
     TFun(args, eff, res) -> deps/unions(Cons(eff.dep, args.map(fn((_, t')) t'.dep))) + res.dep
@@ -972,10 +972,10 @@ fun ktype/dep(t: ktype): div deps
     TApp(tp, tps) -> tp.dep + deps/unions(tps.map(dep))
     TSyn(_, args, tp) -> tp.dep + deps/unions(args.map(dep))
 
-fun def/dep(d: def): div deps
+fun def/dep(d: def): _ deps
   deps/unions([d.ktype.dep, d.defExpr.dep])
 
-fun expr/dep(e: expr): div deps
+fun expr/dep(e: expr): _ deps
   match e
     Var(tn) -> tn.dep
     Lam(_, eff, body) -> eff.dep + body.dep
@@ -987,13 +987,13 @@ fun expr/dep(e: expr): div deps
     Let(defs, body) -> deps/unions(Cons(body.dep, defs.flatten.map(dep)))
     Case(exprs, branches) -> deps/unions(exprs.map(dep) ++ branches.map(dep))
 
-fun branch/dep(b: branch): div deps
+fun branch/dep(b: branch): _ deps
   deps/unions(b.patterns.map(dep)) + deps/unions(b.guards.map(dep))
 
-fun guard/dep(g: guard): div deps
+fun guard/dep(g: guard): _ deps
   g.body.dep
 
-fun pattern/dep(p: pattern): div deps
+fun pattern/dep(p: pattern): _ deps
   match p
     PatCon(tn, pats) -> tn.dep + deps/unions(pats.map(dep))
     PatVar(_, p) -> p.dep

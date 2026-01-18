@@ -17,7 +17,7 @@ alias freeVar = linearSet<tName>
 // definition groups. After type checking it is possible that definitions
 // that seemed recursive are actually not mutually recursive.
 
-fun regroup(dfs: list<def>): <comp-flags,pure> list<def-group>
+fun regroup(dfs: list<def>): _ list<def-group>
   match dfs
     Cons(d, Nil) ->
       val fvdef = d.free-vars
@@ -43,7 +43,7 @@ fun regroup(dfs: list<def>): <comp-flags,pure> list<def-group>
           _ -> DefRec(names.map(defMap.get(_)))
       defOrder.map(makeGroup)
 
-fun find(nameMap: list<(tName, b)>, nm: tName): <comp-flags,exn> b
+fun find(nameMap: list<(tName, b)>, nm: tName): _ b
   match find(nameMap, fn(n: (tName,b)) n.fst == nm)
     Just(x) -> x.snd
     _ -> fail("core/binding-groups find: could not find: " ++ nm.show)

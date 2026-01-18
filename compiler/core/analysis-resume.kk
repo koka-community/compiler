@@ -34,7 +34,7 @@ fun tname/is-resuming(t: tName)
 fun name/is-resuming(t: name)
   t == resumeName.get-name || t == resumeShallowName.get-name
 
-fun expr'(e: expr, defaultKind: resume-kind): div resume-kind
+fun expr'(e: expr, defaultKind: resume-kind): _ resume-kind
   match e
     Lam -> if e.free-vars.is-resuming-elem then ResumeNormal else ResumeNever
     App(Var(tname), args) | tname.is-resuming ->
@@ -51,13 +51,13 @@ fun expr'(e: expr, defaultKind: resume-kind): div resume-kind
     Case(exprs, brnchs) ->
       exprs.map(expr).ands && brnchs.branches(defaultKind)
 
-fun branches(bs: list<branch>, defaultKind: resume-kind): div resume-kind
+fun branches(bs: list<branch>, defaultKind: resume-kind): _ resume-kind
   bs.map(_.branch(defaultKind)).ors
 
-fun branch(b: branch, defaultKind: resume-kind): div resume-kind
+fun branch(b: branch, defaultKind: resume-kind): _ resume-kind
   b.guards.map(_.guard(defaultKind)).ors
 
-fun guard(g: guard, defaultKind: resume-kind): div resume-kind
+fun guard(g: guard, defaultKind: resume-kind): _ resume-kind
   g.body.expr && g.test.expr'(defaultKind)
 
 fun ands(exprs: list<resume-kind>)

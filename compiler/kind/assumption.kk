@@ -25,7 +25,7 @@ effect kGammaEff
   fun kgamma-list(): list<(name, list<(name, type-name-info)>)>
   fun kgamma-filter(modName: name): kGamma
 
-fun withKGamma(kg0: kGamma, f: () -> <kGammaEff,exn,comp-flags|e> a): <exn,comp-flags|e> a
+fun withKGamma(kg0: kGamma, f: () -> _ a): _ a
   var kg := kg0
   with handler
     fun kgamma-extend(name: name, k: kind, d: string) kg := kg.extend(name, k, d)
@@ -40,7 +40,7 @@ fun withKGamma(kg0: kGamma, f: () -> <kGammaEff,exn,comp-flags|e> a): <exn,comp-
     fun kgamma-filter(modName: name) kg.filter(modName)
   f()
 
-fun kgamma/new-nub(xs: list<(name,kind,string)>): <comp-flags,exn> kGamma
+fun kgamma/new-nub(xs: list<(name,kind,string)>): _ kGamma
   xs.foldl(empty, fn(m,(n,k,d)) if m.contains-key(n) then m else m.insert(n,TypeNameInfo(k,d)))
 fun kgamma/extend(kg: kGamma, name: name, k: kind, doc: string)
   kg.insert(name, TypeNameInfo(k, doc))
@@ -53,10 +53,10 @@ fun kgamma/filter(kg: kGamma, modName: name)
 
 val kgamma/empty:kGamma = LinearMap([])
 
-fun core/extract-typedefs(c: core): <exn,comp-flags> kGamma
+fun core/extract-typedefs(c: core): _ kGamma
   c.typedefs.map(extract-typedefs).qname-map/unions
 
-fun tdg/extract-typedefs(g: typedef-group): <exn,comp-flags> kGamma
+fun tdg/extract-typedefs(g: typedef-group): _ kGamma
   g.map(extract-typedefs).qname-map/unions
 
 fun td/extract-typedefs(d: typedef): kGamma

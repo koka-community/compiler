@@ -24,7 +24,7 @@ fun parse-core(fname: path)
   val input = read-text-file(fname)
   lex-parse(True, False, id, {parse-program(fname, Source(fname.string, input))}, fname.string, input)
 
-fun requalify(lexes: list<lexeme>): div list<lexeme>
+fun requalify(lexes: list<lexeme>): _ list<lexeme>
   match lexes
     Cons(Lexeme(r1, LexId(modName)), Cons(Lexeme(_, LexOp(slash)), Cons(Lexeme(r2, LexId(nm)), lexx)))  | slash.nameStem  == "/"
       -> requalify(Cons(Lexeme(r1.combine(r2), LexId(qualify(new-name(modName.show-plain), nm))), lexx))
@@ -38,7 +38,7 @@ fun requalify(lexes: list<lexeme>): div list<lexeme>
       -> Cons(lex, requalify(lexx))
     [] -> []
 
-fun allow-dot-ids(lexes: list<lexeme>): div list<lexeme>
+fun allow-dot-ids(lexes: list<lexeme>): _ list<lexeme>
   match lexes
     // Identifier
     Cons(Lexeme(r1, LexKeyword(".")), Cons(Lexeme(r2, LexId(nm)), lexx)) -> allow-dot-ids(Cons(Lexeme(r1.combine(r2), LexId(prepend(".", nm))), lexx))
@@ -126,7 +126,7 @@ fun parse-local-alias()
 fun default/parse-visibility()
   parse-maybe("visibility", {parse-keyword("pub"); Public}).default(Private)
 
-fun parse-import-declaration(): <parse> (compiler/core/core/kimport, (name, name))
+fun parse-import-declaration(): _ (compiler/core/core/kimport, (name, name))
   val (vis, doc) = parse-try({(parse-visibility(), parse-doc-keyword("import").snd)})
   val (asname, name, _, _) = parse-import-alias()
   val pkg = parse-maybe("=", {parse-keyword("="); parse-string-literal().fst}).default("")
@@ -350,7 +350,7 @@ fun parse-body()
 fun parse-expression()
   parse-choices("expr", [pare-fun, parse-forall, parse-match, parse-let, parse-app])
 
-fun parse-app(): <parse,eenv,comp-flags,synonyms-eff> expr
+fun parse-app(): _ expr
   val expr = parse-atomic()
   fun parseApplies(e)
     parse-choices("app", [
@@ -428,7 +428,7 @@ fun parse-def-groups()
 fun parse-def-groups0()
   parse-maybe("def groups", {parse-def-groups()}).default([])  
 
-fun parse-def-group(): <parse,eenv,comp-flags,synonyms-eff> def-group
+fun parse-def-group(): _ def-group
   val (sort, inl, _, doc) = pDefSort()
   val (name, _) = parse-choices("def group", [{parse-fun-id()}, {parse-wildcard(); (nil, null)}])
   val tp = parse-type-annotation()
@@ -481,7 +481,7 @@ fun pPatCon()
   val InfoCon(_, typ, repr, cons) = env-lookup-parse-con(cname)
   PatCon(TName(cname, typ), patArgs, repr, argTypes, exists0, resTp, cons, skip)
 
-fun parse-patternArgs0(): <parse,eenv,comp-flags,synonyms-eff> list<(pattern, ktype)>
+fun parse-patternArgs0(): _ list<(pattern, ktype)>
   parse-maybe("pattern args", {parse-patternArgs1()}).default([])
 
 fun parse-patternArgs1()
@@ -582,7 +582,7 @@ fun parse-kind-annot-full()
 fun parse-kind-annot()
   parse-maybe("kind annotation", {parse-special-op("::"); pKind()}).default(kindStar)
 
-fun parse-type(): <parse,eenv,comp-flags,synonyms-eff> ktype
+fun parse-type(): _ ktype
   parse-typex(False).tuple2/fst
 
 fun parse-def-type()
@@ -628,7 +628,7 @@ fun parse-type-result(params)
     Just(tp) -> tp
     Nothing -> TFun(params, typeTotal, tp1)
 
-fun parse-type-atom(): <parse,eenv,comp-flags,synonyms-eff> ktype
+fun parse-type-atom(): _ ktype
   val etp = parse-type-atoms-paramsx(False, False)
   match etp
     Left((params, _)) -> parse-type-app(extract(params, "expecting single type"))
@@ -675,7 +675,7 @@ fun parse-type-app(tp)
   val tps = parse-maybe("type application", {angles({parse-sep-by("type params", parse-type, parse-comma)})}).default([])
   parse-synonym(tp, tps)
 
-fun parse-synonym(tp, tps): <parse,eenv,comp-flags,synonyms-eff> ktype
+fun parse-synonym(tp, tps): _ ktype
   val res = parse-maybe("Env")
     parse-special-op("==")
     val rank = parse-maybe("synonym rank", {parse-integer().fst}).default(0)
@@ -700,13 +700,13 @@ fun parse-type-effect()
   parse-right-angle()
   labels.foldr(ext, shallow-effect-extend)
 
-fun pTExtend(): <parse,eenv,comp-flags,synonyms-eff> ktype
+fun pTExtend(): _ ktype
   parse-maybe("effect extend", {parse-vertical-bar(); parse-type-atom()}).default(effectEmpty)
 
 fun pTLabel()
   parse-type-app(parse-type-atom())
 
-fun pTId(): <parse,eenv,comp-flags,synonyms-eff> ktype
+fun pTId(): _ ktype
   val (name, _) = parse-choices("type id", [parse-qualified-var-id, parse-qualified-op-id, parse-wildcard])
   val kind = parse-maybe("type kind", parse-kind-annot-full).default(kindStar)
   env-type(name, kind)
@@ -755,7 +755,7 @@ struct envv
   locals: linearMap<name, ktype>
   synonyms: name-map<syn-info>
 
-fun with-env-initial(modName: name, srcPath: path, imports0, f: () -> <eenv,parse,comp-flags,synonyms-eff> a): <comp-flags,parse> a
+fun with-env-initial(modName: name, srcPath: path, imports0, f: () -> _ a): _ a
   with with-synonyms(synonyms/empty)
   var bound := LinearMap([])
   var imports := imports0

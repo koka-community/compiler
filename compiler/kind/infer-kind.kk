@@ -19,7 +19,7 @@ type inf-kind
   KICon(k: kind)
   KIApp(k1: inf-kind, k2: inf-kind)
 
-fun (==)(k1: inf-kind, k2: inf-kind): div bool
+fun (==)(k1: inf-kind, k2: inf-kind): _ bool
   match (k1, k2)
     (KIVar(kid1), KIVar(kid2)) -> kid1 == kid2
     (KICon(k1), KICon(k2)) -> k1 == k2
@@ -65,7 +65,7 @@ fun inf-extract-kind-fun(infkind: inf-kind)
     KICon(KApp(KApp(ka, k1), k2)) | ka == kindArrow -> KICon(k1).inj(KICon(k2).inf-extract-kind-fun) 
     _ -> ([], infkind)
 
-fun is-infkind-handled(ikind: inf-kind): div bool
+fun is-infkind-handled(ikind: inf-kind): _ bool
   match ikind.inf-extract-kind-fun
     ([KICon(k1), KICon(k2)], KICon(k3)) -> is-kind-handled(kind-fun(k1, kind-fun(k2, k3)))
     _ -> False
@@ -90,7 +90,7 @@ fun inf/(|->)(sub: ksub, k: inf-kind): inf-kind
 fun sub/(|->)(sub1: ksub, sub2: ksub): ksub
   sub2.map(fn(k, v) inf/(|->)(sub1, v))
 
-fun sub/fkv(sub: ksub): pure kvs
+fun sub/fkv(sub: ksub): _ kvs
   sub.list.map(fn((_, s)) s.fkv).unions
 
 fun inf/fkv(k: inf-kind): kvs

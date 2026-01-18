@@ -17,7 +17,7 @@ effect constructors-eff
   fun constrs-find-scheme(name: name): ktype
   fun constrs-unions(cs: list<constructors>): constructors
 
-fun with-constructors(cnstrs0: constructors, f: () -> <constructors-eff,exn,comp-flags|e> a): <exn,comp-flags|e> a
+fun with-constructors(cnstrs0: constructors, f: () -> _ a): _ a
   var cnstrs := cnstrs0
   with handler
     fun constrs-extend(name: name, k: con-info)
@@ -45,13 +45,13 @@ val contructors/empty: constructors = LinearMap([])
 fun compose(a: constructors, b: constructors): constructors
   a.union(b) // ASSUMES left biased union
 
-fun core/extract-coninfo(c: core): <pure,comp-flags> constructors
+fun core/extract-coninfo(c: core): _ constructors
   c.typedefs.map(extract-coninfo).unions
 
-fun tdg/extract-coninfo(g: typedef-group): <pure,comp-flags> constructors
+fun tdg/extract-coninfo(g: typedef-group): _ constructors
   g.map(extract-coninfo).unions
 
-fun td/extract-coninfo(d: typedef): <pure,comp-flags> constructors
+fun td/extract-coninfo(d: typedef): _ constructors
   match d
     Data(dataInfo) | dataInfo.vis.is-public -> 
       LinearMap(dataInfo.constrs.filter(_.vis.is-public).list/map(fn(ci) (ci.con-info/name, ci)))
