@@ -57,7 +57,7 @@ pub fun allow-implicit-mask(ni: name-info): bool
     InfoVal(allowImplicitMaskX = allow) -> allow
     _ -> False
 
-pub fun show(ni: name-info): div string
+pub fun show(ni: name-info): _ string
   match ni
     InfoVal(vis, cname, typ, scope, range, isVar, allowImplicitMask, doc) -> "InfoVal(" ++ show(vis) ++ ", " ++ show(cname) ++ ", " ++ show(typ) ++ ", " ++ show(scope) ++ ", " ++ show-full-range(range, "".path) ++ ", " ++ show(isVar) ++ "," ++ show(allowImplicitMask) ++ "," ++  show(doc) ++ ")"
     InfoFun(vis, cname, typ, scope, arity, fipt, range, doc) -> "InfoFun(" ++ show(vis) ++ ", " ++ show(cname) ++ ", " ++ show(typ) ++ ", " ++ show(scope) ++ ", " ++ show-tuple(arity, show, show) ++ ", " ++ show(fipt) ++ ", " ++ show-full-range(range, "".path) ++ "," ++ show(doc) ++ ")"
@@ -260,7 +260,7 @@ pub fun extract-import((name, qname))
   qname-map/single(name, InfoImport(Private, typeVoid, name, qname, null))
 
 // Extract a Gamma from a Core module
-pub fun extract-gamma(isValue: (data-info -> bool), privateAsPublic: bool, c: core): <exn, comp-flags> gamma
+pub fun extract-gamma(isValue: (data-info -> bool), privateAsPublic: bool, c: core): _ gamma
   fun update-vis(vis)
     match vis
       Public -> Public
@@ -311,7 +311,7 @@ fun create-name-infoEX(vis, name, scopeDepth: int, sort, allowImplicitMask, rng,
     DefVar -> InfoVal(vis, name, tp, scopeDepth, rng, True, False, doc)
     _ -> InfoVal(vis, name, tp, scopeDepth, rng, False, allowImplicitMask, doc)
 
-pub fun arity(tp: ktype): <comp-flags, exn> (int, int)
+pub fun arity(tp: ktype): _ (int, int)
   match tp.expand-syn
     TForAll(tvars, t) ->
       match t.expand-syn
@@ -328,16 +328,16 @@ pub fun extract-external(external: external, update-vis)
 // TODO: ftc
 // Instances
 
-pub fun gamma/substitute(sub: sub, g: gamma): pure gamma
+pub fun gamma/substitute(sub: sub, g: gamma): _ gamma
   g.map(fn(n, nis) nis.list/map(fn((n1, ni: name-info)) (n1, sub.substitute(ni))))
 
-pub fun gamma/free-type-vars(g: gamma): pure tvs
+pub fun gamma/free-type-vars(g: gamma): _ tvs
   g.schemes.map(free-type-vars).unions
 
-pub fun gamma/bound-type-vars(g: gamma): pure tvs
+pub fun gamma/bound-type-vars(g: gamma): _ tvs
   g.schemes.map(bound-type-vars).unions
 
-pub fun ni/substitute(sub: sub, ni: name-info): pure name-info
+pub fun ni/substitute(sub: sub, ni: name-info): _ name-info
   ni.map-type(sub |-> _)
 
 pub fun ni/free-type-vars(info: name-info): pure tvs

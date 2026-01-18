@@ -127,10 +127,10 @@ fun handle-pretty-eff(f)
 fun type-colon()
   ":".text.color(colors.colorSep)
 
-fun min-canonical(tp: ktype): pure string
+fun min-canonical(tp: ktype): _ string
   tp.minimal-form.show.compress
 
-fun canonical(tp: ktype): pure string
+fun canonical(tp: ktype): _ string
   tp.canonical-form.show.compress
 
 fun string/compress(s: string): string

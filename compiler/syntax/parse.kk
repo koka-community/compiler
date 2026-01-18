@@ -25,69 +25,69 @@ import compiler/common/parse
 
 // Updated to commit #ddac17b (of Parse.hs) 7/12/25
 
-pub fun parse-program-from-file(fname: path, allow-at: bool, semiInsert: bool = True): io user-program
+pub fun parse-program-from-file(fname: path, allow-at: bool, semiInsert: bool = True): _ user-program
   val r = read-text-file(fname)
   parse-program-from-string(r, fname, allow-at, semiInsert)
 
-pub fun parse-program-from-string(input: string, fname: path, allow-at: bool, semiInsert: bool = True): io user-program
+pub fun parse-program-from-string(input: string, fname: path, allow-at: bool, semiInsert: bool = True): _ user-program
   with handler
     final ctl parse-error(e: string, r: range)
       throw("Parse error: " ++ e ++ " at " ++ r.show) // TODO: Transition to error
   lex-parse(allow-at, semiInsert, fn(x) x.remove-white, parse-program, fname.string, input)
 
-fun string/lex-parse(str: string, sourceName: path, line: int, semiInsert: bool, p: () -> parse a): io a
+fun string/lex-parse(str: string, sourceName: path, line: int, semiInsert: bool, p: () -> _ a): _ a
   with handler
     final ctl parse-error(e: string, r: range)
       throw("Parse error: " ++ e ++ " at " ++ r.show) // TODO: Transition to error
   lex-parse(False, semiInsert, fn(x) x, p, sourceName.string, str)
 
-pub fun parse-value-def(input: string, fname: path, line: int, semiInsert: bool): io user-def
+pub fun parse-value-def(input: string, fname: path, line: int, semiInsert: bool): _ user-def
   lex-parse(input, fname, line, semiInsert, parse-value-definition)
 
-pub fun parse-type-def(input: string, fname: path, line: int, semiInsert: bool): io (user-typedef, list<user-def>)
+pub fun parse-type-def(input: string, fname: path, line: int, semiInsert: bool): _ (user-typedef, list<user-def>)
   lex-parse(input, fname, line, semiInsert, parse-type-definition)
 
-pub fun lex-parse-type(input: string, fname: path, line: int, name: name, semiInsert: bool): io user-typedef
+pub fun lex-parse-type(input: string, fname: path, line: int, name: name, semiInsert: bool): _ user-typedef
   lex-parse(input, fname, line, semiInsert, {parse-user-type(name)})
 
-pub fun lex-parse-expression(input: string, fname: path, line: int, name: name, semiInsert: bool): io user-def
+pub fun lex-parse-expression(input: string, fname: path, line: int, name: name, semiInsert: bool): _ user-def
   lex-parse(input, fname, line, semiInsert, {parse-user-expression(name)})
 
-fun interactive(f: () -> parse a): parse a
+fun interactive(f: () -> _ a): _ a
   val x = f()
   parse-many("semicolons", parse-semicolon)
   x
 
-fun parse-value-definition(): parse user-def
+fun parse-value-definition(): _ user-def
   interactive
     parse-pure-decl(False, Private)
 
-fun parse-type-definition(): parse (user-typedef, list<user-def>)
+fun parse-type-definition(): _ (user-typedef, list<user-def>)
   interactive
     parse-choices("type definition", [
       {(parse-alias-decl(Public), [])},
       {parse-type-declaration(Public)}
     ])
 
-fun parse-user-type(name: name): parse user-typedef
+fun parse-user-type(name: name): _ user-typedef
   interactive
     val tp = parse-type()
     Synonym(TypeBinder(name, KindNone, null, null), [], tp, tp.range, Public, "")
 
-fun parse-user-expression(name: name): parse user-def
+fun parse-user-expression(name: name): _ user-def
   interactive
     val e = parse-annotated-expr()
     val r = e.range
     Def(ValueBinder(name.unqualify, (), Lam([], e, False, r), r, r), r, Public, DefFun([], noFip), InlineNever, "")
 
-fun parse-dependencies(source: source, lexemes: list<lexeme>): io list<kimport>
+fun parse-dependencies(source: source, lexemes: list<lexeme>): _ list<kimport>
   with handler
     final ctl parse-error(e: string, r: range)
       throw("Parse error: " ++ e ++ " at " ++ r.show) // TODO: Transition to error
   parse-lexemes(source, lexemes, parse-module-deps)
 
 // Program
-fun parse-program(): <parse,fsys> user-program
+fun parse-program(): _ user-program
   parse-many("semicolons", parse-semicolon)
   val p = parse-module()
   peof()
@@ -103,12 +103,12 @@ fun parse-module-decl(fpath: path)
     (Public, "", mname, range/null)
   }])
 
-fun parse-module(): <parse,fsys> user-program
+fun parse-module(): _ user-program
   val (vis, doc, name, namerng) = parse-module-decl(source-info.name.path)
   parse-body(vis, name, namerng, doc)
 
 // Lex imports only; this is more lenient
-fun parse-module-deps(): <parse,fsys> list<kimport>
+fun parse-module-deps(): _ list<kimport>
   val (_, _, name, _) = parse-module-decl(source-info.name.path)
   val imports = parse-import-decls()
   include-std-core(name, imports)
@@ -125,7 +125,7 @@ fun parse-import-decls()
   semis("imports", parse-import-declaration)
 
 // Program body
-fun parse-body(vis: visibility, name: name, rng: range, doc: string): <parse,fsys> user-program
+fun parse-body(vis: visibility, name: name, rng: range, doc: string): _ user-program
   parse-many("semicolons", parse-semicolon)
   val (imports, fix-defss, topDefss) = braced
     val imps = semis("imports", parse-import-declaration)
@@ -148,10 +148,10 @@ type fun-def
     parsRng: range,
     mbTres: maybe<(maybe<user-type>, user-type)>,
     preds: list<user-type>,
-    ann: (user-expr -> parse user-expr)
+    ann: (user-expr -> _ user-expr)
   )
 
-fun parse-top-def(vis): <parse,fsys> list<top-def>
+fun parse-top-def(vis): _ list<top-def>
   parse-choices("topDef", [
     {[DefValue(parse-pure-decl(True, vis))]},
     {[DefType(parse-alias-decl(vis))]},
@@ -164,7 +164,7 @@ fun parse-top-def(vis): <parse,fsys> list<top-def>
   ])
 
 // Import declaration
-fun parse-import-declaration(): parse kimport
+fun parse-import-declaration(): _ kimport
   val (vis, vrng, rng0, open) = parse-try
     val (vis, vrng) = parse-visibility(Private)
     val isOpen = parse-maybe-nb("open", {parse-special-id("@open")}).is-just
@@ -173,7 +173,7 @@ fun parse-import-declaration(): parse kimport
   val (asname, name, asrng, namerng) = parse-import-alias()
   Kimport(asname, name, asrng, namerng, combine([vrng, rng0, namerng]), vis, open)
 
-fun parse-visibility(vis: visibility = Private): parse (visibility, range)
+fun parse-visibility(vis: visibility = Private): _ (visibility, range)
   parse-choices("visibility", [{
     val rng = parse-keyword("pub", ["public"])
     (Public, rng)
@@ -185,7 +185,7 @@ fun parse-visibility(vis: visibility = Private): parse (visibility, range)
   },{(vis, null)}])
 
 // External
-fun parse-extern-decl(dvis: visibility): <parse,fsys> list<top-def>
+fun parse-extern-decl(dvis: visibility): _ list<top-def>
   parse-choices("externDecl", [{
     val krng = parse-doc-keyword("extern").fst
     val _ = parse-choices("import", [
@@ -231,17 +231,17 @@ fun parse-extern-decl(dvis: visibility): <parse,fsys> list<top-def>
   }
   ])
 
-fun parse-external-import-key-val(): parse (string, string)
+fun parse-external-import-key-val(): _ (string, string)
   val key = parse-external-import-key()
   parse-keyword("=")
   val (v, _) = parse-string-literal()
   (key, v)
 
-fun parse-external-import-key(): parse string
+fun parse-external-import-key(): _ string
   val (id, _) = parse-var-id()
   id.show
 
-fun parse-external-includes(target: target, rng: range, (key, fname): (string, string)): <fsys,parse-error> list<(string, string)>
+fun parse-external-includes(target: target, rng: range, (key, fname): (string, string)): _ list<(string, string)>
   val currentFile = rng.source.name
   val fpath = currentFile.path.dirname / fname
   if target.is-c && fpath.extname == "" && key == "file" then
@@ -254,13 +254,13 @@ fun parse-external-includes(target: target, rng: range, (key, fname): (string, s
     [("include-inline", pread-file(fpath))]
   else [(key, fpath.show)]
 
-fun pread-file(fpath: path): <fsys,parse-error> string
+fun pread-file(fpath: path): _ string
   with catch fn(e)
       trace("Error reading file " ++ fpath.show)
       parse-error("Unable to read external file at path: " ++ fpath.show ++ ": got error " ++ e.message, null)
   read-text-file(fpath)
 
-fun parse-external-import-entry() : <parse,fsys> (target, list<(string, string)>)
+fun parse-external-import-entry() : _ (target, list<(string, string)>)
   val target = parse-external-target()
   val (key-vals, rng) = parse-choices("", [
     { val key = parse-external-import-key(); 
@@ -271,7 +271,7 @@ fun parse-external-import-entry() : <parse,fsys> (target, list<(string, string)>
     ])
   (target, key-vals.map(fn(kv) {parse-external-includes(target, rng, kv)}).concat)
 
-fun parse-external-import(r: range): <parse,fsys> external
+fun parse-external-import(r: range): _ external
   parse-choices("import", [
     {
       parse-keyword("=")
@@ -283,24 +283,24 @@ fun parse-external-import(r: range): <parse,fsys> external
     }
   ])
  
-fun parse-external-body(): parse (list<(target, external-call)>, range) 
+fun parse-external-body(): _ (list<(target, external-call)>, range) 
   parse-semi-braces-ranged("external entries", parse-external-entry)
 
-fun parse-external-entry(): parse (target, external-call)
+fun parse-external-entry(): _ (target, external-call)
   val (target, inl, _) = parse-external-entry-range()
   (target, inl)
 
-fun parse-external-entry-range(): parse (target, external-call, range)
+fun parse-external-entry-range(): _ (target, external-call, range)
   val target = parse-external-target()
   val (call, rng) = parse-external-call()
   (target, call, rng)
 
-fun parse-external-call(): parse (external-call, range)
+fun parse-external-call(): _ (external-call, range)
   val f = parse-maybe-nb("inline", {parse-special-id("inline"); ExternalInline}).default(ExternalCall)
   val (s, rng) = parse-string-literal()
   (f(s), rng)
 
-fun parse-external-target(): parse target
+fun parse-external-target(): _ target
   parse-choices("target", [
     {parse-special-id("c"); C(CDefault)},
     {parse-special-id("cs"); CS},
@@ -309,7 +309,7 @@ fun parse-external-target(): parse target
   ])
 
 // Fixity declaration
-fun parse-fixity-decl(): parse list<fix-def>
+fun parse-fixity-decl(): _ list<fix-def>
   val (vis, vrng, assoc) = parse-try
     val (vis, vrng) = parse-visibility(Private); 
     val assoc = parse-assoc-decl(); 
@@ -320,7 +320,7 @@ fun parse-fixity-decl(): parse list<fix-def>
   val names = parse-sep-by1("names", parse-identifier, parse-comma)
   names.map(fn((name, rng)) FixDef(name, FixInfix(prec, assoc), rng.combine(vrng), vis))
 
-fun parse-assoc-decl(): parse assoc
+fun parse-assoc-decl(): _ assoc
   parse-choices("associativity", [
     {parse-keyword("infixl"); AssocLeft},
     {parse-keyword("infixr"); AssocRight},
@@ -328,7 +328,7 @@ fun parse-assoc-decl(): parse assoc
   ])
 
 // Type definitions
-fun parse-alias-decl(dvis: visibility): parse user-typedef
+fun parse-alias-decl(dvis: visibility): _ user-typedef
   val (vis, vrng, trng, doc) = parse-try
     val (vis, vrng) = parse-visibility(dvis)
     val (trng, doc) = parse-doc-keyword("alias")
@@ -340,10 +340,10 @@ fun parse-alias-decl(dvis: visibility): parse user-typedef
   val range = combine([vrng, trng, krng, tp.range])
   Synonym(tbind(kind), tpars, tp, range, vis, doc) 
 
-fun parse-type-declaration(vis: visibility): parse (user-typedef,list<user-def>)
+fun parse-type-declaration(vis: visibility): _ (user-typedef,list<user-def>)
   parse-choices("type", [{parse-data-type-decl(vis)}, {parse-struct-decl(vis)}])
 
-fun parse-data-type-decl(dvis: visibility): parse (user-typedef,list<user-def>)
+fun parse-data-type-decl(dvis: visibility): _ (user-typedef,list<user-def>)
   val (vis, defvis, vrng, (typeSort, trng, doc, ddef)) = parse-choices("type", [
     {
       val rng = parse-keyword("abstract")
@@ -369,7 +369,7 @@ fun parse-data-type-decl(dvis: visibility): parse (user-typedef,list<user-def>)
   val range = combine([vrng, trng, name.range, prng, crng])
   (DataType(name, tpars, constrs, range, vis, typeSort, ddef, DataNoEffect, doc), creatorss.concat)
 
-fun parse-struct-decl(dvis': visibility): parse (user-typedef,list<user-def>)
+fun parse-struct-decl(dvis': visibility): _ (user-typedef,list<user-def>)
   val ((vis, defvis, ddef), (vrng, trng, doc)) = parse-try
       val (vis, defvis, rng1) = parse-choices("", [
         {val rng = parse-keyword("abstract"); (Public, Private, rng)}, 
@@ -392,7 +392,7 @@ fun parse-struct-decl(dvis': visibility): parse (user-typedef,list<user-def>)
   val (usercon, creators) = make-user-constructor(conId, tpars, resTp, [], pars, Nothing, rng, rng.combine(prng), defvis, doc)
   (DataType(n, tpars, [usercon], combine([vrng, trng, rng, prng]), vis, Inductive, ddef, DataNoEffect, doc), creators)
 
-fun parse-type-declaration-kind(): parse (data-kind, range, string, data-def)
+fun parse-type-declaration-kind(): _ (data-kind, range, string, data-def)
   parse-choices("", [
     {
       val (rng1, kind) = parse-choices("", 
@@ -415,7 +415,7 @@ fun parse-type-declaration-kind(): parse (data-kind, range, string, data-def)
     }
   ])
 
-fun parse-type-kind-params(): parse (list<user-type-binder>,user-kind,range)
+fun parse-type-kind-params(): _ (list<user-type-binder>,user-kind,range)
   parse-choices("", [
     { val (tpars, rng) = angles-ranged(parse-type-binders); 
       val kind = parse-kind-annotation(); 
@@ -454,7 +454,7 @@ fun parse-con-binder(dvis: visibility)
   (vis, ValueBinder(name, tp, opt, rng, vrng.combine(rng).combine(tp.range).combine(drng)))
 
 // Effect definitions
-fun parse-effect-decl(dvis: visibility): parse list<top-def>
+fun parse-effect-decl(dvis: visibility): _ list<top-def>
   val ((vis,defVis,vrng,erng),(doc,singleShot,sort),isInstance,isScoped) = parse-try
     val (vis, defVis, vrng) = parse-choices("", [{val (v, vr) = parse-visibility(dvis); (v, v, vr)}, {val vr = parse-keyword("abstract"); (Public, Private, vr)}])
     val isInstance = parse-maybe-nb("named", {parse-keyword("named")}).is-just
@@ -488,13 +488,13 @@ fun parse-effect-decl(dvis: visibility): parse list<top-def>
    }
   ]))
 
-fun parse-doc-keyword-effect(): parse (range, string)
+fun parse-doc-keyword-effect(): _ (range, string)
   parse-doc-keyword("effect", ["context", "ambient"])
 
-fun parse-doc-keyword-fun(): parse (range, string)
+fun parse-doc-keyword-fun(): _ (range, string)
   parse-doc-keyword("fun",[])
 
-fun parse-keyword-mask(): parse range
+fun parse-keyword-mask(): _ range
   parse-keyword("mask", ["inject"])
 
 fun parse-operation-decl(lin: bool, vis: visibility)
@@ -507,7 +507,7 @@ fun parse-operation-decl(lin: bool, vis: visibility)
 // TODO: annotate the operation as "value operation" to
 // (a) also constrain the definition in the handler to use `val`
 // (b) constrain the use site to use it as a value
-fun parse-value-operation-decl(vis: visibility): parse op-decl
+fun parse-value-operation-decl(vis: visibility): _ op-decl
   val (rng0, doc) = parse-doc-keyword("val")
   val (id, idrng) = parse-identifier()
   parse-keyword(":")
@@ -517,7 +517,7 @@ fun parse-value-operation-decl(vis: visibility): parse op-decl
   val oprng = combine([rng0, idrng, tRes.range])
   OpDecl(doc, id.to-value-operation-name, rng0, idrng, True, OpVal, [], [], idrng, mbTeff, tRes, oprng)
 
-fun parse-fun-operation-decl(lin: bool, vis: visibility): parse op-decl
+fun parse-fun-operation-decl(lin: bool, vis: visibility): _ op-decl
   val ((rng0, doc), sort) = parse-choices("op decl", [
     {(parse-doc-keyword-fun(), OpFun)},{
       val rdoc = parse-doc-keyword("ctl", ["control"])
@@ -555,7 +555,7 @@ fun parse-decl-params(allowBorrow: bool, allowDefaults: bool)
   (pars, pinfos, rng)
 
 // Value definitions
-fun parse-pure-decl(toplevel: bool, dvis: visibility): parse user-def
+fun parse-pure-decl(toplevel: bool, dvis: visibility): _ user-def
   with parse-try
   val (vis, vrng) = parse-visibility(dvis)
   val inl = parse-inline()
@@ -574,27 +574,27 @@ fun parse-pure-decl(toplevel: bool, dvis: visibility): parse user-def
       parse-error("hint: use 'fun' to start a named function definition (and 'fn' for anonymous functions)", peek().range)}
   ])
 
-fun parse-function-decl(toplevel: bool, vrng: range, vis: visibility): parse user-def
+fun parse-function-decl(toplevel: bool, vrng: range, vis: visibility): _ user-def
   with parse-try
   val inl = parse-inline()
   val (f,frng) = parse-tail-fip()
   val (rng, doc) = parse-doc-keyword-fun()
   parse-fun-decl(toplevel, vrng.combine(rng).combine(frng), doc, vis, inl, f)
 
-fun parse-variable-declaration(): parse user-def
+fun parse-variable-declaration(): _ user-def
   val (vrng, doc) = parse-doc-keyword("var")
   val bind = parse-value-binder(vrng)
   parse-keyword(":=")
   val body = parse-block-expr()
   Def(bind(body), vrng.combine(body.range), Private, DefVar, InlineNever, doc)
 
-fun parse-val-decl(rng: range, doc: string, vis: visibility, inl: def-inline): parse user-def
+fun parse-val-decl(rng: range, doc: string, vis: visibility, inl: def-inline): _ user-def
   val bind = parse-value-binder(rng)
   parse-keyword("=")
   val body = parse-block-expr()
   Def(bind(body), rng.combine(body.range), vis, DefVal, inl, doc)
 
-fun parse-fun-decl(toplevel: bool, rng: range, doc: string, vis: visibility, inl: def-inline, f: fipT): parse user-def
+fun parse-fun-decl(toplevel: bool, rng: range, doc: string, vis: visibility, inl: def-inline, f: fipT): _ user-def
   val spars = parse-s-quantifier()
   // trace("parsing function " ++ toplevel.show ++ "\n" ++ doc ++ "\n")
   val (name, nameRng) = parse-fun-id()
@@ -611,22 +611,22 @@ fun parse-fun-def(allowBorrow: bool, allowImplicits: bool)
   val preds = []
   FunDef(tpars, pars, pinfos, rng, resultTp, preds, transform)
 
-fun parse-annot-result(): parse maybe<(maybe<user-type>, user-type)>
+fun parse-annot-result(): _ maybe<(maybe<user-type>, user-type)>
   parse-maybe("")
     val (teff, tres) = parse-annotated-result()
     (Just(teff), tres)
 
-fun parse-annotated-result(): parse (user-type, user-type)
+fun parse-annotated-result(): _ (user-type, user-type)
   parse-keyword(":")
   parse-result-type()
 
-fun parse-type-params(): parse list<user-type-binder>
+fun parse-type-params(): _ list<user-type-binder>
   parse-maybe-list({angles(parse-type-binders)})
 
 fun parse-parameters(allowBorrow: bool, allowDefaults: bool, allowImplicits: bool)
   val (results, rng) = parse-parens-commas-ranged({parse-parameter(allowBorrow, allowDefaults, allowImplicits)})
   val (binders, pinfos, transforms) = results.unzip3
-  fun transform(e: user-expr): parse user-expr
+  fun transform(e: user-expr): _ user-expr
     transforms.foldr(e, fn(f, e') f(e'))
   // TODO: Check correct parameter order: normal, named, implicit
   (binders, pinfos, transform, rng)
@@ -674,7 +674,7 @@ fun parse-parameter-implicit()
 fun parse-default-expr()
   parse-maybe-nb("default", {val krng = parse-keyword("="); val e = parse-expression(); (Just(e), krng.combine(e.range))}).default((Nothing, null))
 
-fun parse-block(): parse user-expr
+fun parse-block(): _ user-expr
   val rng1 = parse-left-curly()
   parse-many("semicolons", parse-semicolon)
   val stmts1 = semis("statements", parse-statement)
@@ -695,7 +695,7 @@ fun parse-block(): parse user-expr
     [] -> Var(nameUnit, False, rng1.combine(rng2))
     _ -> parse-error("Last statement in a block must be an expression", rng1.combine(rng2))
 
-fun parse-statement(): parse statement
+fun parse-statement(): _ statement
   parse-choices("statement", [
    {
     val funs = parse-many1("", {parse-function-decl(False, null, Private)})
@@ -710,12 +710,12 @@ fun parse-statement(): parse statement
    {StatExpr(parse-choices("", [parse-basic-expr, parse-return-expr]))} 
   ]) 
 
-fun parse-local-value-declaration(): parse (user-expr -> parse user-expr)
+fun parse-local-value-declaration(): _ (user-expr -> _ user-expr)
   val krng = parse-keyword("val")
   val pat = parse-pattern()
   parse-keyword("=")
   val e = parse-block-expr()
-  fun bindVar(binder:value-binder<maybe<user-type>, pattern<user-type>>, mbTyp: maybe<user-type>, rng: range): parse (user-expr -> parse user-expr)
+  fun bindVar(binder:value-binder<maybe<user-type>, pattern<user-type>>, mbTyp: maybe<user-type>, rng: range): _ (user-expr -> _ user-expr)
     val annExpr = match mbTyp
       Just(tp) -> Ann(e, tp.promote-type, rng)
       Nothing -> e
@@ -747,49 +747,49 @@ fun parse-with-statement()
   ])
 
 
-fun parse-type-annotation(): parse (user-expr -> parse user-expr)
+fun parse-type-annotation(): _ (user-expr -> _ user-expr)
   parse-maybe("", {
     val tp = parse-type-annot()
     fn(x) Ann(x, tp, tp.range.combine(x.range))
   }).default(fn(x) x)
 
 // Expressions
-fun parse-body-expr(): parse user-expr
+fun parse-body-expr(): _ user-expr
   parse-choices("", [parse-block-expr, {parse-keyword("->"); parse-block-expr()}])
 
-fun parse-block-expr(): parse user-expr
+fun parse-block-expr(): _ user-expr
   parse-choices("expression", [parse-with-expr, parse-block-fun-expr, parse-return-expr, parse-val-expr, parse-basic-expr])
 
-fun parse-expression(): parse user-expr
+fun parse-expression(): _ user-expr
   parse-choices("expression", [parse-with-expr, parse-fun-expr, parse-return-expr, parse-val-expr, parse-basic-expr])
 
-fun parse-basic-expr(): parse user-expr
+fun parse-basic-expr(): _ user-expr
   parse-choices("basic expression", [parse-if-expr, parse-fn-expr, parse-match-expr, parse-handler-expr, parse-op-expr])
 
-fun parse-with-expr(): parse user-expr
+fun parse-with-expr(): _ user-expr
   val f = parse-with-statement()
   parse-keyword("in")
   f(parse-block-expr())
 
-fun parse-val-expr(): parse user-expr
+fun parse-val-expr(): _ user-expr
   val f = parse-local-value-declaration()
   parse-keyword("in")
   f(parse-expression())
 
-fun parse-block-fun-expr(): parse user-expr
+fun parse-block-fun-expr(): _ user-expr
   parse-choices("", [parse-block, {parse-lambda(["fun"])}])
 
-fun parse-fun-expr(): parse user-expr
+fun parse-fun-expr(): _ user-expr
   parse-choices("", [parse-fun-block, {parse-lambda(["fun"])}])
 
-inline fun parse-fn-expr(): parse user-expr
+inline fun parse-fn-expr(): _ user-expr
   parse-lambda([])
 
-fun parse-fun-block(): parse user-expr
+fun parse-fun-block(): _ user-expr
   val exp = parse-block()
   Lam([], exp, False, exp.range)
 
-fun parse-lambda(alts: list<string>): parse user-expr
+fun parse-lambda(alts: list<string>): _ user-expr
   val rng = parse-keyword("fn")
   val spars = parse-s-quantifier()
   val FunDef(tpars, pars, _, _, mbTres, preds, ann) = parse-fun-def(False, True)
@@ -797,7 +797,7 @@ fun parse-lambda(alts: list<string>): parse user-expr
   val f = promote(spars, tpars, preds, mbTres, Lam(pars, body, False, rng.combine(body.range)))
   ann(Parens(f, "fn".new-name, "", rng))
 
-fun parse-if-expr(): parse user-expr
+fun parse-if-expr(): _ user-expr
   val rng = parse-keyword("if")
   val tst = parse-non-trailing-lambda()
   val (tExpr, eExprs, eExpr) =
@@ -817,13 +817,13 @@ fun parse-if-expr(): parse user-expr
     Case(tst', [Branch(PatCon(nameTrue, [], null, null), [Guard(guardTrue, tExpr')]),
               Branch(PatCon(nameFalse, [], null, null), [Guard(guardTrue, eExpr')])], False, tst'.range.combine(eExpr'.range))
   
-fun parse-elif-expr(): parse (user-expr, user-expr)
+fun parse-elif-expr(): _ (user-expr, user-expr)
   val rng = parse-keyword("elif")
   val tst = parse-non-trailing-lambda()
   val tExpr = parse-then-expr(rng)
   (tst, tExpr)
 
-fun parse-then-expr(rng: range): parse user-expr
+fun parse-then-expr(rng: range): _ user-expr
   parse-choices("then", [
     {parse-keyword("then"); parse-block-expr()},
     {
@@ -833,12 +833,12 @@ fun parse-then-expr(rng: range): parse user-expr
     }
   ])
 
-fun parse-return-expr(): parse user-expr
+fun parse-return-expr(): _ user-expr
   val rng = parse-keyword("return")
   val exp = parse-expression()
   exp.make-return(rng)
 
-fun parse-match-expr(): parse user-expr
+fun parse-match-expr(): _ user-expr
   parse-choices("", [{
     val lzy = parse-maybe-nb("", {parse-special-id("lazy")}).is-just
     val rng = parse-keyword("match")
@@ -848,7 +848,7 @@ fun parse-match-expr(): parse user-expr
   }, parse-handler-expr])
 
 // TODO: Fix parsing of handler to match the grammar precisely
-fun parse-handler-expr(): parse user-expr
+fun parse-handler-expr(): _ user-expr
   val (rng0, hsort) = parse-maybe-nb("", {val rng = parse-keyword("named"); (rng, HandlerInstance)}).default((null, HandlerNormal))
   parse-choices("handle or handler", [
     {
@@ -867,7 +867,7 @@ fun parse-handler-expr(): parse user-expr
     }
   ])
 
-fun parse-handler-stat(rng: range, hSort: handler-sort): parse user-expr
+fun parse-handler-stat(rng: range, hSort: handler-sort): _ user-expr
   match hSort
     HandlerNormal -> parse-handler-exprx(rng, hSort)
     HandlerInstance ->
@@ -875,12 +875,12 @@ fun parse-handler-stat(rng: range, hSort: handler-sort): parse user-expr
       parse-maybe-nb("", {parse-keyword("handler")})
       parse-handler-exprx(rng, hSort)
 
-fun parse-handler-exprx(rng: range, hSort: handler-sort): parse user-expr
+fun parse-handler-exprx(rng: range, hSort: handler-sort): _ user-expr
   val scoped = parse-maybe("", {parse-keyword("scoped"); HandlerScoped}).default(HandlerNoScope)
   val (over, mbEff) = parse-handler-override(hSort)
   parse-handler-clauses(rng, mbEff, scoped, over, hSort)
 
-fun parse-handler-override(hSort: handler-sort): parse (handler-override, maybe<user-type>)
+fun parse-handler-override(hSort: handler-sort): _ (handler-override, maybe<user-type>)
   val over = match hSort
     HandlerNormal -> 
       parse-maybe("", {parse-keyword("override"); HandlerOverride}).default(HandlerNoOverride)
@@ -888,7 +888,7 @@ fun parse-handler-override(hSort: handler-sort): parse (handler-override, maybe<
   val mbEff = parse-maybe("", {val eff = angles(parse-type); eff.promote-type})
   (over, mbEff)
 
-fun parse-handler-clauses(rng: range, mbEff: maybe<user-type>, scoped: handler-scope, over: handler-override, hsort: handler-sort): parse user-expr
+fun parse-handler-clauses(rng: range, mbEff: maybe<user-type>, scoped: handler-scope, over: handler-override, hsort: handler-sort): _ user-expr
   val (clausesAndBinders, rng2) = parse-op-clauses()
   val fullrange = rng.combine(rng2)
   val (clauses, binders) = extract-binders(clausesAndBinders)
@@ -903,7 +903,7 @@ fun parse-handler-clauses(rng: range, mbEff: maybe<user-type>, scoped: handler-s
     _ -> binders(Handler(hsort, scoped, over, Nothing, mbEff, [], reinit, ret, finally, ops, rng, fullrange))
   apply-maybe(fullrange, reinit, finally, hand)
 
-fun parse-op-clauses(): parse (list<binder>, range)
+fun parse-op-clauses(): _ (list<binder>, range)
   fun parse-single-op()
     val (op, bind) = parse-handler-op()
     ([(op, bind)], op.range)
@@ -916,7 +916,7 @@ fun parse-op-clauses(): parse (list<binder>, range)
     { ([], null)}
   ])
 
-fun parse-handler-opx(): parse (clause, maybe<(user-expr -> user-expr)>)
+fun parse-handler-opx(): _ (clause, maybe<(user-expr -> user-expr)>)
   parse-choices("handler clause", [
     {
       val rng = parse-special-id("finally")
@@ -938,7 +938,7 @@ fun parse-handler-opx(): parse (clause, maybe<(user-expr -> user-expr)>)
     }, parse-handler-op
   ])
 
-fun parse-handler-op(): parse (clause, maybe<(user-expr -> user-expr)>)
+fun parse-handler-op(): _ (clause, maybe<(user-expr -> user-expr)>)
   parse-choices("handler clause", [
     {
       val rng = parse-keyword("return")
@@ -996,12 +996,12 @@ fun parse-handler-param()
   val tp = parse-maybe-nb("", parse-type-annot)
   ValueBinder(name, tp, (), rng, rng.combine(tp.map(kut/range).default(rng)))
 
-fun parse-branch(): parse user-branch
+fun parse-branch(): _ user-branch
   val pat = parse-pattern()
   val grds = parse-guards()
   Branch(pat, grds)
 
-fun parse-guards(): parse list<user-guard>
+fun parse-guards(): _ list<user-guard>
   parse-choices("guards", [
     {parse-many1("", parse-guard-bar)},
     {parse-keyword("->"); [Guard(guardTrue, parse-block-expr())]},
@@ -1012,7 +1012,7 @@ fun parse-guards(): parse list<user-guard>
     }
   ])
 
-fun parse-guard-bar(): parse user-guard
+fun parse-guard-bar(): _ user-guard
   parse-vertical-bar()
   val grd = parse-guard-test()
   parse-keyword("->")
@@ -1028,13 +1028,13 @@ fun parse-guard-test()
 
 // Op expr
 // Non trailing lambda expressions
-inline fun parse-non-trailing-lambda(): parse user-expr
+inline fun parse-non-trailing-lambda(): _ user-expr
   parse-op-exprx(False)
 
-inline fun parse-op-expr(): parse user-expr
+inline fun parse-op-expr(): _ user-expr
   parse-op-exprx(True)
 
-fun parse-op-exprx(allowTrailingLam: bool): parse user-expr
+fun parse-op-exprx(allowTrailingLam: bool): _ user-expr
   val e1 = parse-prefix-expr(allowTrailingLam)
   // trace("Parsed expression " ++ e1.show ++ "\n")
   parse-choices("", [
@@ -1052,24 +1052,24 @@ fun parse-op-exprx(allowTrailingLam: bool): parse user-expr
   ])
 
 
-fun parse-operator-var(): parse user-expr
+fun parse-operator-var(): _ user-expr
   parse-choices("", [
     {val (name, rng) = parse-qualified-operator(); Var(name, True, rng)},
     {Var(nameAssign, True, parse-keyword(":="))}
   ])
 
-fun parse-prefix-expr(allowTrailingLam: bool): parse user-expr
+fun parse-prefix-expr(allowTrailingLam: bool): _ user-expr
   val ops = parse-many("", parse-prefix-op)
   val aexp = parse-application-expression(allowTrailingLam)
   ops.foldr(aexp, fn(op, e) App(op, [(Nothing, e)], op.range.combine(e.range)))
 
-fun parse-application-expression(allowTrailingLam: bool): parse user-expr
+fun parse-application-expression(allowTrailingLam: bool): _ user-expr
   val e0 = parse-atomic()
   // trace("applying " ++ e0.show ++ "\n")
   val fs = parse-many("", {parse-choices("", [parse-dot-expr, parse-applier, parse-indexer, {parse-func-applications(allowTrailingLam)}])})
   fs.foldl(e0, fn(e:user-expr, f:user-expr -> user-expr) f(e))
 
-fun parse-dot-expr(): parse (user-expr -> user-expr)
+fun parse-dot-expr(): _ (user-expr -> user-expr)
   parse-keyword(".")
   parse-choices("", [
     {
@@ -1085,7 +1085,7 @@ fun parse-dot-expr(): parse (user-expr -> user-expr)
       ])
     }, parse-applier])
 
-fun parse-indexer(): parse (user-expr -> user-expr)
+fun parse-indexer(): _ (user-expr -> user-expr)
   val rng0 = parse-left-bracket()
   parse-choices("", [
     {
@@ -1103,17 +1103,17 @@ fun parse-indexer(): parse (user-expr -> user-expr)
     }
   ])
 
-fun parse-applier(): parse (user-expr -> user-expr)
+fun parse-applier(): _ (user-expr -> user-expr)
   val rng0 = parse-left-paren()
   val args = parse-sep-by("", parse-argument, parse-comma)
   val rng1 = parse-right-paren()
   fn(e) App(e, args, rng1.combine(e.range))
 
-fun parse-func-application(allowTrailingLam: bool): parse user-expr
+fun parse-func-application(allowTrailingLam: bool): _ user-expr
   if allowTrailingLam then parse-choices("", [parse-fun-block, {parse-lambda([])}])
   else parse-lambda([])
 
-fun parse-func-applications(allowTrailingLam: bool): parse (user-expr -> user-expr)
+fun parse-func-applications(allowTrailingLam: bool): _ (user-expr -> user-expr)
   fun inject-apply(e, fs)
     match fs
       [] -> e
@@ -1129,7 +1129,7 @@ fun parse-func-applications(allowTrailingLam: bool): parse (user-expr -> user-ex
   fn(arg0)
     inject-apply(arg0, fs)
 
-fun parse-argument(): parse (maybe<(name,range)>, user-expr)
+fun parse-argument(): _ (maybe<(name,range)>, user-expr)
   val exp = parse-annotated-expr()
   match exp
     Var(name, _, rng) ->
@@ -1145,7 +1145,7 @@ fun parse-argument(): parse (maybe<(name,range)>, user-expr)
     _ -> (Nothing, exp.eta-expand)
 
 /// Atomic expression
-fun parse-atomic(): parse user-expr
+fun parse-atomic(): _ user-expr
   parse-choices("(simple) expression", [
     parse-idcon,
     parse-tuple-expression, // must be second due to '(' operator ')'
@@ -1157,7 +1157,7 @@ fun parse-atomic(): parse user-expr
     parse-mask-expr
   ])
 
-fun parse-literal(): parse lit
+fun parse-literal(): _ lit
   parse-choices("", [
     {val (i, tok) = parse-integer(); LitInt(i, tok.range)},
     {val (f, tok) = parse-float(); LitFloat(f, tok.range)},
@@ -1165,7 +1165,7 @@ fun parse-literal(): parse lit
     {val (c, range) = parse-char-literal(); LitChar(c.string, range)},
   ])
 
-fun parse-annotated-expr(): parse user-expr
+fun parse-annotated-expr(): _ user-expr
   val e = parse-expression()
   parse-choices("", [
     {
@@ -1174,7 +1174,7 @@ fun parse-annotated-expr(): parse user-expr
       Ann(e, tp, e.range.combine(tp.range))}, 
     { e }])
 
-fun parse-tuple-expression(): parse user-expr
+fun parse-tuple-expression(): _ user-expr
   val rng1 = parse-left-paren()
   val es = parse-sep-by("", parse-annotated-expr, parse-comma)
   val rng2 = parse-right-paren()
@@ -1184,7 +1184,7 @@ fun parse-tuple-expression(): parse user-expr
     [e] -> Parens(e, nil, "", rng)
     _ -> App(Var(name-tuple(es.length), False, rng), es.map((Nothing, _)), rng)
 
-fun parse-list-expr(): parse user-expr
+fun parse-list-expr(): _ user-expr
   val rng1 = parse-special("[")
   val es = parse-sep-by("",parse-annotated-expr, parse-comma)
   val rng2 = parse-special("]")
@@ -1193,28 +1193,28 @@ fun parse-list-expr(): parse user-expr
   else
     es.foldr(make-nil(rng2.after), fn(x, acc) rng1.make-cons(x, acc, userTpRange)).adjust-range(rng1.combine(rng2))
 
-fun parse-constructor-context-expr(): parse user-expr
+fun parse-constructor-context-expr(): _ user-expr
   parse-constructor-context(parse-keyword("ctx"))
 
-fun parse-constructor-context(rng: range): parse user-expr
+fun parse-constructor-context(rng: range): _ user-expr
   make-app(Var(nameCCtxCreate, False, rng), [parse-non-trailing-lambda()], userTpRange)
 
-fun parse-constructor-context-hole(): parse user-expr
+fun parse-constructor-context-hole(): _ user-expr
   val rng = parse-choices("", [{parse-keyword("hole")}])
   make-app(Var(nameCCtxHoleCreate, False, rng), [], userTpRange)
 
-fun parse-eta-hole(): parse user-expr
+fun parse-eta-hole(): _ user-expr
   val (nm, rng) = parse-wildcard()
   Var(nm, False, rng)
 
-fun parse-mask-expr(): parse user-expr
+fun parse-mask-expr(): _ user-expr
   val (rng, mkInj) = parse-mask-type()
   parse-choices("", [
     {mkInj(parens({parse-choices("", [parse-expression, parse-fun-block])}))}, // Need apply or the escape check may fail if it becomes a separate lambda
     {val name = new-hidden-name("mask-action"); Lam([ValueBinder(name, Nothing, Nothing, rng, rng)], mkInj(Var(name, False, rng)), False, rng)}
   ])
 
-fun parse-mask-type(): parse (range, (user-expr -> div user-expr))
+fun parse-mask-type(): _ (range, (user-expr -> _ user-expr))
   val rng1 = parse-keyword-mask()
   val behind = parse-maybe("", {parse-special-id("behind")}).is-just
   parse-left-angle()
@@ -1222,15 +1222,15 @@ fun parse-mask-type(): parse (range, (user-expr -> div user-expr))
   val rng2 = parse-right-angle()
   (rng1, fn(exp:user-expr) Inject(promote-type(tp), exp, behind, rng1.combine(rng2)))
 
-fun parse-value-binder(pre: range): parse (user-expr -> parse value-binder<(), user-expr>)
+fun parse-value-binder(pre: range): _ (user-expr -> _ value-binder<(), user-expr>)
   val (name, range) = parse-locally-qualified-identifier()
   val ann = parse-type-annotation()
   fn(e:user-expr) ValueBinder(name, (), ann(e), range, pre.combine(range))
 
-inline fun parse-pattern(): parse user-pattern
+inline fun parse-pattern(): _ user-pattern
   parse-pattern-annotation()
 
-fun parse-pattern-annotation(): parse user-pattern
+fun parse-pattern-annotation(): _ user-pattern
   val p = parse-pattern-atom()
   parse-maybe-type-annotation(p) fn(tp0)
     val tp = promote-type(tp0)
@@ -1239,7 +1239,7 @@ fun parse-pattern-annotation(): parse user-pattern
         PatVar(ValueBinder(name, Just(tp), npat, rng1, rng2))
       _ -> PatAnn(p, tp, p.range.combine(tp.range))
 
-fun parse-pattern-atom(): parse user-pattern
+fun parse-pattern-atom(): _ user-pattern
   parse-choices("pattern atom", [
     {
       val (name, rng) = parse-qualified-constructor()
@@ -1264,7 +1264,7 @@ fun parse-pattern-atom(): parse user-pattern
     }
   ])
 
-fun parse-named-pattern(): parse (maybe<(name,range)>, user-pattern)
+fun parse-named-pattern(): _ (maybe<(name,range)>, user-pattern)
   parse-choices("named pattern", [
     {
       val (name, rng) = parse-identifier();
@@ -1274,10 +1274,10 @@ fun parse-named-pattern(): parse (maybe<(name,range)>, user-pattern)
     { (Nothing, parse-pattern()) }
   ])
 
-fun parse-maybe-type-annotation(d: a, f: (user-type) -> div a): parse a
+fun parse-maybe-type-annotation(d: a, f: (user-type) -> _ a): _ a
   parse-maybe("", {f(parse-type-annot())}).default(d)
 
-fun parse-list-pattern(): parse user-pattern
+fun parse-list-pattern(): _ user-pattern
   val rng1 = parse-special("[")
   val es = parse-sep-by("", parse-pattern, parse-comma)
   val rng2 = parse-special("]")
@@ -1286,10 +1286,10 @@ fun parse-list-pattern(): parse user-pattern
   else
     PatParens(es.foldr(make-nil-pattern(rng2.after),make-cons-pattern), rng1.combine(rng2))
 
-fun warn-deprecated(o: string, n: string, rng: range): parse ()
+fun warn-deprecated(o: string, n: string, rng: range): _ ()
   add-warning("warning " ++ rng.start.show ++ ": keyword \"" ++ o ++ "\" is deprecated, use \"" ++ n ++ "\" instead", rng)
 
-fun parse-warning-message(msg: string, rng: range): parse ()
+fun parse-warning-message(msg: string, rng: range): _ ()
   add-warning("warning " ++ rng.start.show ++ ":" ++ msg, rng)
 
 fun test()

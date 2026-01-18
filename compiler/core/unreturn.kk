@@ -19,7 +19,7 @@ fun unreturn()
     val current-eff = Nothing
   set-core-defs(tdgs/unreturn(get-core-defs()))
 
-fun tdgs/unreturn(def-groups: list<def-group>): ur-eff list<def-group>
+fun tdgs/unreturn(def-groups: list<def-group>): _ list<def-group>
   def-groups.map(unreturn)
 
 fun tdg/unreturn(dg: def-group)
@@ -27,7 +27,7 @@ fun tdg/unreturn(dg: def-group)
     DefRec(defs) -> DefRec(defs.map(unreturn))
     DefNonRec(d) -> DefNonRec(d.unreturn)
 
-fun topdef/unreturn(d: def): ur-eff def
+fun topdef/unreturn(d: def): _ def
   val (make-def, kexpr) = d.unreturn
   match kexpr
     U(e) -> make-def(e)
@@ -39,7 +39,7 @@ effect ur
 
 alias ur-eff = <ur,comp-flags,pure,core-phase,unique>
 
-fun current-effect(eff: keffect, k: () -> <ur|e> a): <ur|e> a
+fun current-effect(eff: keffect, k: () -> _ a): _ a
   with override
     val current-eff = Just(eff)
   k()
@@ -48,7 +48,7 @@ fun def/unreturn(d: def)
   val kexpr = d.defExpr.unreturn
   (fn(e) d(defExpr = e), kexpr)
 
-fun expr/unreturn(e: expr): <comp-flags,core-phase,div,exn,ur,unique> kexpr
+fun expr/unreturn(e: expr): _ kexpr
   match e
     // lambdas and type lambdas use UnK to contain returns inside their body
     Lam(pars, eff, body) ->
@@ -115,7 +115,7 @@ fun let/unreturn(org: expr, defgroups: list<def-group>, kbody: kexpr): ur-eff ke
     Just(org).emapK(fn(e) make-let(defgroups, e), kbody)
   else kdefgs.reverse.fold(kbody)
 
-fun case/unreturn(org: expr, scruts: list<expr>, branches: list<branch>): <div,exn,unique,ur,comp-flags,core-phase> kexpr
+fun case/unreturn(org: expr, scruts: list<expr>, branches: list<branch>): _ kexpr
   val (mkBranches, kexprss) = branches.map(branch/unreturn).unzip
   val ks = kexprss.concat
   if ks.all(is-u) then U(org)
@@ -152,7 +152,7 @@ fun guard/unreturn(g: guard)
   val kexpr = g.body.unreturn
   (fn(e) Guard(g.test, e), kexpr)
 
-fun applyK(c: expr -> ur-eff expr, k: kexpr): ur-eff expr
+fun applyK(c: expr -> _ expr, k: kexpr): _ expr
   match k
     U(e) -> c(e)
     I(e) -> c(e)

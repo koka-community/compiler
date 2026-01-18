@@ -37,12 +37,12 @@ fun build-range-map(f)
 
 alias range-map = list<(range, range-info)>
 
-fun rm-find-first(rm: range-map, p: (range-info) -> e bool): e maybe<(range, range-info)>
+fun rm-find-first(rm: range-map, p: (range-info) -> _ bool): _ maybe<(range, range-info)>
   match rm.filter(fn((_,ri)) p(ri))
     Nil -> Nothing
     Cons(x, _) -> Just(x)
 
-fun rm-find-all(rm: range-map, p: (range-info) -> e bool): e list<(range, range-info)>
+fun rm-find-all(rm: range-map, p: (range-info) -> _ bool): _ list<(range, range-info)>
   rm.filter(fn((_,ri)) p(ri))
 
 fun mangle-con-name(nm: name)
@@ -71,7 +71,7 @@ type name-info
   NIModule
   NIKind
 
-fun ni/show(ni: name-info): <comp-flags,pure> string
+fun ni/show(ni: name-info): _ string
   match ni
     NITypeCon(_, d) -> "TypeCon: " ++ d
     NIValue(srt, tp, d) -> "Value " ++ srt ++ ": " ++ tp.pretty.show ++ ": " ++ d
@@ -80,7 +80,7 @@ fun ni/show(ni: name-info): <comp-flags,pure> string
     NIModule -> "Module"
     NIKind -> "Kind"
 
-fun ri/show(ri: range-info): <comp-flags,pure> string
+fun ri/show(ri: range-info): _ string
   match ri
     RIDecl(kind, name, name2, mbtp) -> 
       "Decl " ++ kind ++ " " ++ show(name) ++ " " ++ show(name2) ++ mbtp.map(": " ++ _.pretty.show).default("")
@@ -383,43 +383,43 @@ fun ri-doc(ri: range-info)
         NICon(_, d) -> Just(d)
     _ -> Nothing
 
-fun rm/(|->)(s: sub, rm: range-map): pure range-map
+fun rm/(|->)(s: sub, rm: range-map): _ range-map
   rm.map(fn((r, ri)) (r, s |-> ri))
 
-fun rm/free-type-vars(rm: range-map): pure tvs
+fun rm/free-type-vars(rm: range-map): _ tvs
   rm.map(snd).map(free-type-vars).unions
 
-fun rm/bound-type-vars(rm: range-map): pure tvs
+fun rm/bound-type-vars(rm: range-map): _ tvs
   rm.map(snd).map(bound-type-vars).unions
 
-fun ri/(|->)(s: sub, ri: range-info): pure range-info
+fun ri/(|->)(s: sub, ri: range-info): _ range-info
   match ri
     RIId(nm, i, docs, isDef) -> RIId(nm, s |-> i, docs, isDef)
     _ -> ri
 
-fun ri/free-type-vars(ri: range-info): pure tvs
+fun ri/free-type-vars(ri: range-info): _ tvs
   match ri
     RIId(_, i) -> free-type-vars(i)
     _ -> tvs/empty
 
-fun ri/bound-type-vars(ri: range-info): pure tvs
+fun ri/bound-type-vars(ri: range-info): _ tvs
   match ri
     RIId(_, i) -> bound-type-vars(i)
     _ -> tvs/empty
 
-fun ni/(|->)(s: sub, ni: name-info): pure name-info
+fun ni/(|->)(s: sub, ni: name-info): _ name-info
   match ni
     NIValue(sort, tp, isAnnotated, d) -> NIValue(sort, s |-> tp, isAnnotated, d)
     NICon(tp, d) -> NICon(s |-> tp, d)
     _ -> ni
 
-fun ni/free-type-vars(ni: name-info): pure tvs
+fun ni/free-type-vars(ni: name-info): _ tvs
   match ni
     NIValue(_, tp) -> free-type-vars(tp)
     NICon(tp) -> free-type-vars(tp)
     _ -> tvs/empty
 
-fun ni/bound-type-vars(ni: name-info): pure tvs
+fun ni/bound-type-vars(ni: name-info): _ tvs
   match ni
     NIValue(_, tp) -> bound-type-vars(tp)
     NICon(tp) -> bound-type-vars(tp)

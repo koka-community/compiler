@@ -27,14 +27,14 @@ import compiler/common/syntax
 import compiler/syntax/syntax
 import std/data/linearset
 
-fun promote-type(tp: user-type): div user-type
+fun promote-type(tp: user-type): _ user-type
   val free = tp.free-type-vars
   if free.is-empty then tp
   else
     val (someVars, forallVars) = free.list.partition(is-some-var)
     quantify(QSome, someVars.map(to-type-binder), quantify(QForall, forallVars.map(to-type-binder), tp))
 
-fun promote-free(bound: list<user-type-binder>, tps: list<user-type>): div list<user-type-binder>
+fun promote-free(bound: list<user-type-binder>, tps: list<user-type>): _ list<user-type-binder>
   (tps.free-type-vars - (names/empty + bound.map(name))).list.map(to-type-binder)
 
 // Type variable promotion
@@ -44,7 +44,7 @@ fun promote-free(bound: list<user-type-binder>, tps: list<user-type>): div list<
 // function some(a) forall(b) foo( x : a, y : b, z) : c { .. }
 // ~>
 // foo : some(a,a1) forall(b,c) (a,b,a1) -> total c = fun(x,y,z) { .. }
-fun promote(some-pars: list<user-type-binder>, forall-pars: list<user-type-binder>, preds: list<user-type>, mb-res-tp: maybe<(maybe<user-type>, user-type)>, uexpr: user-expr): pure user-expr
+fun promote(some-pars: list<user-type-binder>, forall-pars: list<user-type-binder>, preds: list<user-type>, mb-res-tp: maybe<(maybe<user-type>, user-type)>, uexpr: user-expr): _ user-expr
   val (argres-tps, expr') = argres-types(uexpr, mb-res-tp)
   if argres-tps.all(_.snd.is-right) then uexpr // no annotation, no promotion
   else
@@ -125,12 +125,12 @@ fun quantify(q: user-quantifier, tbinders: list<user-type-binder>, tp: user-type
 fun to-type-binder(n: name): user-type-binder
   TypeBinder(n, KindNone, null, null)
 
-fun name/promote-tp-vars(x: (name, either<user-type, range>), vars: name-set): div (name, either<user-type, range>)
+fun name/promote-tp-vars(x: (name, either<user-type, range>), vars: name-set): _ (name, either<user-type, range>)
   match x
     (_, Right) -> x
     (name, Left(u)) -> (name, Left(u.promote-tp-vars(vars)))
 
-fun ut/promote-tp-vars(tp: user-type, vars: name-set): div user-type
+fun ut/promote-tp-vars(tp: user-type, vars: name-set): _ user-type
   match tp
     TpQuan(quant, tb, t, rng) -> TpQuan(quant, tb, t.promote-tp-vars(vars - tb.name), rng)
     TpFun(args, eff, t, rng) -> TpFun(args.map(fn((name, t1)) (name, t1.promote-tp-vars(vars))), eff.promote-tp-vars(vars), t.promote-tp-vars(vars), rng)

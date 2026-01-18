@@ -31,8 +31,6 @@ type infer-kind-env
     dataEffects: name-map<data-effect>
   )
 
-alias infer-kind-eff = <inf-kind-env, infer-kind-effect, unique>
-
 effect val inf-kind-env: infer-kind-env
 
 effect infer-kind-effect

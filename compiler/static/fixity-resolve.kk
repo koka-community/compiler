@@ -51,14 +51,14 @@ fun def/resolve(d: def<user-type>)
   val binder' = d.binder.resolve
   d(binder=binder')
 
-fun binder/resolve(b: value-binder<t, a>, ?resolve: (a) -> fix-eff a): fix-eff value-binder<t, a>
+fun binder/resolve(b: value-binder<t, a>, ?resolve: (a) -> _ a): _ value-binder<t, a>
   val expr' = b.expr.resolve
   b(expr=expr')
 
-fun list/resolve(ls: list<a>, ?resolve: (a) -> fix-eff a): fix-eff list<a>
+fun list/resolve(ls: list<a>, ?resolve: (a) -> _ a): _ list<a>
   ls.map(resolve)
 
-fun expr/resolve(ex: user-expr): fix-eff user-expr
+fun expr/resolve(ex: user-expr): _ user-expr
   match ex
     Lam(binds, expr, rng, tp) ->
       val binds' = binds.list/resolve
@@ -102,7 +102,7 @@ fun expr/resolve(ex: user-expr): fix-eff user-expr
       val expr' = expr.resolve
       Inject(tp, expr', b, rng)
 
-fun maybe/resolve(ex: maybe<a>, ?resolve: (a) -> fix-eff a): fix-eff maybe<a>
+fun maybe/resolve(ex: maybe<a>, ?resolve: (a) -> _ a): _ maybe<a>
   ex.map(resolve)
 
 fun branch/resolve(branch: branch<user-type>)
@@ -138,9 +138,7 @@ effect fixityEff
   fun get-fixities(): fixities
   fun update-fixities(f: fixities -> pure fixities): ()
 
-alias fix-eff = <fixityEff, pure, comp-flags>
-
-fun handleFixities(initial: fixities, f: () -> <fixityEff,pure|e> a): <pure|e> (a, fixities, list<doc>)
+fun handleFixities(initial: fixities, f: () -> _ a): _ (a, fixities, list<doc>)
   var fixes := initial
   var errors := []
   with handler
@@ -163,7 +161,7 @@ value type term
 alias expr-stack = list<user-expr>
 alias op-stack = list<op>
 
-fun fixities/resolve(exprs: list<user-expr>): fix-eff user-expr
+fun fixities/resolve(exprs: list<user-expr>): _ user-expr
   val fixMap = get-fixities()
   terms/resolve([], [], exprs.map(_.to-term(fixMap)))
 
@@ -174,7 +172,7 @@ fun to-term(expr: user-expr, fixities: fixities): term
     _ -> Term(expr)
 
 // The real resolve algorithm uses Dijkstra's strategy with two stacks
-fun terms/resolve(exprs: expr-stack, os: op-stack, tms: list<term>): fix-eff user-expr
+fun terms/resolve(exprs: expr-stack, os: op-stack, tms: list<term>): _ user-expr
   match (exprs, os, tms)
     // final term computed
     ([x], [], []) -> x
@@ -239,7 +237,7 @@ fun pp-fixity(f: fixity): doc
     FixPostfix -> "postfix".text
 
 // Helper operations: push and apply
-fun push(xs: expr-stack, ops: op-stack, ts: list<term>, t: op): fix-eff user-expr 
+fun push(xs: expr-stack, ops: op-stack, ts: list<term>, t: op): _ user-expr 
   resolve(xs, Cons(t, ops), ts)
 
 fun apply(xs: list<expr<user-type>>, ops: list<op>, ts: list<term>)
@@ -255,14 +253,14 @@ fun apply(xs: list<expr<user-type>>, ops: list<op>, ts: list<term>)
       resolve(ys, rst, ts)
     _ -> fail("static/fixity-resolve apply: fixity resolver error")
 
-fun apply-unary-op(op: expr<t>, ts: list<expr<t>>): fix-eff list<expr<t>>
+fun apply-unary-op(op: expr<t>, ts: list<expr<t>>): _ list<expr<t>>
   match ts
     Cons(t, ts) -> Cons(App(op, [(Nothing, t)], t.range.combine(op.range)), ts)
     _ -> 
       add-fix-error("Unary operator has not enough arguments".text, op.range )
       ts
 
-fun apply-infix-op(op: expr<t>, ts: list<expr<t>>): fix-eff list<expr<t>>
+fun apply-infix-op(op: expr<t>, ts: list<expr<t>>): _ list<expr<t>>
   match ts
     Cons(t1, Cons(t2, ts)) -> Cons(App(op, [(Nothing, t1), (Nothing, t2)], t1.range.combine(t2.range)), ts)
     _ -> 

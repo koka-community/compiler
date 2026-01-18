@@ -38,13 +38,13 @@ value struct formatting-options
 
 // TODO: Implement this
 
-fun file/format(f: path): <format-opts,io> ()
+fun file/format(f: path): _ ()
   val file = read-text-file(f)
   // Keeping comments causes issues with layout algorithm, so we need better comment integration into keywords, or better layout
   val l = lex-source(Source(f.string, file), 0, True, True, id)
   write-text-file(f, format(l).show)
 
-fun list/format(l: list<lexeme>): <format-opts,pure> doc
+fun list/format(l: list<lexeme>): _ doc
   // trace("Previous lexemes: " ++ l.show)
   val integrated = l.integrate-comments(ctx hole)
   // trace("Integrated lexemes: " ++ integrated.show)
@@ -119,7 +119,7 @@ fun ll/pretty(l: list<lexeme>)
     Cons(lex, Nil) -> lex.pretty
     Nil -> pprint/empty
 
-fun lex/pretty(lexeme: lexeme): div doc
+fun lex/pretty(lexeme: lexeme): _ doc
   match lexeme.lex
     LexInt(_, s) -> s.text
     LexFloat(_, s) -> s.text
