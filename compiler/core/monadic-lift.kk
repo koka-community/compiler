@@ -12,21 +12,20 @@ import std/data/linearset
 import compiler/platform/config
 import compiler/common/unique
 
-fun monadicLift()
-  with runLifted()
+fun monadic-lift()
+  with run-lifted()
   set-core-defs(get-core-defs().lift-defgroups(True))
 
 //   transform definition groups
 fun lift-defgroups(dgs: def-groups, topLevel: bool)
   dgs.map(_.lift-defgroup(topLevel)).concat
 
-alias liftedEff = <lifted, unique, pure, comp-flags>
 effect lifted
   fun emit(dg: def-group): ()
   fun collect(): list<def-group>
   val currentDef: list<def>
 
-fun runLifted(f: () -> <lifted|e> a): e a 
+fun run-lifted(f: () -> _ a): _ a 
   var dgs := []
   with handler
     fun emit(dg) 
@@ -43,32 +42,32 @@ fun lift-defgroup(dg: def-group, topLevel: bool)
   if topLevel then
     match dg
       DefNonRec(d) ->
-        val d' = d.liftDef(topLevel)
+        val d' = d.lift-def(topLevel)
         collect() ++ [DefNonRec(d')]
       DefRec(ds) ->
-        val ds' = ds.map(_.liftDef(topLevel))
+        val ds' = ds.map(_.lift-def(topLevel))
         collect() ++ [DefRec(ds')]
   else
     match dg
-      DefNonRec(d) -> [DefNonRec(d.liftDef(topLevel))]
-      DefRec(ds) -> [DefRec(ds.map(_.liftDef(topLevel)))]
+      DefNonRec(d) -> [DefNonRec(d.lift-def(topLevel))]
+      DefRec(ds) -> [DefRec(ds.map(_.lift-def(topLevel)))]
   
-fun liftDef(d: def, topLevel: bool)
+fun lift-def(d: def, topLevel: bool)
   with override
     val currentDef = Cons(d, currentDef)
     fun emit(dg) emit(dg)
     fun collect() collect()
-  val expr' = if topLevel then d.defExpr.liftExprInl(topLevel).snd else d.defExpr.liftExpr(topLevel)
+  val expr' = if topLevel then d.defExpr.lift-expr-inl(topLevel).snd else d.defExpr.lift-expr(topLevel)
   d(defExpr = expr')
 
 // Transform expressions
 
-fun liftExprInl(expr': expr, topLevel: bool): liftedEff (expr, expr)
+fun lift-expr-inl(expr': expr, topLevel: bool): _ (expr, expr)
   match expr'
     App(tpapp as TypeApp(Var(TName(nameB)), [tpArg, tpRes, tpEff]), [bexpr, Lam([arg], eff, body)]) | nameB == nameBind ->
-      val (body', ibody') = body.liftExprInl(False)
-      val bexpr' = bexpr.liftExpr(False)
-      val f = Lam([arg], eff, body').liftLocalFun(typeTotal)
+      val (body', ibody') = body.lift-expr-inl(False)
+      val bexpr' = bexpr.lift-expr(False)
+      val f = Lam([arg], eff, body').lift-local-fun(typeTotal)
       val bind = App(tpapp, [bexpr', f])
       val a = TypeVar(0, kindStar, Bound)
       val b = TypeVar(1, kindStar, Bound)
@@ -82,69 +81,69 @@ fun liftExprInl(expr': expr, topLevel: bool): liftedEff (expr, expr)
       (bind, ibind)
     Let(defgs, body) ->
       val defgs' = defgs.lift-defgroups(False)
-      val (body', ibody') = body.liftExprInl(False)
+      val (body', ibody') = body.lift-expr-inl(False)
       (Let(defgs', body'), Let(defgs', ibody'))
     Case(exprs, bs) ->
-      val exprs' = exprs.map(_.liftExpr(False))
+      val exprs' = exprs.map(_.lift-expr(False))
       val (bs', ibs') = bs.map(liftBranchInl).unzip
       (Case(exprs', bs'), Case(exprs', ibs'))
     TypeLam(tvars, body) ->
-      val (body', ibody') = body.liftExprInl(topLevel)
+      val (body', ibody') = body.lift-expr-inl(topLevel)
       (TypeLam(tvars, body'), TypeLam(tvars, ibody'))
     TypeApp(body, tps) ->
-      val (body', ibody') = body.liftExprInl(topLevel)
+      val (body', ibody') = body.lift-expr-inl(topLevel)
       (TypeApp(body', tps), TypeApp(ibody', tps))
     Lam(args, eff, body) ->
-      val (body', ibody') = body.liftExprInl(False)
+      val (body', ibody') = body.lift-expr-inl(False)
       (Lam(args, eff, body'), Lam(args, eff, ibody'))
     _ ->
-      val newE = expr'.liftExpr(topLevel)
+      val newE = expr'.lift-expr(topLevel)
       (newE, newE)
 
-fun liftBranchInl(Branch(pat, guards): branch): liftedEff (branch, branch)
+fun liftBranchInl(Branch(pat, guards): branch): _ (branch, branch)
   val (guards', iguards') = guards.map(liftGuardInl).unzip
   (Branch(pat, guards'), Branch(pat, iguards'))
 
 fun liftGuardInl(Guard(guard, body): guard)
-  val guard' = guard.liftExpr(False)
-  val (body', ibody') = body.liftExprInl(False)
+  val guard' = guard.lift-expr(False)
+  val (body', ibody') = body.lift-expr-inl(False)
   (Guard(guard', body'), Guard(guard', ibody'))
 
-fun liftExpr(expr': expr, topLevel: bool): liftedEff expr
+fun lift-expr(expr': expr, topLevel: bool): _ expr
   match expr'
     App(tpApp as TypeApp(Var(TName(nameB))), [bexpr, Lam([arg], eff, body)]) | nameB == nameBind ->
-      val body' = body.liftExpr(False)
-      val bexpr' = bexpr.liftExpr(False)
-      val f = Lam([arg], eff, body').liftLocalFun(typeTotal)
+      val body' = body.lift-expr(False)
+      val bexpr' = bexpr.lift-expr(False)
+      val f = Lam([arg], eff, body').lift-local-fun(typeTotal)
       App(tpApp, [bexpr', f])
     App(f, args) ->
-      val f' = f.liftExpr(False)
-      val args' = args.map(_.liftExpr(False))
+      val f' = f.lift-expr(False)
+      val args' = args.map(_.lift-expr(False))
       App(f', args')
     Lam(args, eff, body) ->
-      val body' = body.liftExpr(False)
+      val body' = body.lift-expr(False)
       Lam(args, eff, body')
     Let(defgs, body) ->
       val defgs' = defgs.lift-defgroups(False)
-      val body' = body.liftExpr(False)
+      val body' = body.lift-expr(False)
       Let(defgs', body')
     Case(exprs, bs) ->
-      val exprs' = exprs.map(_.liftExpr(False))
+      val exprs' = exprs.map(_.lift-expr(False))
       val bs' = bs.map(liftBranch)
       Case(exprs', bs')
     TypeLam(tvars, body) ->
-      val body' = body.liftExpr(topLevel)
+      val body' = body.lift-expr(topLevel)
       TypeLam(tvars, body')
     TypeApp(body, tps) ->
-      val body' = body.liftExpr(topLevel)
+      val body' = body.lift-expr(topLevel)
       TypeApp(body', tps)
     _ -> expr'
 
-fun liftLocalFun(e: expr, eff: keffect)
+fun lift-local-fun(e: expr, eff: keffect)
   val fvs = e.free-locals.list
   val tvs = e.free-type-vars.list
-  val (expr2, liftDef) = e.make-def(fvs, tvs)
-  emit(DefNonRec(liftDef))
+  val (expr2, lift-def) = e.make-def(fvs, tvs)
+  emit(DefNonRec(lift-def))
   expr2
 
 fun make-def(e: expr, fvs: list<tName>, tvs: list<type-var>)
@@ -160,16 +159,16 @@ fun make-def(e: expr, fvs: list<tName>, tvs: list<type-var>)
   val allargs = allpars.map(Var(_, InfoNone))
   val liftedFun = add-type-lambdas(alltpars, Lam(allpars, eff, body))
   val liftedTp = liftedFun.type-of
-  fun liftedDef(nm, inl)
+  fun lifted-def(nm, inl)
     Def(nm, liftedTp, liftedFun, Private, DefFun([]), InlineAuto, range/null, "// monadic lift")
-  fun funExpr(n: name)
+  fun fun-expr(n: name)
     Var(TName(n, liftedTp), InfoArity(alltpars.length, allargs.length))
-  fun etaExpr(n: name)
+  fun eta-expr(n: name)
     match (tvs, fvs)
-      (Nil, Nil) -> n.funExpr
-      _ -> add-type-lambdas(tpars, Lam(pars, eff, App(add-type-apps(alltpars, funExpr(n)), allargs)))
-  val (name, inl) = unique-nameCurrentDef()
-  (name.etaExpr, name.liftedDef(inl))
+      (Nil, Nil) -> n.fun-expr
+      _ -> add-type-lambdas(tpars, Lam(pars, eff, App(add-type-apps(alltpars, fun-expr(n)), allargs)))
+  val (name, inl) = unique-name-current-def()
+  (name.eta-expr, name.lifted-def(inl))
   
 // branches
 fun liftBranch(Branch(pat, guards): branch)
@@ -177,11 +176,11 @@ fun liftBranch(Branch(pat, guards): branch)
   Branch(pat, guards')
 
 fun liftGuard(Guard(guard, body): guard)
-  val guard' = guard.liftExpr(False)
-  val body' = body.liftExpr(False)
+  val guard' = guard.lift-expr(False)
+  val body' = body.lift-expr(False)
   Guard(guard', body')
 
-fun unique-nameCurrentDef()
+fun unique-name-current-def()
   val d = currentDef.last.unjust
   val i = new-unique()
   val udef-name = to-hidden-unique-name(i, "mlift", d.def-name)

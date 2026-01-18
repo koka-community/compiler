@@ -14,19 +14,17 @@ import compiler/type/kind
 import compiler/kind/kind
 import compiler/lib/pprint
 
-alias openEff = <openEffect, comp-flags, unique, pure, documentation>
-
-effect openEffect
+effect open-eff
   fun get-gamma(): gamma
 
 fun open-resolve()
   set-core-defs(resolve(get-core-defs()))
 
 // transform definition groups
-fun dgs/resolve(dgs: def-groups): openEff def-groups
+fun dgs/resolve(dgs: def-groups): _ def-groups
   dgs.map(resolve)
 
-fun dg/resolve(dg: def-group): openEff def-group
+fun dg/resolve(dg: def-group): _ def-group
   match dg
     DefRec(dfs) -> DefRec(dfs.map(resolve))
     DefNonRec(df) -> DefNonRec(resolve(df))

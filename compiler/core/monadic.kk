@@ -14,7 +14,7 @@ import compiler/common/unique
 import std/core/unsafe
 import std/core/undiv
 
-alias monadicEff = <comp-flags,monadic,unique,pure>
+alias monadic-eff = <comp-flags,monadic,unique,pure>
 
 effect monadic
   val currentDef: list<def>
@@ -33,7 +33,7 @@ fun top/mon-transform()
 fun def-group/mon-transform(dgs: def-groups)
   dgs.map(mon-transform)
 
-fun dg/mon-transform(dg): monadicEff def-group
+fun dg/mon-transform(dg): monadic-eff def-group
   match dg
     DefRec(defs) -> DefRec(defs.map(fn(d) d.monDef(True)))
     DefNonRec(d) -> DefNonRec(d.monDef(False))
@@ -53,12 +53,12 @@ fun monDef(d: def, isRecursive: bool)
     d(defExpr = d.defExpr.mon-expr'(True)(id))
 
 alias trans<a> = transX<a, a>
-alias transX<a, b> = (a -> monadicEff b) -> monadicEff b
+alias transX<a, b> = (a -> monadic-eff b) -> monadic-eff b
 
-fun mon-expr(e: expr): monadicEff trans<expr>
+fun mon-expr(e: expr): monadic-eff trans<expr>
   e.mon-expr'(False)
 
-fun mon-expr'(expr: expr, topLevel: bool): monadicEff trans<expr>
+fun mon-expr'(expr: expr, topLevel: bool): monadic-eff trans<expr>
   match expr
     // Optimized open binding
     // note: we cannot just check for `effFrom.is-mon-effect` as the effFrom
@@ -152,12 +152,12 @@ fun mon-let-group(dg: def-group)
       val ldef = mon-let-def(False, d)
       fn(k) ldef(fn((xds, yds, nds)) k([xds,yds,nds].concat.map(DefNonRec)))
 
-fun mon-let-def(isRec: bool, d: def): monadicEff transX<(list<def>, list<def>, list<def>), expr>
+fun mon-let-def(isRec: bool, d: def): monadic-eff transX<(list<def>, list<def>, list<def>), expr>
   with set-current-def(d)
   val expr' = d.defExpr.mon-expr'(True)
   fn(k) expr'(fn(xx:expr) k(([d(defExpr=xx)], [], [])))
 
-fun mon-trans(f: (a -> monadicEff transX<b, c>), xs: list<a>): monadicEff transX<list<b>,c>
+fun mon-trans(f: (a -> monadic-eff transX<b, c>), xs: list<a>): monadic-eff transX<list<b>,c>
   match xs
     Nil -> fn(k) k([])
     Cons(x, xx) ->
@@ -165,7 +165,7 @@ fun mon-trans(f: (a -> monadicEff transX<b, c>), xs: list<a>): monadicEff transX
       val xx' = mon-trans(f, xx)
       fn(k) x'(fn(y) xx'(fn(ys) k(Cons(y, ys))))
 
-fun applies(l: list<trans<a>>, f: (list<a>) -> monadicEff a): monadicEff a
+fun applies(l: list<trans<a>>, f: (list<a>) -> monadic-eff a): monadic-eff a
   match l
     Nil -> f([])
     Cons(x, xx) -> x(fn(y) applies(xx, fn(ys) f(Cons(y, ys))))

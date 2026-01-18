@@ -26,8 +26,6 @@ effect fun-lift-eff
 
 effect val currentDef: list<def>
 
-alias liftDefEff = <fun-lift-eff, currentDef, pure, unique, comp-flags>
-
 fun current-def-names()
   currentDef.map(def-name)
 
@@ -50,7 +48,7 @@ fun handle-fun-lift(f)
   f()
 
 // Transform definition groups
-fun lift-def-groups(defgs: def-groups, topLevel: bool): liftDefEff def-groups
+fun lift-def-groups(defgs: def-groups, topLevel: bool): _ def-groups
   defgs.map(_.lift-defgroup(topLevel)).concat
 
 fun subst-with-lifted-expr(d: def, subst)
@@ -147,7 +145,8 @@ fun make-def(fvs: list<tName>, tvs: list<type-var>, pinfos: list<param-info>, or
   val etaExpr = match (tvs, fvs)
     (Nil, Nil) -> funExpr
     _ -> add-type-lambdas(tpars, Lam(pars, eff, App(add-type-apps(alltpars, funExpr), allargs)))
-  val liftedDef = Def(name, liftedTp, liftedFun, Private, def-fun(allpinfos), inl, null, "// lifted local: " ++ (dnames ++ [origName.get-name]).map(_.unqualify.show).join(", ") ++ "\n" ++ doc)
+  val liftedDef = Def(name, liftedTp, liftedFun, Private, def-fun(allpinfos), inl, null, 
+                      "// lifted local: " ++ (dnames ++ [origName.get-name]).map(_.unqualify.show).join(", ") ++ "\n" ++ doc)
   (etaExpr, liftedDef)
 
 fun unique-name-current-def()
