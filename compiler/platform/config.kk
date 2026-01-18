@@ -28,7 +28,7 @@ type file-config
     libPrefix: string
   )
 
-fun os-config(): <exn,ndet> file-config
+fun os-config(): _ file-config
   match get-os-name()
     "linux" -> FileConfig(".so", ".o", ".a", "lib", "")
     "windows" -> FileConfig(".exe", ".dll", ".obj", ".lib", "")

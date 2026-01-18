@@ -15,9 +15,8 @@ import compiler/common/color-scheme
 import std/core/undiv
 
 // Box / unbox transformation
-alias boxEff = <unique,comp-flags,documentation,pure,colors,ppEnvEff>
 
-fun box-core(c: core): boxEff core
+fun box-core(c: core): _ core
   c(defs=box-def-groups(c.defs))
 
 fun box-def-groups(dgs: def-groups)
@@ -28,7 +27,7 @@ fun box-def-group(dg: def-group)
     DefRec(defs) -> DefRec(defs.map(box-def))
     DefNonRec(d) -> DefNonRec(box-def(d))
 
-fun box-def(d: def): boxEff def
+fun box-def(d: def): _ def
   val bexpr = box-expr(box-type(d.ktype), d.defExpr)
   val bdef = d(defExpr = bexpr)
   // simplify the whole def to avoid simplifying away functions to values (e.g. `fun(x){g(x)} -> val f = g`)
@@ -174,7 +173,7 @@ fun box-var-at-tp(tp: ktype)
 fun unbox-var-at-tp(tp: ktype)
   Var(TName(nameUnbox, tp), InfoExternal([(C(CDefault), "unbox(#1)")]))
 
-fun box-coerce-fun(toParTps: list<(name, ktype)>, toEffTp: ktype, toResTp: ktype, fromParTps: list<(name, ktype)>, fromEffTp: ktype, fromResTp: ktype, ex: expr): <colors,comp-flags,pure,documentation,ppEnvEff,unique> expr
+fun box-coerce-fun(toParTps: list<(name, ktype)>, toEffTp: ktype, toResTp: ktype, fromParTps: list<(name, ktype)>, fromEffTp: ktype, fromResTp: ktype, ex: expr): _ expr
   val names = toParTps.map(fn(_) unique-name("b"))
   val pars = names.zipwith(toParTps.map(snd), fn(n, t) TName(n,t))
   val args = pars.map(Var(_, InfoNone))
@@ -187,7 +186,7 @@ fun zip3(l1: list<a>, l2: list<b>, l3: list<c>): list<(a,b,c)>
     (Cons(x1, xs1), Cons(x2, xs2), Cons(x3, xs3)) -> Cons((x1, x2, x3), zip3(xs1.pretend-decreasing, xs2, xs3))
     _ -> Nil
 
-fun box-bind-expr-as-value(fromTp: ktype, toTp: ktype, ex: expr, f: expr -> boxEff expr)
+fun box-bind-expr-as-value(fromTp: ktype, toTp: ktype, ex: expr, f: expr -> _ expr)
   if ex.is-total then f(ex)
   else
     val v = unique-tname("bv", fromTp)

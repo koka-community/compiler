@@ -32,7 +32,7 @@ pub fun raise(s: string): exn a
   // Figure out stack traces
   throw(s)
 
-pub fun catch(hndl: string -> e a, f: () -> <exn|e> a): e a
+pub fun catch(hndl: string -> _ a, f: () -> _ a): _ a
   fun adjust(s: string): string
     s // TODO: Adjust any errors if needed
   with handler final ctl throw-exn(e)

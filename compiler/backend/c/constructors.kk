@@ -11,11 +11,11 @@ import std/data/sort
 
 // Generate value constructors for each defined type
 
-fun gen-typedefs(tds: typedef-groups): asmEff ()
+fun gen-typedefs(tds: typedef-groups): _ ()
   tds.map(gen-typedef-group)
   ()
 
-fun gen-typedef-group(tds: typedef-group): asmEff ()
+fun gen-typedef-group(tds: typedef-group): _ ()
   tds.map(gen-typedef-pre)
   tds.map(gen-typedef-post)
   ()

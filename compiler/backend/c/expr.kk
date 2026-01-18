@@ -17,15 +17,15 @@ import compiler/common/color-scheme
 import compiler/common/nice
 import std/core/undiv
 
-fun gen-local-groups(dgs: def-groups): asmEff list<doc>
+fun gen-local-groups(dgs: def-groups): _ list<doc>
   dgs.map(gen-local-group)
 
-fun gen-local-group(dg: def-group): asmEff doc
+fun gen-local-group(dg: def-group): _ doc
   match dg
     DefRec -> fail("backend/c/from-core gen-local-group: local recursive function definitions are not allowed")
     DefNonRec(d) -> gen-local-def(d)
 
-fun gen-local-def(d: def): asmEff doc
+fun gen-local-def(d: def): _ doc
   val resDoc = typeComment(d.ktype.cpp-type)
   val defDoc = gen-statement(ResultAssign(d.defTName, Nothing), d.defExpr)
   fun isDiscardExpr(e: expr)
@@ -43,12 +43,12 @@ fun gen-local-def(d: def): asmEff doc
 
 // Generate C declaration for top level definitions
 
-fun gen-top-groups(d: list<def-group>): asmEff ()
+fun gen-top-groups(d: list<def-group>): _ ()
   with localUnique
   d.map(gen-top-group)
   ()
 
-fun gen-top-group(g: def-group): asmEff ()
+fun gen-top-group(g: def-group): _ ()
   match g
     DefRec(defs) -> 
       defs.map(gen-fun-topdef-sig)
@@ -279,7 +279,7 @@ fun try-tailcall(r: result, ex: expr)
   
 
 // Generates a statement from an expression by applying a return context (deeply) inside
-fun gen-statement(res: result, ex: expr): asmEff doc
+fun gen-statement(res: result, ex: expr): _ doc
   val mdoc = try-tailcall(res, ex)
   match mdoc
     Just(doc) -> doc
@@ -387,7 +387,7 @@ fun concat(xss: list<(list<a>, list<b>, list<c>, list<d>)>): (list<a>, list<b>, 
       val (la1, lb1, lc1, ld1) = concat(xs)
       (la ++ la1, lb ++ lb1, lc ++ lc1, ld ++ ld1)
 
-fun gen-pattern(doTest: bool, bindings0: bindings, l: list<(doc, pattern)>, genBody: bindings -> asmEff doc)
+fun gen-pattern(doTest: bool, bindings0: bindings, l: list<(doc, pattern)>, genBody: bindings -> _ doc)
   match l
     Nil -> genBody(bindings0)
     _ ->
@@ -471,7 +471,7 @@ fun gen-next-patterns(select: (doc, doc) -> doc, exprDoc: doc, tp: ktype, patts:
 // Expressions that produce statements on their way
 
 // Generates C statements and expressions from core expression
-fun gen-expression(ex: expr): asmEff (list<doc>, doc)
+fun gen-expression(ex: expr): _ (list<doc>, doc)
   if ex.is-inlineableExpr then
     ([], ex.gen-inline)
   else
@@ -812,7 +812,7 @@ fun gen-expression-external(tname: tName, formats: list<(target, string)>, args:
         ([], gen-hole-call(tname.typeOf.resultType))
   val format = getFormat(tname, formats)
   val argDocs = args.map(fn(d) if d.asString.list.all(fn(c) c.is-alpha || c.is-digit || c == '_') then d else d.parens)
-  fun pp-externalf(name: name, k: list<char>): <comp-flags,documentation,pure,colors,ppEnvEff> doc
+  fun pp-externalf(name: name, k: list<char>): _ doc
     match k
       Nil -> empty
       Cons('\\', Cons('#', xs)) -> char('#') |.| pp-externalf(name, xs)

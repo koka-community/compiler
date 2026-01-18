@@ -4,17 +4,17 @@ import compiler/common/name-prim
 import compiler/common/name-collections
 import std/data/linearmap
 
-alias inlines = name-map<inlineDef>
+alias inlines = name-map<inline-def>
 
 val empty:inlines = LinearMap([])
 
-fun inlines(xs: list<inlineDef>)
+fun inlines(xs: list<inline-def>)
   empty.extends(xs)
 
-fun extends(inls: inlines, xs: list<inlineDef>)
+fun extends(inls: inlines, xs: list<inline-def>)
   xs.foldl(inls, extend)
 
-fun extend(inls: inlines, inl: inlineDef)
+fun extend(inls: inlines, inl: inline-def)
   inls.add(inl.def-name, inl)
 
 fun merge(inls1: inlines, inls2: inlines)

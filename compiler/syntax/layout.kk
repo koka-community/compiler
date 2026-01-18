@@ -21,7 +21,7 @@ import std/core/unsafe
 import std/core-extras
 
 // Lex a source
-fun lex-source(source: source, line: int, allow-at: bool, semi-insert: bool, preprocess: list<lexeme> -> <pure|e> list<lexeme>): <pure|e> list<lexeme>
+fun lex-source(source: source, line: int, allow-at: bool, semi-insert: bool, preprocess: list<lexeme> -> _ list<lexeme>): _ list<lexeme>
   // val input = if source.name.is-literal-doc then rawinput.extract-literate else rawinput
   val rawinput = source.contents
   lexing(source, line, rawinput).layout(allow-at, semi-insert).preprocess
@@ -196,7 +196,7 @@ fun indent-layout(lexs: list<lexeme>): list<lexeme>
       pretend-no-div
         brace(Layout(start, 1), [], start, lexs)
 
-fun brace(layout: layout, layouts: list<layout>, prev: lexeme, lexemes: list<lexeme>): <div> list<lexeme>
+fun brace(layout: layout, layouts: list<layout>, prev: lexeme, lexemes: list<lexeme>): _ list<lexeme>
   match lexemes
     Nil -> // End of file
       match layouts

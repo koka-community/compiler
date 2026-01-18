@@ -34,9 +34,7 @@ linear effect token-parse
   fun put-all(lexemes: list<lexeme>): ()
   fun get-lexemes_(): list<lexeme>
 
-alias parse = <token-parse, parse-error, pure>
-
-fun parse-delimited(msg: string, f: () -> <token-parse,parse-error|e> a): <token-parse,parse-error|e> a
+fun parse-delimited(msg: string, f: () -> _ a): _ a
   delimit(msg)
   with override
     final ctl parse-error(e, r) 
@@ -46,19 +44,19 @@ fun parse-delimited(msg: string, f: () -> <token-parse,parse-error|e> a): <token
   undelimit(msg)
   x
 
-fun peek(): <parse> lexeme
+fun peek(): _ lexeme
   val p = ppeek()
   match p
     Just(l) -> l
     Nothing -> parse-error("unexpected end of file", null)
 
-fun next(): <parse> lexeme
+fun next(): _ lexeme
   val p = pnext()
   match p
     Just(l) -> l
     Nothing -> parse-error("unexpected end of file", null)
 
-fun lex-parse(allow-at: bool, insert-semis: bool, preprocess: list<lexeme> -> pure list<lexeme>, p: () -> <console,parse|e> a, sourceName: string, input: string): <console,parse-error,pure|e> a
+fun lex-parse(allow-at: bool, insert-semis: bool, preprocess: list<lexeme> -> pure list<lexeme>, p: () -> _ a, sourceName: string, input: string): _ a
   val src = Source(sourceName, input)
   val lexes = lexing(src, 1, input)
   // trace(lexes.map(show).join("\n"))
@@ -67,7 +65,7 @@ fun lex-parse(allow-at: bool, insert-semis: bool, preprocess: list<lexeme> -> pu
   with parse-lexemes(src, lexes')
   p()
   
-fun parse-lexemes(src: source, lexemes0: list<lexeme>, p: () -> <console,parse|e> a): <console,parse-error,pure|e> a
+fun parse-lexemes(src: source, lexemes0: list<lexeme>, p: () -> _ a): _ a
   var lexemes := lexemes0
   // trace(lexemes0.show)
   var history := Cons(([], "top", 0), Nil)
@@ -150,17 +148,17 @@ fun peof()
   match get-lexemes_()
     Cons(l, _) -> parse-error("peof expected end of file", l.range)
     Nil -> ()
-fun parse-many(kind: string, l: () -> <parse|e> a): <parse|e> list<a>
+fun parse-many(kind: string, l: () -> _ a): _ list<a>
   match parse-maybe-nb("many " ++ kind, l)
     Just(r) -> Cons(r, parse-many(kind, l))
     Nothing -> Nil
 
-fun parse-many1(kind: string, l: () -> <parse|e> a): <parse|e> list<a>
+fun parse-many1(kind: string, l: () -> _ a): _ list<a>
   match parse-maybe-nb("many " ++ kind, l)
     Just(r) -> Cons(r, parse-many(kind, l))
     Nothing -> parse-error("at least 1 of " ++ kind, peek().range)
 
-fun parse-many-end(kind: string, l: () -> <parse|e> a, p: () -> <parse|e> b): <parse|e> list<a>
+fun parse-many-end(kind: string, l: () -> _ a, p: () -> _ b): _ list<a>
   match parse-maybe-nb("many " ++ kind, l)
     Just(r) -> 
       match parse-maybe-nb("sep " ++ kind, p)
@@ -168,7 +166,7 @@ fun parse-many-end(kind: string, l: () -> <parse|e> a, p: () -> <parse|e> b): <p
         Nothing -> Cons(r, Nil)
     Nothing -> Nil
 
-fun parse-many-end1(kind: string, l: () -> <parse|e> a, p: () -> <parse|e> b): <parse|e> list<a>
+fun parse-many-end1(kind: string, l: () -> _ a, p: () -> _ b): _ list<a>
   match parse-maybe-nb("many " ++ kind, l)
     Just(r) -> 
       match parse-maybe-nb("sep " ++ kind, p)
@@ -176,7 +174,7 @@ fun parse-many-end1(kind: string, l: () -> <parse|e> a, p: () -> <parse|e> b): <
         Nothing -> Cons(r, [])
     Nothing -> parse-error("at least 1 of " ++ kind, peek().range)
 
-fun parse-token(msg: string, f: (lexeme) -> <parse|e> maybe<a>): <parse|e> a
+fun parse-token(msg: string, f: (lexeme) -> _ maybe<a>): _ a
   val t = peek()
   match f(t) 
     Just(a) -> 
@@ -187,7 +185,7 @@ fun parse-token(msg: string, f: (lexeme) -> <parse|e> maybe<a>): <parse|e> a
       parse-error("expecting " ++ msg, peek().range)
 
 // Version of maybe that does backtrack
-fun parse-maybe<e>(str: string, p: () -> <parse|e> a): <parse|e> maybe<a>
+fun parse-maybe<e>(str: string, p: () -> _ a): _ maybe<a>
   delimit(str)
   with override
     return(r)
@@ -198,12 +196,12 @@ fun parse-maybe<e>(str: string, p: () -> <parse|e> a): <parse|e> maybe<a>
       Nothing
   p()
 
-fun parse-maybe-list(p: () -> <parse|e> list<a>): <parse|e> list<a>
+fun parse-maybe-list(p: () -> _ list<a>): _ list<a>
   match parse-maybe("list", p)
     Just(r) -> r
     Nothing -> []
 
-fun parse-try(p: () -> <parse|e> a, ?kk-file-line: string): <parse|e> a
+fun parse-try(p: () -> _ a, ?kk-file-line: string): _ a
   delimit(kk-file-line)
   with override
     return(r) 
@@ -216,7 +214,7 @@ fun parse-try(p: () -> <parse|e> a, ?kk-file-line: string): <parse|e> a
   
 
 // Version of maybe that doesn't backtrack
-fun parse-maybe-nb(str: string, p: () -> <parse|e> a): <parse|e> maybe<a>
+fun parse-maybe-nb(str: string, p: () -> _ a): _ maybe<a>
   delimit(str)
   with override
     return(r)
@@ -233,9 +231,9 @@ fun parse-maybe-nb(str: string, p: () -> <parse|e> a): <parse|e> maybe<a>
 
 // Parse parse-choices without backtracking. 
 // Make sure that all parse-choices start differently or is the last choice.
-fun parse-choices-nb(str: string, ps: list<() -> <parse|e> a>): <parse|e> a
+fun parse-choices-nb(str: string, ps: list<() -> _ a>): _ a
   with parse-delimited(str)
-  fun find(ps': list<() -> <parse|e> a>): <parse|e> a
+  fun find(ps': list<() -> _ a>): _ a
     match ps'
       Cons(p, rst) -> 
         match parse-maybe-nb(str, p)
@@ -245,8 +243,8 @@ fun parse-choices-nb(str: string, ps: list<() -> <parse|e> a>): <parse|e> a
   find(ps)
 
 // Parse parse-choices with backtracking
-fun parse-choices(str: string, ps: list<() -> <parse|e> a>): <parse|e> a
-  fun find(ps': list<() -> <parse|e> a>): <parse|e> a
+fun parse-choices(str: string, ps: list<() -> _ a>): _ a
+  fun find(ps': list<() -> _ a>): _ a
     match ps'
       Cons(p, rst) -> 
         match parse-maybe(str, p)
@@ -258,16 +256,16 @@ fun parse-choices(str: string, ps: list<() -> <parse|e> a>): <parse|e> a
 val parse-sep-by = parse-many-end
 val parse-sep-by1 = parse-many-end1
 
-fun make-parse-error(r: range, e: string): <parse-error> a
+fun make-parse-error(r: range, e: string): _ a
   parse-error("invalid syntax" ++ e.list.drop-while(fn(x) x != ':').string, r)
 
-fun bracketed(open: () -> <parse|e> range, close: () -> <parse|e> range, f: (a, range) -> <parse|e> b, p: () -> <parse|e> a): <parse|e> b
+fun bracketed(open: () -> _ range, close: () -> _ range, f: (a, range) -> _ b, p: () -> _ a): _ b
   val rng1 = open()
   val x = p()
   val rng2 = close()
   f(x, rng1.range/combine(rng2))
 
-fun braced(p: () -> <parse|e> a): <parse|e> a
+fun braced(p: () -> _ a): _ a
   parse-choices("braced", [{
       parse-left-curly() // TODO: Make sure right is same as left? (inserted versus actual)
       parse-many("semicolons", parse-semicolon)
@@ -277,24 +275,24 @@ fun braced(p: () -> <parse|e> a): <parse|e> a
       x
     }, p])
 
-fun parse-semi-braces(kind: string, p: () -> <parse|e> a): <parse|e> list<a>
+fun parse-semi-braces(kind: string, p: () -> _ a): _ list<a>
   parse-semi-braces-ranged(kind, p).fst
 
-fun parse-semi-braces-ranged(kind: string, p: () -> <parse|e> a): <parse|e> (list<a>, range)
+fun parse-semi-braces-ranged(kind: string, p: () -> _ a): _ (list<a>, range)
   val rng1 = parse-left-curly()
   parse-many("semicolons", parse-semicolon)
   val xs = parse-many-end(kind, p, parse-semi1)
   val rng2 = parse-right-curly()
   (xs, rng1.combine(rng2))
 
-fun parse-semi-braces-ranged1(kind: string, p: () -> <parse|e> a): <parse|e> (list<a>, range)
+fun parse-semi-braces-ranged1(kind: string, p: () -> _ a): _ (list<a>, range)
   val rng1 = parse-left-curly()
   parse-many("semicolons", parse-semicolon)
   val xs = parse-many-end1(kind, p, parse-semi1)
   val rng2 = parse-right-curly()
   (xs, rng1.combine(rng2))
 
-fun parse-semi-braced(kind: string, p: () -> <parse|e> a): <parse|e> a
+fun parse-semi-braced(kind: string, p: () -> _ a): _ a
   parse-left-curly()
   parse-many("semicolons", parse-semicolon)
   val x = p()
@@ -302,78 +300,78 @@ fun parse-semi-braced(kind: string, p: () -> <parse|e> a): <parse|e> a
   parse-right-curly()
   x
 
-fun semis(kind: string, p: () -> <parse|e> a): <parse|e> list<a>
+fun semis(kind: string, p: () -> _ a): _ list<a>
   parse-many-end(kind, p, parse-semi1)
 
-fun semis1(kind: string): <parse|e> list<range>
+fun semis1(kind: string): _ list<range>
   parse-many1("semicolons", parse-semicolon)
 
-fun parse-semi1(): <parse> list<range>
+fun parse-semi1(): _ list<range>
   parse-many1("semicolons", parse-semicolon)
 
-fun angles-ranged(p: () -> <parse|e> a): <parse|e> (a, range)
+fun angles-ranged(p: () -> _ a): _ (a, range)
   bracketed(parse-left-angle, parse-right-angle, fn(x, r) (x,r), p)
 
-fun angles(p: () -> <parse|e> a): <parse|e> a
+fun angles(p: () -> _ a): _ a
   bracketed(parse-left-angle, parse-right-angle, fn(x, r) x, p)
 
-fun parse-parens-commas(p: () -> <parse|e> a): <parse|e> list<a>
+fun parse-parens-commas(p: () -> _ a): _ list<a>
   parensx(parse-left-paren, fn(a, r) a)
     parse-sep-by("comma", p, parse-comma)
 
-fun parens-ranged(p: () -> <parse|e> a): <parse|e> (a, range)
+fun parens-ranged(p: () -> _ a): _ (a, range)
   parensx(parse-left-paren, fn(a, b) (a, b), p) 
 
-fun parens(p: () -> <parse|e> a): <parse|e> a
+fun parens(p: () -> _ a): _ a
   parensx(parse-left-paren, fn(a, b) a, p) 
 
-fun parse-parens-commas-ranged(p: () -> <parse|e> a): <parse|e> (list<a>, range)
+fun parse-parens-commas-ranged(p: () -> _ a): _ (list<a>, range)
   parensx(parse-left-paren, fn(a, r) (a, r))
     parse-sep-by("comma", p, parse-comma)
 
-fun parensx(l: () -> <parse|e> range, f: (a, range) -> <parse|e> b, p: () -> <parse|e> a): <parse|e> b
+fun parensx(l: () -> _ range, f: (a, range) -> _ b, p: () -> _ a): _ b
   bracketed(l, parse-right-paren, f, p)
 
-fun parse-range(msg: string, f: (lexeme) -> <parse|e> bool): <parse|e> range
+fun parse-range(msg: string, f: (lexeme) -> _ bool): _ range
   parse-token(msg, fn(x) if f(x) then Just(x) else Nothing).range
 
-inline fun parse-vertical-bar(): <parse> range
+inline fun parse-vertical-bar(): _ range
   parse-keyword("|")
 
-inline fun parse-comma(): <parse> range
+inline fun parse-comma(): _ range
   parse-special(",")
 
-inline fun parse-semicolon(): <parse> range
+inline fun parse-semicolon(): _ range
   parse-range("semicolon", is-semicolon)
 
-fun parse-left-curly(): <parse> range
+fun parse-left-curly(): _ range
   parse-range("{", _.lex.is-lcurly)
 
-fun parse-right-curly(): <parse> range
+fun parse-right-curly(): _ range
   parse-range("}", _.lex.is-rcurly)
 
-fun parse-left-bracket(): <parse> range
+fun parse-left-bracket(): _ range
   parse-range("[", _.lex.is-lbracket)
 
-fun parse-right-bracket(): <parse> range
+fun parse-right-bracket(): _ range
   parse-range("]", _.lex.is-rbracket)
 
-fun parse-left-paren(): <parse> range
+fun parse-left-paren(): _ range
   parse-range("(", _.lex.is-lparen)
 
-fun parse-right-paren(): <parse> range
+fun parse-right-paren(): _ range
   parse-range(")", _.lex.is-rparen)
 
-fun parse-left-angle(): <parse> range
+fun parse-left-angle(): _ range
   parse-range("<", _.lex.is-langle)
 
-fun parse-right-angle(): <parse> range
+fun parse-right-angle(): _ range
   parse-range(">", _.lex.is-rangle)
 
-fun parse-type-binder-id(): <parse> (name, range)
+fun parse-type-binder-id(): _ (name, range)
   parse-choices("tBinderId", [parse-type-ident])
 
-fun parse-import-alias(): <parse> (name, name, range, range)
+fun parse-import-alias(): _ (name, name, range, range)
   val (name1, rng1) = parse-module-path()
   val r = parse-maybe("import alias")
     parse-keyword("=")
@@ -382,19 +380,19 @@ fun parse-import-alias(): <parse> (name, name, range, range)
     Just((name2, rng2)) -> (name1, name2, rng1, rng2)
     Nothing -> (name1, name1, rng1, rng1)
 
-fun parse-param-id(): <parse> (name, range)
+fun parse-param-id(): _ (name, range)
   parse-choices("param id", [parse-identifier, parse-wildcard])
 
-fun parse-param-info(): <parse> param-info
+fun parse-param-info(): _ param-info
   parse-choices("param info", [{
     parse-special-op("^")
     Borrow
   }, {Own}])
 
-fun parse-identifier(): <parse> (name, range)
+fun parse-identifier(): _ (name, range)
   ensure-unqualified("identifier", parse-qualified-identifier)
 
-fun parse-fip-alloc(): <parse> (fip-alloc, range)
+fun parse-fip-alloc(): _ (fip-alloc, range)
   parse-choices("alloc", [
     {
       parens
@@ -406,11 +404,11 @@ fun parse-fip-alloc(): <parse> (fip-alloc, range)
    { (AllocAtMost(0), null) }
   ])
 
-fun parse-tail-fip(): <parse> (fipT, range)
+fun parse-tail-fip(): _ (fipT, range)
   val (isTail, rng) = parse-choices("tail", [{(True, parse-special-id("tail"))}, {(False, null)}])
   parse-fip-ex(rng, isTail)
 
-fun parse-fip-ex(rng0: range, isTail: bool): <parse> (fipT, range)
+fun parse-fip-ex(rng0: range, isTail: bool): _ (fipT, range)
   parse-choices("fip", [{
       val rng1 = parse-special-id("fip")
       val (alloc, rng2) = parse-fip-alloc()
@@ -426,7 +424,7 @@ fun parse-fip-ex(rng0: range, isTail: bool): <parse> (fipT, range)
     { (NoFip(isTail), null) }
   ])
 
-fun parse-inline(): <parse> def-inline
+fun parse-inline(): _ def-inline
   parse-choices("inline", [{
       parse-special-id("inline")
       InlineAlways
@@ -437,54 +435,54 @@ fun parse-inline(): <parse> def-inline
     { InlineAuto }
   ])
 
-fun parse-idcon(): <parse> user-expr
+fun parse-idcon(): _ user-expr
   val (name, rng) = parse-choices("", [parse-qualified-identifier, parse-qualified-constructor])
   Var(name, False, rng)
 
-inline fun parse-qualified-identifier(): <parse> (name, range)
+inline fun parse-qualified-identifier(): _ (name, range)
   parse-choices("qidentifier", [parse-qualified-var-id, parse-qualified-op-id])
 
-inline fun parse-qualified-constructor(): <parse> (name, range)
+inline fun parse-qualified-constructor(): _ (name, range)
   parse-qualified-constructor-id()
 
-inline fun parse-qualified-operator(): <parse> (name, range)
+inline fun parse-qualified-operator(): _ (name, range)
   parse-qualified-op()
 
-fun parse-fun-id(): <parse> (name, range)
+fun parse-fun-id(): _ (name, range)
   parse-locally-qualified-identifier() // [] doesn't work with local qualification
 
-fun parse-locally-qualified-identifier(): parse (name, range)
+fun parse-locally-qualified-identifier(): _ (name, range)
   val (name, rng) = parse-qualified-identifier()
   (name.requalify-locally, rng)
 
-fun parse-var-id(): <parse> (name, range)
+fun parse-var-id(): _ (name, range)
   ensure-unqualified("variable id", parse-qualified-var-id)
 
-fun parse-op-id(): <parse> (name, range)
+fun parse-op-id(): _ (name, range)
   ensure-unqualified("operator", parse-qualified-op-id)
 
-fun parse-constructor-id(): <parse> (name, range)
+fun parse-constructor-id(): _ (name, range)
   ensure-unqualified("constructor", parse-qualified-constructor-id)
     // { val (s, rng) = parse-string-literal(); (new-name(s), rng)}
 
-fun parse-op(): <parse> (name, range)
+fun parse-op(): _ (name, range)
   ensure-unqualified("operator", parse-qualified-op)
 
-fun parse-type-ident(): <parse> (name, range)
+fun parse-type-ident(): _ (name, range)
   val (name, rng) = parse-qualified-type-id()
   if name.is-qualified then
     parse-error("expected unqualified type name", rng)
   else
     (name, rng)
 
-fun ensure-unqualified(str: string, p: () -> <parse|e> (name, range)): <parse|e> (name, range)
+fun ensure-unqualified(str: string, p: () -> _ (name, range)): _ (name, range)
   val (n, r) = p()
   if n.is-qualified then 
     parse-error("expected unqualified " ++ str, r)
   else
     (n, r)
 
-fun parse-qualified-type-id(): <parse> (name, range)
+fun parse-qualified-type-id(): _ (name, range)
   with parse-try()
   val (name, range) = parse-choices("qTypeId", [parse-qualified-var-id, parse-type-id-context])
   if !name.is-type-var then 
@@ -492,49 +490,49 @@ fun parse-qualified-type-id(): <parse> (name, range)
   else // TODO: This isn't quite the right hack.
     parse-error("type name (and not type variable)", range)
 
-fun parse-type-id-context(): <parse> (name, range)
+fun parse-type-id-context(): _ (name, range)
   ("ctx".new-name, parse-keyword("ctx"))
 
-fun parse-qualified-op(): <parse> (name, range)
+fun parse-qualified-op(): _ (name, range)
   parse-token("operator") fn(a)
     match a
       Lexeme(rng, LexOp(id)) -> Just((id, rng))
       _ -> Nothing
 
-fun parse-prefix-op(): <parse> expr<a>
+fun parse-prefix-op(): _ expr<a>
   parse-token("prefix operator") fn(a)
     match a
       Lexeme(rng, LexPrefix(id)) -> Just(Var(id, True, rng))
       _ -> Nothing
 
 // is really qvarid, varid, from the spec
-fun parse-qualified-var-id(): <parse> (name, range)
+fun parse-qualified-var-id(): _ (name, range)
   parse-token("variable id") fn(a)
     match a
       Lexeme(rng, LexId(id)) -> Just((id.show-plain.new-name, rng))
       _ -> Nothing
 
 // is really qidop and idop from the spec
-fun parse-qualified-op-id(): <parse> (name, range)
+fun parse-qualified-op-id(): _ (name, range)
   parse-token("operator id") fn(a)
     match a
       Lexeme(rng, LexIdOp(id)) -> Just((id, rng))
       _ -> Nothing
 
 // is really qconid and conid in the spec
-fun parse-qualified-constructor-id(): <parse> (name, range)
+fun parse-qualified-constructor-id(): _ (name, range)
   parse-token("constructor id") fn(a)
     match a
       Lexeme(rng, LexCons(id)) -> Just((id, rng))
       _ -> Nothing
 
-fun parse-module-path(): <parse> (name, range)
+fun parse-module-path(): _ (name, range)
   parse-token("module path") fn(x)
     match x 
       Lexeme(rng, LexId(id)) -> Just((id.name-as-module-name, rng)) // return the entire module path as one identifier
       _ -> Nothing
 
-fun parse-wildcard(): <parse> (name, range)
+fun parse-wildcard(): _ (name, range)
   parse-token("wildcard") fn(a)
     match a
       Lexeme(rng, LexWildCard(id)) -> 
@@ -543,43 +541,43 @@ fun parse-wildcard(): <parse> (name, range)
         else Just((id, rng))
       _ -> Nothing
 
-fun parse-integer(): <parse> (int, lexeme)
+fun parse-integer(): _ (int, lexeme)
   parse-token("integer") fn(l)
     match l
       Lexeme(_, LexInt(i)) -> Just((i, l))
       _ -> Nothing
 
-fun parse-float(): <parse> (float64, lexeme)
+fun parse-float(): _ (float64, lexeme)
   parse-token("float") fn(l)
     match l
       Lexeme(_, LexFloat(d)) -> Just((d, l))
       _ -> Nothing
 
-fun parse-char-literal(): <parse> (char, range)
+fun parse-char-literal(): _ (char, range)
   parse-token("char literal") fn(x) 
     match x
       Lexeme(rng, LexChar(c)) -> Just((c, rng))
       _ -> Nothing
 
-fun parse-string-literal(): <parse> (string, range)
+fun parse-string-literal(): _ (string, range)
   parse-token("string literal") fn(x) 
     match x
       Lexeme(rng, LexString(s)) -> Just((s, rng))
       _ -> Nothing
 
-fun parse-special-op(s: string): <parse> range
+fun parse-special-op(s: string): _ range
   parse-token(s) fn(x)
     match x.lex
       LexOp(s') | s == s'.show-plain -> Just(x.range)
       _ -> Nothing
 
-fun default/parse-special-id(s: string): <parse> range
+fun default/parse-special-id(s: string): _ range
   parse-token(s) fn(x)
     match x.lex
       LexId(id) | id.show-plain == s -> Just(x.range)
       _ -> Nothing
 
-fun parse-special-id(s: string, alternates: list<string>): <parse> range
+fun parse-special-id(s: string, alternates: list<string>): _ range
   parse-token(s) fn(x)
     match x.lex
       LexId(id) | id.show-plain == s -> Just(x.range)
@@ -588,16 +586,16 @@ fun parse-special-id(s: string, alternates: list<string>): <parse> range
         Just(x.range)
       _ -> Nothing
 
-fun parse-special-con-id(s: string): <parse> range
+fun parse-special-con-id(s: string): _ range
   parse-token(s) fn(x)
     match x.lex
       LexCons(s') | s == s'.show-plain -> Just(x.range)
       _ -> Nothing
 
-inline fun default/parse-special(s: string): <parse> range
+inline fun default/parse-special(s: string): _ range
   parse-special(s, [])
 
-fun parse-special(s: string, alternates: list<string>): <parse> range
+fun parse-special(s: string, alternates: list<string>): _ range
   parse-token(s) fn(x)
     match x.lex
       LexSpecial(s') | s == s' -> Just(x.range)
@@ -606,13 +604,13 @@ fun parse-special(s: string, alternates: list<string>): <parse> range
         Just(x.range)
       _ -> Nothing
 
-inline fun default/parse-keyword(s: string): <parse> range
+inline fun default/parse-keyword(s: string): _ range
   parse-keyword_(s, []).range
 
-inline fun range/parse-keyword(s: string, alts: list<string>): <parse> range
+inline fun range/parse-keyword(s: string, alts: list<string>): _ range
   parse-keyword_(s, alts).range
 
-fun parse-keyword_(s: string, alternates: list<string>): <parse> lexeme
+fun parse-keyword_(s: string, alternates: list<string>): _ lexeme
   parse-token("keyword " ++ s) fn(x)
     match x.lex
       LexKeyword(s', _) | s == s' -> Just(x)
@@ -621,15 +619,15 @@ fun parse-keyword_(s: string, alternates: list<string>): <parse> lexeme
         Just(x)
       _ -> Nothing
 
-fun default/parse-doc-keyword(s: string): <parse> (range, string)
+fun default/parse-doc-keyword(s: string): _ (range, string)
   parse-doc-keyword(s, [])
 
-fun parse-doc-keyword(s: string, alternates: list<string>): <parse> (range, string)
+fun parse-doc-keyword(s: string, alternates: list<string>): _ (range, string)
   match parse-keyword_(s, alternates)
     Lexeme(rng, LexKeyword(_, doc)) -> (rng, doc)
     _ -> parse-error("expected " ++ s, null)
 
-fun parse-doccon-id(): <parse> (name, (range, string))
+fun parse-doccon-id(): _ (name, (range, string))
   parse-token("constructor") fn(x)
     match x.lex
       LexCons(id, doc) -> Just((id.requalify-locally, (x.range, doc)))
@@ -649,7 +647,7 @@ fun expr/adjust-range(ue: user-expr, r: range): user-expr
 fun tp/adjust-range(ut: user-type, r: range): user-type
   TpParens(ut, r)
 
-fun unimplemented(): <parse> a
+fun unimplemented(): _ a
   parse-error("unimplemented", peek().range)
 
 fun main()

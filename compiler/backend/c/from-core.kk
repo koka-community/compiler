@@ -30,7 +30,7 @@ fun cFromCore(cTarget: cTarget, b: buildType, sourceDir: path,
               platform: platform, borrowed: borrowed, enableReuse: bool, 
               enableSpecialize: bool, enableReuseSpecialize: bool, enableBorrowInference: bool, 
               eagerPatBind: bool, stackSize: int, mbMain: maybe<(name, bool)>, 
-              core: core): <pure,comp-flags,unique,newtypes,printer,documentation,nice-eff<type-var>,prettyTypeEff,precEff> (doc, doc, core)
+              core: core): _ (doc, doc, core)
   with handler
     val cdefToHeader = False
     val substEnv = []
@@ -90,7 +90,7 @@ val customInitDoc = [
   "  KK_CUSTOM_INIT".text |+| emptyArgs |.| semi,
   "#endif".text].vcat
 
-fun genModule(core: core, mbMain: maybe<(name, bool)>): asmEff core
+fun genModule(core: core, mbMain: maybe<(name, bool)>): _ core
   // box-core
   // borrowedExtend
   // parcCore
@@ -189,7 +189,7 @@ fun includeEndExternalH(ext: external)
     Just(content) -> [content.list.drop-while(isSpace).string.text]
     _ -> []
 
-fun importExternalInclude(ext: external): asmEff list<doc>
+fun importExternalInclude(ext: external): _ list<doc>
   match external-import-lookup(C(cTarget),buildType,"include",ext)
     Just(includePath) -> 
       [
@@ -203,7 +203,7 @@ fun importExternalInclude(ext: external): asmEff list<doc>
       )]
     _ -> []
 
-fun genMain(mbMain: maybe<(name, bool)>): asmEff ()
+fun genMain(mbMain: maybe<(name, bool)>): _ ()
   match mbMain
     Nothing -> ()
     Just((name, _)) ->

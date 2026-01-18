@@ -95,10 +95,10 @@ fun trace-indent(f)
   with override val indent = type/pretty/indent + 2
   f()
 
-fun trace-doc(d: () -> <indent,div|e> doc): <indent,div|e> ()
+fun trace-doc(d: () -> _ doc): _ ()
   trace(d().indent(type/pretty/indent).show)
 
-fun pp-name-type((name, tp): (name, ktype)): <pretty-eff> doc
+fun pp-name-type((name, tp): (name, ktype)): _ doc
   name.pp-name |+| colon |+| tp.pp-type
 
 fun default-indent(f)
@@ -147,21 +147,21 @@ fun list/compress(l: list<char>): list<char>
 fun nice-type(tp: ktype)
   nice-types([tp]).head.unjust
 
-fun nice-types(tps: list<ktype>): pretty-eff list<doc>
+fun nice-types(tps: list<ktype>): _ list<doc>
   tps.niceList fn(tp)
     tp.pp-type.color(colors.colorType)
 
-fun niceList(schemes: list<ktype>, f: (ktype) -> pretty-eff doc): pretty-eff list<doc>
+fun niceList(schemes: list<ktype>, f: (ktype) -> _ doc): _ list<doc>
   schemes.map(free-type-vars).unions.list.map(extend-nice)
   schemes.map(f)
 
 // Pretty print a type
-fun ktp/ppretty(t: ktype): <documentation,pp-env,pure,comp-flags,colors> doc
+fun ktp/ppretty(t: ktype): _ doc
   with handle-pretty-eff
   with niceEnv
   t.pp-type
 
-fun ktp/pretty(t: ktype): <comp-flags, pure> doc
+fun ktp/pretty(t: ktype): _ doc
   with default-pp-env
   with default-doc-env
   with handle-pretty-eff
@@ -169,17 +169,17 @@ fun ktp/pretty(t: ktype): <comp-flags, pure> doc
   with color-scheme-default
   t.pp-type
 
-fun tv/pretty(tv: type-var): <documentation,pp-env,pure,comp-flags,colors> doc
+fun tv/pretty(tv: type-var): _ doc
   with handle-pretty-eff
   with niceEnv
   tv.pp-typevar
 
-fun tcon/pretty(tc: type-con): <documentation,pp-env,pure,comp-flags,colors> doc
+fun tcon/pretty(tc: type-con): _ doc
   with handle-pretty-eff
   with niceEnv
   tc.pp-typecon
 
-fun tsyn/pretty(ts: type-syn): <documentation,pp-env,pure,comp-flags,colors> doc
+fun tsyn/pretty(ts: type-syn): _ doc
   with handle-pretty-eff
   with niceEnv
   ts.pp-typesyn
@@ -222,7 +222,7 @@ fun pp-decl-type(tp: ktype, pinfos: list<param-info>)
       (Just(pparams), pprint/empty, if eff.is-type-total then pprint/empty else override-prec(precArrow, {eff.pp-type |.| space}) |.| override-prec(precArrow, {rho.pp-type}))
     _ -> (Nothing, pprint/empty, tp.pp-type)
 
-fun pretty(d: data-info): <documentation,pp-env,pure,comp-flags,colors> doc
+fun pretty(d: data-info): _ doc
   with handle-pretty-eff
   with niceEnv
   pp-data-info(d, True)
@@ -283,7 +283,7 @@ fun pretty-comment(d: doc, comment: string)
     val cmt = if clist.last.unjust == '\n' then clist.init.string else comment
     (cmt.text |-| d).color(colors.colorComment)
 
-fun pp-vis(v: visibility): colors doc
+fun pp-vis(v: visibility): _ doc
   match v
     Private -> pprint/empty
     Public -> "pub ".keyword
@@ -292,7 +292,7 @@ fun pp-sub(sub: sub): _ doc
   sub.list.map(fn((tv, tp)) tv.pp-typevar |+| "|->".text |+| tp.pp-type).list
 
 // Synonym info
-fun syninfo/pretty(s: syn-info): <documentation,pp-env,pure,comp-flags,colors> doc
+fun syninfo/pretty(s: syn-info): _ doc
   with handle-pretty-eff
   with niceEnv
   pp-syn-info(s)
@@ -426,10 +426,10 @@ fun pp-typecon(tc: type-con)
 fun pp-typesyn(ts: type-syn)
   ts.name.pp-name-plain.wrap-kind(ts.kind).color-by-kind-def(ts.kind, colorTypeCon)
 
-fun color-by-kind-def(d: doc, k: kind, defcolor: (colorScheme -> <pretty-type-eff,colors> color))
+fun color-by-kind-def(d: doc, k: kind, defcolor: (colorScheme -> _ color))
   d.color-by-kind(k, fn(d') d'.color(defcolor(colors)))
 
-fun color-by-kind(d: doc, k: kind, defcolor: (doc -> <pretty-type-eff,colors> doc))
+fun color-by-kind(d: doc, k: kind, defcolor: (doc -> _ doc))
   match k.color-for-kind
     Just(c) -> d.color(c)
     Nothing -> defcolor(d)

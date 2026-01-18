@@ -281,7 +281,7 @@ pub fun expand-syn(tp: ktype): ktype
     _ -> tp
 
 // A type in canonical form has no type synonyms and expanded effect types.
-pub fun canonical-form(tp: ktype): pure ktype
+pub fun canonical-form(tp: ktype): _ ktype
   match tp
     TSyn(_, _, t) -> canonical-form(t)
     TForAll(vars, t) -> TForAll(vars, canonical-form(t))
@@ -290,7 +290,7 @@ pub fun canonical-form(tp: ktype): pure ktype
     _ -> tp
 
 // A type in minimal form is canonical and has no named function arguments
-pub fun minimal-form(tp: ktype): pure ktype
+pub fun minimal-form(tp: ktype): _ ktype
   match tp
     TSyn -> tp.canonical-form
     TForAll(vars, t) -> TForAll(vars, t.canonical-form)
@@ -425,11 +425,11 @@ pub fun make-value-operation(eff: ktype, tp: ktype)
   val k = kind-fun(kindEffect, kind-fun(kindStar, kindStar))
   TApp(TCon(TypeCon(nameTpValueOp, k)), [eff, tp])
 
-pub fun order-effect(tp: tau): <exn,div> tau
+pub fun order-effect(tp: tau): _ tau
   val (ls, tl) = extract-ordered-effect(tp)
   ls.foldr(tl, effect-extend)
 
-pub fun extract-ordered-effect(tp: tau): pure (list<tau>, tau)
+pub fun extract-ordered-effect(tp: tau): _ (list<tau>, tau)
   val (labs, tl) = extract-effect-extend(tp)
   fun expand(l)
     val (ls, tl') = extract-effect-extend(l)
@@ -440,19 +440,19 @@ pub fun extract-ordered-effect(tp: tau): pure (list<tau>, tau)
   val slabs = labss.sort()
   (slabs, tl)
 
-pub fun contains-local-effect(eff: tau): pure bool
+pub fun contains-local-effect(eff: tau): _ bool
   val (ls,_) = eff.extract-ordered-effect
   ls.any(_.label-name == nameTpLocal)
 
-pub fun label-name(tp: tau): exn name
+pub fun label-name(tp: tau): _ name
   tp.label-name-ex.fst
 
-pub fun label-name-full(tp: tau): pure name
+pub fun label-name-full(tp: tau): _ name
   val (name, i, _) = tp.label-name-ex
   val ids = i.show-id
   postpend(name, "$" ++ ids)
 
-pub fun label-name-ex(tp: tau): exn (name, int, list<tau>)
+pub fun label-name-ex(tp: tau): _ (name, int, list<tau>)
   match tp.expand-syn
     TCon(tc) -> (tc.name, 0, [])
     TApp(TCon(TypeCon(name)), [htp]) | name == nameTpHandled || name == nameTpHandled1 || name == nameTpNHandled || name == nameTpNHandled1 -> 
@@ -484,7 +484,7 @@ pub fun wrap-handled-from-data-effect(de: data-effect, eff: ktype)
       TApp(TCon(TypeCon(name, kind)), [eff])
     DataNoEffect -> eff
 
-fun is-async-function(tp: ktype): pure bool
+fun is-async-function(tp: ktype): _ bool
   val rho = tp.split-type-scheme.snd
   match rho.split-fun-type
     Just((_, eff, _)) ->
@@ -492,7 +492,7 @@ fun is-async-function(tp: ktype): pure bool
       ls.any(is-effect-async)
     _ -> False
 
-fun is-effect-async(tp: tau): div bool
+fun is-effect-async(tp: tau): _ bool
   match tp.expand-syn
     TForAll(_, rho) -> rho.is-effect-async
     TFun(_, eff) -> eff.is-effect-async
@@ -511,7 +511,7 @@ pub fun is-effect-empty(tp: tau): bool
     TCon(tc) -> tc.name == nameEffectEmpty
     _ -> False
 
-pub fun effect-extend-no-dup(label: tau, eff: tau): pure tau
+pub fun effect-extend-no-dup(label: tau, eff: tau): _ tau
   val (ls, _) = label.extract-effect-extend
   match ls
     Nil ->
@@ -520,10 +520,10 @@ pub fun effect-extend-no-dup(label: tau, eff: tau): pure tau
       else app-effect-extend(label, eff)
     _ -> ls.effect-extend-no-dups(eff)
 
-pub fun effect-extend-no-dups(labels: list<tau>, eff: tau): pure tau
+pub fun effect-extend-no-dups(labels: list<tau>, eff: tau): _ tau
   labels.foldr(eff, effect-extend-no-dup)
 
-pub fun effect-extend(label: tau, eff: tau): pure tau
+pub fun effect-extend(label: tau, eff: tau): _ tau
   val (ls, _) = label.extract-effect-extend
   match ls
     Nil -> app-effect-extend(label, eff)
@@ -531,20 +531,20 @@ pub fun effect-extend(label: tau, eff: tau): pure tau
 
 pub val tconEffectExtend = TypeCon(nameEffectExtend, kind-fun(kindLabel, kind-fun(kindEffect, kindEffect)))
 
-pub fun effect-extends(labels: list<tau>, eff: tau): pure tau
+pub fun effect-extends(labels: list<tau>, eff: tau): _ tau
   // prevent over expansion of type synonyms here (see also: core/parse/teffect)
   match labels
     Cons(lab as TSyn(TypeSyn(_, kind)), _) | eff.is-effect-empty && kind == kindEffect -> lab
     _ -> labels.foldr(eff, effect-extend)
 
-pub fun effect-fixed(labels: list<tau>): pure tau
+pub fun effect-fixed(labels: list<tau>): _ tau
   effect-extends(labels, effectEmpty)
 
-pub fun is-effect-fixed(tp: tau): pure bool
+pub fun is-effect-fixed(tp: tau): _ bool
   tp.extract-effect-extend.snd.is-effect-empty
 
-pub fun extract-effect-extend(t: tau): pure (list<tau>, tau)
-  fun extractLabel(l: tau): pure list<tau>
+pub fun extract-effect-extend(t: tau): _ (list<tau>, tau)
+  fun extract-label(l: tau): _ list<tau>
     match l.expand-syn
       TApp(TCon(tc), [_, _]) | tc.name == nameEffectExtend ->
         val (ls, tl) = l.pretend-decreasing.extract-effect-extend
@@ -554,7 +554,7 @@ pub fun extract-effect-extend(t: tau): pure (list<tau>, tau)
   match t.expand-syn
     TApp(TCon(tc), [l, e]) | tc.name == nameEffectExtend ->
       val (ls, tl) = e.pretend-decreasing.extract-effect-extend
-      (l.extractLabel ++ ls, tl)
+      (l.extract-label ++ ls, tl)
     _ -> ([], t)
 
 pub fun shallow-extract-effect-extend(t: tau): (list<tau>, tau)
@@ -564,7 +564,7 @@ pub fun shallow-extract-effect-extend(t: tau): (list<tau>, tau)
       (Cons(l, ls), tl)
     _ -> ([], t)
 
-pub fun shallow-effect-extend(label: tau, eff: tau): pure tau
+pub fun shallow-effect-extend(label: tau, eff: tau): _ tau
   // We do not expand type synonyms in the label here by using the 'shallow' version of extract
   // this means that type synonyms of kind E (ie. a fixed effect row) could stay around in
   // the label (which should have kind X).
@@ -597,7 +597,7 @@ pub fun kind-of(tau: ktype)
     TSyn(syn) -> syn.kind
     TApp(tp, args) -> kind-apply(args, tp.kind-of)
 
-fun unsafe-type(f: () -> pure tau): tau
+fun unsafe-type(f: () -> _ tau): tau
   unsafe-total
     try(f) fn(e) // TODO: Replace this with exit
       TCon(TypeCon("error".new-name, kindStar))
@@ -690,7 +690,7 @@ pub fun is-delayed-type(tp: ktype): bool
   match tp.expand-syn
     TFun([]) -> True
     _ -> False
-pub fun get-type-name(tp: ktype, ?kk-file-line: string): pure name
+pub fun get-type-name(tp: ktype, ?kk-file-line: string): _ name
   match tp.expand-syn
     TApp(TCon(tc)) -> tc.name 
     TCon(tc) -> tc.name
@@ -700,7 +700,7 @@ pub fun type-is-case-legal(tp: ktype): bool
     TApp(TCon()) -> True
     TCon() -> True
     _ -> False
-pub fun effect-name-from-label(eff: keffect): pure name
+pub fun effect-name-from-label(eff: keffect): _ name
   match eff.expand-syn
     TApp(TCon(tc), [hx]) | tc.name == nameTpHandled || tc.name == nameTpHandled1 || tc.name == nameTpNHandled || tc.name == nameTpNHandled1 -> hx.effect-name-from-label
     TCon(tc) -> tc.name
@@ -740,8 +740,8 @@ pub fun eq-type(tp1: ktype, tp2: ktype)
     (TApp(t1, ts1), TApp(t2, ts2)) -> t1.eq-type(t2) && eq-types(ts1, ts2)
     _ -> False
 
-pub fun eq-types(t1: list<ktype>, t2: list<ktype>): pure bool
+pub fun eq-types(t1: list<ktype>, t2: list<ktype>): _ bool
   t1.zipwith(t2, eq-type).all(id)
 
-fun match-effect(eff1: tau, eff2: tau): pure bool
+fun match-effect(eff1: tau, eff2: tau): _ bool
   eq-type(eff1.order-effect, eff2.order-effect)

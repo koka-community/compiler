@@ -35,7 +35,7 @@ pub struct program<t, k>
   fix-defs: fix-defs
   doc: string
 
-fun program/show(Program(_, n, _, typedefs, defs, imports, externals, fix-defs, _):program<t,k>, ?t/show: (t) -> <div|e> string, ?k/show: (k) -> <div|e> string): <div|e> string
+fun program/show(Program(_, n, _, typedefs, defs, imports, externals, fix-defs, _):program<t,k>, ?t/show: (t) -> _ string, ?k/show: (k) -> _ string): _ string
   n.name/name/show ++ ":\n" ++ "typedefs " ++ typedefs.list/show ++ "\n" ++ "defs " ++ defs.list/show ++ "\n" ++ 
   "imports " ++ imports.list/show ++ "\n" ++ "externals " ++ externals.list/show ++ "\n" ++ 
   "fix-defs " ++ fix-defs.list/show ++ "\n"
@@ -71,7 +71,7 @@ type external
     eImport: list<(target,list<(string, string)>)>, 
     range: range)
 
-fun external/show(e: external): div string
+fun external/show(e: external): _ string
   match e
     External(name, t, params, name-range, range, inlineCall, vis, fipAnnot, doc) -> 
       "External " ++ name.name/name/show ++ " " ++ t.show ++ " " ++ params.list/show ++ " " ++ name-range.show ++ " " ++ range.show ++ " " ++ 
@@ -120,7 +120,7 @@ value type typedef-group<t,k>
   TypeDefRec(defs: list<typedef<t,t,k>>)
   TypeDefNonRec(tdef: typedef<t,t,k>)
 
-fun typedefgroup/show(t: typedef-group<t,k>, ?t/show: (t) -> <div|e> string, ?k/show: (k) -> <div|e> string): <div|e> string
+fun typedefgroup/show(t: typedef-group<t,k>, ?t/show: (t) -> _ string, ?k/show: (k) -> _ string): _ string
   match t
     TypeDefRec(defs) -> "TypeDefRec " ++ defs.list/show
     TypeDefNonRec(d) -> "TypeDefNonRec " ++ d.show
@@ -144,7 +144,7 @@ type typedef<t,u,k>
     deffect: data-effect, 
     doc: string)
 
-fun typedef/show(td: typedef<t,u,k>, ?t/show: (t) -> <div|e> string, ?u/show: (u) -> <div|e> string, ?k/show: (k) -> <div|e> string): <div|e> string
+fun typedef/show(td: typedef<t,u,k>, ?t/show: (t) -> _ string, ?u/show: (u) -> _ string, ?k/show: (k) -> _ string): _ string
   match td
     Synonym(binder, params, synonym, range, vis, doc) -> "Synonym " ++ binder.show ++ " " ++ params.list/show ++ " " ++ synonym.t/show ++ " " ++ range.show ++ " " ++ vis.show ++ " " ++ doc.show
     DataType(binder, params, constrs, range, vis, sort, ddef, deffect, doc) -> 
@@ -159,7 +159,7 @@ type type-binder<k>
     range: range
   )
 
-fun tb/show(t: type-binder<k>, ?show: (k) -> <div|e> string): <div|e> string
+fun tb/show(t: type-binder<k>, ?show: (k) -> _ string): _ string
   t.name.show ++ " " ++ t.kind.show ++ " " ++ t.name-range.show ++ " " ++ t.range.show
 
 type user-con<t, u, k>
@@ -175,7 +175,7 @@ type user-con<t, u, k>
     doc: string  
   )
 
-fun con/show(u: user-con<t,u,k>, ?t/show: (t) -> <div|e> string, ?u/show: (u) -> <div|e> string, ?k/show: (k) -> <div|e> string): <div|e> string
+fun con/show(u: user-con<t,u,k>, ?t/show: (t) -> _ string, ?u/show: (u) -> _ string, ?k/show: (k) -> _ string): _ string
   u.name.show ++ " " ++ u.existentials.list/show ++ " " ++ u.params.list/show ++ " " ++ u.result.show ++ " " ++ u.name-range.show ++ " " ++ u.range.show ++ " " ++ u.vis.show ++ " " ++ u.doc.show
 
 alias def-groups<t> = list<def-group<t>>;
@@ -184,7 +184,7 @@ type def-group<t>
   DefRec(defs: list<def<t>>)
   DefNonRec(d: def<t>)
 
-fun dg/show(d: def-group<t>, ?show: (t) -> <div|e> string): <div|e> string
+fun dg/show(d: def-group<t>, ?show: (t) -> _ string): _ string
   match d
     DefRec(defs) -> "DefRec " ++ defs.list/show
     DefNonRec(d) -> "DefNonRec " ++ d.show
@@ -202,7 +202,7 @@ type value-binder<t,e>
     range: range // full range
   )
 
-fun vb/show(v: value-binder<t,v>, ?t/show: (t) -> <div|e> string, ?e/show: (v) -> <div|e> string): <div|e> string
+fun vb/show(v: value-binder<t,v>, ?t/show: (t) -> _ string, ?e/show: (v) -> _ string): _ string
   v.name.show ++ " " ++ v.binderType.t/show ++ " " ++ v.expr.e/show ++ " " ++ v.name-range.show ++ " " ++ v.range.show
 
 struct def<t>
@@ -213,7 +213,7 @@ struct def<t>
   defInline: def-inline
   doc: string;
 
-fun def/show(d: def<t>, ?show: (t) -> <div|e> string): <div|e> string
+fun def/show(d: def<t>, ?show: (t) -> _ string): _ string
   d.binder.show ++ " " ++ d.range.show ++ " " ++ d.visibility.show ++ " " ++ d.sort.show ++ " " ++ d.defInline.show ++ " " ++ d.doc
 
 fun defIsVal(d: def<t>): bool
@@ -249,7 +249,7 @@ type expr<t>
 // fun expr/show(expr: expr<t>): string
 //   ""
 
-fun expr/show(expr: expr<t>, ?show: (t) -> <div|e> string): <div|e> string
+fun expr/show(expr: expr<t>, ?show: (t) -> _ string): _ string
   match expr
     // Lam(binder, e, rng) -> "Lam " ++ binder.list/show ++ " " ++ e.show ++ " " ++ rng.show
     // Let(d, e, rng) -> "Let " ++ d.dg/show ++  " " ++ e.expr/show ++ " " ++ rng.show 
@@ -287,7 +287,7 @@ fun wrap-optional(expr: expr<t>): expr<t>
 
 val optionalNone = Var(nameOptionalNone, False, null)
 
-fun expr/uses-locals(expr: expr<t>, lvars : name-set): pure bool
+fun expr/uses-locals(expr: expr<t>, lvars : name-set): _ bool
   match expr
     App(Var(newLocal, False), [_, (_, Parens(Lam([ValueBinder(name)], body)))]) | newLocal == nameLocalVar -> body.uses-locals(lvars.remove(name)) // Fragile, expects this form from the parser
     Lam(_, e) -> e.uses-locals(lvars)
@@ -303,25 +303,25 @@ fun expr/uses-locals(expr: expr<t>, lvars : name-set): pure bool
     Var(n, _, _) -> lvars.member(n)
     _ -> False
 
-fun list/uses-locals(l: list<a>, lvars: name-set, ?uses-locals: (a, name-set) -> pure bool): pure bool
+fun list/uses-locals(l: list<a>, lvars: name-set, ?uses-locals: (a, name-set) -> _ bool): _ bool
   match l
     Cons(x, xs) -> x.uses-locals(lvars) || xs.uses-locals(lvars)
     Nil -> False
-fun maybe/uses-locals(m: maybe<a>, lvars: name-set, ?uses-locals: (a, name-set) -> pure bool): pure bool
+fun maybe/uses-locals(m: maybe<a>, lvars: name-set, ?uses-locals: (a, name-set) -> _ bool): _ bool
   match m
     Just(x) -> x.uses-locals(lvars)
     Nothing -> False
-fun def-group/uses-locals(dg: def-group<t>, lvars: name-set): pure bool
+fun def-group/uses-locals(dg: def-group<t>, lvars: name-set): _ bool
   match dg
     DefRec(defs) -> defs.uses-locals(lvars)
     DefNonRec(d) -> d.uses-locals(lvars)
-fun def/uses-locals(d: def<t>, lvars: name-set): pure bool
+fun def/uses-locals(d: def<t>, lvars: name-set): _ bool
   d.binder.expr.uses-locals(lvars)
-fun guard/uses-locals(g: guard<t>, lvars: name-set): pure bool
+fun guard/uses-locals(g: guard<t>, lvars: name-set): _ bool
   g.guardTest.uses-locals(lvars) || g.guardExpr.uses-locals(lvars)
-fun branch/uses-locals(b: branch<t>, lvars: name-set): pure bool
+fun branch/uses-locals(b: branch<t>, lvars: name-set): _ bool
   b.branchGuard.uses-locals(lvars)
-fun op/uses-locals(o: handler-branch<t>, lvars: name-set): pure bool
+fun op/uses-locals(o: handler-branch<t>, lvars: name-set): _ bool
   o.branchExpr.uses-locals(lvars)
 
 fun extract-matched-names(e: expr<t>)
@@ -371,7 +371,7 @@ type handler-branch<t>
     branchPatRange: range
   )
 
-fun hb/show(h: handler-branch<t>, ?show: (t) -> <div|e> string): <div|e> string
+fun hb/show(h: handler-branch<t>, ?show: (t) -> _ string): _ string
   h.branchName.show ++ " " ++ h.branchPars.list/show ++ " " ++ h.branchExpr.show ++ " " ++
   h.branchSort.show ++ " " ++ h.branchNameRange.show ++ " " ++ h.branchPatRange.show
   
@@ -379,14 +379,14 @@ struct branch<t>
   branchPattern: pattern<t>
   branchGuard: list<guard<t>>
 
-fun branch/show(b: branch<t>, ?show: (t) -> <div|e> string): <div|e> string
+fun branch/show(b: branch<t>, ?show: (t) -> _ string): _ string
   b.branchPattern.show ++ " " ++ b.branchGuard.list/show
   
 struct guard<t>
   guardTest: expr<t>
   guardExpr: expr<t>
 
-fun guard/show(g: guard<t>, ?show: (t) -> <div|e> string): <div|e> string
+fun guard/show(g: guard<t>, ?show: (t) -> _ string): _ string
   g.guardTest.show ++ " " ++ g.guardExpr.show
 
 type pattern<t>
@@ -397,7 +397,7 @@ type pattern<t>
   PatParens(p: pattern<t>, range: range)
   PatLit(value: lit, range:range = value.range)
 
-fun pat/show(p: pattern<t>, ?show: (t) -> <div|e> string): <div|e> string
+fun pat/show(p: pattern<t>, ?show: (t) -> _ string): _ string
   match p
     PatWild(range) -> "PatWild " ++ range.show
     // PatVar(patvar) -> "PatVar " ++ patvar.show
@@ -448,7 +448,7 @@ type kuser-type<k>
 
 alias user-type = kuser-type<user-kind>
 
-fun ut/show(u: user-type): div string
+fun ut/show(u: user-type): _ string
   match u
     TpQuan(q, b, kind, range) -> "TpQuan " ++ q.show ++ " " ++ b.show ++ " " ++ kind.show ++ " " ++ range.show
     TpFun(a, b, c, range) -> "TpFun " ++ a.list/show(?show=fn((n, ut)) n.name/name/show ++ ":" ++ ut.show) ++ " " ++ b.show ++ " " ++ c.show ++ " " ++ range.show
@@ -496,15 +496,15 @@ fun uhb/range(uhb: user-handler-branch): range
   uhb.branchPatRange.combine(uhb.branchExpr.range)
 
 // free type variables
-fun maybe/free-type-vars(m: maybe<a>, ?free-type-vars: (a) -> div name-set): div name-set
+fun maybe/free-type-vars(m: maybe<a>, ?free-type-vars: (a) -> _ name-set): _ name-set
   match m
     Nothing -> LinearSet([])
     Just(x) -> ?free-type-vars(x)
 
-fun list/free-type-vars(l: list<a>, ?free-type-vars: (a) -> div name-set): div name-set
+fun list/free-type-vars(l: list<a>, ?free-type-vars: (a) -> _ name-set): _ name-set
   l.foldl(LinearSet([]), fn(s:name-set, x) s + ?free-type-vars(x))
 
-fun kut/free-type-vars(tp: kuser-type<k>): div name-set
+fun kut/free-type-vars(tp: kuser-type<k>): _ name-set
   match tp
     TpQuan(_, TypeBinder(name), tp, _) -> tp.free-type-vars - name
     TpFun(args, eff, tp) -> free-type-vars(Cons(tp,Cons(eff,args.map(snd))))
@@ -550,7 +550,7 @@ fun remove-tdefs(tdefs: list<typedef<t,t,k>>, tdefs0: list<typedef<t,t,k>>): lis
 fun remove-defs(defs: list<def<k>>, defs0: list<def<k>>): list<def<k>>
   defs0.foldl(defs, fn(acc, def) acc.filter(fn(def') def'.name != def.name))
 
-fun add-defs(p: program<t,k>, tdefs0: list<typedef<t,t,k>>, defs0: list<def<t>>): <exn,comp-flags> program<t,k>
+fun add-defs(p: program<t,k>, tdefs0: list<typedef<t,t,k>>, defs0: list<def<t>>): _ program<t,k>
   val tdefs' = match p.typedefs
     [] -> [TypeDefRec(tdefs0)]
     [TypeDefRec(ts)] -> [TypeDefRec(ts.remove-tdefs(tdefs0) ++ tdefs0)]

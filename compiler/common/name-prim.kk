@@ -24,7 +24,7 @@ val nameMain        = "@main".new-name
 val nameCopy        = "@copy".new-name
 val nameOpExpr      = "@opexpr".new-name
 
-fun copy-name-of(typename: name): <comp-flags,exn> name
+fun copy-name-of(typename: name): _ name
   type-qualified-name-of(typename, nameCopy)
 
 //---------------------------------
@@ -190,10 +190,10 @@ val nameEffectOpen   =  "@open".core-types-name // prelude-name "@open"
 
 val nameInitially    = "initially".core-hnd-name
 val nameFinally      = "finally".core-hnd-name
-fun name-clause-tail-no-op(n: int): e name
+fun name-clause-tail-no-op(n: int): _ name
   core-hnd-name("clause-tail-noop" ++ show(n))
 
-fun is-clause-tail-name(n: name): maybe<int>
+fun is-clause-tail-name(n: name): _ maybe<int>
   if n.nameModule != nameCoreHnd.nameModule then Nothing
   else
     val s = n.local

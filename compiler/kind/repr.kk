@@ -13,12 +13,12 @@ import compiler/type/pretty
 
 // value types
 fun create-data-def(
-    emit-error: (doc) -> e (), 
-    emit-warning: (doc) -> e (), 
-    lookup-datainfo: (name) -> e maybe<data-info>, 
+    emit-error: (doc) -> _ (), 
+    emit-warning: (doc) -> _ (), 
+    lookup-datainfo: (name) -> _ maybe<data-info>, 
     platform: platform, nm:name, 
     resultHasKindStar: bool, isRec: bool, sort: data-kind, extraFields: int, 
-    defaultDef:data-def, conInfos0: list<con-info>): e (data-def, list<con-info>)
+    defaultDef:data-def, conInfos0: list<con-info>): _ (data-def, list<con-info>)
   val isVal = defaultDef.is-value
   fun create-con-info-repr(c: con-info)
     val (orderedFields, vrepr) = order-con-fields(emit-error, "constructor ".text |+| (c.name:name).pretty, lookup-datainfo, platform, extraFields, c.params)
@@ -137,7 +137,7 @@ fun create-data-def(
 //  order constructor fields of constructors with raw field so the regular fields come first to be scanned.
 // return the ordered fields, and a ValueRepr (raw size part, the scan count (including tags), align, and full size)
 // The size is used for reuse and should include all needed fields including the tag field for "open" datatypes 
-fun order-con-fields(emit-error: (doc) -> e (), nameDoc: doc, get-datainfo: (name) -> e maybe<data-info>, platform: platform, extraPreScan: int, fields: list<(name, ktype)>): e (list<(name, ktype)>, value-repr)
+fun order-con-fields(emit-error: (doc) -> _ (), nameDoc: doc, get-datainfo: (name) -> _ maybe<data-info>, platform: platform, extraPreScan: int, fields: list<(name, ktype)>): _ (list<(name, ktype)>, value-repr)
   fun visit(rraw: list<((name, ktype), value-repr)>, rmixed: list<((name, ktype), value-repr)>, rscan: list<(name, ktype)>, scan-count0: int, alignment0: int, l: list<(name, ktype)>)
     if rmixed.length > 1 then
       emit-error(nameDoc |+| " has multiple value type fields that each contain both raw types and regular types".text |-|
@@ -176,7 +176,7 @@ fun extract-datadef-type(tp: ktype): maybe<name>
 
 // Return the DataDef for a type.
 // This may be 'Nothing' for abstract types.
-fun get-data-def(lookupDI: (name) -> e maybe<data-info>, tp: ktype): e maybe<data-def>
+fun get-data-def(lookupDI: (name) -> _ maybe<data-info>, tp: ktype): _ maybe<data-def>
   match tp.extract-datadef-type
     Nothing -> Just(DataDefNormal)
     Just(nm) | nm == nameTpBox -> Just(DataDefNormal)

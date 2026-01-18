@@ -64,42 +64,42 @@ fun is-path-delimiter(c: char): bool
   c == ':' || c == ';'
 
 // run-system-raw 
-fun run-system-raw(cmd: string): io ()
+fun run-system-raw(cmd: string): _ ()
   val res = process/run-system(cmd)
   if res == 0 then ()
   else
     throw("Command failed: " ++ cmd)
 
-fun run-system(cmd: string): io ()
+fun run-system(cmd: string): _ ()
   val res = run-system-ex(cmd)
   if res == 0 then ()
   else
     throw("Command failed: " ++ cmd)
 
-fun run-system-ex(cmd: string): io int
+fun run-system-ex(cmd: string): _ int
   cmd.path.normalize-with(pathsep().head-char.default('/')).process/run-system
 
-fun run-cmd(cmd: string, args: list<string>): io ()
+fun run-cmd(cmd: string, args: list<string>): _ ()
   val res = process/run-system(cmd ++ " " ++ args.join(" "))
   if res == 0 then ()
   else
     throw("Command failed: (exit code " ++ res.show ++ ")")
 
 // TODO: Need stderr in the output, and setting the child processes environment - not supported by the koka std libraries yet
-fun run-cmd-read(env: env, cmd: string, args: list<string>): io string
+fun run-cmd-read(env: env, cmd: string, args: list<string>): _ string
   val res = process/run-system-read(cmd ++ " " ++ args.join(" "))
   match res
     Ok(s) -> s 
     Error(s) -> throw("Command failed: (exit code " ++ s.show ++ ")")
 
 // TODO: Need setting the child processes environment - not supported by the koka std libraries yet
-fun run-cmd-env(env: env, cmd: string, args: list<string>): io ()
+fun run-cmd-env(env: env, cmd: string, args: list<string>): _ ()
   val res = process/run-system(cmd ++ " " ++ args.join(" "))
   if res == 0 then ()
   else
     throw("Command failed: (exit code " ++ res.show ++ ")")
 
-fun build-env(env: env): io maybe<env>
+fun build-env(env: env): _ maybe<env>
   if env.is-empty then return Nothing
   val old = get-env()
   Just(env ++ old.filter(fn((k,_)) env.lookup(_ == k).is-nothing))
@@ -114,10 +114,10 @@ fun build-env(env: env): io maybe<env>
 // read-text-file (already part of std/os/file)
 // write-text-file (already part of std/os/file)
 
-fun copy-text-file(src: path, dest: path): io ()
+fun copy-text-file(src: path, dest: path): _ ()
   file/write-text-file(dest, file/read-text-file(src))
 
-fun copy-text-file-with(src: path, dest: path, transform: (string) -> <io|e> string): <io|e> ()
+fun copy-text-file-with(src: path, dest: path, transform: (string) -> _ string): _ ()
   file/write-text-file(dest, transform(file/read-text-file(src)))
 
 // binary modes are not supported in koka std lib yet - but are in libuv branch
@@ -131,7 +131,7 @@ fun copy-text-file-with(src: path, dest: path, transform: (string) -> <io|e> str
 
 // get-program-path (already in std/os/path as app-path())
 
-fun common-path-prefix(p1: path, p2: path): io string
+fun common-path-prefix(p1: path, p2: path): _ string
   p1.dirparts.zip(p2.dirparts).take-while(fn((a,b)) a == b).map(fst).join(pathsep())
 
 fun default/relative-to-path(pprefix: path, p: path): ndet path
@@ -185,7 +185,7 @@ fun make-relative-to-paths(p: path, roots: list<path>): ndet (path, path)
 
 
 // TODO: More
-fun get-env-paths(n: string): io list<path>
+fun get-env-paths(n: string): _ list<path>
   get-env-value(n).default("").paths
 
 // get-env-var (already part of std/os/env as get-env-value)

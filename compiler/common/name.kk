@@ -178,7 +178,7 @@ fun pretty-name-ex(Name(m, _, l, _, n, _): name, lsep: string, cs: colorScheme):
    (m.text |.| (if ln.is-empty then pretty/pprint/empty elif l.is-empty then "/".text else lsep.text)).color(cs.colorModule)
            |.| ln.text
 
-fun pretty-name(nm: name, cs: colorScheme): <exn> doc // not explicit /#
+fun pretty-name(nm: name, cs: colorScheme): _ doc // not explicit /#
   if nm.is-implicit-param-name then "?".text |.| nm.from-implicit-param-name.requalify-locally.pretty-name-ex("/", cs)
   else nm.pretty-name-ex("/", cs)
 
@@ -199,7 +199,7 @@ fun tupled/read(s: string): exn name
   val Cons(m, Cons(l, Cons(n, Nil))) = s'.split(",")
   new-locally-qualified(m, l, n)
 
-fun qualified/read(s: string): <div,exn> name
+fun qualified/read(s: string): _ name
   if s.starts-with("(").bool then tupled/read(s)
   else s.read-qualified-name
 
@@ -231,7 +231,7 @@ fun name-map-stem(Name(m, hm, l, hl, n, _): name, f: (string) -> e string): e na
   val n' = f(n)
   Name(m, hm, l, hl, n', n'.hash)
 
-fun read-qualified-name(s0: string): <div,exn> name
+fun read-qualified-name(s0: string): _ name
   if s0.starts-with("?").bool then s0.slice.drop(1).string.read-qualified-name.requalify-locally.to-implicit-param-name
   else
     fun split-qual-id-rev(rs: list<char>): (string, string)
@@ -239,7 +239,7 @@ fun read-qualified-name(s0: string): <div,exn> name
       match rqual
         Cons('/', rs1) -> (rs1.reverse.string, rid.reverse.string)
         _ -> ("", rid.reverse.string)
-    fun split-id-name-rev(rs: list<char>): <exn> (string, string, string)
+    fun split-id-name-rev(rs: list<char>): _ (string, string, string)
       val (rid, rest) = rs.span(_ != '#')
       match rest
         Cons('#', Cons('/', rs2)) ->
@@ -249,7 +249,7 @@ fun read-qualified-name(s0: string): <div,exn> name
           val (qual, id) = rid.split-qual-id-rev
           (qual, "", id)
         _ -> fail("Name split-id-name-rev: illegal locally qualified name: " ++ rs.reverse.string)
-    fun split-name(s: string): <exn> (string, string, string)
+    fun split-name(s: string): _ (string, string, string)
       match s.list.reverse
         Cons(')', rest) ->
           val (rop, rest2) = rest.span(_ != '(')

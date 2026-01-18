@@ -7,16 +7,14 @@ import compiler/common/failure
 import compiler/platform/config
 import std/core/undiv
 
-alias pretty-kind-eff = <pure, comp-flags, colors>
-
 fun kind-colon()
   ":".text.color(colors.colorSep)
 
 // Generate nice quantifier names
-fun nice-kinds(kinds: list<kind>): pretty-kind-eff list<doc>
+fun nice-kinds(kinds: list<kind>): _ list<doc>
   kinds.map(_.pp-kind(precTop))
 
-fun pretty-kind(k: kind): pretty-kind-eff doc
+fun pretty-kind(k: kind): _ doc
   k.pp-kind(precTop)
 
 // Show

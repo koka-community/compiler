@@ -4,7 +4,7 @@ import compiler/common/range
 import std/core-extras
 import std/core/unsafe
 
-fun lex(str: string, pos: pos): pure list<lexeme>
+fun lex(str: string, pos: pos): _ list<lexeme>
   val src = pos.source
   var lexemes := []
   var slices := []
@@ -64,10 +64,10 @@ fun adjust(pos: alex-pos, l: int, c: int): alex-pos
 fun get-int(l: list<char>): int
   l.drop-while(is-white).take-while(is-digit).string.parse-int.default(0)
 
-fun lexer(path: string, line: int, input: string): pure list<lexeme>
+fun lexer(path: string, line: int, input: string): _ list<lexeme>
   lexing(Source(path, input), line, input)
 
-fun lexing(source: source, line: int, input: string): pure list<lexeme>
+fun lexing(source: source, line: int, input: string): _ list<lexeme>
   val init-pos = Pos(source, 0, 0, 1)
   lex(input, init-pos)
 

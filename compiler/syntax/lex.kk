@@ -17,13 +17,13 @@ effect koka-lex
   fun check-linedir(c: lex, start: alex-pos, end: alex-pos): lex
   fun do-emit(l: lex, start: alex-pos, end: alex-pos): ()
 
-fun emit(l: lex): <alex,koka-lex> ()
+fun emit(l: lex): _ ()
   do-emit(l, get-start(), get-end())
 
-fun start-chunked(s: string): <alex,koka-lex> ()
+fun start-chunked(s: string): _ ()
   do-start-chunked(s, get-start())
 
-fun end-chunk(f: (string) -> <alex,koka-lex> lex): <alex,koka-lex> ()
+fun end-chunk(f: (string) -> _ lex): _ ()
   val (s, start) = end-chunked()
   do-emit(f(s), start, get-end())
 val alex_tab_size:int = 8
@@ -201,19 +201,19 @@ type action-info
     end: alex-pos
   )
 
-fun get-slice(): <alex> bslice
+fun get-slice(): _ bslice
   action-info().token
 
-fun get-sslice(): <alex> sslice
+fun get-sslice(): _ sslice
   get-string().slice
 
-fun get-string(): <alex> string
+fun get-string(): _ string
   get-slice().bytes.string
 
-fun get-start(): <alex> alex-pos
+fun get-start(): _ alex-pos
   action-info().start
 
-fun get-end(): <alex> alex-pos
+fun get-end(): _ alex-pos
   action-info().end
 
 value type alex-acc
@@ -298,7 +298,7 @@ fun recognize(a: alex-scan-state, restart: bool)
         AlexAccResSkip(resnext) ->
           AlexScanState(states, resnext, resnext, resnext.truncate(), 0, 0, end, end, AlexAccResNone, action-info)
 
-fun alex-scan(input: bslice, sc: int, restart:bool=False): handled-alex-eff ()
+fun alex-scan(input: bslice, sc: int, restart:bool=False): _ ()
   var state := AlexScanState([sc], input, input, input.truncate, 0, 0 , AlexPos(0,1,1), AlexPos(0,1,1), AlexAccResNone, ActionInfo(input.truncate, AlexPos(0,1,1), AlexPos(0,1,1)))
   with handler
     fun get-state()
@@ -337,7 +337,7 @@ fun alex-scan(input: bslice, sc: int, restart:bool=False): handled-alex-eff ()
       la
   alex-scan-tokens(sc)
 
-inline fun do-recognize-token(): alex-eff ()
+inline fun do-recognize-token(): _ ()
   val la = recognize-token() // Changes last accept, so we get it prior
   match la
     AlexAccRes(a) ->
@@ -346,7 +346,7 @@ inline fun do-recognize-token(): alex-eff ()
 
 // Push the input through the DFA, remembering the most recent accepting
 // state it encountered.
-fun alex-scan-tokens(s: int): alex-eff ()
+fun alex-scan-tokens(s: int): _ ()
   set-accept(s)
   val mc = next-char()
   match mc

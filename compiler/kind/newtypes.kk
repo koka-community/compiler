@@ -16,7 +16,7 @@ effect newtypes-eff
   fun newtypes-find(name: name): data-info
   fun newtypes-list(): list<(name, data-info)>
 
-fun withNewtypes(newtps0: newtypes, f: () -> <newtypes-eff,exn,comp-flags|e> a): <exn,comp-flags|e> a
+fun withNewtypes(newtps0: newtypes, f: () -> _ a): _ a
   var newtps := newtps0
   with handler
     fun newtypes-extend(name: name, k: data-info) newtps := newtps.set(name, k)
@@ -47,13 +47,13 @@ fun single(name: name, d: data-info): newtypes
   LinearMap([(name, d)])
 val newtypes/empty:newtypes = LinearMap([])
 
-fun core/extract-newtypes(c: core): <pure,comp-flags> newtypes
+fun core/extract-newtypes(c: core): _ newtypes
   c.typedefs.map(extract-newtypes).unions
 
-fun tdg/extract-newtypes(g: typedef-group): <pure,comp-flags> newtypes
+fun tdg/extract-newtypes(g: typedef-group): _ newtypes
   g.map(extract-newtypes).unions
 
-fun td/extract-newtypes(d: typedef): <pure,comp-flags> newtypes
+fun td/extract-newtypes(d: typedef): _ newtypes
   match d
     Data(dataInfo) -> single(dataInfo.name, dataInfo)
     _ -> newtypes/empty

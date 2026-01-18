@@ -17,22 +17,22 @@ fun run-unique(start: int, f: () -> <unique|e> a): e a
         u
   f() 
 
-fun new-unique(): <unique> int 
+fun new-unique(): _ int 
   update-unique(_ + 1)
 
-fun uniques(n: int): <unique> list<int>
+fun uniques(n: int): _ list<int>
   list(1, n).map(fn(_) new-unique())
 
-fun unique-id(s: string): <unique> id
+fun unique-id(s: string): _ id
   gen-id(s, new-unique())
 
-fun unique-ids(s: string, n: int): <unique> list<id>
+fun unique-ids(s: string, n: int): _ list<id>
   uniques(n).map(gen-id(s, _))
 
-fun unique-name(s: string): <unique> name
+fun unique-name(s: string): _ name
   new-hidden-name(s ++ "." ++ new-unique().int/show)
 
-fun unique-name-from(nm: name): <unique> name
+fun unique-name-from(nm: name): _ name
   new-unique().to-unique-name(nm)
 
 fun fresh-name(pfx: string)

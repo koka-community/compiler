@@ -52,34 +52,34 @@ pub type lex
   LexError(s: string) // layout errors
 
 // 'True' when the lexeme is whitespace
-pub fun lexeme/is-white(l: lexeme): <> bool
+pub fun lexeme/is-white(l: lexeme): bool
   l.lex.is-white
 
 // 'True' when the lexical token is whitespace
-pub fun lex/is-white(l: lex): <> bool
+pub fun lex/is-white(l: lex): bool
   match l
     LexWhite -> True
     LexComment -> True
     _ -> False
 
 // 'True' when the lexical token is exactly LexWhite
-pub fun lexeme/is-whitespace(l: lexeme): <> bool
+pub fun lexeme/is-whitespace(l: lexeme): bool
   l.lex.is-whitespace
 
 // 'True' when the lexical token is exactly LexWhite
-pub fun lex/is-whitespace(l: lex): <> bool
+pub fun lex/is-whitespace(l: lex): bool
   match l
     LexWhite(_) -> True
     _ -> False
 
 // Returns 'True' if the lexical tokens of the lexeme are of the same kind. (i.e. Constructor)
-pub fun same-lexeme(Lexeme(_, lex1): lexeme, Lexeme(_, lex2): lexeme): <> bool
+pub fun same-lexeme(Lexeme(_, lex1): lexeme, Lexeme(_, lex2): lexeme): bool
   match (lex1, lex2)
     (LexKeyword(n1, _), LexKeyword(n2, _)) -> n1 == n2 
     (LexSpecial(n1), LexSpecial(n2)) -> n1 == n2
     _ -> lex1.from-enum == lex2.from-enum
 
-pub fun from-enum(l: lex): <> int
+pub fun from-enum(l: lex): int
   match l
     LexInt -> 0
     LexFloat -> 1
@@ -102,10 +102,10 @@ pub fun from-enum(l: lex): <> int
     LexCons -> 17
     LexTypedId -> 18
 
-pub fun lexeme/show(Lexeme(rng, lex): lexeme): <> string
+pub fun lexeme/show(Lexeme(rng, lex): lexeme): string
   rng.show-full-range("".path) ++ ": " ++ lex.show
 
-pub fun lex/show(l: lex): <> string
+pub fun lex/show(l: lex): string
   match l
     LexInt(_, s) -> s
     LexFloat(_, s) -> s

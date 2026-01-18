@@ -21,8 +21,6 @@ import std/os/path
 import std/num/float64
 import std/core/undiv
 
-alias asmEff = <pure,asm,comp-flags,unique,colors,newtypes-eff,printer,subst,documentation,nice-eff<type-var>,ppEnvEff,precEff,prettyTypeEff>
-
 // Put the things that need overriding in here
 effect subst
   val substEnv: list<(tName, doc)> // substituting names
@@ -91,10 +89,10 @@ fun local-unique(f)
   set-unique(u)
   x
 
-fun new-var-name(s: string): asmEff name
+fun new-var-name(s: string): _ name
   new-name("." ++ s ++ new-unique().show)
 
-fun new-var-names(i: int): asmEff list<name>
+fun new-var-names(i: int): _ list<name>
   Cons(new-var-name("x"), new-var-names(i - 1))
 
 fun newDefVarName(s: string)
@@ -154,7 +152,7 @@ fun is-pat(q: pattern, b: bool): bool
     PatVar(_, q') -> q'.is-pat(b)
     PatCon(tn) -> tn.get-name == (if b then nameTrue else nameFalse)
 
-fun extract-external(e: expr): asmEff maybe<(tName, string, list<expr>)>
+fun extract-external(e: expr): _ maybe<(tName, string, list<expr>)>
   fun format(tn:tName, fs:list<(target,string)>)
     match lookup-target(C(cTarget), fs)
       Nothing -> fail("backend does not support external in " ++ tn.show ++ fs.show-list(fn((t,s)) t.show ++ ":" ++ s))

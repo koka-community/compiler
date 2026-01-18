@@ -21,7 +21,7 @@ val names/empty: name-set = LinearSet([])
 
 alias qname-map<a> = linearMap<name,list<(name,a)>>;
 
-fun name-map/find(m: name-map<a>, n: name): <div,exn> a
+fun name-map/find(m: name-map<a>, n: name): _ a
   match m.lookup(n)
     Just(x) -> x
     _ -> throw("common/name-map/find: could not find: " ++ n.show)
@@ -47,7 +47,7 @@ fun lookup/show(a: lookup<a>, ?show: (a) -> e string): e string
 fun qname-map/single(n: name, a: a): qname-map<a>
   LinearMap([(n.unqualify, [(n, a)])])
 
-fun qname-map/from-list(l: list<(name,a)>): <comp-flags,pure> qname-map<a>
+fun qname-map/from-list(l: list<(name,a)>): _ qname-map<a>
   l.foldl(LinearMap([])) fn(qm, (name, x))
     qm.insert(name, x)
 
@@ -76,22 +76,22 @@ fun qname-map/filter-names(m: qname-map<a>, p: (name) -> e bool): e qname-map<a>
   m.map fn(k, xs)
     xs.filter(fn((n, _)) p(n))
 
-fun qname-map/insert(m: qname-map<a>, n: name, a: a): <comp-flags,exn> qname-map<a>
+fun qname-map/insert(m: qname-map<a>, n: name, a: a): _ qname-map<a>
   m.update(n.unqualify, Cons((n, a), Nil)) fn(xs, ys)
     safe-combine("insert", xs, ys)
 
-fun qname-map/union(m1: qname-map<a>, m2: qname-map<a>): <comp-flags,exn> qname-map<a>
+fun qname-map/union(m1: qname-map<a>, m2: qname-map<a>): _ qname-map<a>
   m1.union-with(m2) fn(xs, ys)
     safe-combine("union", xs, ys)
 
-fun qname-map/union-left-bias(m1: qname-map<a>, m2: qname-map<a>): <comp-flags,exn> qname-map<a>
+fun qname-map/union-left-bias(m1: qname-map<a>, m2: qname-map<a>): _ qname-map<a>
   m1.union-with(m2, list/(++))
 
-fun qname-map/unions(ms: list<qname-map<a>>): <comp-flags,exn> qname-map<a>
+fun qname-map/unions(ms: list<qname-map<a>>): _ qname-map<a>
   ms.foldl(LinearMap([])) fn(m1, m2)
     m1.qname-map/union(m2)
 
-fun qname-map/safe-combine(s: string, xs: list<(name,a)>, ys: list<(name,a)>): <comp-flags,exn> list<(name,a)>
+fun qname-map/safe-combine(s: string, xs: list<(name,a)>, ys: list<(name,a)>): _ list<(name,a)>
   if xs.any(fn(x) ys.any(fn(y) y.fst == x.fst)) then
     fail("common/name-collections " ++ s ++ ": overlapping names: " ++ xs.map(fn((x, _)) x).list/show ++ ys.map(fn((y,_)) y).list/show)
   xs ++ ys

@@ -107,13 +107,13 @@ fun warning-message-kind(d: doc, rng: range, ekind: error-kind = ErrGeneral): er
 fun error-message-kind(d: doc, rng: range, ekind: error-kind = ErrGeneral): error-msg
   ErrorMsg(rng, d, SevError, ekind)
 
-fun info-message(d: doc, rng: range): current-error-kind error-msg
+fun info-message(d: doc, rng: range): _ error-msg
   d.info-message-kind(rng, current-error-kind)
 
-fun warning-message(d: doc, rng: range): current-error-kind error-msg
+fun warning-message(d: doc, rng: range): _ error-msg
   d.warning-message-kind(rng, current-error-kind)
 
-fun error-message(d: doc, rng: range): current-error-kind error-msg
+fun error-message(d: doc, rng: range): _ error-msg
   d.error-message-kind(rng, current-error-kind)
 
 //---------------------------------
@@ -127,7 +127,7 @@ fun errs/pretty(msgs: errors): doc
   with color-scheme-default
   msgs.pp-errors("".path, False)
 
-fun pp-error-severity(sev: error-severity, ekind: error-kind): colors doc
+fun pp-error-severity(sev: error-severity, ekind: error-kind): _ doc
   val ekindTxt = match ekind
     ErrParse -> "parse"
     ErrKind -> "kind"
@@ -142,12 +142,12 @@ fun pp-error-severity(sev: error-severity, ekind: error-kind): colors doc
     SevWarning -> header(colorWarning, "warning")
     SevInfo -> header(colorWarning, "info")
 
-fun pp-error-message(msg: error-msg, cwd: path, showRangeEnd: bool): colors doc
+fun pp-error-message(msg: error-msg, cwd: path, showRangeEnd: bool): _ doc
   (msg.range.pp-range(cwd,showRangeEnd)
   |.| colon |+| msg.severity.pp-error-severity(msg.kind) |+| msg.message
   ).hang(2)
 
-fun pp-errors(errs: errors, cwd: path, showRangeEnd: bool): colors doc
+fun pp-errors(errs: errors, cwd: path, showRangeEnd: bool): _ doc
   vcat(errs.map(_.pp-error-message(cwd, showRangeEnd)))
 
 fun to-warning((range, doc): (range, doc), ekind: error-kind): error-msg
@@ -156,8 +156,6 @@ fun to-warning((range, doc): (range, doc), ekind: error-kind): error-msg
 //--------------------
 // Errors Monad
 //--------------------
-
-alias koka-error = <comp-error,current-error-kind>
 
 effect comp-error
   ctl add-errors(errs: errors): a
@@ -170,26 +168,26 @@ fun default-error-kind(f): error-kind
   with val current-error-kind = ErrGeneral
   f()
 
-fun msg/add-error(err: error-msg): comp-error a
+fun msg/add-error(err: error-msg): _ a
   add-errors([err])
 
-fun msg/add-warning(msg: error-msg): comp-error ()
+fun msg/add-warning(msg: error-msg): _ ()
   add-warnings([msg])
 
-fun msg/add-info(msg: error-msg): comp-error ()
+fun msg/add-info(msg: error-msg): _ ()
   add-infos([msg])
 
-fun doc/add-error(rng: range, error: doc): <comp-error,current-error-kind> a
+fun doc/add-error(rng: range, error: doc): _ a
   add-errors([error-message(error, rng)])
 
-fun doc/add-warning(rng: range, warning: doc): <comp-error,current-error-kind> ()
+fun doc/add-warning(rng: range, warning: doc): _ ()
   add-warnings([error-message(warning, rng)])
 
-fun doc/add-info(rng: range, info: doc): <comp-error,current-error-kind> ()
+fun doc/add-info(rng: range, info: doc): _ ()
   add-infos([error-message(info, rng)])
 
 // check an 'error'
-fun check-error(f: () -> comp-error a): either<errors, (a, warnings)>
+fun check-error(f: () -> _ a): either<errors, (a, warnings)>
   var warns := []
   with handler
     final ctl add-errors(errs) Left(errs)
@@ -198,14 +196,14 @@ fun check-error(f: () -> comp-error a): either<errors, (a, warnings)>
     return(x) Right((x, warns))
   f()
 
-fun handle-error(f: () -> comp-error a, h: errors -> comp-error a): comp-error a
+fun handle-error(f: () -> _ a, h: errors -> _ a): _ a
   with handler
     final ctl add-errors(errs) h(errs)
     fun add-warnings(w) add-warnings(w)
     fun add-infos(w) add-warnings(w)
   f()
 
-fun ignore-warnings(f: () -> comp-error a): comp-error a
+fun ignore-warnings(f: () -> _ a): _ a
   with handler
     final ctl add-errors(errs) add-errors(errs)
     fun add-warnings(w) ()
