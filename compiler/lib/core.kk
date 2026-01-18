@@ -17,3 +17,11 @@ fun contains(l: list<a>, x: a, ?(==): (a, a) -> e bool): e bool
   match l
     Cons(y, rst) -> (x == y) || contains(rst, x)
     Nil -> False
+
+fun unzip-either(xs: list<either<a, b>>): (list<a>, list<b>)
+  fun loop(ys: list<either<a, b>>, las: ctx<list<a>>, lbs: ctx<list<b>>): (list<a>, list<b>)
+    match ys
+      Nil -> (las ++. Nil, lbs ++. Nil)
+      Cons(Left(a), a1) -> loop(a1, las ++ ctx Cons(a, hole), lbs)
+      Cons(Right(b), b1) -> loop(b1, las, lbs ++ ctx Cons(b, hole))
+  loop(xs, ctx hole, ctx hole)

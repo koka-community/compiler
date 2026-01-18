@@ -344,7 +344,7 @@ fun resolve-name-ex(info-filter: (assumption/name-info -> bool), mb-info-filter-
 // lookup an application name `f(...)` where the name context usually contains (partially) inferred
 // argument types. We reuse the lookup for implicit arguments as it works the same
 // (except that for implicit arguments we allow value types to be resolved with unit functions (for conversions))
-fun lookup-app-name(allow-disambiguate : bool, name: name, name-ctx: name-context, ctx-range: range, rng: range): infer either<list<doc>, (ktype, syntax/syntax/expr<ktype>, list<((name, range), syntax/syntax/expr<ktype>, bool -> pretty-eff doc)>)>
+fun lookup-app-name(allow-disambiguate : bool, name: name, name-ctx: name-context, ctx-range: range, rng: range): _ either<list<doc>, (ktype, syntax/syntax/expr<ktype>, list<((name, range), syntax/syntax/expr<ktype>, bool -> pretty-eff doc)>)>
   val roots = 
     if !name.is-constructor-name then // normal identifiers
       [(is-info-val-fun-ext, name)]
@@ -726,7 +726,7 @@ fun pp-select(sel: implicit-select): <pretty-eff> doc
 
 // lookup names in the local and global scope that match the given name context
 // Returns also an instantiated rho required to match the name context
-fun lookup-names(info-filter: (assumption/name-info) -> bool, name: name, nctx: name-context, rng: range): infer list<(name, assumption/name-info, rho)>
+fun lookup-names(info-filter: (assumption/name-info) -> bool, name: name, nctx: name-context, rng: range): _ list<(name, assumption/name-info, rho)>
   val matches = 
     match lookup-local-name(info-filter, name)
       Right(local) -> [local] // a local name that matches exactly was found; use it always
@@ -737,7 +737,7 @@ fun lookup-names(info-filter: (assumption/name-info) -> bool, name: name, nctx: 
         locals ++ globals
   filter-match-name-context-ex(matches, nctx, rng)
 
-pub fun lookup-local-name(info-filter: (assumption/name-info) -> bool, name: name): infer either<list<(name, assumption/name-info)>, (name, assumption/name-info)>
+pub fun lookup-local-name(info-filter: (assumption/name-info) -> bool, name: name): _ either<list<(name, assumption/name-info)>, (name, assumption/name-info)>
   if name.is-implicit-constraint-evidence then 
     get-iconstraints-gamma().inf-gamma/lookup(name)
   else 
@@ -745,7 +745,7 @@ pub fun lookup-local-name(info-filter: (assumption/name-info) -> bool, name: nam
       Left(all) -> Left(all.subst)
       Right((n, ni)) -> Right((n, ni.subst))
 
-fun lookup-global-name(info-filter: (assumption/name-info) -> bool, name: name): infer list<(name, assumption/name-info)>
+fun lookup-global-name(info-filter: (assumption/name-info) -> bool, name: name): _ list<(name, assumption/name-info)>
   val find = fn(nm) gamma-lookup(infer-env.gamma, nm).filter(fn((_, info)) info-filter(info))
   match infer-env.importsMap.expand(name)
     Right((name', _)) -> 
@@ -758,11 +758,11 @@ fun lookup-global-name(info-filter: (assumption/name-info) -> bool, name: name):
       // However, that runs into issue #719 where the original module name is not included in `names`
       find(name)
 
-fun filter-match-name-context(matches: list<(name, assumption/name-info)>, nctx: name-context, rng: range): infer list<(name, assumption/name-info)>
+fun filter-match-name-context(matches: list<(name, assumption/name-info)>, nctx: name-context, rng: range): _ list<(name, assumption/name-info)>
   filter-match-name-context-ex(matches, nctx, rng).map(fn((nm, info, _)) (nm, info))
 
-fun filter-match-name-context-ex(matches: list<(name, assumption/name-info)>, nctx: name-context, rng: range): infer list<(name, assumption/name-info, rho)>
-  fun match-type(ex: ktype, (nm, info): (name, assumption/name-info)): infer list<(name, assumption/name-info, rho)>
+fun filter-match-name-context-ex(matches: list<(name, assumption/name-info)>, nctx: name-context, rng: range): _ list<(name, assumption/name-info, rho)>
+  fun match-type(ex: ktype, (nm, info): (name, assumption/name-info)): _ list<(name, assumption/name-info, rho)>
     val free = free-in-gamma()
     match run-unify({subsume(rng, free, ex, info.typ)})
       (Right((rho, _, _)), _) -> [(nm, info, rho)]
@@ -809,7 +809,7 @@ pub type name-context
     mbResTp: maybe<ktype>) // possible result type
 
 // A context where some fixed arguments have been inferred
-pub fun fixed-context(propagated: maybe<(ktype, range)>, fixed-resolved: list<(int, fixed-arg)>, fixed-count: int, namedArgs: list<name>): infer name-context
+pub fun fixed-context(propagated: maybe<(ktype, range)>, fixed-resolved: list<(int, fixed-arg)>, fixed-count: int, namedArgs: list<name>): _ name-context
   fun tvars(i: int)
     list(1, i).map(fn(_) fresh-star())
   fun fill(j, l: list<(int, fixed-arg)>)
@@ -914,12 +914,12 @@ pub fun pp-amb-docs(docs: list<doc>)
       val cut = docs.take(10) ++ (if docs.length > 10 then ["...".text] else [])
       align(vcat(cut))
 
-pub fun pp-ambiguous(hint: string, infos: list<(name, assumption/name-info)>): infer doc
+pub fun pp-ambiguous(hint: string, infos: list<(name, assumption/name-info)>): _ doc
   vcat([". Possible candidates: ".text, pp-candidates(infos)] ++
        (if hint.is-empty then [] else ["hint: ".text |+| hint.text]))
 
 
-pub fun pp-candidates(nameInfos: list<(name, assumption/name-info)>): infer doc
+pub fun pp-candidates(nameInfos: list<(name, assumption/name-info)>): _ doc
   val env = infer-env
   val modName = env.contxt
   val n = 10
@@ -935,7 +935,7 @@ pub fun pp-candidates(nameInfos: list<(name, assumption/name-info)>): infer doc
     else rows ++ [("...".text, "or".text |+| rest.length.show.text |+| "other definitions".text)]
   finalRows.table.align
 
-pub fun pp-implicits-hint(nameInfos: list<(name, assumption/name-info)>): infer list<(doc, doc)>
+pub fun pp-implicits-hint(nameInfos: list<(name, assumption/name-info)>): _ list<(doc, doc)>
   val candidateMissingImplicits = nameInfos.map fn((_, info))
     info.scheme.requires-implicits.map(fst)
   
@@ -948,7 +948,7 @@ pub fun pp-implicits-hint(nameInfos: list<(name, assumption/name-info)>): infer 
     _ -> [("missing implicits".text, allRequiredMissingImplicits.map(pp-name).hsep),
           ("hint".text, "ensure implicit functions are defined prior to functions that require them".text)]
 
-pub fun pp-name-info(nm: name, info: assumption/name-info): infer (doc, doc)
+pub fun pp-name-info(nm: name, info: assumption/name-info): _ (doc, doc)
   val env = infer-env
   (env.importsMap.get-alias(nm).pp-name, info.scheme.pp-type)
 
@@ -999,7 +999,7 @@ fun in-hidden-term-doc(): infer-env bool
 
 fun qualify-name(nm: name)
   qualify(module-name(), nm)
-fun find-data-info(nm: name): infer data-info
+fun find-data-info(nm: name): _ data-info
   newtypes-lookup-any(nm).expect("type/infer-effect/find-data-info: unknown type: " ++ nm.show ++ "\nin: " ++ newtypes-list().show)
 fun lookup-inf-name(nm: name)
   match infer-env.inf-gamma.inf-gamma/lookup(nm.unqualify) 
@@ -1114,13 +1114,13 @@ fun do-unify(action)
       add-sub(sub)
       Left(err)
 
-pub fun infer-unify(rng: range, expected: ktype, tp: ktype): infer ()
+pub fun infer-unify(rng: range, expected: ktype, tp: ktype): _ ()
   val (sexp, stp) = (expected.subst, tp.subst)
   match do-unify({ unify(expected, tp) })
     Left(err) -> infer-unify-error(rng, err, sexp, stp)
     Right(_) -> ()
 
-pub fun infer-unifies(tps: list<(range, ktype)>): infer ktype
+pub fun infer-unifies(tps: list<(range, ktype)>): _ ktype
   match tps
     Cons((_, tp), Nil) -> tp
     Cons((rng1, tp1), Cons((rng2, tp2), rst)) -> 
@@ -1129,7 +1129,7 @@ pub fun infer-unifies(tps: list<(range, ktype)>): infer ktype
       val tp = tp1.subst
       infer-unifies(Cons((r, tp), rst))
 
-pub fun infer-subsume(rng: range, expected: ktype, tp: ktype): infer (ktype, core/core/expr -> pure core/core/expr)
+pub fun infer-subsume(rng: range, expected: ktype, tp: ktype): _ (ktype, core/core/expr -> pure core/core/expr)
   val free = free-in-gamma()
   val (sexp, stp) = (expected.subst, tp.subst)
   match do-unify({ subsume(rng, free, sexp, stp) })
@@ -1138,7 +1138,7 @@ pub fun infer-subsume(rng: range, expected: ktype, tp: ktype): infer (ktype, cor
       (expected, fn(e) e) // never reached
     Right((t, _, coref)) -> (t, coref)
 
-pub fun check-skolem-escape(rng: range, tp: ktype, mhint: maybe<doc>, skolems: list<type-var>, extra-free: tvs): infer ()
+pub fun check-skolem-escape(rng: range, tp: ktype, mhint: maybe<doc>, skolems: list<type-var>, extra-free: tvs): _ ()
   match skolems
     Nil -> ()
     _ -> 
@@ -1151,13 +1151,13 @@ pub fun check-skolem-escape(rng: range, tp: ktype, mhint: maybe<doc>, skolems: l
           Nothing -> [("hint".text, "give a higher-rank type annotation to a function parameter?".text)]
         term-error(rng, "abstract type(s) escape(s) into the context".text, stp, hintDocs)
 
-pub fun with-skolemized(rng: range, tp: ktype, mhint: maybe<doc>, action: (ktype, list<type-var>) -> infer (a, tvs)): infer a
+pub fun with-skolemized(rng: range, tp: ktype, mhint: maybe<doc>, action: (ktype, list<type-var>) -> infer (a, tvs)): _ a
   val (xvars, xrho, _) = skolemize-ex(tp, rng)
   val (x, extra-free) = action(xrho, xvars)
   check-skolem-escape(rng, tp, mhint, xvars, extra-free)
   x
 
-pub fun occurs-in-context(tv: type-var, extraFree: tvs): infer bool
+pub fun occurs-in-context(tv: type-var, extraFree: tvs): _ bool
   val free = free-in-gamma() + extraFree
   free.member(tv)
 
@@ -1175,7 +1175,7 @@ fun get-term-doc(term: string, rng: range): <infer-env,colors,exn> (doc, doc)
     Nothing -> 
       (term.text, doc-from-range(rng))
 
-fun infer-unify-error(rng: range, err: unify-error, xtp1: ktype, xtp2: ktype): infer ()
+fun infer-unify-error(rng: range, err: unify-error, xtp1: ktype, xtp2: ktype): _ ()
   match err
     NoMatchEffect(eff1, eff2) ->
       infer-unify-error(rng, NoMatchType, eff2, eff1)
@@ -1246,7 +1246,7 @@ fun infer-unify-error(rng: range, err: unify-error, xtp1: ktype, xtp2: ktype): i
       inf-error(rng, message.text |-| table(rows))
 
 
-pub fun type-error(ctxRng: range, rng: range, message: doc, xtp: ktype, extra: list<(doc,doc)>): infer ()
+pub fun type-error(ctxRng: range, rng: range, message: doc, xtp: ktype, extra: list<(doc,doc)>): _ ()
   val free = free-in-gamma()
   val tp: ktype = normalizeX(False, free, xtp.subst)
   val termInfo = get-term-doc("term", rng)
@@ -1257,7 +1257,7 @@ pub fun type-error(ctxRng: range, rng: range, message: doc, xtp: ktype, extra: l
     ++ extra
   inf-error(rng, message |-| table(rows))
 
-pub fun context-error(ctxRng: range, rng: range, message: doc, extra: list<(doc,doc)>): infer ()
+pub fun context-error(ctxRng: range, rng: range, message: doc, extra: list<(doc,doc)>): _ ()
   val termInfo = get-term-doc("term", rng)
   val rows = 
     [("context".text, doc-from-range(ctxRng)),
@@ -1265,7 +1265,7 @@ pub fun context-error(ctxRng: range, rng: range, message: doc, extra: list<(doc,
     ++ extra
   inf-error(rng, message |-| table(rows))
 
-pub fun term-error(rng: range, message: doc, tp: ktype, extra: list<(doc,doc)>): infer ()
+pub fun term-error(rng: range, message: doc, tp: ktype, extra: list<(doc,doc)>): _ ()
   val termInfo = get-term-doc("term", rng)
   val rows = 
     [termInfo,
@@ -1310,7 +1310,7 @@ pub div effect def-infer-effect
 
 val implicit-constraints : list<(name, check-constraint)> = [] // TODO: fill this in
 
-fun check-implicit-constraint(name: name, tp: ktype, ctx-range: range, rng: range): infer maybe<typed-arg>
+fun check-implicit-constraint(name: name, tp: ktype, ctx-range: range, rng: range): _ maybe<typed-arg>
   match implicit-constraints.lookup(name)
     Just(check) -> match check(name, tp)
       Just((can-resolve, resolve)) -> 
@@ -1362,10 +1362,10 @@ fun pp-constraint(ic: implicit-constraint): <pretty-eff> doc
 fun pp-constraints(ics: list<implicit-constraint>): <pretty-eff> doc
   ics.map(pp-constraint).list
 
-fun resolve-implicit-constraints(free: tvs, ics : list<implicit-constraint>): infer (core/core/expr -> core/core/expr)
+fun resolve-implicit-constraints(free: tvs, ics : list<implicit-constraint>): _ (core/core/expr -> core/core/expr)
   // TODO: 
   id
-fun try-resolve-implicit-constraints(close: bool, free: tvs): infer (core/core/expr -> core/core/expr)
+fun try-resolve-implicit-constraints(close: bool, free: tvs): _ (core/core/expr -> core/core/expr)
   // TODO: 
   id
 

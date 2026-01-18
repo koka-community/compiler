@@ -960,7 +960,7 @@ fun core/deps(c: core): div deps
 
 fun td/dep(td: typedef): div deps
   match td
-    Synonym(info) -> info.t.dep
+    Synonym(info) -> info.tp.dep
     Data(info) -> deps/unions(info.constrs.map(_.typeScheme.dep))
 
 fun ktype/dep(t: ktype): div deps

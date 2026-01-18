@@ -100,17 +100,17 @@ fun inf/fkv(k: inf-kind): kvs
     KICon(_) -> LinearSet([])
 
 // Pretty printing
-fun infkind/show(infkind: inf-kind): <comp-flags,pure,colors> string
+fun infkind/show(infkind: inf-kind): _ string
   with nice-kind-env()
   infkind.fkv.list.foreach(extend-nice)
   infkind.pp-infkind(precInfKindTop).pprint/show
 
-fun nice-infkinds(kinds: list<inf-kind>): <pure,comp-flags,colors> list<doc>
+fun nice-infkinds(kinds: list<inf-kind>): _ list<doc>
   with nice-kind-env()
   kinds.map(fkv).unions.list.map(extend-nice)
   kinds.map(_.lift-kapp.pp-infkind(precInfKindTop))
 
-fun pp-infkind(k: inf-kind, prec: int): <pure, nice-eff<id>, comp-flags, colors> doc
+fun pp-infkind(k: inf-kind, prec: int): _ doc
   fun collect-funargs(ik: inf-kind)
     match ik
       KIApp(KIApp(KICon(KCon(nm)), k1), k2) | nm == "->".new-name -> Cons(k1, k2.collect-funargs)
@@ -134,7 +134,7 @@ fun pp-infkind(k: inf-kind, prec: int): <pure, nice-eff<id>, comp-flags, colors>
         _ -> throw("kind/inferKind KIApp")
       doc.pparens(prec, precInfKindApp)
 
-fun nice-kind-env(f: () -> <nice-eff<id>|e> a): e a
+fun nice-kind-env(f: () -> _ a): _ a
   var nice := LinearMap([])
   var kindIndex := -1
   with handler

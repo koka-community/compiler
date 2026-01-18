@@ -48,7 +48,7 @@ effect infer-kind-effect
 fun allnewtypes(env: infer-kind-env)
   env.newtypesImported.compose(env.newtypesExtended)
 
-fun runKindInfer(platform: platform, moduleName: name, imports: import-map, kgamma: kGamma, syns: synonyms, datas: newtypes, f: () -> <infer-kind-eff,pure,colors,unique,koka-error|e> a): <pure,colors,unique,comp-error,unique|e> a
+fun run-kind-infer(platform: platform, moduleName: name, imports: import-map, kgamma: kGamma, syns: synonyms, datas: newtypes, f: () -> _ a): _ a
   with val current-error-kind = ErrKind
   val imports' = match imports.extend(moduleName, moduleName)
     Just(imp) -> imp

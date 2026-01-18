@@ -40,7 +40,7 @@ fun withKGamma(kg0: kGamma, f: () -> <kGammaEff,exn,comp-flags|e> a): <exn,comp-
     fun kgamma-filter(modName: name) kg.filter(modName)
   f()
 
-fun kgamma/new-nub(xs: list<(name,kind,string)>): <comp-flags, exn> kGamma
+fun kgamma/new-nub(xs: list<(name,kind,string)>): <comp-flags,exn> kGamma
   xs.foldl(empty, fn(m,(n,k,d)) if m.contains-key(n) then m else m.insert(n,TypeNameInfo(k,d)))
 fun kgamma/extend(kg: kGamma, name: name, k: kind, doc: string)
   kg.insert(name, TypeNameInfo(k, doc))

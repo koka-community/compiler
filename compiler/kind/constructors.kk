@@ -17,7 +17,7 @@ effect constructors-eff
   fun constrs-find-scheme(name: name): ktype
   fun constrs-unions(cs: list<constructors>): constructors
 
-fun withConstructors(cnstrs0: constructors, f: () -> <constructors-eff,exn,comp-flags|e> a): <exn,comp-flags|e> a
+fun with-constructors(cnstrs0: constructors, f: () -> <constructors-eff,exn,comp-flags|e> a): <exn,comp-flags|e> a
   var cnstrs := cnstrs0
   with handler
     fun constrs-extend(name: name, k: con-info)

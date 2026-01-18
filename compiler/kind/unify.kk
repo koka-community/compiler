@@ -11,12 +11,12 @@ import compiler/kind/infer-effect
 import std/data/linearset
 
 // Unify
-type unify-context
+type unify-ctx
   Check(s: string, r: range)
   Infer(r: range)
 
-effect unify-context-eff
-  val uctx: unify-context
+effect unify-context
+  val uctx: unify-ctx
 
 fun unify(rng: range, k1: inf-kind, k2: inf-kind)
   val sk1 = subst(k1)

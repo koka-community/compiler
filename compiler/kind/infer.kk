@@ -44,10 +44,9 @@ import std/data/sort
 
 // Kindcheck a program and calculate types
 // Also group recursive type and expressing bindings in order
-fun inferKinds(
+fun infer-kinds(
       isValue: (data-info) -> pure bool, // is this a value type
       target: platform, // target platform (x32, x64)
-      mbRangeMap: maybe<range-map>, // range map for tool integration
       imports: import-map, // import aliases
       kgamma0: kGamma, // initial kind kgamma
       syns0: synonyms, // initial list of synonyms
@@ -55,7 +54,7 @@ fun inferKinds(
   // original program
   val Program(_, modName, nmrng, tdefs, defs, importdefs, externals, _, doc) = current-program
   // order and group recursive let-bindings
-  with runKindInfer(platform, modName, imports, kgamma0, syns0, data0)
+  with run-kind-infer(target, modName, imports, kgamma0, syns0, data0)
   val tdgroups0 = tdefs.group-bindings
   val (tdgroups, kgamma1, syns1, data1, lazyExprs) = kinfer(tdgroups0)
   val externals1 = kinfer(externals)
@@ -72,14 +71,6 @@ fun inferKinds(
   val dgroups = (synDefs ++ defs1).group-bindings
   (dgroups, kgamma1, (syns1, data1, cons1), Core(modName, [], [], tdgroups, [], externals1, doc))
   
-fun unzip-either(xs: list<either<a, b>>): (list<a>, list<b>)
-  fun loop(ys: list<either<a, b>>, las: ctx<list<a>>, lbs: ctx<list<b>>): (list<a>, list<b>)
-    match ys
-      Nil -> (las ++. Nil, lbs ++. Nil)
-      Cons(Left(a), a1) -> loop(a1, las ++ ctx Cons(a, hole), lbs)
-      Cons(Right(b), b1) -> loop(b1, las, lbs ++ ctx Cons(b, hole))
-  loop(xs, ctx hole, ctx hole)
-
 fun extract-infos(groups: list<core/core/typedef-group>): list<either<syn-info, data-info>>
   fun extract-info(td: core/core/typedef): either<syn-info, data-info>
     match td
@@ -118,18 +109,18 @@ fun syn-typedef(td: core/core/typedef, lazyExprs: list<lazyExpr>): _ list<syntax
                     else [] 
       accessors ++ testers ++ copycon ++ contag ++ synLazy
 
-effect data-info-eff 
+effect current-data-info
   val data-info : data-info
   val data-def-name: name
   val lazy-constructors: list<con-info>
   val whnf-constructors: list<con-info>
   fun lazy-name(str: string): name
   fun alloc-size-scan(conInfo: con-info): (int, int)
-effect con-info-eff
+effect current-con-info
   val con-info : con-info
   val con-range: range
   val con-name: name
-fun with-data(di: data-info, action: () -> <infer-kind-eff,data-info-eff,exn|e> a): <infer-kind-eff,exn|e> a
+fun with-data(di: data-info, action: () -> _ a): _ a
   val (lazy-cons, whnf-cons) = di.constrs.partition(coninfo/is-lazy)
   val p = platform
   with handler 
@@ -141,7 +132,7 @@ fun with-data(di: data-info, action: () -> <infer-kind-eff,data-info-eff,exn|e> 
     val lazy-constructors = lazy-cons
     val whnf-constructors = whnf-cons
   action()
-fun with-con(ci: con-info, action: () -> <con-info-eff|e> a): e a
+fun with-con(ci: con-info, action: () -> _ a): _ a
   with handler 
     val con-info = ci 
     val con-range = ci.range.hide
@@ -740,10 +731,11 @@ fun tdl/kinfer(isRec: bool, tdefs0: list<syntax/syntax/typedef<user-type, user-t
   val xinfgamma = tdefs.map(bind-typedef) // set up recursion
   val infgamma = xinfgamma.filter(snd).map(fst)
   with with-data-effects(LinearMap([]) + infgamma.zip(tdefs).flatmap(get-data-effect)) // make effect types visible for lifting to handled
-  with extend-infgamma(infgamma) // extend inference gamma, also checks for duplicates
-  val names = infgamma.map(name)
-  val tdefs1 = xinfgamma.map(fst).zip(tdefs).map(fn((a, b)) kinfer(a, b))
-  val ctdefs' = tdefs1.map(resolve-typedef(isRec, names, _))
+  val ctdefs' =   
+    with extend-infgamma(infgamma) // extend inference gamma, also checks for duplicates
+    val names = infgamma.map(name)
+    val tdefs1 = xinfgamma.map(fst).zip(tdefs).map(fn((a, b)) kinfer(a, b))
+    tdefs1.map(resolve-typedef(isRec, names, _))
   check-recursion(tdefs) // check for recursive type synonym definitions rather late so we spot duplicate definitions first
   val (ctdefs, lazyExprss) = ctdefs'.unzip
   (ctdefs, lazyExprss.concat)
@@ -949,26 +941,29 @@ fun typedef/kinfer(tb: type-binder<inf-kind>, td: syntax/syntax/typedef<user-typ
     syntax/syntax/Synonym(_, args, tp, rng, vis, doc) ->
       val infgamma = args.map(bind-typebinder)
       val k = fresh-kind()
-      with extend-infgamma(infgamma)
-      with override val uctx = Infer(rng)
+      val tp' = 
+        with extend-infgamma(infgamma)
+        with override val uctx = Infer(rng)
+        kinfer(k, tp)
       val tbinder = unify-binder(tb, rng, infgamma, k)
-      syntax/syntax/Synonym(tbinder, infgamma, kinfer(k, tp), rng, vis, doc)
+      syntax/syntax/Synonym(tbinder, infgamma, tp', rng, vis, doc)
     DataType(newTp, args, constrs, rng, vis, sort, ddef, dataEff, doc) ->
       val infgamma = args.map(bind-typebinder)
-      with extend-infgamma(infgamma)
-      val constrs' = constrs.map(kinfer)
+      val constrs' = 
+        with extend-infgamma(infgamma)
+        constrs.map(kinfer)
       val resKind = if ddef.is-open then infKindStar else fresh-kind()
       val tbinder' = unify-binder(tb, rng, infgamma, resKind)
       if !ddef.is-extend then ()
       else
         val (_, kd, _) = find-infkind(newTp.name, newTp.range)
-        with override val uctx = Check("extended type must have the same kind as the open type", newTp.range)
+        with val uctx = Check("extended type must have the same kind as the open type", newTp.range)
         unify(newTp.range, tbinder'.tb/kind, kd)
       DataType(tbinder', infgamma, constrs', rng, vis, sort, ddef, dataEff, doc)
 
 fun unify-binder(tb: type-binder<inf-kind>, rng: range, infgamma: list<type-binder<inf-kind>>, resKind: inf-kind)
   val kind = inf-kind-funN(infgamma.map(tb/kind), resKind)
-  with override val uctx = Infer(rng)
+  with val uctx = Infer(rng)
   unify(rng, tb.tb/kind, kind)
   tb
 
@@ -977,8 +972,9 @@ fun tb/kind(TypeBinder(_, k, _, _): type-binder<k>): k
 
 fun constr/kinfer(UserCon(name, exists0, params, mbresult, mblazy, rngName, rng, vis, doc): user-con<user-type,user-type,user-kind>)
   val infgamma = exists0.map(bind-typebinder)
-  with extend-infgamma(infgamma)
-  val params' = params.map(kinfer)
+  val params' = 
+    with extend-infgamma(infgamma)
+    params.map(kinfer)
   val result' = mbresult.map fn(t)
     with override val uctx = Check("Constructor results must be values", rng)
     kinfer(infKindStar, t)
@@ -997,8 +993,8 @@ fun usertp/kinfer(expected: inf-kind, user-type: user-type)
           unify(r, expected, infKindStar)
           expected
       val tname' = tname.bind-typebinder
-      with extend-infgamma([tname'])
       val tp' = 
+        with extend-infgamma([tname'])
         with check-quant(r)
         kinfer(ikind, tp)
       TpQuan(quant, tname', tp', r)

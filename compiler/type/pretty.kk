@@ -303,7 +303,7 @@ fun pp-syn-info(s: syn-info, isLocal: bool=False, publicOnly:bool=False, showBod
     val al = if isLocal then "local alias".keyword else s.vis.pp-vis |.| "alias".keyword
     val params = if s.params.is-nil then pprint/empty else s.params.map(TVar).nice-types.angled
     val kind = if s.kind == kindStar then pprint/empty else " ::".text |+| s.kind.pp-kind(precTop)
-    val body = if !showBody then pprint/empty else "=".keyword |+| s.t.nice-type
+    val body = if !showBody then pprint/empty else "=".keyword |+| s.tp.nice-type
     val syn = al |+| s.name.pp-name |.| s.range.pretty-range |.| params |.| kind |+| body |+| "=".text |+| pretty(s.rank)
     syn.pretty-comment(s.doc)
 
