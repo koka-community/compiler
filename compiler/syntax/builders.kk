@@ -69,7 +69,7 @@ pub type effect-extra
   EffectExtra(extra: list<user-type>) // Extra operation effects besides the regular effect (partial for non-scoped)
   EffectReplace(replace: list<user-type>) // Replace operation effect by these (umbrella type, and partial)
 
-alias parse = <token-parse, parse-error, pure>
+pub alias parse = <token-parse, parse-error, pure>
 pub value type statement
   StatFun(e: (user-expr -> <parse> user-expr))
   StatExpr(e: user-expr)

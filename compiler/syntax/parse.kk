@@ -148,7 +148,7 @@ type fun-def
     parsRng: range,
     mbTres: maybe<(maybe<user-type>, user-type)>,
     preds: list<user-type>,
-    ann: (user-expr -> _ user-expr)
+    ann: (user-expr -> <parse> user-expr)
   )
 
 fun parse-top-def(vis): _ list<top-def>
