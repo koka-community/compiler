@@ -6,7 +6,7 @@
 // found in the LICENSE file at the root of this distribution.
 //---------------------------------------------------------------------------
 // Updated as of 7/23/24: Commit aa9474d
-
+module compiler/common/error
 import compiler/common/range
 import compiler/common/message
 import compiler/common/color-scheme
@@ -20,11 +20,11 @@ import std/os/path
 //------------------------------
 
 // Error messages
-alias errors = list<error-msg>;
+pub alias errors = list<error-msg>;
 
-alias warnings = errors;
+pub alias warnings = errors;
 
-type error-msg
+pub type error-msg
   ErrorMsg(
     range: range,
     message: doc,
@@ -38,7 +38,7 @@ pub fun error-msg/(==)(this : error-msg, other : error-msg) : bool
   match (this, other)
     (ErrorMsg(range, message, severity, kind), ErrorMsg(range', message', severity', kind')) -> range == range' && message == message' && severity == severity' && kind == kind'
 
-type error-severity
+pub type error-severity
   SevInfo
   SevWarning
   SevError
@@ -64,7 +64,7 @@ pub fun error-severity/(==)(this : error-severity, other : error-severity) : boo
     (SevError, SevError) -> True
     (_, _) -> False
 
-type error-kind
+pub type error-kind
   ErrGeneral
   ErrParse
   ErrStatic
@@ -86,48 +86,48 @@ pub fun error-kind/(==)(this : error-kind, other : error-kind) : bool
     (ErrInternal, ErrInternal) -> True
     (_, _) -> False
 
-fun range(errs: errors): range
+pub fun range(errs: errors): range
   errs.map(range).combine
 
-fun err/show(err: error-msg): div string
+pub fun err/show(err: error-msg): div string
   err.pretty.show
 
-fun errs/show(errs: errors): div string
+pub fun errs/show(errs: errors): div string
   errs.errs/pretty.show
     
-fun is-warning(e: error-msg): bool
+pub fun is-warning(e: error-msg): bool
   (<=)(e.severity, SevWarning, ?cmp=cmp)
 
-fun info-message-kind(d: doc, rng: range, ekind: error-kind = ErrGeneral): error-msg
+pub fun info-message-kind(d: doc, rng: range, ekind: error-kind = ErrGeneral): error-msg
   ErrorMsg(rng, d, SevInfo, ekind)
 
-fun warning-message-kind(d: doc, rng: range, ekind: error-kind = ErrGeneral): error-msg
+pub fun warning-message-kind(d: doc, rng: range, ekind: error-kind = ErrGeneral): error-msg
   ErrorMsg(rng, d, SevWarning, ekind)
 
-fun error-message-kind(d: doc, rng: range, ekind: error-kind = ErrGeneral): error-msg
+pub fun error-message-kind(d: doc, rng: range, ekind: error-kind = ErrGeneral): error-msg
   ErrorMsg(rng, d, SevError, ekind)
 
-fun info-message(d: doc, rng: range): _ error-msg
+pub fun info-message(d: doc, rng: range): _ error-msg
   d.info-message-kind(rng, current-error-kind)
 
-fun warning-message(d: doc, rng: range): _ error-msg
+pub fun warning-message(d: doc, rng: range): _ error-msg
   d.warning-message-kind(rng, current-error-kind)
 
-fun error-message(d: doc, rng: range): _ error-msg
+pub fun error-message(d: doc, rng: range): _ error-msg
   d.error-message-kind(rng, current-error-kind)
 
 //---------------------------------
 // pretty
 //---------------------------------
-fun err/pretty(msg: error-msg): doc
+pub fun err/pretty(msg: error-msg): doc
   with color-scheme-default
   msg.pp-error-message("".path, False)
 
-fun errs/pretty(msgs: errors): doc
+pub fun errs/pretty(msgs: errors): doc
   with color-scheme-default
   msgs.pp-errors("".path, False)
 
-fun pp-error-severity(sev: error-severity, ekind: error-kind): _ doc
+pub fun pp-error-severity(sev: error-severity, ekind: error-kind): _ doc
   val ekindTxt = match ekind
     ErrParse -> "parse"
     ErrKind -> "kind"
@@ -142,52 +142,52 @@ fun pp-error-severity(sev: error-severity, ekind: error-kind): _ doc
     SevWarning -> header(colorWarning, "warning")
     SevInfo -> header(colorWarning, "info")
 
-fun pp-error-message(msg: error-msg, cwd: path, showRangeEnd: bool): _ doc
+pub fun pp-error-message(msg: error-msg, cwd: path, showRangeEnd: bool): _ doc
   (msg.range.pp-range(cwd,showRangeEnd)
   |.| colon |+| msg.severity.pp-error-severity(msg.kind) |+| msg.message
   ).hang(2)
 
-fun pp-errors(errs: errors, cwd: path, showRangeEnd: bool): _ doc
+pub fun pp-errors(errs: errors, cwd: path, showRangeEnd: bool): _ doc
   vcat(errs.map(_.pp-error-message(cwd, showRangeEnd)))
 
-fun to-warning((range, doc): (range, doc), ekind: error-kind): error-msg
+pub fun to-warning((range, doc): (range, doc), ekind: error-kind): error-msg
   doc.warning-message-kind(range, ekind)
 
 //--------------------
 // Errors Monad
 //--------------------
 
-effect comp-error
+pub effect comp-error
   ctl add-errors(errs: errors): a
   fun add-warnings(w: warnings): ()
   fun add-infos(w: warnings): ()
 
-effect val current-error-kind: error-kind
+pub effect val current-error-kind: error-kind
 
-fun default-error-kind(f): error-kind
+pub fun default-error-kind(f): error-kind
   with val current-error-kind = ErrGeneral
   f()
 
-fun msg/add-error(err: error-msg): _ a
+pub fun msg/add-error(err: error-msg): _ a
   add-errors([err])
 
-fun msg/add-warning(msg: error-msg): _ ()
+pub fun msg/add-warning(msg: error-msg): _ ()
   add-warnings([msg])
 
-fun msg/add-info(msg: error-msg): _ ()
+pub fun msg/add-info(msg: error-msg): _ ()
   add-infos([msg])
 
-fun doc/add-error(rng: range, error: doc): _ a
+pub fun doc/add-error(rng: range, error: doc): _ a
   add-errors([error-message(error, rng)])
 
-fun doc/add-warning(rng: range, warning: doc): _ ()
+pub fun doc/add-warning(rng: range, warning: doc): _ ()
   add-warnings([error-message(warning, rng)])
 
-fun doc/add-info(rng: range, info: doc): _ ()
+pub fun doc/add-info(rng: range, info: doc): _ ()
   add-infos([error-message(info, rng)])
 
 // check an 'error'
-fun check-error(f: () -> _ a): either<errors, (a, warnings)>
+pub fun check-error(f: () -> _ a): either<errors, (a, warnings)>
   var warns := []
   with handler
     final ctl add-errors(errs) Left(errs)
@@ -196,14 +196,14 @@ fun check-error(f: () -> _ a): either<errors, (a, warnings)>
     return(x) Right((x, warns))
   f()
 
-fun handle-error(f: () -> _ a, h: errors -> _ a): _ a
+pub fun handle-error(f: () -> _ a, h: errors -> _ a): _ a
   with handler
     final ctl add-errors(errs) h(errs)
     fun add-warnings(w) add-warnings(w)
     fun add-infos(w) add-warnings(w)
   f()
 
-fun ignore-warnings(f: () -> _ a): _ a
+pub fun ignore-warnings(f: () -> _ a): _ a
   with handler
     final ctl add-errors(errs) add-errors(errs)
     fun add-warnings(w) ()

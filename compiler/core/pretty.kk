@@ -355,7 +355,7 @@ fun extract-types(tps: list<ktype>)
 fun extract-imports-from-synonyms(imps: list<kimport>, syns: list<syn-info>)
   val impNames = imps.map(importName)
   fun extractSyn(syn: syn-info)
-    Cons(syn.name.qualifier, syn.t.extract-type)
+    Cons(syn.name.qualifier, syn.tp.extract-type)
   val quals = syns.map(extractSyn).concat.filter(fn(nm) !impNames.any(_ == nm))
   quals.map(Kimport(_, "", Private, "")) // TODO: import path?
 

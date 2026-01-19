@@ -96,6 +96,19 @@ pub fun remove-local-effect(ftp: ktype)
 //////////////////////////////////////////
 // Infer Effect Handlers
 //////////////////////////////////////////
+// From Infer.hs: resolve the effect tag core expression for handled effects.
+// Returns (maybe tagExpr, effectName)
+fun effect-name-core(eff: keffect, rng: range): _ (maybe<core/core/expr>, name)
+  match eff.expand-syn
+    // handled effects (from an `effect` declaration)
+    TApp(TCon(tc), [hx])
+      | tc.name == nameTpHandled || tc.name == nameTpHandled1 || tc.name == nameTpNHandled || tc.name == nameTpNHandled1 ->
+        val eff-name = hx.effect-name-from-label
+        val (tag-qname, _, tag-info) = resolve-name(eff-name.to-effect-tag-name, Nothing, rng)
+        (Just(tag-info.core-expr(tag-qname)), eff-name)
+    // builtin effect
+    _ ->
+      (Nothing, eff.effect-name-from-label)
 
 ///////////////////////////////////////////////////////////
 // Infer Applications and Resolve Overloaded Identifiers
@@ -327,7 +340,7 @@ fun arg-expr/range(a: arg-expr): range
     ArgCore((rng, _, _, _)) -> rng
     ArgImplicit(_, app-rng, _) -> app-rng
 
-fun pp-arg-expr(ae: arg-expr): _ doc
+fun pp-arg-expr(ae: arg-expr): <comp-flags,div,exn> doc
   match ae
     ArgExpr(e, _) -> "ArgExpr".text |+| e.pretty
     ArgCore((_, tp, _, _)) -> "ArgCore".text |+| tp.pp-type

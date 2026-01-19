@@ -6,7 +6,7 @@
 // found in the LICENSE file at the root of this distribution.
 //---------------------------------------------------------------------------
 // Updated as of 7/12/25: Commit 0c7d513
-
+module compiler/common/color-scheme
 import compiler/lib/printer
 import std/core/undiv
 
@@ -19,13 +19,13 @@ import std/core/undiv
 // ----------------------------
 
 // Color scheme for the interpreter
-effect val colors: colorScheme;
+pub effect val colors: colorScheme;
 
-fun color-scheme-default(f)
+pub fun color-scheme-default(f)
   handle(f)
     val colors = ColorScheme()
 
-struct colorScheme
+pub struct colorScheme
   colorInterpreter: color = DarkGreen
   colorType: color = DarkCyan
   colorParameter: color = DarkGray
@@ -58,7 +58,7 @@ struct colorScheme
   colorImplicitParameter: color = Gray
   colorImplicitExpr: color = colorSource
 
-fun cs/(==)(c1: colorScheme, c2: colorScheme): bool
+pub fun cs/(==)(c1: colorScheme, c2: colorScheme): bool
   c1.colorInterpreter == c2.colorInterpreter && c1.colorType == c2.colorType && c1.colorParameter == c2.colorParameter && c1.colorKind == c2.colorKind && c1.colorMarker == c2.colorMarker 
   && c1.colorError == c2.colorError && c1.colorWarning == c2.colorWarning && c1.colorSource == c2.colorSource && c1.colorCommand == c2.colorCommand && c1.colorKeyword == c2.colorKeyword 
   && c1.colorEffect == c2.colorEffect && c1.colorRange == c2.colorRange && c1.colorSep == c2.colorSep 
@@ -68,8 +68,8 @@ fun cs/(==)(c1: colorScheme, c2: colorScheme): bool
   && c1.colorTypeSpecial == c2.colorTypeSpecial && c1.colorTypeParam == c2.colorTypeParam 
   && c1.colorNameQual == c2.colorNameQual && c1.colorImplicitParameter == c2.colorImplicitParameter && c1.colorImplicitExpr == c2.colorImplicitExpr
 
-val dark-color-scheme = ColorScheme()
-val light-color-scheme = ColorScheme(
+pub val dark-color-scheme = ColorScheme()
+pub val light-color-scheme = ColorScheme(
   colorNumber = DarkGray,
   colorSource = ColorDefault,
   colorCommand = Black,
@@ -84,13 +84,13 @@ val light-color-scheme = ColorScheme(
   colorString = DarkRed
 )
 
-val color-themes = [("dark", dark-color-scheme), ("light", light-color-scheme)]
+pub val color-themes = [("dark", dark-color-scheme), ("light", light-color-scheme)]
 
 // Replace "default" with an explicit color value
-fun color/default(c: color, clr: color): color
+pub fun color/default(c: color, clr: color): color
   if clr == ColorDefault then c else clr
 
-fun scheme/default(cs: colorScheme, clr: color): colorScheme
+pub fun scheme/default(cs: colorScheme, clr: color): colorScheme
   cs(
     colorType = color/default(cs.colorType, clr),
     colorParameter = color/default(cs.colorParameter, clr),
@@ -125,9 +125,9 @@ fun scheme/default(cs: colorScheme, clr: color): colorScheme
     colorImplicitExpr = color/default(cs.colorImplicitExpr, clr)
   )
 
-val empty = make-color-scheme(ColorDefault)
+pub val empty = make-color-scheme(ColorDefault)
 
-fun make-color-scheme(clr: color)
+pub fun make-color-scheme(clr: color)
   ColorScheme(clr, clr, clr, clr, clr, clr, clr, clr, clr, clr, clr, clr, clr, clr,
     clr, clr, clr, clr, clr, clr, clr, clr, clr, clr, clr, clr, clr, clr, clr, clr)
 
@@ -135,7 +135,7 @@ fun make-color-scheme(clr: color)
 // Read colors
 // ----------------------------
 // Read a comma separated list of name=color pairs.
-fun read-color-flags(scheme: colorScheme, s: string)
+pub fun read-color-flags(scheme: colorScheme, s: string)
   fun split(xs: list<char>): list<string>
     val (pre, ys) = xs.span(fn(c) c != ',' && c != ';')
     match ys

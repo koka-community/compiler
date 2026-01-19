@@ -6,7 +6,7 @@
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
 // Updated as of 7/23/24: Commits b8074c2 (IdSet) e914563 (IdMap) b8074c2 (Id)
-
+module compiler/common/id
 import std/data/linear-map
 import std/data/linear-set
 import compiler/lib/pprint
@@ -15,33 +15,33 @@ import compiler/lib/pprint
 
 /// Types aliases
 /// A list of identifiers
-alias ids = list<id>
+pub alias ids = list<id>
 // A map from identifiers to values
-alias id-map<a> = linear-map<int, a>
+pub alias id-map<a> = linear-map<int, a>
 // A set of identifiers
-alias id-set = linear-set<int>
+pub alias id-set = linear-set<int>
 
 /// Identifiers are unique compiler generated identities
-alias id = int;
+pub alias id = int;
 
 /// Show quotes around the id
-fun show-id(id: id): string
+pub fun show-id(id: id): string
   "\"" ++ id.int/show ++ "\""
 
 /// Generate an 'Id' with a certain base name (which is ignored :-)
-fun gen-id(baseName: string, i: int): id
+pub fun gen-id(baseName: string, i: int): id
   i.new-id
 
 /// Create a fresh identifier
-fun new-id(i: int): id
+pub fun new-id(i: int): id
   i
 
-fun new-id-from(id: id): id
+pub fun new-id-from(id: id): id
   id + 1
 
 /// Dummy identifier
-val id-nil = 0.new-id
+pub val id-nil = 0.new-id
 
 /// Only used internally to guarantee unique identifiers
-fun id-number(id: id): int
+pub fun id-number(id: id): int
   id

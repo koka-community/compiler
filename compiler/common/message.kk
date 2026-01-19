@@ -5,6 +5,7 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
+module compiler/common/message
 import compiler/lib/pprint
 import compiler/common/failure
 import compiler/platform/config
@@ -17,10 +18,10 @@ import std/test
 // Updated as of 7/23/24: Commit: c7c0ac6
 
 // Pretty print helpers
-fun pp-range(r: range, cwd: path, endToo: bool)
+pub fun pp-range(r: range, cwd: path, endToo: bool)
   r.show-range(cwd, endToo).text.color(colors.colorRange)
 
-fun table(xs: list<(doc, doc)>)
+pub fun table(xs: list<(doc, doc)>)
   tablex(0, xs)
 
 fun tablex(n: int, xs: list<(doc, doc)>)
@@ -32,13 +33,13 @@ fun tablex(n: int, xs: list<(doc, doc)>)
   doc.indent(n)
 
 // Source from range
-fun source-from-ranges(rngs: list<range>)
+pub fun source-from-ranges(rngs: list<range>)
   rngs.map(source)
 
-fun docs-from-ranges(rngs: list<range>)
+pub fun docs-from-ranges(rngs: list<range>)
   rngs.map(_.doc-from-range)
 
-fun doc-from-range(r: range)
+pub fun doc-from-range(r: range)
   fun remove-indent(ls: list<string>)
     val i = Cons(0, ls.map(_.list.take-while(is-space).length)).minimum
     ls.map(_.list.drop(i).string)
