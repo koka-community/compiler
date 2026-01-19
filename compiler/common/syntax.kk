@@ -379,10 +379,18 @@ pub type fipT
   NoFip(tail: bool) // Ordering seems wrong as `NoFip False` should be top but now NoFip True is the top
 
 pub fun fipt/show(f: fipT): string
+  fun show-n(fip-alloc: fip-alloc): string
+    match fip-alloc
+      AllocAtMost(0) -> ""
+      AllocAtMost(n) -> "(" ++ n.show ++ ")"
+      AllocFinitely -> "(n)"
+      AllocUnlimited -> ""
+  fun show-tail(b: bool): string
+    if b then "tail" else ""
   match f
-    Fip(a) -> "fip(" ++ a.show ++ ")"
-    Fbip(a, t) -> "fbip(" ++ a.show ++ ", " ++ t.show ++ ")"
-    NoFip(t) -> "NoFip(" ++ t.show ++ ")"
+    Fip(a) -> "fip" ++ show-n(a)
+    Fbip(a, t) -> [show-tail(t), "fbip" ++ show-n(a)].sep-by-space
+    NoFip(t) -> show-tail(t)
 
 pub fun fipt/(==)(f1: fipT, f2: fipT): bool
   match (f1, f2) 
@@ -496,5 +504,7 @@ pub fun fipa/max(a1: fip-alloc, a2: fip-alloc)
     (AllocAtMost(n1), AllocAtMost(n2)) -> AllocAtMost(max(n1, n2))
 
 pub fun member-doc(doc: string, header: string, members: list<string>): string
-  val mdoc = "// " ++ header ++ ":\n// ```koka\n" ++ members.map("// " ++ _).join("\n") ++ "// ```\n"
-  if doc == "" then mdoc else doc ++ "\n// * * *\n" ++ mdoc
+  if members.is-empty then doc 
+  else 
+    val mdoc = "// " ++ header ++ ":\n// ```koka\n" ++ members.map("// " ++ _).join("\n") ++ "// ```\n"
+    if doc == "" then mdoc else doc ++ "\n// * * *\n" ++ mdoc

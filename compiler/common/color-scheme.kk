@@ -191,7 +191,7 @@ fun update(scheme: colorScheme, name: string, color: string)
     "darkgray" -> DarkGray
     _ -> ColorDefault
   match name.trim.to-lower
-    "type" -> scheme(colorType=clr, colorTypeCon=clr, colorTypeKeyword=clr, colorEffect=clr)
+    "type" -> scheme(colorType=clr, colorTypeCon=clr, colorTypeVar=clr, colorTypeKeyword=clr, colorEffect=clr)
     "kind" -> scheme(colorKind=clr)
     "marker" -> scheme(colorMarker=clr)
     "warning" -> scheme(colorWarning=clr)
@@ -199,7 +199,7 @@ fun update(scheme: colorScheme, name: string, color: string)
     "source" -> scheme(colorSource=clr)
     "interpreter" -> scheme(colorInterpreter=clr)
     "command" -> scheme(colorCommand=clr)
-    "keyword" -> scheme(colorKeyword=clr)
+    "keyword" -> scheme(colorKeyword=clr, colorTypeKeyword=clr)
     "typecon" -> scheme(colorTypeCon=clr)
     "typevar" -> scheme(colorTypeVar=clr)
     "typekeyword" -> scheme(colorTypeKeyword=clr)

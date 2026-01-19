@@ -15,6 +15,9 @@ pub value struct source
   name: string
   contents: string
 
+pub fun source/(==)(s1: source, s2: source): bool
+  s1.name == s2.name
+
 pub val source/null = Source("", "")
 
 pub struct pos
@@ -133,7 +136,7 @@ pub fun range/pretty(r: range): doc
 pub fun range/is-after(r1: range, r2: range): bool
   r1.end <= r2.start
 
-pub val range/null = make-range(pos/null, pos/null)
+pub val range/null = Range(pos/null, pos/null, False)
 
 pub fun range/is-null(r: range)
   r.start.off < 0 || r.end.off < 0
@@ -144,7 +147,8 @@ pub fun range/show(r: range): string
 pub fun show-full-range(r: range, cwd: path): string
   r.show-range(cwd, True)
 
-pub fun make-range(p1: pos, p2: pos): range
+pub fun make-range(p1: pos, p2: pos): _ range
+  if p1.source != p2.source then throw("range/make-range: positions are from different sources")
   Range(min(p1, p2), max(p1, p2), False)
 
 pub fun make-source-range(p: path, l1: int, c1: int, l2: int, c2: int)
