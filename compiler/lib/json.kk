@@ -18,7 +18,7 @@ fun test()
 
 // The direct translation from Koka's Haskell compiler is below
 // import std/text/parse
-// import std/data/linearmap
+// import std/data/linear-map
 // import std/text/regex
 // import std/num/float64
 
@@ -31,7 +31,7 @@ fun test()
 //   JsArray(l: list<jsValue>)
 //   JsObject(o: jsObject<jsValue>)
 
-// alias jsObject<a> = linearMap<string, a>
+// alias jsObject<a> = linear-map<string, a>
 
 // fun toString(v: jsValue)
 //   match v

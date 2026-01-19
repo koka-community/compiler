@@ -12,7 +12,7 @@ import compiler/type/type
 import compiler/lib/pprint
 import compiler/kind/kind
 import compiler/common/syntax
-import std/data/linearmap
+import std/data/linear-map
 
 // Map identifiers to /nice/ strings.
 alias nice = id-map<string>

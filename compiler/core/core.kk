@@ -7,7 +7,7 @@ import compiler/common/range
 import compiler/type/type
 import compiler/type/kind
 import compiler/kind/kind
-import std/data/linearset
+import std/data/linear-set
 import compiler/common/name-collections
 
 fun is-unit(e: expr): bool
@@ -772,9 +772,9 @@ fun get-effect(e: expr): keffect
 
 // Type variables
 
-val tnames/empty: linearSet<tName> = LinearSet([])
+val tnames/empty: linear-set<tName> = LinearSet([])
 
-fun tnames(l: list<tName>): linearSet<tName>
+fun tnames(l: list<tName>): linear-set<tName>
   LinearSet(l)
 
 fun cmp(t1: tName, t2: tName): order
@@ -939,7 +939,7 @@ fun split-tforall(tp: ktype): _ (list<type-var>, ktype)
     TForAll(tvs, t) -> (tvs, t)
     _ -> throw("core/core split-tforall: expected forall type")
 
-alias deps = linearSet<name>
+alias deps = linear-set<name>
 fun deps/unions(l: list<deps>): deps
   l.foldl(LinearSet([]), fn(s: deps, a: deps) s + a)
 fun tname/dep(t: tName): deps

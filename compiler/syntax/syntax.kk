@@ -15,7 +15,7 @@ import compiler/common/name-collections
 import compiler/common/syntax
 import compiler/common/failure
 import compiler/platform/config
-import std/data/linearset
+import std/data/linear-set
 import std/core-extras
 import std/core/undiv
 

@@ -4,8 +4,8 @@ import compiler/common/range
 import compiler/common/syntax
 import compiler/syntax/syntax
 import compiler/lib/scc
-import std/data/linearset
-import std/data/linearmap
+import std/data/linear-set
+import std/data/linear-map
 // Updated 7/12/25; Commit #752748d
 
 effect val modname: name
@@ -266,7 +266,7 @@ fun dg/free-bound-var(dg: def-group<t>): pure (name-set, name-set)
 // Dependencies
 alias deps = name-map<name-set>
 alias free-var = name-set
-val emptyDeps: linearMap<name, name-set> = LinearMap([])
+val emptyDeps: linear-map<name, name-set> = LinearMap([])
 
 // Topological sort
 

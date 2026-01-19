@@ -1,8 +1,8 @@
 import compiler/common/name
-import std/data/linearmap
+import std/data/linear-map
 import std/core/undiv
 
-alias import-map = linearMap<list<string>, name>
+alias import-map = linear-map<list<string>, name>
 
 fun is-prefix(x: list<string>, y: list<string>): bool
   match (x, y)

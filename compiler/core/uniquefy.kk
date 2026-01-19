@@ -4,8 +4,8 @@ import compiler/common/unique
 import compiler/core/core
 import compiler/core/corevar
 import compiler/type/type
-import std/data/linearset
-import std/data/linearmap
+import std/data/linear-set
+import std/data/linear-map
 
 alias locals = name-set;
 alias renaming = name-map<name>
@@ -47,7 +47,7 @@ fun fun/run-unique(f: () -> _ a): _ a
 fun expr/uniquefy(e: expr): _ expr
   uniquefy(e, tnames/empty)
 
-fun free/uniquefy(e: expr, free: linearSet<tName>): _ expr
+fun free/uniquefy(e: expr, free: linear-set<tName>): _ expr
   val locals = LinearSet(free.union(e.free-locals).list.map(get-name))
   with start/run-unique(0)
   set-locals(locals)

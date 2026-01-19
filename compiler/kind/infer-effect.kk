@@ -18,7 +18,7 @@ import compiler/syntax/range-map
 import compiler/syntax/syntax
 import compiler/core/core
 import compiler/common/error
-import std/data/linearmap
+import std/data/linear-map
 
 type infer-kind-env
   InferKindEnv(

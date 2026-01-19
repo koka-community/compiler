@@ -13,8 +13,8 @@ import compiler/core/core
 import compiler/core/corevar
 import compiler/type/pretty
 import compiler/lib/pprint
-import std/data/linearmap
-import std/data/linearset
+import std/data/linear-map
+import std/data/linear-set
 import std/os/path
 import std/data/sort
 // Updated to #ddac17b on 11/19/25
@@ -230,10 +230,10 @@ pub fun map(g: gamma, f: (name-info -> name-info)): gamma
   g.map(fn(k, xs) xs.list/map(fn((n, ni)) (n, f(ni))))
 
 pub fun list(g: gamma): list<(name, name-info)>
-  g.linearmap/list.map(snd).concat.sort(?(<)=fn((n, _), (n2, _)) n.name/name/cmp(n2).is-lt)
+  g.linear-map/list.map(snd).concat.sort(?(<)=fn((n, _), (n2, _)) n.name/name/cmp(n2).is-lt)
 
 pub fun remove(g: gamma, name: name)
-  g.linearmap/remove(name.unqualify)
+  g.linear-map/remove(name.unqualify)
 
 pub fun union(g1: gamma, g2: gamma)
   g2.union-with(g1, fn(xs1: list<_>, xs2) xs1 ++ xs2)

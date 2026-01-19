@@ -8,7 +8,7 @@ import compiler/platform/config
 import compiler/kind/kind
 import compiler/kind/infer-kind
 import compiler/kind/infer-effect
-import std/data/linearset
+import std/data/linear-set
 
 // Unify
 type unify-ctx

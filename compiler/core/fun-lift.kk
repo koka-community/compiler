@@ -13,7 +13,7 @@ import compiler/type/assumption
 import compiler/core/core
 import compiler/core/corevar
 import compiler/platform/config
-import std/data/linearset
+import std/data/linear-set
 
 fun lift-functions()
   with handle-fun-lift()

@@ -5,7 +5,7 @@ import compiler/common/syntax
 import compiler/common/unique
 import compiler/core/corevar
 import std/core/undiv
-import std/data/linearset
+import std/data/linear-set
 
 fun defs/unroll(unrollMax: int)
   set-core-defs(unroll(get-core-defs()))

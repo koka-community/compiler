@@ -7,8 +7,8 @@
 //----------------------------------------------------------------------------
 // Updated as of 7/23/24: Commits b8074c2 (IdSet) e914563 (IdMap) b8074c2 (Id)
 
-import std/data/linearmap
-import std/data/linearset
+import std/data/linear-map
+import std/data/linear-set
 import compiler/lib/pprint
 
 /// Internal identifiers (just 'Int's).
@@ -17,9 +17,9 @@ import compiler/lib/pprint
 /// A list of identifiers
 alias ids = list<id>
 // A map from identifiers to values
-alias id-map<a> = linearMap<int, a>
+alias id-map<a> = linear-map<int, a>
 // A set of identifiers
-alias id-set = linearSet<int>
+alias id-set = linear-set<int>
 
 /// Identifiers are unique compiler generated identities
 alias id = int;

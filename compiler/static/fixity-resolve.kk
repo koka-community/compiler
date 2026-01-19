@@ -7,7 +7,7 @@ import compiler/common/range
 import compiler/syntax/syntax
 import compiler/common/syntax
 import compiler/common/color-scheme
-import std/data/linearmap
+import std/data/linear-map
 import compiler/lib/pprint
 // Updated to 7eb71dc on 2/10/25
 

@@ -1,6 +1,6 @@
 import std/os/path
 import std/os/file
-import std/data/linearmap
+import std/data/linear-map
 import compiler/common/parse
 import compiler/common/id
 import compiler/syntax/lexeme
@@ -748,11 +748,11 @@ effect eenv
   fun set-env(env: envv): ()
 
 struct envv
-  bound: linearMap<name, type-var>
+  bound: linear-map<name, type-var>
   imports: import-map
   unique: int
   gamma: gamma
-  locals: linearMap<name, ktype>
+  locals: linear-map<name, ktype>
   synonyms: name-map<syn-info>
 
 fun with-env-initial(modName: name, srcPath: path, imports0, f: () -> _ a): _ a

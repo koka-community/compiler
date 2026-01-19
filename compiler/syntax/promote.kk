@@ -25,7 +25,7 @@ import compiler/common/name-prim
 import compiler/common/name-collections
 import compiler/common/syntax
 import compiler/syntax/syntax
-import std/data/linearset
+import std/data/linear-set
 
 fun promote-type(tp: user-type): _ user-type
   val free = tp.free-type-vars

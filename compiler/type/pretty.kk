@@ -14,8 +14,8 @@ import compiler/platform/config
 import compiler/type/kind
 import compiler/kind/kind
 import compiler/kind/pretty
-import std/data/linearmap
-import std/data/linearset
+import std/data/linear-map
+import std/data/linear-set
 import std/core/undiv
 import std/core-extras
 // Updated 11/19/25 to commit #752748d, not fully visually second checked otherwise.
@@ -29,7 +29,7 @@ val precTypeApp = 3
 val precTypeAtom = 4
 val precPred = 5
 
-alias tv-scheme = linearMap<type-var, (prec -> doc)>;
+alias tv-scheme = linear-map<type-var, (prec -> doc)>;
 
 val rankedDefault:tv-scheme = LinearMap([])
 

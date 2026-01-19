@@ -7,13 +7,13 @@
 //---------------------------------------------------------------------------
 // Updated as of 7/23/24: Commit b8074c2
 
-pub import std/data/linearmap
-pub import std/data/linearset
+pub import std/data/linear-map
+pub import std/data/linear-set
 pub import compiler/common/name-collections
 import std/core/undiv
 import std/core/unsafe
 
-alias graph<v> = linearMap<v, list<v>>;
+alias graph<v> = linear-map<v, list<v>>;
 alias edge<v> = (v,v)
 alias node<v> = (v,list<v>)
 
@@ -55,7 +55,7 @@ fun dfs(g: graph<v>, vs: list<v>, ?(==): (v, v) -> bool): forest<v>
   with unsafe-total
   Forest(vs.map(fn(v) g.tree(v, ref(LinearSet([v]))))).prune()
 
-fun tree(g: graph<v>, v: v, visited: ref<h, linearSet<v>>, ?(==): (v, v) -> div bool): <div,read<h>,write<h>> tree<v>
+fun tree(g: graph<v>, v: v, visited: ref<h, linear-set<v>>, ?(==): (v, v) -> div bool): <div,read<h>,write<h>> tree<v>
   val f = g.successors(v).flatmap fn(v')
     if (!visited).member(v') then []
     else
@@ -63,7 +63,7 @@ fun tree(g: graph<v>, v: v, visited: ref<h, linearSet<v>>, ?(==): (v, v) -> div 
       [g.tree(v'.pretend-decreasing, visited)]
   Tree(v, Forest(f))
 
-alias vset<v> = linearSet<v>;
+alias vset<v> = linear-set<v>;
 
 fun prune(fs: forest<v>, ?a/(==): (v,v) -> bool): forest<v>
   fun chop(ms: vset<v>, fs1: forest<v>, ?v/(==): (v,v) -> bool): (vset<v>, forest<v>)

@@ -18,7 +18,7 @@ import compiler/kind/kind
 import compiler/type/typevar
 import compiler/type/pretty
 import compiler/syntax/lexeme
-import std/data/linearset
+import std/data/linear-set
 import std/data/sort
 
 pub infixr 5 (|->)

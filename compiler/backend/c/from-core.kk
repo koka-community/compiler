@@ -21,7 +21,7 @@ import compiler/backend/c/dup-drops
 import compiler/backend/c/constructors
 import compiler/backend/c/expr
 import std/os/path
-import std/data/linearset
+import std/data/linear-set
 
 val externalNames = [(exprTrue.conName, "true"), (exprFalse.conName, "false")]
 

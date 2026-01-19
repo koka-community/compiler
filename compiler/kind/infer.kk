@@ -38,8 +38,8 @@ import compiler/kind/infer-kind
 import compiler/kind/infer-effect
 import compiler/kind/unify
 import compiler/static/binding-groups
-import std/data/linearset
-import std/data/linearmap
+import std/data/linear-set
+import std/data/linear-map
 import std/data/sort
 
 // Kindcheck a program and calculate types

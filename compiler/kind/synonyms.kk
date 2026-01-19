@@ -5,7 +5,7 @@ import compiler/type/type
 import compiler/common/syntax
 import compiler/common/failure
 import compiler/platform/config
-import std/data/linearmap
+import std/data/linear-map
 
 alias synonyms = name-map<syn-info>
 effect synonyms-eff

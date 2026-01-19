@@ -14,8 +14,8 @@ import compiler/type/kind
 import compiler/type/pretty
 import compiler/type/operations
 import compiler/core/core
-import std/data/linearset
-import std/data/linearmap
+import std/data/linear-set
+import std/data/linear-map
 // Updated 12/19/25 to commit #f2a9c90
 
 /// Do two types overlap on the argument types? Used to check for overlapping definitions of overloaded identifiers.

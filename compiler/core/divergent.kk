@@ -7,7 +7,7 @@ import compiler/common/name
 import compiler/common/name-prim
 import compiler/common/name-collections
 import compiler/core/uniquefy
-import std/data/linearset
+import std/data/linear-set
 
 // Fix a group of recursive definitions to potentially include the divergence effect in their type
 fun analyze-divergence(defs0: list<def>)

@@ -7,19 +7,19 @@
 //----------------------------------------------------------------------------
 // Updated as of 3/15/25: Commits 69fe3ab (NameMap) b8074c2 (NameSet) 3229cca QNameMap
 
-import std/data/linearmap
-import std/data/linearset
+import std/data/linear-map
+import std/data/linear-set
 import compiler/common/name
 import compiler/common/failure
 import compiler/platform/config
 import std/test
 
-alias name-map<a> = linearMap<name, a>;
+alias name-map<a> = linear-map<name, a>;
 
-alias name-set = linearSet<name>;
+alias name-set = linear-set<name>;
 val names/empty: name-set = LinearSet([])
 
-alias qname-map<a> = linearMap<name,list<(name,a)>>;
+alias qname-map<a> = linear-map<name,list<(name,a)>>;
 
 fun name-map/find(m: name-map<a>, n: name): _ a
   match m.lookup(n)

@@ -12,7 +12,7 @@ import compiler/type/type
 import compiler/type/typevar
 import compiler/type/pretty
 import compiler/type/assumption
-import std/data/linearmap
+import std/data/linear-map
 // Updated to #cf4024e on 7/13/25
 
 pub infixr 5 (|->)
@@ -86,7 +86,7 @@ fun inf-gamma/new(tnames: list<(name,ktype,int,string)>): _ inf-gamma
   inf-gamma/empty.extends(tnames)
 
 fun inf-gamma/list(ig: inf-gamma): _ list<(name, ktype)>
-  ig.linearmap/list.flatmap(fn((_, infos)) infos.map(fn(info) (info.cname, info.typ)))
+  ig.linear-map/list.flatmap(fn((_, infos)) infos.map(fn(info) (info.cname, info.typ)))
 
 val inf-gamma/empty: inf-gamma = LinearMap([])
 

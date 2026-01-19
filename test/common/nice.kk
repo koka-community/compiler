@@ -3,7 +3,7 @@ import compiler/common/id
 import compiler/type/type
 import compiler/kind/kind
 import std/test
-import std/data/linearmap
+import std/data/linear-map
 
 fun suite()
   group("nice creation and lookup")

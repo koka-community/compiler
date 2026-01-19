@@ -8,7 +8,7 @@ import compiler/core/core
 import compiler/type/assumption
 import compiler/common/syntax
 import compiler/platform/config
-import std/data/linearset
+import std/data/linear-set
 import std/core/undiv
 // Updated 11/19/25 to commit #7083c02
 

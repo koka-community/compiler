@@ -6,7 +6,7 @@ import compiler/type/type
 import compiler/common/syntax
 import compiler/common/failure
 import compiler/platform/config
-import std/data/linearmap
+import std/data/linear-map
 import std/data/sort
 
 alias kGamma = qname-map<type-name-info>;

@@ -9,8 +9,8 @@ import compiler/common/name-collections
 import compiler/platform/config
 import compiler/kind/kind
 import compiler/kind/pretty
-import std/data/linearmap
-import std/data/linearset
+import std/data/linear-map
+import std/data/linear-set
 
 pub infixr 5 (|->)
 // Inference Kind: These kinds contain meta kind variables
@@ -26,7 +26,7 @@ fun (==)(k1: inf-kind, k2: inf-kind): _ bool
     (KIApp(k11, k12), KIApp(k21, k22)) -> k11 == k21 && k12 == k22
     _ -> False
 
-alias inf-kgamma = linearMap<name, inf-kind>
+alias inf-kgamma = linear-map<name, inf-kind>
 
 val infKindStar = KICon(kindStar)
 val infKindHandled = KICon(kindHandled)

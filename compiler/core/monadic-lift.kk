@@ -8,7 +8,7 @@ import compiler/kind/kind
 import compiler/core/core
 import compiler/core/corevar
 import compiler/type/typevar
-import std/data/linearset
+import std/data/linear-set
 import compiler/platform/config
 import compiler/common/unique
 

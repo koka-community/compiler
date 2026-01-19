@@ -26,8 +26,8 @@ import compiler/syntax/syntax
 import compiler/syntax/range-map
 import compiler/core/core
 import compiler/lib/pprint
-import std/data/linearmap
-import std/data/linearset
+import std/data/linear-map
+import std/data/linear-set
 import std/data/sort
 import std/core/undiv
 import std/core/unsafe

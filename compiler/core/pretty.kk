@@ -13,7 +13,7 @@ import compiler/type/type
 import compiler/type/typevar
 import compiler/type/pretty
 import compiler/platform/config
-import std/data/linearmap
+import std/data/linear-map
 import std/num/float64
 
 // Show pretty names rather than numbers

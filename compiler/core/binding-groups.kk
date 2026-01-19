@@ -4,14 +4,14 @@ import compiler/core/corevar
 import compiler/common/name
 import compiler/common/failure
 import compiler/platform/config
-import std/data/linearmap
-import std/data/linearset
+import std/data/linear-map
+import std/data/linear-set
 
 // Re-analyze a recursive binding group just after type checking.
 // Due to overloading, functions that seem mutually recursive may not
 // actually be mutually recursive after the types are resolved.
-alias deps = linearMap<tName, linearSet<tName>>
-alias freeVar = linearSet<tName>
+alias deps = linear-map<tName, linear-set<tName>>
+alias freeVar = linear-set<tName>
 
 // Re-analyze a recursive binding group and return a list of new
 // definition groups. After type checking it is possible that definitions
@@ -33,7 +33,7 @@ fun regroup(dfs: list<def>): _ list<def-group>
       val defMap = LinearMap(def-names.zip(defs))
       val deps = LinearMap(def-names.zip(defs.map(_.free-vars.intersection(def-name-set))))
       // determine strongly connected components
-      val defOrder = deps.list.map(fn((nm, fvs)) (nm, fvs.linearset/list)).scc
+      val defOrder = deps.list.map(fn((nm, fvs)) (nm, fvs.linear-set/list)).scc
       // create a definition group
       fun makeGroup(names)
         match names

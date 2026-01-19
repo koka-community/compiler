@@ -2,8 +2,8 @@ import compiler/type/type
 import compiler/common/syntax
 import compiler/common/range
 import compiler/core/core
-import std/data/linearset
-import std/data/linearmap
+import std/data/linear-set
+import std/data/linear-map
 import compiler/common/name
 import compiler/type/typevar
 
@@ -20,10 +20,10 @@ fun expr/free-locals(e: expr)
 fun branch/free-locals(b: branch)
   b.free-vars.filter(fn(TName(nm)) !nm.is-qualified)
 
-fun list/free-vars(l: list<a>, ?free-vars: (a) -> _ linearSet<tName>): _ linearSet<tName>
+fun list/free-vars(l: list<a>, ?free-vars: (a) -> _ linear-set<tName>): _ linear-set<tName>
   l.map(free-vars).unions
 
-fun expr/free-vars(e0: expr): _ linearSet<tName>
+fun expr/free-vars(e0: expr): _ linear-set<tName>
   match e0
     Lam(tnames, _, e) -> e.free-vars - tnames
     Var(tn) -> tnames/empty + tn
@@ -35,36 +35,36 @@ fun expr/free-vars(e0: expr): _ linearSet<tName>
     Let(dfgps, e) -> free-vars(dfgps, e)
     Case(exprs, bs) -> exprs.free-vars + bs.map(free-vars).unions
 
-fun branch/free-vars(Branch(patterns, guards): branch): _ linearSet<tName>
+fun branch/free-vars(Branch(patterns, guards): branch): _ linear-set<tName>
   guards.map(free-vars).unions - patterns.map(bound-vars).unions
 
-fun guard/free-vars(Guard(test, expr): guard): _ linearSet<tName>
+fun guard/free-vars(Guard(test, expr): guard): _ linear-set<tName>
   test.free-vars + expr.free-vars
 
-fun pat/bound-vars(p: pattern): _ linearSet<tName>
+fun pat/bound-vars(p: pattern): _ linear-set<tName>
   match p
     PatCon(_, args) -> args.map(bound-vars).unions
     PatVar(tn) -> tnames/empty + tn
     PatLit -> tnames/empty
     PatWild -> tnames/empty
 
-fun dgs/free-vars(def-groups: def-groups, e: expr): _ linearSet<tName>
+fun dgs/free-vars(def-groups: def-groups, e: expr): _ linear-set<tName>
   match def-groups
     [] -> e.free-vars
     Cons(dg, dgs) -> 
-      val fv1: linearSet<tName> = (free-vars(dgs, e) - dg.bound-vars)
+      val fv1: linear-set<tName> = (free-vars(dgs, e) - dg.bound-vars)
       dg.free-vars + fv1
 
-fun dg/free-vars(defg: def-group): _ linearSet<tName>
+fun dg/free-vars(defg: def-group): _ linear-set<tName>
   defg.flatten.map(free-vars).unions
 
-fun dg/bound-vars(defg: def-group): _ linearSet<tName>
+fun dg/bound-vars(defg: def-group): _ linear-set<tName>
   defg.flatten.map(bound-vars).unions
 
-fun def/bound-vars(Def(nm, tp): def): _ linearSet<tName>
+fun def/bound-vars(Def(nm, tp): def): _ linear-set<tName>
   LinearSet([TName(nm, tp)])
 
-fun def/free-vars(Def(_, _, e): def): _ linearSet<tName>
+fun def/free-vars(Def(_, _, e): def): _ linear-set<tName>
   e.free-vars
 
 // Term substitutions

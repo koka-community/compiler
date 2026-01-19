@@ -5,7 +5,7 @@ import compiler/common/syntax
 import compiler/common/name
 import compiler/common/name-collections
 import compiler/common/range
-import std/data/linearmap
+import std/data/linear-map
 
 // Map names to their borrowing info. If a name does not use borrowing
 // it may not be in here.

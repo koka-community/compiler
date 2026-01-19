@@ -1,5 +1,5 @@
 import compiler/lib/json
-import std/data/linearmap
+import std/data/linear-map
 import std/test
 
 fun suite()

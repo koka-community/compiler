@@ -8,8 +8,8 @@ import compiler/common/syntax
 import compiler/common/name
 import compiler/common/range
 import compiler/common/unique
-import std/data/linearset
-import std/data/linearmap
+import std/data/linear-set
+import std/data/linear-map
 import std/core/undiv
 import std/core-extras // list.contains
 
@@ -46,10 +46,10 @@ pub fun all-tv(a: a, ?bound-type-vars: (a) -> _ tvs, ?free-type-vars: (a) -> _ t
 
 // A substitution from type variables to 'Tau's.
 pub struct sub
-  map: linearMap<type-var, ktype>
+  map: linear-map<type-var, ktype>
   tvs: tvs
 
-pub fun sub/unsub(s: sub): linearMap<type-var, ktype>
+pub fun sub/unsub(s: sub): linear-map<type-var, ktype>
   s.map
 
 pub fun sub/count(Sub(sub): sub): int
@@ -140,7 +140,7 @@ pub fun sub/inserts(Sub(sub, tvars): sub, assoc: list<(type-var, tau)>)
 // Type variables
 
 // A set of type variables
-pub alias tvs = linearSet<type-var>
+pub alias tvs = linear-set<type-var>
 pub val tvs/empty:tvs = LinearSet([])
 // All the tvar functions defer to Set functions, just alias here
 
@@ -173,7 +173,7 @@ pub fun oftv(x: a, ?odftv: (a) -> _ list<type-var>): _ list<type-var>
   val (es, ws) = vs.partition(_.kind.is-special)
   ws ++ es
 
-pub alias type-cons = linearSet<type-con>
+pub alias type-cons = linear-set<type-con>
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 // Utilities for types and expressions
