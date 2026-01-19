@@ -44,11 +44,11 @@ fun flip(v : variance)
     Positive -> Negative
     Invariant -> Invariant
 
-pub fun normalize(close: bool, tp: rho): <infer|e> rho
+pub fun normalize(close: bool, tp: rho): _ rho
   val free = free-in-gamma()
   normalizeX(close, free, tp)
 
-pub fun normalizeX(close: bool, free: tvs, tp: rho): <infer|e> rho
+pub fun normalizeX(close: bool, free: tvs, tp: rho): _ rho
   match tp
     TForAll([], t) -> normalizeX(close, free, t)
     TSyn(syn, targs, t) ->
@@ -72,7 +72,7 @@ pub fun normalizeX(close: bool, free: tvs, tp: rho): <infer|e> rho
       TFun(args', nice-eff, res')
     _ -> normalizex2(Positive, tp)
 
-fun normalizex2(v: variance, tp: rho): <infer|e> rho
+fun normalizex2(v: variance, tp: rho): _ rho
   match v
     Invariant -> tp
     _ -> match tp
@@ -98,8 +98,8 @@ fun normalizex2(v: variance, tp: rho): <infer|e> rho
         TSyn(syn, args, normalizex2(v, t))
       _ -> tp
 
-pub fun nicefy-effect(eff: keffect): <infer|e> keffect
-  fun try-alias(ls: list<tau>, nm: name): <infer|e> (list<tau>, list<tau>)
+pub fun nicefy-effect(eff: keffect): _ keffect
+  fun try-alias(ls: list<tau>, nm: name): _ (list<tau>, list<tau>)
     if ls.is-nil then ([], [])
     else
       match synonyms-lookup(nm)
@@ -113,7 +113,7 @@ pub fun nicefy-effect(eff: keffect): <infer|e> keffect
               Just(rest) ->
                 ([TSyn(TypeSyn(nm, syn.syn-info/kind, syn.syn-info/rank, Just(syn)), insts, effect-fixed(sls))], rest)
               _ -> ([], ls)
-  fun match-aliases(names: list<name>, ls: list<tau>): <infer|e> list<tau>
+  fun match-aliases(names: list<name>, ls: list<tau>): _ list<tau>
     match names
       Nil -> ls
       Cons(nm, ns) ->
@@ -153,14 +153,14 @@ fun is-subset(acc: list<tau>, ls1: list<tau>, ls2: list<tau>): pure maybe<list<t
       else if eq-type(l1, l2) then is-subset(acc, ll1, ll2)
       else Nothing
 
-pub fun split-effect(eff: keffect): <infer|e> (list<tau>, keffect)
+pub fun split-effect(eff: keffect): _ (list<tau>, keffect)
   nofail-unify(fn() eff.extract-normalize-effect)
 
 //////////////////////////////////////
 // Generalization
 //////////////////////////////////////
 
-pub fun generalize(contextRng: range, rng: range, close: bool, f: () -> <infer|e> (rho,keffect,core/core/expr)): <infer|e> (rho, keffect, core/core/expr)
+pub fun generalize(contextRng: range, rng: range, close: bool, f: () -> _ (rho,keffect,core/core/expr)): _ (rho, keffect, core/core/expr)
   fun generalizeX(tp: ktype, eff0: keffect, core0: core/core/expr)
     match tp 
       TForAll(_, _) ->
@@ -613,7 +613,7 @@ alias typed-arg = (name, assumption/name-info, rho)
 pub val empty-implicit-arg = 
   ImplicitArg(nil, InfoVal(Private, nil, typeUnit, 0, null, True, False, ""), typeUnit, [])
 
-pub fun pp-implicit-arg(iarg: implicit-arg): <pretty-eff> doc
+pub fun pp-implicit-arg(iarg: implicit-arg): _ doc
   if iarg.name.is-nil then "...".text
   else
     val docargs = iarg.implicit-args.map fn((pname, arg))
@@ -631,7 +631,7 @@ pub fun pp-implicit-arg(iarg: implicit-arg): <pretty-eff> doc
       (if iarg.implicit-args.is-nil then pprint/empty
        else (docfixed ++ docargs).intersperse(comma).hcat.parens)
 
-pub fun pp-implicit-assign(pfx: string, pname: name, iarg: implicit-arg, shorten: bool): <pretty-eff> doc
+pub fun pp-implicit-assign(pfx: string, pname: name, iarg: implicit-arg, shorten: bool): _ doc
   val pardoc = pname.pp-name-plain.color(colors.colorImplicitParameter) |.| "=".text
   if (pname == iarg.name && iarg.implicit-args.is-nil) || pname.from-implicit-param-name == iarg.name.unqualify-full || iarg.name.is-nil then
     (if shorten then pprint/empty else pardoc) |.| iarg.pp-implicit-arg
@@ -646,7 +646,7 @@ pub fun ia-scope-depth(iarg: implicit-arg): int
   iarg-scope-depth(iarg.name, iarg.info)
 
 // Convert an implicit argument to an expression (that is supplied as the argument)
-pub fun to-implicit-arg-expr(iarg: implicit-arg, xrange: range): <unique,pure> syntax/syntax/expr<ktype>
+pub fun to-implicit-arg-expr(iarg: implicit-arg, xrange: range): _ syntax/syntax/expr<ktype>
   val range = xrange.hide // don't add things in the expression to the rangemap
   match iarg.implicit-args
     Nil -> syntax/Var(iarg.name, False, range)
@@ -671,7 +671,7 @@ pub fun to-implicit-arg-expr(iarg: implicit-arg, xrange: range): <unique,pure> s
           Lam(binders, body, False, range)
       _ -> fail("compiler/type/infer-effect: to-implicit-arg-expr: illegal type for implicit? " ++ range.show ++ ", " ++ iarg.name.show)
 
-pub fun pp-typed-arg(targ: typed-arg): <pretty-eff> doc
+pub fun pp-typed-arg(targ: typed-arg): _ doc
   val (nm, _, tp) = targ
   pp-param((nm, tp))
 
@@ -713,7 +713,7 @@ fun merge(sel1: implicit-select, sel2: implicit-select): implicit-select
     // in particular Infty + Found must be treated as ambiguous to be sound
     _ -> Amb(sel1.all-candidates ++ sel2.all-candidates)
 
-fun pp-select(sel: implicit-select): <pretty-eff> doc
+fun pp-select(sel: implicit-select): _ doc
   match sel
     None -> "None".text
     Found(iarg) -> "Found".text |+| iarg.pp-implicit-arg
@@ -827,7 +827,7 @@ pub fun fixed-context(propagated: maybe<(ktype, range)>, fixed-resolved: list<(i
     
   
 
-pub fun pp-name-context(nctx: name-context): <pretty-eff> doc
+pub fun pp-name-context(nctx: name-context): _ doc
   match nctx
     CtxNone -> "_".text
     CtxType(tp) -> tp.pp-type
@@ -838,14 +838,14 @@ pub fun pp-name-context(nctx: name-context): <pretty-eff> doc
       val args = fixed.map(pp-type) ++ namedArgs.map(pp-param) ++ (if matchSome then ["...".text] else [])
       args.tupled |+| "->".text |+| mbResTp.map(pp-type).default("_".text)
 
-pub fun pp-name-ctx(nm: name, nctx: name-context): <pretty-eff> doc
+pub fun pp-name-ctx(nm: name, nctx: name-context): _ doc
   nm.pp-name |+| ":".text |+| pp-name-context(nctx)
 
 
 // A fixed argument that has been inferred
 pub alias fixed-arg = (range, ktype, keffect, core/core/expr)
 
-pub fun pure-match-shape-name-ctx(ctx1 : name-context, ctx2 : name-context) : <pure,unique> bool
+pub fun pure-match-shape-name-ctx(ctx1 : name-context, ctx2 : name-context) : _ bool
   match (ctx1, ctx2)
     (CtxType(tp1), CtxType(tp2)) -> pure-match-shape(tp1, tp2)
     (CtxFunTypes(some1, fixed1, named1, mbResTp1), CtxFunTypes(some2, fixed2, named2, mbResTp2)) ->
@@ -862,7 +862,7 @@ pub fun fixed-count-context(propagated : maybe<(ktype, range)>, fixed-count : in
   CtxFunArgs(False, fixed-count, namedArgs, propagated.map(fst))
 
 
-pub fun pp-tvs(tvs: tvs): <pretty-eff> doc
+pub fun pp-tvs(tvs: tvs): _ doc
   tvs.list.map(pp-typevar).list
 
 pub fun implicit-type-context(tp : ktype) : name-context
@@ -893,14 +893,14 @@ pub fun case-overlaps(nm: name, qname: name, info: assumption/name-info): maybe<
   then Just(qname1)
   else Nothing
 
-pub fun check-casing-overlap(rng: range, nm: name, qname: name, info: assumption/name-info): <infer> ()
+pub fun check-casing-overlap(rng: range, nm: name, qname: name, info: assumption/name-info): _ ()
   match case-overlaps(nm, qname, info)
     Just(qname1) ->
       val env = infer-env
       inf-error(rng, info.element.text |+| nm.unqualify.pp-name |+| "is already in scope with a different casing as".text |+| env.importsMap.get-alias(qname1).pp-name)
     Nothing -> ()
 
-pub fun check-casing(rng: range, nm: name, qname: name, info: assumption/name-info): <infer> ()
+pub fun check-casing(rng: range, nm: name, qname: name, info: assumption/name-info): _ ()
   match case-overlaps(nm, qname, info)
     Just(qname1) ->
       val env = infer-env
@@ -952,7 +952,7 @@ pub fun pp-name-info(nm: name, info: assumption/name-info): _ (doc, doc)
   val env = infer-env
   (env.importsMap.get-alias(nm).pp-name, info.scheme.pp-type)
 
-pub fun pp-or(names : list<name>) : <pretty-eff> doc
+pub fun pp-or(names : list<name>) : _ doc
   match names
     Nil -> pprint/empty
     Cons(name, Nil) -> pp-name(name)
@@ -1010,7 +1010,7 @@ fun lookup-inf-name(nm: name)
 fun create-canonical-name(nm-ctx: name, gamma: gamma, qname: name)
   qname
 
-fun get-local-vars(): <pure,infer-env> list<(name, ktype)>
+fun get-local-vars(): _ list<(name, ktype)>
   infer-env.inf-gamma.inf-gamma/list.filter(fn((_, info)) info.is-type-localvar)
 
 pub effect val scope-depth: int
@@ -1022,47 +1022,47 @@ pub alias infer = <pretty-eff, ctxt, infer-state, infer-eff, range-map-eff, loca
 fun free-in-gamma()
   (sub/(|->)(get-subst(), infer-env.inf-gamma.inf-gamma/list.map(snd))).free-type-vars
 
-fun with-hole-allowed(allowed0: bool, action: () -> <infer|e> a): <infer|e> a
+fun with-hole-allowed(allowed0: bool, action: () -> _ a): _ a
   var allowed := allowed0
   with override 
     fun hole-allowed() allowed
     fun use-hole() allowed := False
   action()
 
-pub fun hidden-term-doc(rng: range, doc: doc, action: () -> <infer|e> a): <infer|e> a
+pub fun hidden-term-doc(rng: range, doc: doc, action: () -> _ a): _ a
   with override val infer-env = infer-env(hiddenTermDoc = Just((rng, doc)))
   action()
-pub fun disallow-hole(action: () -> <infer|e> a): <infer|e> a
+pub fun disallow-hole(action: () -> _ a): _ a
   with-hole-allowed(False, action)
 // Returns the value of the action and whether a hole was used
-pub fun allow-hole(action: () -> <infer|e> a): <infer|e> (a, bool)
+pub fun allow-hole(action: () -> _ a): _ (a, bool)
   with-hole-allowed(True, {(action(), !hole-allowed())})
-pub fun with-context(nm: name, action: () -> <infer|e> a): <infer|e> a
+pub fun with-context(nm: name, action: () -> _ a): _ a
   with override val infer-env = infer-env(contxt = nm)
   action()
-pub fun with-lhs(action: () -> <infer|e> a): <infer|e> a
+pub fun with-lhs(action: () -> _ a): _ a
   with override val infer-env = infer-env(inLhs = True)
   action()
-pub fun return-allowed(allowed: bool, action: () -> <infer|e> a): <infer|e> a
+pub fun return-allowed(allowed: bool, action: () -> _ a): _ a
   with override val infer-env = infer-env(returnAllowed = allowed)
   action()
-pub fun allow-return(action: () -> <infer|e> a): <infer|e> a
+pub fun allow-return(action: () -> _ a): _ a
   return-allowed(True, action)
-pub fun with-scope(action: () -> <infer|e> a): <infer|e> a
+pub fun with-scope(action: () -> _ a): _ a
   with override val scope-depth = infer-effect/scope-depth + 1
   action()
-pub fun with-local-scope(action: () -> <infer|e> a): <infer|e> a
+pub fun with-local-scope(action: () -> _ a): _ a
   with override val local-depth = local-depth + 1
   action()
-pub fun with-no-local-scope(action: () -> <infer|e> a): <infer|e> a
+pub fun with-no-local-scope(action: () -> _ a): _ a
   with override val local-depth = 0
   action()
-pub fun with-def-name(nm: name, action: () -> <infer|e> a): <infer|e> a
+pub fun with-def-name(nm: name, action: () -> _ a): _ a
   with override val infer-env = infer-env(currentDefNames = Cons(nm, infer-env.currentDefNames), namedLam = !(nm.is-nil || nm.is-wildcard) )
   action()
 
 pub effect val infer-env: inferEnv
-pub fun with-env(env: inferEnv, action: () -> <infer|e> a): <infer|e> a
+pub fun with-env(env: inferEnv, action: () -> _ a): _ a
   with override val infer-env = env
   action()
 
@@ -1086,7 +1086,7 @@ pub effect infer-eff
   fun inf-error(rng: range, msg: doc): a
   fun inf-warning(rng: range, msg: doc): ()
 
-fun trace-def-doc(f: () -> <infer|e> doc): <infer|e> ()
+fun trace-def-doc(f: () -> _ doc): _ ()
   val names = infer-env.currentDefNames
   with trace-doc 
   hcat(intersperse(names.map(pp-name), ".".text)) |+| ":".text |+| f()
@@ -1096,7 +1096,7 @@ fun trace-def-doc(f: () -> <infer|e> doc): <infer|e> ()
 // Unify helpers
 //////////////////////////////////////
 
-fun nofail-unify(action: () -> <infer,unify|e> a, ?kk-file-line: string): <infer|e> a
+fun nofail-unify(action: () -> _ a, ?kk-file-line: string): _ a
   match run-unify(action)
     (Right(v), sub) -> 
       add-sub(sub)
@@ -1167,7 +1167,7 @@ pub fun occurs-in-context(tv: type-var, extraFree: tvs): _ bool
 // Unification Errors
 //////////////////////////////////////
 
-fun get-term-doc(term: string, rng: range): <infer-env,colors,exn> (doc, doc)
+fun get-term-doc(term: string, rng: range): _ (doc, doc)
   val env = infer-env
   match env.hiddenTermDoc
     Just((_, doc)) -> 
@@ -1321,7 +1321,7 @@ fun check-implicit-constraint(name: name, tp: ktype, ctx-range: range, rng: rang
 
 // TODO: incorporate generalization into here?
 // This is essentially scope-implicit-constraints
-fun scope-implicit-constraints(action: () -> <infer|e> a): <infer|e> a
+fun scope-implicit-constraints(action: () -> _ a): _ a
   var iconstraints : list<implicit-constraint> := []
   var iconstraints-gamma := inf-gamma/empty
   with override
@@ -1356,10 +1356,10 @@ fun ic/free-type-constructors(ic: implicit-constraint): div type-cons
 fun is-implicit-constraint-evidence(name: name): bool
   name.name/starts-with("iev@")
 
-fun pp-constraint(ic: implicit-constraint): <pretty-eff> doc 
+fun pp-constraint(ic: implicit-constraint): _ doc 
   pp-name(ic.evidence) |.| "=".text |+| pp-param((ic.name, ic.typ))
 
-fun pp-constraints(ics: list<implicit-constraint>): <pretty-eff> doc
+fun pp-constraints(ics: list<implicit-constraint>): _ doc
   ics.map(pp-constraint).list
 
 fun resolve-implicit-constraints(free: tvs, ics : list<implicit-constraint>): _ (core/core/expr -> core/core/expr)

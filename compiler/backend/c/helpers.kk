@@ -313,7 +313,7 @@ fun parameters(pars: list<doc>): doc
 fun arguments(args: list<doc>): doc
   tupled(args ++ [contextDoc])
 
-fun ppLit(l: lit): <exn,comp-flags> doc
+fun ppLit(l: lit): _ doc
   match l
     LitInt(i) ->
       if i.is-small-int then text("kk_integer_from_small") |.| parens(i.pretty)
@@ -557,7 +557,7 @@ val constdecl = "const".text
 fun t-parameters(tns: list<tName>): doc
   nt-parameters(tns.map(fn(tn) (tn.get-name, tn.tNameType)))
 
-fun result-type(tp: ktype): <pure,comp-flags> ktype
+fun result-type(tp: ktype): _ ktype
   match tp.split-fun-scheme
     Just((_, _, _, res)) -> res
     _ -> fail("backend/c/from-core result-type: not a function type: " ++ tp.show) // TODO: Pretty type

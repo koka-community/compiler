@@ -333,7 +333,7 @@ fun qualifier(Name(m, hm)): name
 fun name-as-module-name(n: name): name
   new-module-name(join(n.nameModule, join(n.nameLocalQual, n.nameStem)))
 
-fun qualify-locally(nl: name, n: name): <exn> name
+fun qualify-locally(nl: name, n: name): exn name
   match nl
     Name(l, _, _, 0, _, 0) ->
       new-locally-qualified(n.nameModule, join(l, n.nameLocalQual), n.nameStem)
@@ -449,7 +449,7 @@ fun make-hidden(n: name): name
 fun make-hidden-name(s: string, n: name): name
   prepend("@" ++ s ++ "-", n)
 
-fun unmake-hidden(n: name, pre: string): <exn> name
+fun unmake-hidden(n: name, pre: string): exn name
   n.name-map-stem fn(stem)
     if stem.starts-with("@" ++ pre ++ "-").bool then
       stem.slice.drop(2 + pre.count).string
@@ -536,7 +536,7 @@ fun is-handler-name(n: name): bool
   n.stem-is-equal(hndName)
 
 // Create an effect type name from an operations type name.
-fun from-handler-name(n: name): <exn> name
+fun from-handler-name(n: name): exn name
   n.type-qualified-get-type-name
 
 // Create a handle function name from an effect type name.
@@ -555,7 +555,7 @@ fun is-operations-name(n: name): bool
   n.stem-is-equal(effectOpsName)
 
 // Create an effect type name from an operations type name.
-fun from-operations-name(n: name): <exn> name
+fun from-operations-name(n: name): exn name
   n.type-qualified-get-type-name
 
 fun to-op-selector-name(typeName: name): exn name
@@ -566,7 +566,7 @@ fun is-op-selector-name(n: name): bool
   n.stem-is-equal(opsSelectName)
 
 //  Create an effect type name from an operations type name.
-fun from-op-selector-name(n: name): <exn> name
+fun from-op-selector-name(n: name): exn name
   n.type-qualified-get-type-name
 
 // Create an effect tag name from an effect type name.
@@ -606,11 +606,11 @@ fun is-value-operation-name(n: name): bool
   n.hidden/starts-with("val")
 
 // Create an operation name from a value operation name
-fun from-value-operation-name(n: name): <exn> name
+fun from-value-operation-name(n: name): exn name
   n.unmake-hidden("val")
 
 // Create an operation name from either a value operation name or regular operations name
-fun to-basic-operation-name(n: name): <exn> name
+fun to-basic-operation-name(n: name): exn name
   if n.is-value-operation-name then n.from-value-operation-name else n
 
 // Implicits
@@ -623,10 +623,10 @@ fun is-implicit-param-name(n: name): bool
     Cons(m, _) -> m == implicit-namespace
     _ -> False
 
-fun to-implicit-param-name(n: name): <exn> name
+fun to-implicit-param-name(n: name): exn name
   qualify-locally(implicit-namespace-name, n)
 
-fun from-implicit-param-name(n: name): <exn> name
+fun from-implicit-param-name(n: name): exn name
   match n.split-local-qual-name
     Cons(m, ms) | m == implicit-namespace -> qualify-locally(ms.unsplit-module-name, n.unqualify-full)
     _ -> n
