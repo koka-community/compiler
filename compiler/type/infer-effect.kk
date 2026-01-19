@@ -999,7 +999,7 @@ fun in-hidden-term-doc(): infer-env bool
 
 fun qualify-name(nm: name)
   qualify(module-name(), nm)
-fun find-data-info(nm: name): _ data-info
+pub fun find-data-info(nm: name): _ data-info
   newtypes-lookup-any(nm).expect("type/infer-effect/find-data-info: unknown type: " ++ nm.show ++ "\nin: " ++ newtypes-list().show)
 fun lookup-inf-name(nm: name)
   match infer-env.inf-gamma.inf-gamma/lookup(nm.unqualify) 
@@ -1016,7 +1016,7 @@ fun get-local-vars(): _ list<(name, ktype)>
 pub effect val scope-depth: int
 pub effect val local-depth: int
 
-effect val ctxt : infer-context
+pub effect val ctxt : infer-context
 pub alias infer = <pretty-eff, ctxt, infer-state, infer-eff, range-map-eff, local-depth, scope-depth, def-infer-effect, infer-env, synonyms-eff, newtypes-eff, unify, unique>;
 
 fun free-in-gamma()
@@ -1525,7 +1525,7 @@ fun core-def-infoX(def : core/core/def, scope-depth: int)
      (name, create-name-infoX(Public, name, scope-depth, sort, rng, tp, doc))
 
 // extend gamma with qualified names
-fun extend-gamma(is-already-canonical: bool, defs: list<(name, assumption/name-info)>, act: () -> _ a): _ a
+pub fun extend-gamma(is-already-canonical: bool, defs: list<(name, assumption/name-info)>, act: () -> _ a): _ a
   val e = infer-env
   fun extend(ctxt: name, to-add: list<(name, assumption/name-info)>, gamma: gamma): _ gamma
     match to-add
@@ -1553,7 +1553,7 @@ fun extend-inf-gamma-core(top-level: bool, defs: list<core/core/def-group>, act:
         DefNonRec(def) -> [def.core-def-info(depth)]
       extend-inf-gamma-ex(top-level, [], to-add, fn() extend-inf-gamma-core(top-level, rest, act))
 
-fun extend-inf-gamma(tnames: list<(name, assumption/name-info)>, act: () -> _ a): _ a
+pub fun extend-inf-gamma(tnames: list<(name, assumption/name-info)>, act: () -> _ a): _ a
   extend-inf-gamma-ex(False, [], tnames, act)
 
 fun extend-inf-gamma-ex(top-level: bool, ignores: list<name>, tnames: list<(name, assumption/name-info)>, act: () -> _ a): _ a

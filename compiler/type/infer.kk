@@ -26,6 +26,7 @@ import compiler/syntax/syntax
 import compiler/syntax/pretty
 import compiler/syntax/range-map
 import compiler/core/core
+import compiler/core/corevar
 import compiler/lib/pprint
 import std/data/linear-map
 import std/data/linear-set
@@ -35,7 +36,8 @@ import std/core/unsafe
 import compiler/lib/core
 import compiler/type/infer-effect
 
-
+fun expr/infer(mb, expect, expr)
+  throw("Unimplemented")
 //////////////////////////////////////////
 // Infer Types
 //////////////////////////////////////////
@@ -96,8 +98,7 @@ pub fun remove-local-effect(ftp: ktype)
 //////////////////////////////////////////
 // Infer Effect Handlers
 //////////////////////////////////////////
-// From Infer.hs: resolve the effect tag core expression for handled effects.
-// Returns (maybe tagExpr, effectName)
+// resolve the effect tag core expression for handled effects.
 fun effect-name-core(eff: keffect, rng: range): _ (maybe<core/core/expr>, name)
   match eff.expand-syn
     // handled effects (from an `effect` declaration)
@@ -176,26 +177,117 @@ fun checkEffectTp(rng: range)
 fun checkLocalScope(rng: range) 
   Check("a reference to a local variable escapes it's scope", rng)
 
+fun infer-binders(inf-gamma, binders)
+  match binders
+    [] -> inf-gamma
+    Cons(par, pars) -> 
+      val info = (par.name, create-name-infoX(Public, par.name, infer-effect/scope-depth, DefVal, par.range, par.binderType, "")
+      infer-binders(inf-gamma ++ [info], pars)
+
+// infer implicit parameter declaration:
+// check if the expression is a single identifier and possibly generate unpacking of fields
+fun infer-implicit-param(par: value-binder<t1, maybe<syntax/syntax/expr<t2>>>): _ (value-binder<t1, maybe<syntax/syntax/expr<t2>>>, syntax/syntax/expr<ktype> -> syntax/syntax/expr<ktype>)
+  if par.name.is-implicit-param-name then 
+    val unpack = 
+      match par.expr
+        Just(Parens(Var(qname, _, rng))) -> // encoded in the parser as a default expression
+          infer-implicit-unpack(par.range.hide, rng.hide, par.name, qname)
+        Nothing -> id
+        Just(expr) -> 
+          context-error(par.range, expr.range, "the value of an implicit parameter must be a single identifier".text, [])
+          id
+    // leave the binder name locally qualified as `@implicit/name` -- binderName = pname,
+    (ValueBinder(par.name, par.binderType, Nothing, par.name-range, par.range), unpack)
+  else (par, id)
+     
+    
+fun infer-implicit-unpack(rng: range, nrng: range, pname: name, qname: name): _ (syntax/syntax/expr<ktype> -> syntax/syntax/expr<ktype>)
+  match newtypes-lookup-any(qname)
+    Just(DataInfo(sort=Inductive, constrs=[conInfo], def=ddef)) | !ddef.is-open -> 
+      // struct unpack the fields
+      val pats = conInfo.params.map(fst).filter(!_.is-nil).map(fn(fname) PatVar(ValueBinder(pname.qualify-unpacked(fname), Nothing, PatWild(nrng), nrng, rng)))
+      val pat = PatCon(conInfo.name, pats.map(fn(p) (Nothing, p)), nrng, null) // no warnings for unused pattern variables by using a null range
+      fun unpack(body)
+        Case(Var(pname, False, nrng), [Branch(pat, [Guard(guardTrue, body)])], False, rng)
+      fun extract-struct-type(tp)
+        match tp.expand-syn
+          TApp(TCon(tcon), _) -> [tcon.name]
+          TCon(tcon) -> [tcon.name]
+          _ -> []
+      val bases = conInfo.params.filter(fn((fname, _)) fname.name/starts-with("base")).flatmap(fn((fname, ftp)) ftp.extract-struct-type.map((fname, _)))
+      fun compose(l, e) 
+        match l
+          Nil -> e
+          Cons(f, fs) -> f(compose(fs, e))
+      val unpackBases = bases.map fn((fname, fqname))
+        infer-implicit-unpack(rng, nrng, pname.qualify-unpacked(fname), fqname)
+      fn(e) compose(Cons(unpack, unpackBases), e)
+    _ -> id
+
 // Infer automatic unwrapping for parameters with default values, and adjust their type from optional<a> to a
 // Takes an accumulated InfGamma (initially empty), a list of parameters (as value binders) and returns
 // the new InfGamma and a substitution from optional parameter names to the local unique names (of type a)
 // and a list of core (non-recursive) bindings (where the substitution has already been applied)
-// fun infer-optionals(eff : keffect, inf-gamma: list<(name, name-info)>, params: list<value-binder<ktype, maybe<syntax/syntax/expr<ktype>>>>): _ (list<(name, assumption/name-info)>, list<(tname, core/core/expr)>, list<core/core/def>)
-//   match params 
-//     [] -> (inf-gamma, [], [])
-//     Cons(par, pars) -> 
-//       match par.expr
-//         Nothing -> infer-optionals(eff, inf-gamma ++ [(par.name, create-name-info-ex(Public, par.name, scope-depth, DefVal, allow-implicit-mask, par.range, par.tp, ""))], pars)
-//         Just(def-expr) -> // default value
-//           val full-range = par.range.combine(expr.range)
-//           val opt-tp = par.tp
-//           // infer parameter type from optional
-//           val tvar = fresh-star()
-//           with val cntxt = Infer(full-range)
-//           infer-unify(par.range, opt-tp, tvar.make-optional)
-//           val partp = tvar.subst
-//           // infer expression
-//           val (expr-tp, expr-eff, core-expr) = 
+fun infer-optionals(allow-implicit-mask: bool, eff : keffect, inf-gamma: list<(name, assumption/name-info)>, params: list<value-binder<ktype, maybe<syntax/syntax/expr<ktype>>>>): _ (list<(name, assumption/name-info)>, list<(tName, core/core/expr)>, list<core/core/def>)
+  match params 
+    [] -> (inf-gamma, [], [])
+    Cons(par: value-binder<ktype, maybe<syntax/syntax/expr<ktype>>>, pars) -> 
+      match par.expr
+        Nothing -> infer-optionals(allow-implicit-mask, eff, inf-gamma ++ [(par.name, create-name-infoEX(Public, par.name, infer-effect/scope-depth, DefVal, allow-implicit-mask, par.range, par.binderType, ""))], pars)
+        Just(def-expr) -> // default value 
+          val def-range = def-expr.range
+          val full-range = par.range.combine(def-range)
+          val opt-tp = par.binderType
+          // infer parameter type from optional
+          val tvar = fresh-star()
+          val _ = 
+            with val ctxt = Infer(full-range)
+            infer-unify(par.range, opt-tp, tvar.make-optional)
+          val partp = tvar.subst
+          // infer expression
+          val (expr-tp, expr-eff: ktype, core-expr) = 
+            extend-inf-gamma(inf-gamma) 
+              infer(Just((partp, par.range)), if partp.is-rho then Instantiated else Generalized(False), def-expr)
+          val _ = 
+            with val ctxt = checkOptional(full-range)
+            infer-unify(def-range, partp, expr-tp)
+          
+          // check optional expressions; avoid unifying with `eff` type if possible
+          match expr-eff.subst
+            TVar(_) -> 
+              with val ctxt = checkOptionalTotal(full-range)
+              infer-unify(def-range, eff, expr-eff)
+            _ -> if expr-eff.is-type-total then () else 
+              with val ctxt = Infer(full-range)
+              infer-unify(def-range, eff, expr-eff)
+          
+          val tp = partp.subst
+          val infgamma' = inf-gamma ++ [(par.name, create-name-infoEX(Public, par.name, infer-effect/scope-depth, DefVal, allow-implicit-mask, par.range, tp, ""))]
+
+          // build up core to get the optional value
+          val local = par.name.unique-name-from
+          val temp = par.name.unique-name-from
+          val di = find-data-info(nameTpOptional)
+          val (core-name-opt, core-tp-opt, core-repr-opt, con-info-opt) = resolve-con-name(nameOptional, Nothing, full-range)
+          val (core-name-opt-none, core-tp-opt-none, core-repr-opt-none, con-info-opt-none) = resolve-con-name(nameOptionalNone, Nothing, full-range)
+          val temp-name = TName(temp, tp)
+          val par-name = TName(par.name, opt-tp)
+          val core-par = Var(par-name, InfoNone) 
+          val core-res-tp = TApp(TCon(TypeCon(di.name, di.kind)), [tp])
+          val init = core/core/Case([core-par], 
+               [Branch([
+                  PatCon(TName(core-name-opt, core-tp-opt), [PatVar(temp-name, PatWild)], core-repr-opt, [tp], [], core-res-tp, con-info-opt, False
+                    )], [core/core/Guard(exprTrue, Var(temp-name, InfoNone))]),
+                Branch([
+                  PatCon(TName(core-name-opt-none, core-tp-opt-none), [], core-repr-opt-none, [], [], core-res-tp, con-info-opt-none, True // Skip test
+                    )], [core/core/Guard(exprTrue, core-expr)])
+              ])
+          val def = Def(local, partp, init, Private, DefVal, InlineNever, par.name-range, "")
+          val sub = [(TName(par.name, tp), Var(TName(local, partp), InfoNone))]
+          // infer the rest
+          val (infgamma2, sub2, defs2) = infer-optionals(allow-implicit-mask, eff, infgamma', pars)
+          (infgamma2, sub ++ sub2, Cons(def, sub |-> defs2))
+
 
 //////////////////////////////////////////
 // infer arguments
@@ -208,7 +300,7 @@ fun infer-argsN(rng: range, par-args: list<(ktype, arg-expr)>): _ (list<keffect>
     with allow-return 
     val eta-arg = eta-expand-var-arg(tp, arg-expr)
     throw("")
-    // infer-expr(Just((tp, arg-expr.range)), if tp.is-rho then Instantiated else Generalized(False), eta-arg)
+    infer(Just((tp, arg-expr.range)), if tp.is-rho then Instantiated else Generalized(False), eta-arg)
   fun infer-arg(acc, args)
     match args 
       [] -> acc.reverse

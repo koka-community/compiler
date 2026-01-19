@@ -300,7 +300,7 @@ pub fun create-name-info(name, scopeDepth, is-val, rng, tp, doc)
 pub fun create-name-infoX(vis, name, scopeDepth: int, sort, rng, tp, doc)
   create-name-infoEX(vis, name, scopeDepth, sort, False, rng, tp, doc)
 
-fun create-name-infoEX(vis, name, scopeDepth: int, sort, allowImplicitMask, rng, tp, doc)
+pub fun create-name-infoEX(vis, name, scopeDepth: int, sort, allowImplicitMask, rng, tp, doc)
   fun is-default(nm: name)
     match nm.split-local-qual-name
       Cons("default") -> True 
