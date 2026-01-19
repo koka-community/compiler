@@ -44,3 +44,71 @@ This file tracks inconsistencies and missing features identified while porting t
 ## `compiler/syntax/builders.kk`
 - [ ] **Record Operations**: `make-effect-decl` and `make-operation-decl` have `TODO` to use record operations.
 - [ ] **Resume Parameters**: `bind-expr-to-val` has `TODO` to add parameters to resume.
+
+## `compiler/syntax/promote.kk`
+- **Note**: `extend`, `makeEffectExtends`, and `extract` are missing compared to Haskell, but the file header notes this is intentional (unused/unexported).
+
+## `compiler/syntax/syntax.kk`
+- **Status**: Defines the AST. Matches `src/Syntax/Syntax.hs` very closely (1:1 structures).
+
+## `compiler/syntax/pretty.kk`
+- [ ] **Dot Notation**: Koka's `App` printing is generic `e(args)` where Haskell tries to reconstruct dot notation `arg0.fun(args)`.
+- [ ] **Guards**: Koka iterates all guards printing `->`, while Haskell checks `alwaysTrue` to skip the guard arrow/expr if the guard is just `True`.
+
+## `compiler/syntax/range-map.kk`
+- **Status**: Faithful port of `src/Syntax/RangeMap.hs`. API and helper functions match for supporting "IntelliSense" (finding blocks, previous lexemes, etc.).
+
+## `compiler/syntax/format.kk`
+- **Status**: Work-in-progress formatter. Not present in Haskell reference (likely new Koka-native tooling).
+- [ ] **Features**: Many TODOs for implementing `use-tabs`, `add-braces`, `remove-braces`, `add-semicolons`, etc.
+- [ ] **Strings**: TODO regarding "Strings have bad ranges".
+
+## `compiler/type/type.kk`
+- **Status**: Defines `ktype` (matching `Type.hs`). Includes utilities like `is-optional`, `make-optional`, etc. from `Infer.hs` in Haskell.
+
+## `compiler/type/typevar.kk`
+- **Status**: Matches `TypeVar.hs`. Defines `sub` substitution map and type variable utilities.
+
+## `compiler/type/kind.kk`
+- **Status**: Matches `src/Type/Kind.hs`. Contains effect checks (`label-is-linear`, `effect-is-affine`) and `get-operation-effect`.
+
+## `compiler/type/unify.kk`
+- [ ] **Status**: Ported. Needs verification of `match-arguments` logic against complex cases.
+
+## `compiler/type/infgamma.kk`
+- [ ] **Status**: Ported. Implements the inference monad and implicit constraint handling.
+
+## `compiler/type/infer-effect.kk`
+- [ ] **Status**: Ported. Handles effect inference and `isolate` logic.
+
+## `compiler/type/assumption.kk`
+- [ ] **Status**: Ported. Manages name assumptions and gamma.
+
+## `compiler/type/operations.kk`
+- [ ] **Status**: Ported. Implements instantiation, skolemization, and heap divergence checks.
+
+## `compiler/type/infer.kk`
+- [ ] **Incomplete Port**: The main expression inference function `infer-expr` is missing/commented out.
+    - **Note**: `infer-arg-expr` contains a `throw("")` placeholder.
+    - **Action**: High priority to implement the main type checking loop.
+
+## `compiler/type/pretty.kk`
+- [ ] **Status**: Ported. Implements `pp-type` and related type printing functions.
+
+## `compiler/core/core.kk`
+- **Status**: Ported. Defines Core language AST (`expr`, `def`, `core`) and traversals (`expr/cost`, `is-total`).
+
+## `compiler/core/corevar.kk`
+- **Status**: Ported. Handles variable substitutions (`|->`) and free variable analysis.
+
+## `compiler/core/monadic.kk`
+- **Status**: Ported. Implements monadic translation (`mon-expr`, `mon-branch`).
+
+## `compiler/core/monadic-lift.kk`
+- **Status**: Ported. Implements lambda-lifting (`lift-expr`, `make-def`).
+
+## `compiler/core/inlines.kk`
+- **Status**: Ported. Manages inline definition catalog and extraction.
+
+## `compiler/core/pretty.kk`
+- **Status**: Ported. Implements `pretty-core` and Core expression printing using `pp-env`.
