@@ -19,9 +19,9 @@ import compiler/type/type
 import compiler/type/typevar
 import compiler/type/assumption
 import compiler/type/infgamma
+import compiler/type/operations
 import compiler/type/unify
 import compiler/type/pretty
-import compiler/type/operations
 import compiler/syntax/syntax
 import compiler/syntax/range-map
 import compiler/core/core
@@ -1285,12 +1285,12 @@ pub div type implicit-constraint
     evidence: name, // fresh name for the evidence
     contxt: range,
     range: range,
-    canSolve: (tvs, implicit-constraint) -> bool,
-    solve: (tvs, implicit-constraint) -> (core/core/expr, ktype)
+    canSolve: (tvs, implicit-constraint) -> infer bool,
+    solve: (tvs, implicit-constraint) -> infer (core/core/expr, ktype)
   )
 
-alias can-resolve-constraint = (tvs, implicit-constraint) -> <> bool
-alias resolve-constraint = (tvs, implicit-constraint) -> <> (core/core/expr, ktype)
+alias can-resolve-constraint = (tvs, implicit-constraint) -> <pretty-eff, ctxt, infer-state, infer-eff, range-map-eff, local-depth, scope-depth, def-infer-effect, infer-env, synonyms-eff, newtypes-eff, unify, unique> bool
+alias resolve-constraint = (tvs, implicit-constraint) -> <pretty-eff, ctxt, infer-state, infer-eff, range-map-eff, local-depth, scope-depth, def-infer-effect, infer-env, synonyms-eff, newtypes-eff, unify, unique> (core/core/expr, ktype)
 alias check-constraint = (name, ktype) -> maybe<(can-resolve-constraint, resolve-constraint)>
 
 div type ic-params 
@@ -1305,10 +1305,56 @@ pub div effect def-infer-effect
   fun get-iconstraints(): list<implicit-constraint>
   fun get-iconstraints-gamma(): inf-gamma
   // add a new implicit constraint with a fresh name (to be solved at generalization time)
-  fun add-iconstraint(ic: ic-params, can-solve: (tvs, implicit-constraint) -> bool, resolve: (tvs, implicit-constraint) -> (core/core/expr, ktype)): (name, assumption/name-info, ktype)
+  fun add-iconstraint(ic: ic-params, 
+       can-solve: (tvs, implicit-constraint) -> <pretty-eff, ctxt, infer-state, infer-eff, range-map-eff, local-depth, scope-depth, def-infer-effect, infer-env, synonyms-eff, newtypes-eff, unify, unique> bool, 
+       resolve: (tvs, implicit-constraint) -> <pretty-eff, ctxt, infer-state, infer-eff, range-map-eff, local-depth, scope-depth, def-infer-effect, infer-env, synonyms-eff, newtypes-eff, unify, unique> (core/core/expr, ktype)): (name, assumption/name-info, ktype)
   fun solve-iconstraint(nm : name, tp : ktype): ()
 
-val implicit-constraints : list<(name, check-constraint)> = [] // TODO: fill this in
+fun implicit-constraint-type(ic: implicit-constraint): infer ktype
+  val ig = infer-env.inf-gamma
+  match ig.inf-gamma/lookup(ic.evidence) 
+    Right((_, nameInfo)) -> 
+      nameInfo.scheme.subst // unlike icType, this may have substituted skolems
+    _ -> fail("type/infer-monad/implicit-constraint-type: unknown constraint " ++ ic.evidence.show)
+
+fun check-heap-div-constraint(nm: name, tp: ktype): maybe<(can-resolve-constraint, resolve-constraint)>
+  match tp.expand-syn
+    TApp(TCon(tc), [_, _, _]) | tc.name == nameTypeHeapDiv ->
+      Just((can-resolve-heap-div-constraint, resolve-heap-div-constraint))
+    _ -> Nothing
+
+fun can-resolve-heap-div-constraint(free: tvs, ic: implicit-constraint): infer bool
+  val icTp = implicit-constraint-type(ic)
+  match icTp.expand-syn //  expand here again (should never fail!) so we get skolem substitutions
+    TApp(TCon(_), [tpHeap, tpVal, _tpEff]) ->
+      val never = heap-never-contained-in(free, tpHeap, tpVal)
+      val always = heap-always-contained-in(free, tpHeap, tpVal)
+      never || always
+    _ -> False
+
+fun resolve-heap-div-constraint(free: tvs, ic: implicit-constraint): infer (core/core/expr, ktype)
+  // val sic = ic.subst // TODO: This isn't used?
+  val tp = implicit-constraint-type(ic)
+  match tp.expand-syn // expand here again (should never fail!) so we get skolem substitutions
+    TApp(TCon(_), [tpHeap, tpVal, tpEff]) ->
+       val maydiv = if heap-never-contained-in(free, tpHeap, tpVal) then False // not (tvsIsEmpty (ftv stp)))) -- conservative guess...
+                    else
+                      // add div effect to tpEff
+                      val tv = fresh-effect() 
+                      val divEff = effect-extend(typeDivergent, tv)
+                      with val ctxt = Infer(ic.contxt)
+                      infer-unify(ic.range, tpEff, divEff)
+                      True
+       val nameToFind = if maydiv then nameEvHeapDiv else nameEvHeapNoDiv
+       val (cname, _, cinfo) = resolve-name-ex(is-infoCon, Nothing, if maydiv then nameEvHeapDiv else nameEvHeapNoDiv, CtxNone, ic.contxt, ic.range)
+       val seff = tpEff.subst
+       val stp = tp.subst
+       val ev = TypeApp(cinfo.core-expr(cname), [tpHeap, tpVal, seff])
+       (ev, stp)
+    _ -> fail("resolve-heap-div-constraint: invalid type")
+
+
+val implicit-constraints : list<(name, check-constraint)> = [(nameHeapDiv, check-heap-div-constraint)]
 
 fun check-implicit-constraint(name: name, tp: ktype, ctx-range: range, rng: range): _ maybe<typed-arg>
   match implicit-constraints.lookup(name)
@@ -1344,7 +1390,7 @@ fun scope-implicit-constraints(action: () -> _ a): _ a
 fun show(ic: implicit-constraint): string
   ic.name.show
 
-fun ic/substitute(sub: sub, ic: implicit-constraint): pure implicit-constraint
+fun ic/substitute(sub: sub, ic: implicit-constraint): _ implicit-constraint
   ic(typ = ktype/substitute(sub, ic.typ))
 fun ic/free-type-vars(ic: implicit-constraint): div tvs
   ic.typ.free-type-vars
@@ -1362,12 +1408,35 @@ fun pp-constraint(ic: implicit-constraint): _ doc
 fun pp-constraints(ics: list<implicit-constraint>): _ doc
   ics.map(pp-constraint).list
 
-fun resolve-implicit-constraints(free: tvs, ics : list<implicit-constraint>): _ (core/core/expr -> core/core/expr)
-  // TODO: 
-  id
+fun resolve-implicit-constraints(free: tvs, ics : list<implicit-constraint>): infer (core/core/expr -> core/core/expr)
+  if ics.is-nil then return id
+  val defs = ics.map(_.resolve-one(free))
+  fn(core) make-defs-let(defs, core)
+
+fun resolve-one(ic: implicit-constraint, free: tvs): infer core/core/def
+  val (ev, tp) = ic.solve.(free, ic)
+  solve-iconstraint(ic.evidence, tp)
+  make-tdef(TName(ic.evidence, tp), ev)
+
 fun try-resolve-implicit-constraints(close: bool, free: tvs): _ (core/core/expr -> core/core/expr)
-  // TODO: 
-  id
+  val ics = get-iconstraints()
+  fun try-resolve-loop(ics': list<implicit-constraint>, defs: list<core/core/def>): _ (core/core/expr -> core/core/expr)
+    match ics'
+      Nil -> 
+        if defs.is-nil then id 
+        else fn(core) make-defs-let(defs.reverse, core)
+      Cons(ic, ics-next) ->
+        val determined = ic.canSolve.(free, ic)
+        val freeTv = ic.fuv.list
+        val force = freeTv.is-nil || freeTv.any(fn(tv) !free.member(tv))
+        if determined || force || close then
+          val (ev, tp) = ic.solve.(free, ic)
+          solve-iconstraint(ic.evidence, tp)
+          val def = make-tdef(TName(ic.evidence, tp), ev)
+          try-resolve-loop(ics-next, Cons(def, defs))
+        else
+          try-resolve-loop(ics-next, defs)
+  try-resolve-loop(ics, [])
 
 fun improve(ctx-range: range, rng: range, close: bool, eff0: keffect, rho0: rho): _ (keffect, rho, core/core/expr -> core/core/expr)
   val seff = eff0.subst

@@ -32,7 +32,7 @@ pub type ktype
   // final `ktype` is the "real" type (expanded)
   TSyn(syn: type-syn, args: list<ktype>, t: ktype)
 
-pub fun ktype/show(tp: ktype): _ string
+pub fun ktype/show(tp: ktype): div string
   match tp
     TForAll(vars, t) -> "forall " ++ vars.show-list(show) ++ " => " ++ t.show
     TFun(args, eff, t) -> "(" ++ args.show-list(fn((name, tp1)) name.name/name/show ++ tp1.pretend-decreasing.show) ++ " -> " ++ eff.show ++ " " ++ t.show ++ ")"

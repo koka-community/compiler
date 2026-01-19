@@ -39,9 +39,9 @@ fun suite()
         n''.show(2)
 
   group("nice-eff effect handler")
-    test("niceEnv handler manages type variable names")
+    test("nice-env handler manages type variable names")
       expect("a")
-        niceEnv
+        nice-env
           val tv = TypeVar(0, kindStar, Meta)
           extend-nice(tv)
           get-nice(tv)

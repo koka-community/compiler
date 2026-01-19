@@ -158,30 +158,30 @@ fun niceList(schemes: list<ktype>, f: (ktype) -> _ doc): _ list<doc>
 // Pretty print a type
 fun ktp/ppretty(t: ktype): _ doc
   with handle-pretty-eff
-  with niceEnv
+  with nice-env
   t.pp-type
 
 fun ktp/pretty(t: ktype): _ doc
   with default-pp-env
   with default-doc-env
   with handle-pretty-eff
-  with niceEnv
+  with nice-env
   with color-scheme-default
   t.pp-type
 
 fun tv/pretty(tv: type-var): _ doc
   with handle-pretty-eff
-  with niceEnv
+  with nice-env
   tv.pp-typevar
 
 fun tcon/pretty(tc: type-con): _ doc
   with handle-pretty-eff
-  with niceEnv
+  with nice-env
   tc.pp-typecon
 
 fun tsyn/pretty(ts: type-syn): _ doc
   with handle-pretty-eff
-  with niceEnv
+  with nice-env
   ts.pp-typesyn
 
 fun pp-schema(tp: ktype)
@@ -222,9 +222,9 @@ fun pp-decl-type(tp: ktype, pinfos: list<param-info>)
       (Just(pparams), pprint/empty, if eff.is-type-total then pprint/empty else override-prec(precArrow, {eff.pp-type |.| space}) |.| override-prec(precArrow, {rho.pp-type}))
     _ -> (Nothing, pprint/empty, tp.pp-type)
 
-fun pretty(d: data-info): _ doc
+fun data-info/pretty(d: data-info): <documentation,pp-env,pure,comp-flags,colors> doc
   with handle-pretty-eff
-  with niceEnv
+  with nice-env
   pp-data-info(d, True)
 
 fun pp-data-info(d: data-info, showBody: bool)
@@ -292,9 +292,9 @@ fun pp-sub(sub: sub): _ doc
   sub.list.map(fn((tv, tp)) tv.pp-typevar |+| "|->".text |+| tp.pp-type).list
 
 // Synonym info
-fun syninfo/pretty(s: syn-info): _ doc
+fun syninfo/pretty(s: syn-info): <documentation,pp-env,pure,comp-flags,colors> doc
   with handle-pretty-eff
-  with niceEnv
+  with nice-env
   pp-syn-info(s)
 
 fun pp-syn-info(s: syn-info, isLocal: bool=False, publicOnly:bool=False, showBody:bool=True)

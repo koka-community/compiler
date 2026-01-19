@@ -126,7 +126,7 @@ struct core
   externals: externals = []
   doc: string = ""
 
-fun core/show(c: core): _ string
+fun core/show(c: core): div string
   "Core(" ++ c.coreName.name/name/show ++ "," ++ c.imports.show-list(show) ++ "," ++ c.fix-defs.show-list(show) ++ 
   "," ++ c.typedefs.show-list(fn(g) g.show-list(show)) ++ "," ++ c.defs.show-list(show) ++ "," ++ c.externals.show-list(show) ++ "," ++ c.doc.show ++ ")"
 
@@ -163,7 +163,7 @@ type external
     imports: list<(target,list<(string, string)>)>
     rng: range
 
-fun external/show(e: external): _ string
+fun external/show(e: external): div string
   match e
     External(name, typeScheme, params, format, visibility, fipT, rng, doc) -> 
       "External(" ++ name.name/name/show ++ "," ++ typeScheme.show ++ "," ++ params.show-list(show) ++ "," ++ 
@@ -438,7 +438,7 @@ type def-group
   DefRec(defs: list<def>)
   DefNonRec(d: def)
 
-fun dg/show(d: def-group): _ string
+fun dg/show(d: def-group): div string
   match d
     DefRec(defs) -> "DefRec(" ++ defs.show-list(show) ++ ")"
     DefNonRec(d') -> "DefNonRec(" ++ d'.show ++ ")"
@@ -454,7 +454,7 @@ struct def
   nameRange: range
   doc: string;
 
-fun def/show(d: def): _ string
+fun def/show(d: def): div string
   "Def(" ++ d.def-name.name/name/show ++ "," ++ d.ktype.show ++ "," ++ d.defExpr.show ++ "," ++ d.vis.show ++ "," ++
   d.sort.show ++ "," ++ d.kinline.show ++ "," ++ d.nameRange.show ++ "," ++ d.doc.show ++ ")"
 
@@ -472,7 +472,7 @@ type inline-def
 fun idef/(==)(inl1: inline-def, inl2: inline-def): bool
   name/(==)(inl1.def-name, inl2.def-name)
 
-fun idef/show(inl: inline-def): _ string
+fun idef/show(inl: inline-def): div string
   "InlineDef(" ++ inl.def-name.name/name/show ++ "," ++ inl.expr.show ++ "," ++ inl.is-rec.show ++ "," ++ inl.kind.show ++ "," ++ inl.cost.int/show ++ "," ++ inl.sort.show ++ "," ++ inl.paramSpecialize.show-list(show) ++ ")"
 
 fun def/is-val(d: def): bool
@@ -509,7 +509,7 @@ type expr
   // Case expressions
   Case(exprs: list<expr>, branches: list<branch>);
 
-fun expr/show(e0: expr): _ string
+fun expr/show(e0: expr): div string
   match e0
     Lam(names, eff, e) -> "Lam(" ++ names.show-list(show) ++ "," ++ eff.show ++ "," ++ e.show ++ ")"
     Var(n, info) -> "Var(" ++ n.show ++ "," ++ info.show ++ ")"
@@ -525,14 +525,14 @@ struct branch
   patterns: list<pattern> // length = length exprs in the match
   guards: list<guard>; // any number (>= 1) of guarded expressions
 
-fun branch/show(b: branch): _ string
+fun branch/show(b: branch): div string
   "Branch(" ++ b.patterns.show-list(show) ++ "," ++ b.guards.show-list(show) ++ ")"
 
 struct guard
   test: expr // boolean
   body: expr; // body of the branch
 
-fun guard/show(g: guard): _ string
+fun guard/show(g: guard): div string
   "Guard(" ++ g.test.show ++ "," ++ g.body.show ++ ")"
 
 type pattern
@@ -549,7 +549,7 @@ type pattern
   PatLit(lit: lit)
   PatWild
 
-fun pattern/show(p: pattern): _ string
+fun pattern/show(p: pattern): div string
   match p
     PatCon(name, pattern, repr, typeArgs, kexists, typeRes, info, skip) -> 
       "PatCon(" ++ name.show ++ "," ++ pattern.show-list(show) ++ "," ++ repr.show ++ "," ++ 

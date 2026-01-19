@@ -22,7 +22,7 @@ effect nice-eff<k>
   fun get-nice(tv: k): string 
   fun get-nice-doc(tv: k): doc 
 
-fun niceEnv(f)
+fun nice-env(f)
   var nice := LinearMap([])
   var effectIndex := 0
   var heapIndex := 0

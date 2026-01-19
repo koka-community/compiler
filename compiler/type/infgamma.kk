@@ -67,7 +67,7 @@ fun inf-gamma/lookup-ex(ig: inf-gamma, guard: (name-info) -> bool, name: name): 
           val matches = infos.filter(fn(info) guard(info) && match-qualifiers(name, info.cname))
           Left(matches.map(fn(info) (info.cname, info)))
 
-fun inf-gamma/map(ig: inf-gamma, f: (ktype) -> e ktype): _ inf-gamma
+fun inf-gamma/map(ig: inf-gamma, f: (ktype) -> _ ktype): _ inf-gamma
   ig.map(fn(a, infos) infos.list/map(fn(i : name-info) i.update-type(f(i.typ))))
 
 fun inf-gamma/union(ig1: inf-gamma, ig2: inf-gamma): _ inf-gamma
