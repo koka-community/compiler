@@ -36,6 +36,50 @@ import std/core/unsafe
 import compiler/lib/core
 import compiler/type/infer-effect
 
+fun checkFun(rng: range) 
+  Check("function type does not match the argument types", rng)
+fun checkMatch(rng: range) 
+  Check("branch has not the same type as previous branches", rng)
+fun checkAnn(rng: range) 
+  Check("type cannot be instantiated to match the annotation", rng)
+fun checkRec(rng: range) 
+  Check("recursive invocations do not match the assumed type; add a type annotation?", rng)
+fun checkGuardTotal(rng: range) 
+  Check("guard expressions must be total", rng)
+fun checkGuardBool(rng: range) 
+  Check("guard expressions must be of a boolean type", rng)
+fun checkConMatch(rng: range) 
+  Check("constructor must have the same the type as the matched term", rng)
+fun checkLitMatch(rng: range) 
+  Check("literal pattern does not match the type of the matched term", rng)
+fun checkConTotal(rng: range) 
+  Check("constructor in a pattern must have a total effect type", rng)
+fun checkLit(rng: range)      
+  Check("literal does not match the expected type", rng)
+fun checkOptional(rng: range) 
+  Check("default value does not match the parameter type", rng)
+fun checkOptionalTotal(rng: range) 
+  Check("default value expression must be total", rng)
+fun checkInject(rng: range) 
+  Check("inject expects a parameter-less function argument", rng)
+val checkEffect = Infer
+fun checkEffectSubsume(rng: range) 
+  Check("effect cannot be subsumed", rng)
+fun checkReturnResult(rng: range) 
+  Check("function returns values of different types", rng)
+fun checkReturn(rng: range)        
+  Check("return type does not match an earlier return type", rng)
+fun checkOp(rng: range)         
+  Check("operator type does not match the parameter types", rng)
+fun checkMakeHandler(rng: range) 
+  Check("handler types do not match the handler maker; please report this as a bug!", rng)
+fun checkMakeHandlerBranch(rng: range) 
+  Check("handle branch types do not match the handler branch maker; please report this as a bug!", rng)
+fun checkEffectTp(rng: range)   
+  Check("operator type does not match the effect type", rng)
+fun checkLocalScope(rng: range) 
+  Check("a reference to a local variable escapes it's scope", rng)
+
 fun expr/infer(mb, expect, expr)
   throw("Unimplemented")
 //////////////////////////////////////////
@@ -133,49 +177,96 @@ type pattern-kind
   PatternOutermost(is-lazy: bool)
   PatternNested
 
-fun checkFun(rng: range) 
-  Check("function type does not match the argument types", rng)
-fun checkMatch(rng: range) 
-  Check("branch has not the same type as previous branches", rng)
-fun checkAnn(rng: range) 
-  Check("type cannot be instantiated to match the annotation", rng)
-fun checkRec(rng: range) 
-  Check("recursive invocations do not match the assumed type; add a type annotation?", rng)
-fun checkGuardTotal(rng: range) 
-  Check("guard expressions must be total", rng)
-fun checkGuardBool(rng: range) 
-  Check("guard expressions must be of a boolean type", rng)
-fun checkConMatch(rng: range) 
-  Check("constructor must have the same the type as the matched term", rng)
-fun checkLitMatch(rng: range) 
-  Check("literal pattern does not match the type of the matched term", rng)
-fun checkConTotal(rng: range) 
-  Check("constructor in a pattern must have a total effect type", rng)
-fun checkLit(rng: range)      
-  Check("literal does not match the expected type", rng)
-fun checkOptional(rng: range) 
-  Check("default value does not match the parameter type", rng)
-fun checkOptionalTotal(rng: range) 
-  Check("default value expression must be total", rng)
-fun checkInject(rng: range) 
-  Check("inject expects a parameter-less function argument", rng)
-val checkEffect = Infer
-fun checkEffectSubsume(rng: range) 
-  Check("effect cannot be subsumed", rng)
-fun checkReturnResult(rng: range) 
-  Check("function returns values of different types", rng)
-fun checkReturn(rng: range)        
-  Check("return type does not match an earlier return type", rng)
-fun checkOp(rng: range)         
-  Check("operator type does not match the parameter types", rng)
-fun checkMakeHandler(rng: range) 
-  Check("handler types do not match the handler maker; please report this as a bug!", rng)
-fun checkMakeHandlerBranch(rng: range) 
-  Check("handle branch types do not match the handler branch maker; please report this as a bug!", rng)
-fun checkEffectTp(rng: range)   
-  Check("operator type does not match the effect type", rng)
-fun checkLocalScope(rng: range) 
-  Check("a reference to a local variable escapes it's scope", rng)
+fun infer-case(prop: maybe<(ktype, range)>, expect: expect, expr: syntax/syntax/expr<ktype>, 
+              branches: list<syntax/syntax/branch<ktype>>, is-lazy-match: bool, rng: range): _ (ktype, keffect, core/core/expr)
+  with maybe-instantiate-or-generalize(rng, branches.range, expect)
+  val (ctp, ceff, ccore0) = no-allow-return{disallow-hole{infer(Nothing, Instantiated, expr)}}
+  // infer branches
+  val matched-names = expr.extract-matched-names
+  val pat-kind = PatternOutermost(is-lazy-match)
+  val bress = 
+    with disallow-hole
+    with with-scope
+    match (prop, branches)
+      (Nothing, Cons(b, bs)) -> // propagate the type of the first branch
+        val (tpeffs, br) = infer-branch(pat-kind, prop, ctp, expr.range, matched-names, b)
+        val tp = 
+          match tpeffs
+            Cons((tp, _), _) -> tp
+            _ -> fail("type/infer/infer-case: branch without guard")
+        val bress = bs.map(infer-branch(pat-kind, Just((tp, b.range)), ctp, expr.range, matched-names, _))
+        Cons((tpeffs, br), bress)
+      _ -> branches.map(infer-branch(pat-kind, prop, ctp, expr.range, matched-names, _))
+  val (tpeffss, bcores) = bress.unzip
+  val (tps, effs) = unzip(tpeffss.concat)
+  // ensure branches match 
+  val rngs = branches.map(_.branchGuard.range)
+  val brngs = branches.map(range)
+  val res-tp =
+    fun recur(tpsx: list<(ktype, (range, range))>)
+      match tpsx
+        Cons((tp, _)) -> tp.subst
+        Cons((tp1, r), Cons((tp2, (ctx2, rng2)), tps')) -> 
+          val _ = 
+            with val ctxt = checkMatch(ctx2)
+            infer-unify(rng2, tp1, tp2)
+          recur(Cons((tp1,r), tps'))
+    recur(zip(tps, zip(brngs, rngs)))
+  val res-eff = fresh-effect()
+  val _ = 
+    with val ctxt = checkEffectSubsume(rng)
+    Cons(expr.range, rngs).zipwith(Cons(ceff,effs)) fn(r, eff) 
+      infer-unify(r, eff, res-eff)
+  // check scrutinee type
+  val stp = ctp.subst
+  if stp.type-is-case-legal then ()
+  else type-error(rng, expr.range, "can only match on literals or data types".text, stp, [])
+  // get data info and analyze branches
+  val data-info = stp.get-type-name.find-data-info
+  val def-name = current-def-name()
+  val sbcores = bcores.subst 
+  val newtypes = get-newtypes()
+  // TODO: Analysis match 
+  val (is-total, warnings, cbranches) = throw("Analysis match")
+  warnings.map(inf-warning(_, _))
+  val cbranches = 
+    if is-total then cbranches
+    else 
+      val modName = get-module-name()
+      val lit-pos = Lit(LitString(modName.show ++ rng.show), rng)
+      val lit-def = Lit(LitString(defName.show), rng)
+      val exn-branch = Branch(PatWild(rng), [Guard(guardTrue, App(Var(namePatternMatchError, False, rng), [(Nothing, litPos), (Nothing, litDef)], rng))])
+      val cexn-branch = infer-branch(pat-kind, Just((res-tp, rng)), ctp, expr.range, matched-names, exn-branch)
+      match cexn-branch 
+        (Cons((tp, eff)), cbranch) -> // already propagated
+          with val ctxt = checkEffectSubsume(rng)
+          infer-unify(rng, eff, res-eff)
+          cbranches ++ [cbranch]
+        _ -> fail("type/infer/infer-case: should never, happen, cexn-branch always contains a guard")
+  // add lazy force
+  // todo: warning if lazy match on regular datatype?
+  val ccore = 
+    if !is-lazy-match && data-info.di/is-lazy then 
+      val forceName = data-info.lazy-name("force")
+      val (force, force-tp, force-info) = resolve-fun-name(forceName, CtxFunArgs(False, 1, [], Nothing), rng, expr.range)
+      val cforce = force-info.core-expr(force)
+      match ccore0
+        App(Var(fname), [_]) | force == fname.name -> ccore0 // don't duplicate as force(force(expr)) -- this can happen in kind/infer where force is explicitly inserted sometimes
+        _ -> 
+          val (ftp, _, coref) = instantiate(force-tp, rng) 
+          match ftp.split-fun-type
+            Just((_, eff, rtp)) -> 
+              val _ = 
+                with val ctxt = Infer(rng)
+                infer-unify(expr.range, ctp, rtp)
+              val _ = 
+                with val ctxt = checkEffectSubsume(rng)
+                infer-unify(expr.range, eff, resEff)
+              App(coref(cforce), [ccore0])
+    else ccore0
+  val core = get-subst() |-> Case([ccore1], cbranches)
+  val sres-eff = res-eff.subst
+  (res-tp, sres-eff, core)  
 
 fun infer-branch(pat-kind, prop, match-type, match-range, matched-names, branch)
   match branch

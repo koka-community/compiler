@@ -982,7 +982,7 @@ pub struct inferEnv
   inf-gamma: inf-gamma
   gamma: gamma
 
-fun current-def-name()
+pub fun current-def-name()
   match infer-env.currentDefNames
     Cons(n, _) -> n
     Nil -> nil
