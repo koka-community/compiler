@@ -340,7 +340,7 @@ fun eta-expand(n: int, rng: range, fbody: (expr<t> -> expr<t>) -> expr<t>): expr
   val body = fbody(fn(f') App(f', argsFixed, rng))
   Lam(nameFixed.map(ValueBinder(_, Nothing, Nothing, rng, rng)), body, False, rng)
 
-fun is-annotated-binder(vb: value-binder<maybe<t>,e>): bool
+fun is-annotated(vb: value-binder<maybe<t>,e>): bool
   vb.binderType.is-just
 
 type handler-override
@@ -379,12 +379,18 @@ struct branch<t>
   branchPattern: pattern<t>
   branchGuard: list<guard<t>>
 
+fun branch/range(b: branch<t>) 
+  range/combine(b.branchPattern.range, b.branchGuard.range)
+
 fun branch/show(b: branch<t>, ?show: (t) -> _ string): _ string
   b.branchPattern.show ++ " " ++ b.branchGuard.list/show
   
 struct guard<t>
   guardTest: expr<t>
   guardExpr: expr<t>
+
+fun guard/range(g: guard<t>)
+  range/combine(g.guardTest.range, g.guardExpr.range)
 
 fun guard/show(g: guard<t>, ?show: (t) -> _ string): _ string
   g.guardTest.show ++ " " ++ g.guardExpr.show

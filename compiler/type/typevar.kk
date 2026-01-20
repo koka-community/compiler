@@ -204,6 +204,9 @@ pub fun assoclist/substitute(s: sub, al: list<(k, a)>, ?substitute: (sub, a) -> 
   al.map(fn((k, v)) (k, substitute(s, v)))
 pub fun list/substitute(s: sub, ps: list<a>, ?substitute: (sub, a) -> _ a): _ list<a>
   ps.map(substitute(s, _))
+pub fun tuple/free-type-vars(tup: (a, b), ?a/free-type-vars: a -> _ tvs, ?b/free-type-vars: b -> _ tvs): _ tvs
+  val (a, b) = tup
+  a.free-type-vars.union(b.free-type-vars)
 
 // Type utilities for ktype
 pub fun ktype/free-type-vars(tp: ktype): _ tvs

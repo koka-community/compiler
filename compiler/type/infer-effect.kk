@@ -1048,6 +1048,8 @@ pub fun return-allowed(allowed: bool, action: () -> _ a): _ a
   action()
 pub fun allow-return(action: () -> _ a): _ a
   return-allowed(True, action)
+pub fun no-allow-return(action: () -> _ a): _ a
+  return-allowed(False, action)
 pub fun with-scope(action: () -> _ a): _ a
   with override val scope-depth = infer-effect/scope-depth + 1
   action()
@@ -1556,7 +1558,7 @@ fun extend-inf-gamma-core(top-level: bool, defs: list<core/core/def-group>, act:
 pub fun extend-inf-gamma(tnames: list<(name, assumption/name-info)>, act: () -> _ a): _ a
   extend-inf-gamma-ex(False, [], tnames, act)
 
-fun extend-inf-gamma-ex(top-level: bool, ignores: list<name>, tnames: list<(name, assumption/name-info)>, act: () -> _ a): _ a
+pub fun extend-inf-gamma-ex(top-level: bool, ignores: list<name>, tnames: list<(name, assumption/name-info)>, act: () -> _ a): _ a
   val e = infer-env
   fun extend(ctxt: name, gamma: gamma, seen: list<(name, assumption/name-info)>, to-add: list<(name, assumption/name-info)>, inf-gamma: inf-gamma): _ inf-gamma
     match to-add

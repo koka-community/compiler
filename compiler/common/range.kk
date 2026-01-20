@@ -164,6 +164,9 @@ pub fun source(r: range): source
 pub fun combine(r1: range, r2: range): range
   Range(min(r1.start, r2.start), max(r1.end, r2.end), r1.hidden || r2.hidden)
 
+pub fun list/range(l: list<a>, ?range: a -> range): range
+  range-list/combine(l.map(range))
+
 pub fun range-list/combine(rs: list<range>): range
   rs.foldl(range/null, combine)
 

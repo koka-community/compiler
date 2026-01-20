@@ -177,11 +177,136 @@ fun checkEffectTp(rng: range)
 fun checkLocalScope(rng: range) 
   Check("a reference to a local variable escapes it's scope", rng)
 
-fun infer-binders(inf-gamma, binders)
+fun infer-branch(pat-kind, prop, match-type, match-range, matched-names, branch)
+  match branch
+    syntax/syntax/Branch(pattern, guards) -> 
+      infer-pattern(pat-kind, match-type, branch.range, pattern, fn(pcore, gcores: list<core/core/guard>) {
+          if pattern.range != range/null then  
+            // check for unused pattern bindings 
+            val defined = pcore.pat/bound-vars
+            val free = gcores.free-vars.list.map(get-name).linear-set
+            match defined.filter(fn(tn) !free.member(tn.get-name)).list
+              [] -> ()
+              names -> 
+                inf-warning(pattern.range, "pattern variables ".text |+| tupled(names.map(_.get-name.pp-name)) |+| "are unused (or a wrongly spelled constructor?)".text |-| 
+                  " hint: prepend an underscore to make it a wildcard pattern".text)
+          core/core/Branch([pcore], gcores)
+        }, 
+        fn(inf-gamma) {
+            extend-inf-gamma-ex(False, matched-names, inf-gamma, {guards.map(infer-guard(prop, branch.range, _)).unzip})
+        })
+
+fun infer-guard(prop: maybe<(ktype,range)>, branch-range: range, Guard(test, expr): syntax/syntax/guard<ktype>)
+  val (gtp, geff, gcore) = 
+    with no-allow-return 
+    infer(Just((typeBool, test.range)), Instantiated, test)
+  val _ = 
+    with val ctxt = checkGuardTotal(branch-range)
+    infer-unify(test.range, typeTotal, geff)
+  val _ = 
+    with val ctxt = checkGuardBool(branch-range)
+    infer-unify(test.range, typeBool, gtp)
+  // check branch expression
+  val (btp, beff, bcore) = infer(prop, Instantiated, expr)
+  ((btp, beff), get-subst() |-> core/core/Guard(gcore, bcore))
+
+fun infer-pattern-nested(pat-kind: pattern-kind, match-type: ktype, branch-range: range, pattern: syntax/syntax/pattern<ktype>): _ (core/core/pattern, list<(name, assumption/name-info)>)
+  val (_, res) = infer-pattern(pat-kind, match-type, branch-range, pattern, fn(pcore, inf-gamma) (pcore, inf-gamma)) fn(inf-gamma)
+    val smatch-type = match-type.subst
+    ([(smatch-type, typeTotal)], inf-gamma)
+  res
+
+fun use-skolemized-con(con-info: con-info, gcon-tp: ktype, range, name-range: range, cont)
+  if con-info.existentials.is-empty then 
+    val (conRho, _, _) = gcon-tp.infer-effect/instantiate(name-range)
+    val (res, _) = cont(conRho, [])
+    res
+  else 
+    val con-res-tp = fresh-star()
+    val con-exists-tp = TForAll(con-info.existentials, if con-info.params.is-empty then con-res-tp else TFun(con-info.params, typeTotal, con-res-tp))
+    with-skolemized(range, con-exists-tp, Nothing) fn(conXRho0, xvars)
+      val conXRho = operations/instantiate(TForAll(con-info.foralls, conXRho0), name-range)
+      val (iconRho, _, _) = gcon-tp.infer-effect/instantiate(name-range)
+      val _ =
+        with val ctxt = checkOp(range)
+        infer-unify(name-range, conXRho, iconRho)
+      cont(iconRho.subst, xvars)
+
+fun infer-pattern(pat-kind: pattern-kind, match-type: ktype, branch-range: range, 
+    pat: syntax/syntax/pattern<ktype>, 
+    with-pattern: (core/core/pattern, a) -> _ b, 
+    infer-part: (list<(name,assumption/name-info)> -> _ (list<(ktype, keffect)>, a)), 
+    ?(|->): (sub, a) -> _ a): _ (list<(ktype, keffect)>, b)
+  match pat 
+    PatCon(name, patterns0, name-range, range) -> 
+      val (qname, gcon-tp, repr, con-info) = resolve-con-pattern-name(name, match-type, patterns0.length, range)
+      add-range-info(name-range, RIId(qname, NiCon(gcon-tp, con-info.doc), [], False))
+      use-skolemized-con(con-info, gcon-tp, branch-range, range) fn(con-rho, xvars)
+        val (con-par-tps, con-eff-tp, con-res-tp) = con-rho.split-con-tp
+        val _ =
+          with val ctxt = checkConTotal(range)
+          infer-unify(name-range, con-eff-tp, typeTotal)
+        val _ = 
+          with val ctxt = checkConMatch(range)
+          infer-unify(name-range, con-res-tp, match-type)
+        // check valid lazy constructors
+        val data-info = find-data-info(con-res-tp.get-type-name)
+        if data-info.di/is-lazy then 
+          match pat-kind
+            PatternOutermost(is-lazy-match) -> 
+              if con-info.coninfo/is-lazy && !is-lazy-match then 
+                inf-error(name-range, qname.pp-name |.| ": lazy constructors are not allowed in a (non lazy) match".text)
+            PatternNested -> 
+              inf-error(name-range, qname.pp-name |.| ": constructors of a lazy type cannot be matched in a nested pattern (but must always be matched as an outermost pattern)".text)
+        val patterns = match-patterns(range, name-range, con-rho, con-par-tps, patterns0)
+        val (cpatterns, inf-gammas) = con-par-tps.map(snd).zipwith(patterns, fn(par-tp, p) infer-pattern-nested(PatternNested, par-tp.subst, branch-range, p)).unzip
+        val inf-gamma = inf-gammas.concat
+        val (btpeffs: list<(ktype, keffect)>, core-guards0) = infer-part(inf-gamma) // infer-guards
+        val (pcore, core-guards) = 
+          if xvars.is-empty then (PatCon(TName(qname, con-rho), cpatterns, repr, con-par-tps.map(snd), [], con-res-tp, con-info, False), core-guards0)
+          else 
+            val (bind-exists, sub-exists: sub) = fresh-sub(Bound, xvars)
+            val pcore = PatCon(TName(qname, con-rho), sub-exists |-> cpatterns, repr, sub-exists |-> con-par-tps.map(snd), bind-exists, con-res-tp, con-info, False)
+            (pcore, sub-exists |-> core-guards0)
+        ((btpeffs, with-pattern(pcore, core-guards)), btpeffs.free-type-vars)
+    PatVar(binder) -> 
+      add-range-info(binder.name-range, RIId(binder.name, NIValue("val", match-type, "", binder.is-annotated), [], True))
+      match binder.binderType
+        Just(tp) -> 
+          with val ctxt = checkAnn(binder.range)
+          infer-unify(binder.name-range, match-type, tp)
+        Nothing -> ()
+      val (cpat, infgamma0) = infer-pattern-nested(pat-kind, match-type, branch-range, binder.expr)
+      val infgamma = [(binder.name, create-name-infoX(Public, binder.name, infer-effect/scope-depth, DefVal, binder.name-range, match-type, ""))] ++ infgamma0
+      val (btpeffs, x) = infer-part(infgamma)
+      (btpeffs, with-pattern(PatVar(TName(binder.name, match-type), cpat), x))
+    PatWild() ->
+      val (btpeffs, x) = infer-part([])
+      (btpeffs, with-pattern(PatWild, x))
+    PatAnn(pat, tp, rng) -> 
+      infer-pattern(pat-kind, tp, rng, pat, with-pattern) fn(infgamma)
+        val _ = 
+          with val ctxt = checkAnn(rng)
+          infer-unify(pat.pattern/range, match-type, tp) // TODO: improve error message
+        infer-part(infgamma)
+    PatParens(pat) -> infer-pattern(pat-kind, match-type, branch-range, pat, with-pattern, infer-part)
+    PatLit(lit) -> 
+      val (pat, tp) = match lit 
+        LitInt(i, _) -> (PatLit(LitInt(i)), typeInt)
+        LitChar(c, _) -> (PatLit(LitChar(c)), typeChar)
+        LitFloat(f, _) -> (PatLit(LitFloat(f)), typeFloat)
+        LitString(s, _) -> (PatLit(LitString(s)), typeString)
+      val _  = 
+        with val ctxt = checkLitMatch(lit.range)
+        infer-unify(branch-range, tp, match-type)
+      val (btpeffs,x) = infer-part([])
+      (btpeffs, with-pattern(pat, x))
+
+fun infer-binders(inf-gamma, binders: list<value-binder<_, _>>)
   match binders
     [] -> inf-gamma
     Cons(par, pars) -> 
-      val info = (par.name, create-name-infoX(Public, par.name, infer-effect/scope-depth, DefVal, par.range, par.binderType, "")
+      val info = (par.name, create-name-infoX(Public, par.name, infer-effect/scope-depth, DefVal, par.range, par.binderType, ""))
       infer-binders(inf-gamma ++ [info], pars)
 
 // infer implicit parameter declaration:

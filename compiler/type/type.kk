@@ -264,7 +264,7 @@ pub fun split-type-scheme(tp: ktype): (list<type-var>, rho)
     TForAll(vars, t) -> (vars, t)
     _ -> if tp.must-split then tp.pretend-decreasing.split-type-scheme else ([], tp)
 
-fun split-con-tp(tp: ktype): (list<(name, ktype)>, keffect, ktype)
+pub fun split-con-tp(tp: ktype): (list<(name, ktype)>, keffect, ktype)
   match tp.expand-syn
     TFun(args, eff, res) -> (args, eff, res)
     res -> ([], typeTotal, res)
