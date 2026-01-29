@@ -153,7 +153,7 @@ fun make-def(e: expr, fvs: list<tName>, tvs: list<type-var>)
   val (tpars, pars, eff, body) = match e
     TypeLam(tpars, Lam(pars, eff, lbody)) -> (tpars, pars.map(unwild), eff, lbody)
     Lam(pars, eff, lbody) -> ([], pars.map(unwild), eff, lbody)
-    _ -> fail("core/monadic-lift make-def lifting non function? " ++ e.show)
+    _ -> failure/fail("core/monadic-lift make-def lifting non function? " ++ e.show)
   val alltpars = tvs ++ tpars
   val allpars = fvs ++ pars
   val allargs = allpars.map(Var(_, InfoNone))

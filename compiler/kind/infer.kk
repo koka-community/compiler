@@ -250,7 +250,7 @@ fun syn-lazy-tag()
   val defName = lazy-name("tag")
   val lazyTag = 
     match di.constrs.find(_.name.is-lazy-indirect-con-name)
-      Nothing -> fail("kind/infer/syn-lazy-tag: no indirection constructor found: " ++ di.name.show)
+      Nothing -> failure/fail("kind/infer/syn-lazy-tag: no indirection constructor found: " ++ di.name.show)
       Just(ind) -> ind.tag
   val expr = App(Var(nameInternalInt32, False, rng), [(Nothing, Literal(syntax/syntax/LitInt(lazyTag, rng)))], rng)
   DefNonRec(Def(ValueBinder(defName, (), expr, rng, rng), rng, di.vis, DefVal, InlineAlways, "// Automatically generated tag value of lazy indirection"))
@@ -404,7 +404,7 @@ fun syn-lazy-eval-locked(les : list<lazyExpr>): _ list<compiler/syntax/syntax/de
   fun branch-expr(ci: con-info, par-names: list<name>)
     match les.lookup(ci.name)
       Just(lazyExpr) -> lazy-con-def-call(di, ci, par-names, rec, arg, lazyExpr) 
-      Nothing -> fail("kind/infer/syn-lazy-eval-locked/branch-expr: cannot find expression for lazy constructor " ++ ci.name.show)
+      Nothing -> failure/fail("kind/infer/syn-lazy-eval-locked/branch-expr: cannot find expression for lazy constructor " ++ ci.name.show)
   fun branch(ci: con-info)
     if ci.name.is-lazy-indirect-con-name then 
       val [(par, _)] = ci.params
@@ -671,7 +671,7 @@ fun lazy-update(expr, arg)
 fun lazy-fip(di: data-info)
   match di.def
     DataDefLazy(fip) -> fip
-    _ -> fail("kind/infer/lazy-fip: not a lazy data type? " ++ di.name.show)
+    _ -> failure/fail("kind/infer/lazy-fip: not a lazy data type? " ++ di.name.show)
 
 // Types for constructors
 fun constructor-gamma(dis: list<data-info>, is-value: (data-info) -> bool): _ gamma
@@ -1338,7 +1338,7 @@ fun resolve-con-param(idmap: name-map<type-var>, (vis, ValueBinder(name, tp, mbE
   val tp' = resolve-type(idmap, False, tp)
   val expr = match mbExpr
     Nothing -> Nothing
-    Just -> Just(fail("kind/kinfer/resolve-con-param: optional parameter expression in constructor"))
+    Just -> Just(failure/fail("kind/kinfer/resolve-con-param: optional parameter expression in constructor"))
   // add-range-info(nameRng, RIId(name, NIValue("val", tp', "", True), [], True))
   (vis, ValueBinder(name, tp', expr, nameRng, rng))
 
@@ -1367,7 +1367,7 @@ fun resolve-type(idmap: name-map<type-var>, partialSyn: bool, user-type: kuser-t
       val tp' = resolve-type(idmap.set(tname.name, tvar), False, tp)
       tp'
     TpQuan(QExists) ->
-      fail("kind/kinfer resolve-type: existentials are not supported yet")
+      failure/fail("kind/kinfer resolve-type: existentials are not supported yet")
     TpFun(args, eff, tp) ->
       val args' = args.map(resolve-param)
       val eff' = resolve-type(idmap, False, eff)
@@ -1426,7 +1426,7 @@ fun resolve-app(idmap: name-map<type-var>, partialSyn: bool, (tp, args): (kuser-
           // is only inside synonyms arguments so we are ok
         Nothing ->
           TApp(TCon(TypeCon(nm, k)), args.map(resolve-type(idmap, False, _)))
-    _ -> fail("kind/kinfer resolve-app: this case should never occur after kind checking")
+    _ -> failure/fail("kind/kinfer resolve-app: this case should never occur after kind checking")
 
 fun make-effect-append(fixed, ext)
   TpApp(TpCon(nameEffectAppend, null), [fixed, ext], null)

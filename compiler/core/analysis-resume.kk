@@ -13,7 +13,7 @@ fun analyze(defNm: name, opNm: name, isRaw: bool, e: expr)
     TypeLam(_, body) -> analyze(defNm, opNm, isRaw, body)
     TypeApp(body) -> analyze(defNm, opNm, isRaw, body)
     App(_, [body]) -> analyze(defNm, opNm, isRaw, body)
-    _ -> fail("core/analysis-resume, invalid branch expression")
+    _ -> failure/fail("core/analysis-resume, invalid branch expression")
 
 fun tail-expr(e: expr)
   e.expr'(ResumeTail)

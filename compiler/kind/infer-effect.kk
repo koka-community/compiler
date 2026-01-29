@@ -211,7 +211,7 @@ fun qualify-def(nm: name)
 fun find-kind(nm: name)
   match kgamma-lookup(current-modname(), nm)
     Found((qname, (kind, doc))) -> (qname, kind, doc)
-    _ -> fail("kind/infer find-kind: unknown type constructor: " ++ nm.show)
+    _ -> failure/fail("kind/infer find-kind: unknown type constructor: " ++ nm.show)
 
 fun lookup-datainfo(nm: name)
   match inf-kind-env.newtypesExtended.lookup-any(nm)

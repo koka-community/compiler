@@ -27,7 +27,7 @@ fun with-constructors(cnstrs0: constructors, f: () -> _ a): _ a
     fun constrs-find(name: name)
       match cnstrs.lookup(name)
         Just(con-info) -> con-info
-        _ -> fail("conInfo lookup failed")
+        _ -> failure/fail("conInfo lookup failed")
     fun constrs-list()
       cnstrs.list
     fun constrs-find-scheme(name: name)

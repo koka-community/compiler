@@ -22,7 +22,7 @@ fun gen-local-groups(dgs: def-groups): _ list<doc>
 
 fun gen-local-group(dg: def-group): _ doc
   match dg
-    DefRec -> fail("backend/c/from-core gen-local-group: local recursive function definitions are not allowed")
+    DefRec -> failure/fail("backend/c/from-core gen-local-group: local recursive function definitions are not allowed")
     DefNonRec(d) -> gen-local-def(d)
 
 fun gen-local-def(d: def): _ doc
@@ -72,7 +72,7 @@ fun gen-fun-sig(ex: expr, inlineC: bool, vis: visibility, nm: name)
     TypeApp(e) -> e.gen-fun-sig(inlineC, vis, nm)
     TypeLam(_, e) -> e.gen-fun-sig(inlineC, vis, nm)
     Lam(params, _, body) -> body.gen-lam-sig(inlineC, vis, nm, params)
-    _ -> fail("backend/c/from-core gen-fun-sig: expected lambda expression")
+    _ -> failure/fail("backend/c/from-core gen-fun-sig: expected lambda expression")
 
 fun gen-lam-sig(body: expr, inlineC: bool, vis: visibility, nm: name, params: list<tName>)
   val inl = if inlineC then "static inline ".text else empty
@@ -110,7 +110,7 @@ fun gen-topdef-decl(d: def, genSig: bool, inlineC: bool)
           // some optimization turned a toplevel lambda into a value;
           // wrap it back into a lmabda again as all occurences will have InfoArity and call it directly (so it cannot be a function_t)
           match d.ktype.split-funScheme
-            Nothing -> fail("backend/c/from-core gen-topdef-decl: expected function type, got: " ++ d.ktype.show ++ " for def " ++ d.def-name.show)
+            Nothing -> failure/fail("backend/c/from-core gen-topdef-decl: expected function type, got: " ++ d.ktype.show ++ " for def " ++ d.def-name.show)
             Just((_, _, argTps, _, _)) ->
               val names = list(1, argTps.length).map(fn(x) ("x" ++ x.show).newVarName)
               val tnames = zip(names, argTps).map(fn((nm, (_, tp))) TName(nm, tp))
@@ -155,7 +155,7 @@ fun gen-lambda(body: expr, params: list<tName>, eff: ktype)
   val structDoc = "struct".text |+| fnTpDoc
   val freeVars = Lam(params, eff, body).freeLocals.list.map(fn(TName(nm, tp)) (nm, tp))
   fun emit-error(d: doc)
-    fail("backend/c/gen-lambda: " ++ d.show)
+    failure/fail("backend/c/gen-lambda: " ++ d.show)
   val nameDoc = (cdef-name.show ++ ".<lambda>").text
   fun get-datainfo(nm)
     newtypesLookupAny(nm)
@@ -456,7 +456,7 @@ fun gen-next-patterns(select: (doc, doc) -> doc, exprDoc: doc, tp: ktype, patts:
             [pat] | args.length == 0 || args.length > 1 -> [(exprDoc, pat)]
             _ ->
               if args.length != patts.length then
-                fail("c/from-core gen-next-patterns: args != patterns " ++ args.length.show ++ "," ++ patts.length.show ++ " " ++ args.show-list(_.fst.show) ++ "," ++ patts.show-list(show) ++ ":\n expr: " ++ exprDoc.show ++ "\n type: " ++  tp.show)
+                failure/fail("c/from-core gen-next-patterns: args != patterns " ++ args.length.show ++ "," ++ patts.length.show ++ " " ++ args.show-list(_.fst.show) ++ "," ++ patts.show-list(show) ++ ":\n expr: " ++ exprDoc.show ++ "\n type: " ++  tp.show)
               fun genNextPattern((nm, pat))
                 match pat
                   PatWild -> []
@@ -466,7 +466,7 @@ fun gen-next-patterns(select: (doc, doc) -> doc, exprDoc: doc, tp: ktype, patts:
           match patts
             [PatWild] -> []
             [pat] -> [(exprDoc, pat)]
-            _ -> fail("c/from-core gen-next-patterns: patterns but not a function")
+            _ -> failure/fail("c/from-core gen-next-patterns: patterns but not a function")
 
 // Expressions that produce statements on their way
 
@@ -504,8 +504,8 @@ fun gen-expression-prim(ex: expr)
           val names = tpars.length.newVarNames
           val tnames = names.zip(tpars).map(fn((name, (_, tp))) TName(name, tp))
           gen-expression(Lam(tnames, teff, App(ex, tnames.map(Var(_, InfoNone)))))
-        _ -> fail("backend/c/from-core gen-expression: invalid partially applied external:\n" ++ ex.show)
-    _ -> fail("backend/c/from-core gen-expression: invalid expression:\n" ++ ex.show)
+        _ -> failure/fail("backend/c/from-core gen-expression: invalid partially applied external:\n" ++ ex.show)
+    _ -> failure/fail("backend/c/from-core gen-expression: invalid expression:\n" ++ ex.show)
 
 fun gen-constr-eta-expand(cexpr: expr)
   match cexpr.typeOf.split-funScheme
@@ -513,7 +513,7 @@ fun gen-constr-eta-expand(cexpr: expr)
       val names = tpars.length.newVarNames
       val tnames = names.zip(tpars).map(fn((name, (_, tp))) TName(name, tp))
       gen-expression(Lam(tnames, teff, App(cexpr, tnames.map(Var(_, InfoNone)))))
-    _ -> fail("backend/c/from-core gen-expression: invalid partially applied constructor:\n" ++ cexpr.show)
+    _ -> failure/fail("backend/c/from-core gen-expression: invalid partially applied constructor:\n" ++ cexpr.show)
 
 fun gen-expressions(l: list<expr>)
   val xs = l.map(gen-expression)
@@ -571,7 +571,7 @@ fun gen-pure(ex: expr)
       else nm.get-name.conCreateNameX |.| arguments([])
     ELit(l) -> l.ppLit
     Lam(params, eff, body) -> body.gen-lambda(params, eff)
-    _ -> fail("backend/c/from-core gen-pure: invalid expression:\n" ++ ex.show)
+    _ -> failure/fail("backend/c/from-core gen-pure: invalid expression:\n" ++ ex.show)
 
 // Generates an effect-free expression
 // NOTE: Throws an error if expression is not guaranteed to be effectfree
@@ -581,7 +581,7 @@ fun gen-inline(ex: expr)
   else
     val (decls, doc) = ex.gen-expression-prim()
     if decls.is-cons then
-      fail("backend/c/from-core gen-inline: not an inlineable expression? " ++ ex.show)
+      failure/fail("backend/c/from-core gen-inline: not an inlineable expression? " ++ ex.show)
     doc
 
 // Applications
@@ -609,14 +609,14 @@ fun gen-app-normal(f: expr, args: list<expr>)
       val setTag = tmp |.| "->_base._block.header.tag = (kk_tag_t)".text |.| parens(tag.show.text) |.| semi
       val fieldNames = match typeAssign.split-funScheme
         Just((_, _, args', _, _)) -> tail(tail(args'.map(fst)))
-        _ -> fail("backend/c/from-core: illegal conAssignFields type: " ++ typeAssign.pretty.show)
+        _ -> failure/fail("backend/c/from-core: illegal conAssignFields type: " ++ typeAssign.pretty.show)
       val (decls, tmpDecl, assigns, result) = gen-assign-fields(tmp, conName, conRepr, reuseName, fieldNames, fieldValues)
       (decls ++ [tmpDecl, setTag] ++ assigns, result)
     (Var(TName(conFieldAssign, typeAssign)), Cons(Var(reuseName, InfoConField(conName, conRepr, _)), fieldValues)) | conFieldAssign == nameConFieldsAssign ->
       val tmp = "con".genVarName
       val fieldNames = match typeAssign.split-funScheme
         Just((_, _, args', _, _)) -> tail(args'.map(fst))
-        _ -> fail("backend/c/from-core: illegal conAssignFields type: " ++ typeAssign.pretty.show)
+        _ -> failure/fail("backend/c/from-core: illegal conAssignFields type: " ++ typeAssign.pretty.show)
       val (decls, tmpDecl, assigns, result) = gen-assign-fields(tmp, conName, conRepr, reuseName, fieldNames, fieldValues)
       (decls ++ [tmpDecl] ++ assigns, result)
   
@@ -658,7 +658,7 @@ fun gen-app-normal(f: expr, args: list<expr>)
               (decls, conCreateNameX(tname.get-name) |.| arguments(at ++ pp-ctx-path(crepr, tname, argDocs.is-nil) ++ argDocs))
             // call to known function
             Var(tname) | tname.get-name == nameAllocAt ->
-              fail("backend/c/gen-app Var allocat" ++ f.show ++ " " ++ args.show-list(show))
+              failure/fail("backend/c/gen-app Var allocat" ++ f.show ++ " " ++ args.show-list(show))
             Var(tname, InfoArity) | tname.get-name.isQualified ->
               (decls, tname.get-name.cpp-name |.| arguments(argDocs))
             // call unknown function_t
@@ -672,7 +672,7 @@ fun gen-app-normal(f: expr, args: list<expr>)
                 Just((_, _, argTps, _, resTp)) ->
                   (resTp.cpp-type, tupled(["kk_function_t".text] ++ argTps.map(snd).map(cpp-type) ++ ["kk_context_t*".text]))
                 _ ->
-                  fail("backend/c/gen-app-normal: expecting function type: " ++ f.typeOf.pretty.show)
+                  failure/fail("backend/c/gen-app-normal: expecting function type: " ++ f.typeOf.pretty.show)
               (fdecls ++ decls, "kk_function_call".text |.| arguments([cresTp, cargTps, fdoc, arguments(Cons(fdoc, argDocs))]))
 
 fun pp-ctx-path(crepr: conRepr, cname: tName, noArgs: bool)
@@ -747,7 +747,7 @@ fun extract-extern(ex: expr)
 fun gen-inline-external(tname: tName, formats: list<(target, string)>, args: list<doc>)
   val (decls, doc) = gen-expression-external(tname, formats, args)
   if decls.is-nil then doc
-  else fail("backend/c/from-core gen-inline-external: TODO: inline external declarations: " ++ show(vcat(decls ++ [doc])))
+  else failure/fail("backend/c/from-core gen-inline-external: TODO: inline external declarations: " ++ show(vcat(decls ++ [doc])))
 
 // generate external: needs to add try blocks for primitives that can throw exceptions
 
@@ -760,51 +760,51 @@ fun gen-expression-external(tname: tName, formats: list<(target, string)>, args:
         val isBox = nm == nameBox
         val tp = match tname.typeOf
           TFun([(_, fromTp)], _, toTp) -> if isBox then fromTp else toTp
-          _ -> fail("backend/c/from-core gen-expression-external: box/unbox: expected function type")
+          _ -> failure/fail("backend/c/from-core gen-expression-external: box/unbox: expected function type")
         ([], if isBox then gen-box-call(tp, argDoc) else gen-unbox-call-owned(tp, argDoc))
       // special case dup/drop
       | nm == nameDup || nm == nameDrop ->
         val isDup = nm == nameDup
         val tp = match tname.typeOf
           TFun([(_, fromTp)], _, _) -> fromTp
-          _ -> fail("backend/c/from-core gen-expression-external: dup/drop: expected function type")
+          _ -> failure/fail("backend/c/from-core gen-expression-external: dup/drop: expected function type")
         ([], hcat(gen-dup-drop-call(isDup, tp, argDoc)))
       // special case is-unique
       | nm == nameIsUnique ->
         val tp = match tname.typeOf
           TFun([(_, fromTp)], _, _) -> fromTp
-          _ -> fail("backend/c/from-core gen-expression-external: isUnique: expected function type")
+          _ -> failure/fail("backend/c/from-core gen-expression-external: isUnique: expected function type")
         ([], hcat(gen-unique-call(tp, argDoc)))
       // special case free
       | nm == nameFree ->
         val tp = match tname.typeOf
           TFun([(_, fromTp)], _, _) -> fromTp
-          _ -> fail("backend/c/from-core gen-expression-external: free: expected function type")
+          _ -> failure/fail("backend/c/from-core gen-expression-external: free: expected function type")
         ([], hcat(gen-free-call(tp, argDoc)))
       // special case decref
       | nm == nameDecRef ->
         val tp = match tname.typeOf
           TFun([(_, fromTp)], _, _) -> fromTp
-          _ -> fail("backend/c/from-core gen-expression-external: decRef: expected function type")
+          _ -> failure/fail("backend/c/from-core gen-expression-external: decRef: expected function type")
         ([], hcat(gen-decref-call(tp, argDoc)))
       // special case reuse
       | nm == nameReuse ->
         val tp = match tname.typeOf
           TFun([(_, fromTp)], _, _) -> fromTp
-          _ -> fail("backend/c/from-core gen-expression-external: reuse: expected function type")
+          _ -> failure/fail("backend/c/from-core gen-expression-external: reuse: expected function type")
         ([], hcat(gen-reuse-call(tp, argDoc)))
     [argDoc1, argDoc2]
       // special case dropn
       | nm == nameDrop ->
         val tp = match tname.typeOf
           TFun([(_, fromTp)], _, _) -> fromTp
-          _ -> fail("backend/c/from-core gen-expression-external: drop: expected function type")
+          _ -> failure/fail("backend/c/from-core gen-expression-external: drop: expected function type")
         ([], hcat(gen-dropn-call(tp, [argDoc1, argDoc2])))
       // special case drop_reuse
       | nm == nameDropReuse ->
         val tp = match tname.typeOf
           TFun([(_, fromTp)], _, _) -> fromTp
-          _ -> fail("backend/c/from-core gen-expression-external: dropReuse: expected function type")
+          _ -> failure/fail("backend/c/from-core gen-expression-external: dropReuse: expected function type")
         ([], hcat(gen-drop-reuse-call(tp, [argDoc1, argDoc2])))
     Nil
       // special case cfield hold
@@ -816,13 +816,13 @@ fun gen-expression-external(tname: tName, formats: list<(target, string)>, args:
     match k
       Nil -> empty
       Cons('\\', Cons('#', xs)) -> char('#') |.| pp-externalf(name, xs)
-      Cons('#', Cons('#', _)) -> fail("backend/c/from-core: type arguments in C external in " ++ tname.show)
+      Cons('#', Cons('#', _)) -> failure/fail("backend/c/from-core: type arguments in C external in " ++ tname.show)
       Cons('#', Cons(y, xs)) ->
         if y >= '1' && y <= '9' then
           val n = args.length
           val i = (y - '1').int
           if i >= args.length then
-            fail("Illegal index in external: " ++ tname.show ++ ":" ++ tname.typeOf.pretty.show ++ "(" ++ k.string ++ "): index: " ++ i.show ++ ", arguments: " ++ args.show-list(show))
+            failure/fail("Illegal index in external: " ++ tname.show ++ ":" ++ tname.typeOf.pretty.show ++ "(" ++ k.string ++ "): index: " ++ i.show ++ ", arguments: " ++ args.show-list(show))
           args[i].unjust |.| pp-externalf(name, xs)
         else y.char |.| pp-externalf(name, xs)
       Cons(x, xs) -> char(x) |.| pp-externalf(name, xs)

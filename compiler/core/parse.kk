@@ -562,7 +562,7 @@ fun pTBinders()
     env-extend(name, kind)
     match env-type(name, kind)
       TVar(tv) -> tv
-      _ -> fail("core/parse pTBinders: expecting type variable")
+      _ -> failure/fail("core/parse pTBinders: expecting type variable")
 
 fun pTBinder()
   parse-choices("quantifier", [
@@ -642,7 +642,7 @@ fun extract(params, msg)
       if params.all(_.fst == nil) then
         TApp(type-tuple(params.length), params.map(snd))
       else
-        fail(msg)
+        failure/fail(msg)
 
 fun parse-type-atom-params(allowBorrow: bool)
   parse-type-atoms-paramsx(True, allowBorrow)
@@ -687,7 +687,7 @@ fun parse-synonym(tp, tps): _ ktype
             TSyn(TypeSyn(name, kind', rank', Just(info)), tps, body)
           _ -> TSyn(TypeSyn(name, kind, rank, Nothing), tps, body)
       TSyn(_, _) | tps.is-empty -> tp
-      _ -> fail("illegal type alias expression " ++ tp.show)
+      _ -> failure/fail("illegal type alias expression " ++ tp.show)
   match res
     Just(t) -> t
     Nothing -> env-type-app(tp, tps)
@@ -815,11 +815,11 @@ fun with-env-initial(modName: name, srcPath: path, imports0, f: () -> _ a): _ a
     fun env-lookup-local(n)
       match locals.lookup(n)
         Just(tp) -> tp
-        Nothing -> fail("core/parse unbound local: " ++ n.show)
+        Nothing -> failure/fail("core/parse unbound local: " ++ n.show)
     fun env-lookup-parse-con(n)
       match gamma.lookup-exact-con(n)
         [c as InfoCon] -> c
-        res -> fail("unknown constructor " ++ n.show ++ ": " ++ res.show-list(show))
+        res -> failure/fail("unknown constructor " ++ n.show ++ ": " ++ res.show-list(show))
     fun env-lookup-var(n)
       match gamma.lookup-canonical(n)
         [fnct as InfoFun] -> fnct.core-expr(n)
@@ -829,5 +829,5 @@ fun with-env-initial(modName: name, srcPath: path, imports0, f: () -> _ a): _ a
           val a = TypeVar(0, kindStar, Bound)
           val fType = TForAll([a], TFun([(nil, TVar(a)), (nil, typeString), (nil, typeString)], typeTotal, TApp(typeFieldAddr, [TVar(a)])))
           Var(TName(nameFieldAddrOf, fType), compiler/core/core/InfoExternal([]))
-        res -> fail("unknown identifier: " ++ n.show-plain ++ ": " ++ res.show-list(show)) 
+        res -> failure/fail("unknown identifier: " ++ n.show-plain ++ ": " ++ res.show-list(show)) 
   f()

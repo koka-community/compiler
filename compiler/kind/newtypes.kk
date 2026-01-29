@@ -39,7 +39,7 @@ fun newtypes/lookup-public(newtps: newtypes, name: name)
 fun newtypes/find(newtps: newtypes, name: name)
   match newtps.lookup(name)
     Just(di) -> di
-    _ -> fail("newTypes lookup failed")
+    _ -> failure/fail("newTypes lookup failed")
 fun newtypes/compose(ntps1: newtypes, ntps2: newtypes)
   unions([ntps2, ntps1])
 

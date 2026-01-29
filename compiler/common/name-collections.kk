@@ -93,5 +93,5 @@ fun qname-map/unions(ms: list<qname-map<a>>): _ qname-map<a>
 
 fun qname-map/safe-combine(s: string, xs: list<(name,a)>, ys: list<(name,a)>): _ list<(name,a)>
   if xs.any(fn(x) ys.any(fn(y) y.fst == x.fst)) then
-    fail("common/name-collections " ++ s ++ ": overlapping names: " ++ xs.map(fn((x, _)) x).list/show ++ ys.map(fn((y,_)) y).list/show)
+    failure/fail("common/name-collections " ++ s ++ ": overlapping names: " ++ xs.map(fn((x, _)) x).list/show ++ ys.map(fn((y,_)) y).list/show)
   xs ++ ys

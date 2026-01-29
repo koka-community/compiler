@@ -200,8 +200,8 @@ fun terms/resolve(exprs: expr-stack, os: op-stack, tms: list<term>): _ user-expr
       else
         ops.check-ambiguous(t)
         if assoc == AssocRight then push(xs, ops, tt, t) else apply(xs, ops, ts)
-    ([], [], []) -> fail("static/fixity-resolve resolveTerms: no term: fix parser")
-    _ -> fail("static/fixity-resolve resolveTerms: fixity resolver error")
+    ([], [], []) -> failure/fail("static/fixity-resolve resolveTerms: no term: fix parser")
+    _ -> failure/fail("static/fixity-resolve resolveTerms: fixity resolver error")
 
 fun precedence-op(Op(_, fix): op)
   fix.precedence
@@ -251,7 +251,7 @@ fun apply(xs: list<expr<user-type>>, ops: list<op>, ts: list<term>)
     Cons(Op(op, FixInfix(_, _)), rst) ->
       val ys = apply-infix-op(op, xs)
       resolve(ys, rst, ts)
-    _ -> fail("static/fixity-resolve apply: fixity resolver error")
+    _ -> failure/fail("static/fixity-resolve apply: fixity resolver error")
 
 fun apply-unary-op(op: expr<t>, ts: list<expr<t>>): _ list<expr<t>>
   match ts

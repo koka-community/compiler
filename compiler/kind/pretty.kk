@@ -59,6 +59,6 @@ fun pp-kind(k: kind, prec: prec)
         Cons(k', ks) -> 
           k'.pp-kind(precApp - 1) |.| 
           ks.comma-parens(_.pp-kind(precTop))
-        _ -> fail("kind/pretty pp-kind.KApp: match failure")
+        _ -> failure/fail("kind/pretty pp-kind.KApp: match failure")
       x.pparens(prec, precApp)
   nm.color(colors.colorKind)

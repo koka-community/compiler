@@ -47,7 +47,7 @@ fun kgamma/extend(kg: kGamma, name: name, k: kind, doc: string)
 fun kgamma/find(kg: kGamma, ctxt: name, name: name)
   match kg.lookup(ctxt, name)
     Found((qn, TypeNameInfo(k, doc))) -> (qn, k, doc)
-    _ -> fail("kind lookup failed")
+    _ -> failure/fail("kind lookup failed")
 fun kgamma/filter(kg: kGamma, modName: name)
   kg.filter-names(_ == modName)
 

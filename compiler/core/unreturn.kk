@@ -32,7 +32,7 @@ fun topdef/unreturn(d: def): _ def
   match kexpr
     U(e) -> make-def(e)
     I(e) -> make-def(e)
-    _ -> fail("core/unreturn urTopDef: should not happen: return inside top level definition")
+    _ -> failure/fail("core/unreturn urTopDef: should not happen: return inside top level definition")
 
 effect ur
   val current-eff: maybe<keffect>
@@ -79,7 +79,7 @@ fun to-expr(k: kexpr)
   match k
     U(org) -> org
     I(e') -> e'
-    _ -> fail("core/unreturn unreturn-pure: should not happen: return inside pure expression")
+    _ -> failure/fail("core/unreturn unreturn-pure: should not happen: return inside pure expression")
 
 alias alter<x> = (x -> ur-eff def-group)
 alias maybechanged = either<(alter<list<expr>>, list<kexpr>), (alter<expr>, kexpr)>

@@ -136,7 +136,7 @@ pub fun remove-local-effect(ftp: ktype)
     Just((foralls, args, eff, resTp)) -> 
       val (ls, tl) = eff.extract-ordered-effect
       quantify-type(foralls, TFun(args, ls.filter(_.label-name != nameTpLocal).foldr(tl, effect-extend), resTp))
-    _ -> fail("type/infer/remove-local-effect: unexpected type: " ++ ftp.show)
+    _ -> failure/fail("type/infer/remove-local-effect: unexpected type: " ++ ftp.show)
 
 
 //////////////////////////////////////////
@@ -193,7 +193,7 @@ fun infer-case(prop: maybe<(ktype, range)>, expect: expect, expr: syntax/syntax/
         val tp = 
           match tpeffs
             Cons((tp, _), _) -> tp
-            _ -> fail("type/infer/infer-case: branch without guard")
+            _ -> failure/fail("type/infer/infer-case: branch without guard")
         val bress = bs.map(infer-branch(pat-kind, Just((tp, b.range)), ctp, expr.range, matched-names, _))
         Cons((tpeffs, br), bress)
       _ -> branches.map(infer-branch(pat-kind, prop, ctp, expr.range, matched-names, _))
@@ -242,7 +242,7 @@ fun infer-case(prop: maybe<(ktype, range)>, expect: expect, expr: syntax/syntax/
           with val ctxt = checkEffectSubsume(rng)
           infer-unify(rng, eff, res-eff)
           cbranches ++ [cbranch]
-        _ -> fail("type/infer/infer-case: should never, happen, cexn-branch always contains a guard")
+        _ -> failure/fail("type/infer/infer-case: should never, happen, cexn-branch always contains a guard")
   // add lazy force
   // todo: warning if lazy match on regular datatype?
   val ccore = 

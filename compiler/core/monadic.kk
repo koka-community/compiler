@@ -86,7 +86,7 @@ fun mon-expr'(expr: expr, topLevel: bool): monadic-eff trans<expr>
         val (_, rho) = ftp.split-type-scheme
         match rho.split-fun-type
           Just((_, feff, _)) -> feff
-          _ -> fail("core/monadic app: illegal application")
+          _ -> failure/fail("core/monadic app: illegal application")
       if (f.is-never-mon || !(ftp.is-mon-type || f.is-always-mon)) then
         fn(k) f'(fn(ff) applies(args', fn(argss) k(App(ff, argss))))
       else

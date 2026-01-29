@@ -39,7 +39,7 @@ fun gen-unbox-call(tp: ktype, arg: doc, argBorrow: doc)
 fun data-struct-as-maybe-split(l: list<conInfo>)
   match l
     Cons(ci1, Cons(ci2, Nil)) -> if ci1.params.is-nil then (ci1, ci2) else (ci2, ci1)
-    _ -> fail("backend/c/from-core data-struct-as-maybe-split: expected two constructors for a maybe like type, got: " ++ l.show-list(show))
+    _ -> failure/fail("backend/c/from-core data-struct-as-maybe-split: expected two constructors for a maybe like type, got: " ++ l.show-list(show))
 
 fun gen-box(nm: name, info: dataInfo, drepr: dataRepr)
   val initDoc = "static inline kk_box_t".text |.| nm.cpp-name |.| "_box".text |.| parameters([nm.cpp-name |+| "_x".text])
@@ -111,7 +111,7 @@ fun gen-dup-dropX(isDup: bool, nm: name, info: dataInfo, drepr: dataRepr, conInf
 fun gen-dup-drop-iso(isDup: bool, (_, _, tnames, _): (conInfo, conRepr, list<(name, ktype)>, int))
   match tnames
     [(name, tp)] -> gen-dup-drop-call(isDup, tp, "_x.".text |.| name.cpp-name).map(_ |.| semi).hcat
-    _ -> fail("backend/c/gen-dup-drop-iso: invalid arguments")
+    _ -> failure/fail("backend/c/gen-dup-drop-iso: invalid arguments")
 
 // coninfos are sorted with singletons first
 fun gen-dup-drop-maybe(isDup: bool, l: list<(conInfo, conRepr, list<(name, ktype)>, int)>)

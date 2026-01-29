@@ -248,7 +248,7 @@ fun read-qualified-name(s0: string): _ name
         Nil ->
           val (qual, id) = rid.split-qual-id-rev
           (qual, "", id)
-        _ -> fail("Name split-id-name-rev: illegal locally qualified name: " ++ rs.reverse.string)
+        _ -> failure/fail("Name split-id-name-rev: illegal locally qualified name: " ++ rs.reverse.string)
     fun split-name(s: string): _ (string, string, string)
       match s.list.reverse
         Cons(')', rest) ->
@@ -257,7 +257,7 @@ fun read-qualified-name(s0: string): _ name
             Cons('(', rs2) ->
               val (qual, lqual, id) = rs2.split-id-name-rev
               (qual, lqual, id ++ rop.reverse.string)
-            _ -> fail("Name split-name: unmatched parenthesis in name: " ++ s)
+            _ -> failure/fail("Name split-name: unmatched parenthesis in name: " ++ s)
         rs -> rs.split-id-name-rev
     val (q, lq, id) = s0.split-name
     new-locally-qualified(q,lq,id)
@@ -337,7 +337,7 @@ fun qualify-locally(nl: name, n: name): exn name
   match nl
     Name(l, _, _, 0, _, 0) ->
       new-locally-qualified(n.nameModule, join(l, n.nameLocalQual), n.nameStem)
-    _ -> fail("common/name/qualify-locally: illegal qualification: " ++ nl.show-explicit ++ ", " ++ n.show-explicit)
+    _ -> failure/fail("common/name/qualify-locally: illegal qualification: " ++ nl.show-explicit ++ ", " ++ n.show-explicit)
 
 // Move the module qualifier to the local qualifier
 fun requalify-locally(n: name): name
@@ -440,7 +440,7 @@ fun type-qualified-name-of(typeName : name, stem: name): exn name
 fun type-qualified-get-type-name(nm : name)
   match nm.split-local-qual-name.reverse
     Cons(m, ms) -> nm.nameModule.new-locally-qualified(ms.reverse.joins,m)
-    [] -> fail("common/name type-qualified-get-type-name: no locally qualified type: " ++ nm.show)
+    [] -> failure/fail("common/name type-qualified-get-type-name: no locally qualified type: " ++ nm.show)
 
 // Hidden names
 fun make-hidden(n: name): name
@@ -453,7 +453,7 @@ fun unmake-hidden(n: name, pre: string): exn name
   n.name-map-stem fn(stem)
     if stem.starts-with("@" ++ pre ++ "-").bool then
       stem.slice.drop(2 + pre.count).string
-    else fail("common/name/unmake-hidden: expecting hidden name prefixed with @" 
+    else failure/fail("common/name/unmake-hidden: expecting hidden name prefixed with @" 
               ++ pre ++ "-, but found: " ++ n.show)
 
 fun new-hidden-name-ex(base: string, s: string): name

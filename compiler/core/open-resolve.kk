@@ -63,7 +63,7 @@ fun resolve-open(eopen: expr, effFrom: ktype, effTo: ktype, tpFrom: ktype, tpTo:
         // exact match just use expr
         expr
       elif !effFrom.isEffectFixed then
-        fail("core/open-resolve resolve-open: todo: masking handled effect " ++ effFrom.pretty.show)
+        failure/fail("core/open-resolve resolve-open: todo: masking handled effect " ++ effFrom.pretty.show)
       elif tlFrom.match-type(tlTo) && lsFrom.length == lsTo.length && lsFrom.zip(lsTo).all(fn((t1, t2)) t1 == t2) then
         // same handled effects, just use expr
         expr
@@ -72,7 +72,7 @@ fun resolve-open(eopen: expr, effFrom: ktype, effTo: ktype, tpFrom: ktype, tpTo:
         fun resolve(nm: name)
           match get-gamma().gamma-lookup(nm)
             [(qname, info)] -> info.core-expr(qname)
-            _ -> fail("core/open-resolve resolve-open: unknown name: " ++ nm.show)
+            _ -> failure/fail("core/open-resolve resolve-open: unknown name: " ++ nm.show)
         val params = list(1, targs.length).zip(targs).map(fn((i, t)) TName(new-hidden-name("x" ++ i.show), t.snd))
         val exprName = TName(new-hidden-name("x0"), tpFrom)
         val exprVar = Var(exprName, InfoNone)
@@ -111,7 +111,7 @@ fun resolve-open(eopen: expr, effFrom: ktype, effTo: ktype, tpFrom: ktype, tpTo:
               wrapper(resolve(n.name-open), [indices])
             else
               wrapper-thunk(resolve(0.name-open), [indices])
-    _ -> fail("core/open-resolve resolve-open: open applied to a non-function? " ++ effTo.pretty.show)
+    _ -> failure/fail("core/open-resolve resolve-open: open applied to a non-function? " ++ effTo.pretty.show)
 
 // is a function expression handler free?: meaning if invoked it will never need evidence (invoke an operation) or change the eveidence (use a handler)
 fun is-handler-free(ex: expr)

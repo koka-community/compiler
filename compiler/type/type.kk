@@ -588,7 +588,7 @@ pub fun kind-of(tau: ktype)
     match (args, k)
       (Nil, k') -> k'
       (Cons(_, rst), KApp(KApp, k2)) -> kind-apply(rst, k2)
-      (args, k) -> fail("type/type/kind-of: illegal kind in application? " ++ k.show ++ " to " ++ args.show ++ "\n  " ++ tau.show)
+      (args, k) -> failure/fail("type/type/kind-of: illegal kind in application? " ++ k.show ++ " to " ++ args.show ++ "\n  " ++ tau.show)
   match tau
     TForAll(_, tp) -> tp.kind-of
     TFun -> kindStar
@@ -694,7 +694,7 @@ pub fun get-type-name(tp: ktype, ?kk-file-line: string): _ name
   match tp.expand-syn
     TApp(TCon(tc)) -> tc.name 
     TCon(tc) -> tc.name
-    _ -> fail("compiler/compiler/type/get-type-name " ++ tp.show ++ " : " ++ ?kk-file-line)
+    _ -> failure/fail("compiler/compiler/type/get-type-name " ++ tp.show ++ " : " ++ ?kk-file-line)
 pub fun type-is-case-legal(tp: ktype): bool
   match tp.expand-syn
     TApp(TCon()) -> True
@@ -706,7 +706,7 @@ pub fun effect-name-from-label(eff: keffect): _ name
     TCon(tc) -> tc.name
     TSyn(syn) -> syn.name
     TApp(TCon(tc)) -> tc.name
-    _ -> fail("compiler/type/type/effect-name-from-label: invalid effect: " ++ eff.show) 
+    _ -> failure/fail("compiler/type/type/effect-name-from-label: invalid effect: " ++ eff.show) 
 
 
 // Remove type synonym indirections

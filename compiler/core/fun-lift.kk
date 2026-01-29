@@ -55,7 +55,7 @@ fun subst-with-lifted-expr(d: def, subst)
   val body = match d.defExpr
     TypeLam(tpars, Lam(pars, eff, lbody)) -> TypeLam(tpars, Lam(pars, eff, corevar/expr/(|->)(subst, lbody)))
     Lam(pars, eff, lbody) -> Lam(pars, eff, subst |-> lbody)
-    e -> fail("core/fun-lift lift-defgroup: expected lambda, got " ++ e.show)
+    e -> failure/fail("core/fun-lift lift-defgroup: expected lambda, got " ++ e.show)
   // Note here we only want to skip the substitution for fvs and tvs,
   // but we have skipped more than necessary, i.e.,
   // the part of those tpars and pars that are not in fvs and tvs.
@@ -134,7 +134,7 @@ fun make-def(fvs: list<tName>, tvs: list<type-var>, pinfos: list<param-info>, or
   val (tpars, pars, eff, body) = match expr
     TypeLam(tpars, Lam(pars, eff, lbody)) -> (tpars, pars.map(unwild), eff, lbody)
     Lam(pars, eff, lbody) -> ([], pars.map(unwild), eff, lbody)
-    _ -> fail("core/fun-lift make-def: expected lambda, got " ++ expr.show)
+    _ -> failure/fail("core/fun-lift make-def: expected lambda, got " ++ expr.show)
   val alltpars = tvs ++ tpars
   val allpars = fvs ++ pars
   val allargs = allpars.map(Var(_, InfoNone))

@@ -669,7 +669,7 @@ pub fun to-implicit-arg-expr(iarg: implicit-arg, xrange: range): _ syntax/syntax
           val binders = name-fixed.map fn(nm)
             ValueBinder(nm, Nothing, Nothing, range, range)
           Lam(binders, body, False, range)
-      _ -> fail("compiler/type/infer-effect: to-implicit-arg-expr: illegal type for implicit? " ++ range.show ++ ", " ++ iarg.name.show)
+      _ -> failure/fail("compiler/type/infer-effect: to-implicit-arg-expr: illegal type for implicit? " ++ range.show ++ ", " ++ iarg.name.show)
 
 pub fun pp-typed-arg(targ: typed-arg): _ doc
   val (nm, _, tp) = targ
@@ -1005,7 +1005,7 @@ fun lookup-inf-name(nm: name)
   match infer-env.inf-gamma.inf-gamma/lookup(nm.unqualify) 
     Right((qname, info)) -> Just((qname, info.scheme))
     Left([]) -> Nothing
-    Left(infos) -> fail("infer-effect/lookup-inf-name: ambiguous local? " ++ current-def-name().show ++ ": " ++ nm.show ++ ":\n" ++ infos.show)
+    Left(infos) -> failure/fail("infer-effect/lookup-inf-name: ambiguous local? " ++ current-def-name().show ++ ": " ++ nm.show ++ ":\n" ++ infos.show)
 // TODO: Remove, not needed anymore
 fun create-canonical-name(nm-ctx: name, gamma: gamma, qname: name)
   qname
@@ -1072,7 +1072,7 @@ pub fun infer-eff(action)
   with override
     fun inf-error(rng: range, msg: doc)
       add-range-info(rng, RIError(msg))
-      fail(msg.show ++ " at " ++ rng.show)
+      failure/fail(msg.show ++ " at " ++ rng.show)
     fun inf-warning(rng: range, msg: doc)
       add-range-info(rng, RIWarning(msg))
       ()
@@ -1105,7 +1105,7 @@ fun nofail-unify(action: () -> _ a, ?kk-file-line: string): _ a
       v
     (Left(err), sub) -> 
       add-sub(sub)
-      fail("should never fail!: " ++ err.show ++ " " ++ kk-file-line)
+      failure/fail("should never fail!: " ++ err.show ++ " " ++ kk-file-line)
 
 fun do-unify(action)
   match run-unify(action)
@@ -1317,7 +1317,7 @@ fun implicit-constraint-type(ic: implicit-constraint): infer ktype
   match ig.inf-gamma/lookup(ic.evidence) 
     Right((_, nameInfo)) -> 
       nameInfo.scheme.subst // unlike icType, this may have substituted skolems
-    _ -> fail("type/infer-monad/implicit-constraint-type: unknown constraint " ++ ic.evidence.show)
+    _ -> failure/fail("type/infer-monad/implicit-constraint-type: unknown constraint " ++ ic.evidence.show)
 
 fun check-heap-div-constraint(nm: name, tp: ktype): maybe<(can-resolve-constraint, resolve-constraint)>
   match tp.expand-syn
@@ -1353,7 +1353,7 @@ fun resolve-heap-div-constraint(free: tvs, ic: implicit-constraint): infer (core
        val stp = tp.subst
        val ev = TypeApp(cinfo.core-expr(cname), [tpHeap, tpVal, seff])
        (ev, stp)
-    _ -> fail("resolve-heap-div-constraint: invalid type")
+    _ -> failure/fail("resolve-heap-div-constraint: invalid type")
 
 
 val implicit-constraints : list<(name, check-constraint)> = [(nameHeapDiv, check-heap-div-constraint)]

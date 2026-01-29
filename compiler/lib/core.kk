@@ -1,3 +1,4 @@
+import std/core/undiv
 
 fun nub-by(xs: list<a>, f: (a, a) -> e bool): e list<a>
   match xs
@@ -25,3 +26,8 @@ fun unzip-either(xs: list<either<a, b>>): (list<a>, list<b>)
       Cons(Left(a), a1) -> loop(a1, las ++ ctx Cons(a, hole), lbs)
       Cons(Right(b), b1) -> loop(b1, las, lbs ++ ctx Cons(b, hole))
   loop(xs, ctx hole, ctx hole)
+
+fun zip3(l1: list<a>, l2: list<b>, l3: list<c>): list<(a,b,c)>
+  match (l1, l2, l3)
+    (Cons(x1, xs1), Cons(x2, xs2), Cons(x3, xs3)) -> Cons((x1, x2, x3), zip3(xs1.pretend-decreasing, xs2, xs3))
+    _ -> Nil

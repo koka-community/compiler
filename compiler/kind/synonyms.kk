@@ -44,7 +44,7 @@ fun extend(synonyms: synonyms, k: syn-info)
 fun find(synonyms: synonyms, name: name)
   match synonyms.lookup(name)
     Just(di) -> di
-    _ -> fail("synonyms lookup failed")
+    _ -> failure/fail("synonyms lookup failed")
 fun diff(synonyms: synonyms, syns1: synonyms, syns2: synonyms)
   syns2.filter(fn(k, v) syns1.lookup(k).is-nothing)
 fun synonyms/filter(synonyms: synonyms, modName: name)

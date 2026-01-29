@@ -12,6 +12,7 @@ import compiler/kind/kind
 import compiler/common/failure
 import compiler/platform/config
 import compiler/common/color-scheme
+import compiler/lib/core
 import std/core/undiv
 
 // Box / unbox transformation
@@ -108,7 +109,7 @@ fun box-pattern(fromTp: ktype, p: pattern)
               val def = make-tdef(TName(tname.get-name, toTp), coerce)
               (PatVar(TName(uname, fromTp), PatWild), [def])
             _ ->
-              fail("backend/c/from-core box-pattern: nested match on a function?")
+              failure/fail("backend/c/from-core box-pattern: nested match on a function?")
         else // regular box / unbox
           val i = new-unique()
           val uname = new-hidden-name("box-x" ++ i.show)
@@ -162,8 +163,8 @@ fun bcoerceX(fromTp: ktype, toTp: ktype, ex: expr)
           Just((_, toParTps, toEffTp, toResTp)) ->
             match fromTp.split-fun-scheme
               Just((_, fromParTps, fromEffTp, fromResTp)) -> Just(box-bind-expr-as-value(fromTp, toTp, ex, box-coerce-fun(toParTps, toEffTp, toResTp, fromParTps, fromEffTp, fromResTp, _)))
-              _ -> fail("backend/c/box bcoerceX: expecting function (from): " ++ fromTp.pretty.show)
-          _ -> fail("backend/c/box bcoerceX: expecting function (to): " ++ toTp.pretty.show)
+              _ -> failure/fail("backend/c/box bcoerceX: expecting function (from): " ++ fromTp.pretty.show)
+          _ -> failure/fail("backend/c/box bcoerceX: expecting function (to): " ++ toTp.pretty.show)
       else Nothing
     _ -> Nothing
 
@@ -180,11 +181,6 @@ fun box-coerce-fun(toParTps: list<(name, ktype)>, toEffTp: ktype, toResTp: ktype
   val bargs = zip3(args, toParTps.map(snd), fromParTps.map(snd)).map(fn((arg, parToTp, parFromTp)) bcoerce(parToTp, parFromTp, arg))
   val bapp = bcoerce(fromResTp, toResTp, App(ex, bargs))
   Lam(pars, toEffTp, bapp)
-
-fun zip3(l1: list<a>, l2: list<b>, l3: list<c>): list<(a,b,c)>
-  match (l1, l2, l3)
-    (Cons(x1, xs1), Cons(x2, xs2), Cons(x3, xs3)) -> Cons((x1, x2, x3), zip3(xs1.pretend-decreasing, xs2, xs3))
-    _ -> Nil
 
 fun box-bind-expr-as-value(fromTp: ktype, toTp: ktype, ex: expr, f: expr -> _ expr)
   if ex.is-total then f(ex)
@@ -214,7 +210,7 @@ fun boxed-funtp(tp: ktype)
       val bpars = pars.map(fn(_) boxed-tv())
       val bres = res.boxed-funtp
       TFun(pars.zip(bpars).map(fn(((nm, _), bp)) (nm, bp)), eff, bres)
-    _ -> fail("backend/c/box boxed-funtp: " ++ tp.pretty.show)
+    _ -> failure/fail("backend/c/box boxed-funtp: " ++ tp.pretty.show)
 
 fun boxed-tv()
   TVar(TypeVar(new-unique(), kindStar, Bound))

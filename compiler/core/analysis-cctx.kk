@@ -141,7 +141,7 @@ fun make-set-ctx-path(obj: expr, cName: tName, fieldName: name)
 
 fun get-field-name(cName: tName, fieldIdx: int)
   match cName.lookup(fieldIdx)
-    Left(err) -> fail("core/analysiscctx: " ++ err)
+    Left(err) -> failure/fail("core/analysiscctx: " ++ err)
     Right(name) -> name
 
 fun ensure-valid-hole-type(tp: ktype)
@@ -165,12 +165,12 @@ fun data-type-name-of(tp: ktype)
 fun data-type-name-res(tp: ktype)
   match tp.data-type-name-of
     Right(name) -> name
-    Left(t) -> fail("core/ctail data-type-name-res: illegal result type: " ++ t.show)
+    Left(t) -> failure/fail("core/ctail data-type-name-res: illegal result type: " ++ t.show)
 
 fun data-type-name(cName: tName)
   match cName.type-of.split-fun-scheme
     Just((_, _, _, tres)) -> tres.data-type-name-res
-    _ -> fail("core/ctail get-data-type-name: illegal constructor type: " ++ cName.show)
+    _ -> failure/fail("core/ctail get-data-type-name: illegal constructor type: " ++ cName.show)
 
 fun lookup(cName: tName, fieldIdx: int)
   match newtypes-lookup-any(cName.data-type-name)
@@ -183,6 +183,6 @@ fun lookup(cName: tName, fieldIdx: int)
           [c] -> 
             match c.params.drop(fieldIdx - 1)
               Cons((fname, ftp)) -> Right(TName(fname, ftp))
-              _ -> fail("core/ctail get-field-name: field index is off: " ++ cName.show ++ ", field " ++ fieldIdx.show ++ ", in " ++ c.params.show-list(fn((n, _)) n.show))
-          _ -> fail("core/ctail get-field-name: constructor not found: " ++ cName.show ++ ", field " ++ fieldIdx.show ++ ", in " ++ dinfo.constrs.map(show).join(","))
+              _ -> failure/fail("core/ctail get-field-name: field index is off: " ++ cName.show ++ ", field " ++ fieldIdx.show ++ ", in " ++ c.params.show-list(fn((n, _)) n.show))
+          _ -> failure/fail("core/ctail get-field-name: constructor not found: " ++ cName.show ++ ", field " ++ fieldIdx.show ++ ", in " ++ dinfo.constrs.map(show).join(","))
       

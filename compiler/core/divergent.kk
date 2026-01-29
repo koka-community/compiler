@@ -131,7 +131,7 @@ fun add-relation(sz: size, name1: name, name2: name, div: () -> _ a): _ a
         match sz
           SLt -> (eq, lt.add(name2))
           SEq -> (eq.add(name2), lt)
-          _ -> fail("core/divergent add-relation: encountered Unknown")
+          _ -> failure/fail("core/divergent add-relation: encountered Unknown")
       elif lt.member(name1) then
         (eq, lt.add(name2))
       else (eq, lt)

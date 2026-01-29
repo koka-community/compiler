@@ -155,7 +155,7 @@ fun is-pat(q: pattern, b: bool): bool
 fun extract-external(e: expr): _ maybe<(tName, string, list<expr>)>
   fun format(tn:tName, fs:list<(target,string)>)
     match lookup-target(C(cTarget), fs)
-      Nothing -> fail("backend does not support external in " ++ tn.show ++ fs.show-list(fn((t,s)) t.show ++ ":" ++ s))
+      Nothing -> failure/fail("backend does not support external in " ++ tn.show ++ fs.show-list(fn((t,s)) t.show ++ ":" ++ s))
       Just(f) -> f
   match e
     App(TypeApp(Var(tname, InfoExternal(formats)), _), args) ->
@@ -324,7 +324,7 @@ fun ppLit(l: lit): _ doc
       if c' >= ' ' && c' <= '~' then c.show.text
       else c'.int.show-hex(4).text
     LitFloat(d) -> d.show.text
-    LitString(s) -> fail("backend/c/from-core: ppLit: cannot inline string literal: " ++ s.show)
+    LitString(s) -> failure/fail("backend/c/from-core: ppLit: cannot inline string literal: " ++ s.show)
 
 fun cString(s: string)
   fun bytes(bs: list<int>)
@@ -390,13 +390,13 @@ fun is-small-ssizet(i)
   match targetPlatform.ptrSize
     4 -> i > minSmallInt32 && i < maxSmallInt32
     8 -> i > minSmallInt64 && i < maxSmallInt64
-    _ -> fail("backend/c/from-core: is-small-ssizet: unknown platform ssize_t: " ++ targetPlatform.show)
+    _ -> failure/fail("backend/c/from-core: is-small-ssizet: unknown platform ssize_t: " ++ targetPlatform.show)
 
 fun is-small-int-ptr(i)
   match targetPlatform.ptrSize
     4 -> i > minSmallInt32 && i < maxSmallInt32
     8 -> i > minSmallInt64 && i < maxSmallInt64
-    _ -> fail("backend/c/from-core: is-small-int-ptr: unknown platform intptr_t: " ++ targetPlatform.show)
+    _ -> failure/fail("backend/c/from-core: is-small-int-ptr: unknown platform intptr_t: " ++ targetPlatform.show)
 
 fun cpp-name(n: name): doc
   if n.is-qualified then pp-mod-name(n.qualifier) |.| "_".text |.| n.unqualify.show.ascii-encode(False).text
@@ -560,4 +560,4 @@ fun t-parameters(tns: list<tName>): doc
 fun result-type(tp: ktype): _ ktype
   match tp.split-fun-scheme
     Just((_, _, _, res)) -> res
-    _ -> fail("backend/c/from-core result-type: not a function type: " ++ tp.show) // TODO: Pretty type
+    _ -> failure/fail("backend/c/from-core result-type: not a function type: " ++ tp.show) // TODO: Pretty type

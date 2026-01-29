@@ -46,6 +46,6 @@ fun regroup(dfs: list<def>): _ list<def-group>
 fun find(nameMap: list<(tName, b)>, nm: tName): _ b
   match find(nameMap, fn(n: (tName,b)) n.fst == nm)
     Just(x) -> x.snd
-    _ -> fail("core/binding-groups find: could not find: " ++ nm.show)
+    _ -> failure/fail("core/binding-groups find: could not find: " ++ nm.show)
 
 

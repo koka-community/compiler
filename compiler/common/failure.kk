@@ -16,17 +16,17 @@ import std/core-extras
 // Internal errors and assertions
 // ------------------------------------------
 
-pub fun fail(s: string): exn a
+pub fun failure/fail(s: string): exn a
   raise(s)
 
 pub fun assert(msg: string, test: bool, x: a): exn a
-  if test then x else fail(msg)
+  if test then x else failure/fail(msg)
 
 pub fun todo(msg: string): exn a
-  fail("todo: " ++ msg)
+  failure/fail("todo: " ++ msg)
 
 pub fun match-failure(msg: string, ?kk-file-line: string): exn a
-  fail("unmatched pattern: " ++ msg ++ " at " ++ kk-file-line)
+  failure/fail("unmatched pattern: " ++ msg ++ " at " ++ kk-file-line)
 
 pub fun raise(s: string): exn a
   // Figure out stack traces

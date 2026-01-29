@@ -53,7 +53,7 @@ pub fun doc-from-range(r: range)
       pre.string ++ " ... " ++ post.string
   fun limit-lines(ls: list<string>, n: int)
     if ls.length <= n then ls.remove-indent
-    elif n <= 2 then fail("common/message docFromRange.limitLines: illegal n")
+    elif n <= 2 then failure/fail("common/message docFromRange.limitLines: illegal n")
     else
       val n2 = n / 2
       val pre = ls.take(n2)

@@ -560,11 +560,11 @@ fun add-defs(p: program<t,k>, tdefs0: list<typedef<t,t,k>>, defs0: list<def<t>>)
   val tdefs' = match p.typedefs
     [] -> [TypeDefRec(tdefs0)]
     [TypeDefRec(ts)] -> [TypeDefRec(ts.remove-tdefs(tdefs0) ++ tdefs0)]
-    _ -> fail("syntax/syntax: can not add type definitions to processed tree")
+    _ -> failure/fail("syntax/syntax: can not add type definitions to processed tree")
   val defs' = match p.defs
     [] -> [DefRec(defs0)]
     [DefRec(ds)] -> [DefRec(ds.remove-defs(defs0) ++ defs0)]
-    _ -> fail("syntax/syntax: can not add definitions to processed tree")
+    _ -> failure/fail("syntax/syntax: can not add definitions to processed tree")
   Program(p.source, p.name, p.name-range, tdefs', defs', p.imports, p.externals, p.fix-defs, p.doc)
 
 fun remove-all-defs(p: program<t,k>): program<t,k>
