@@ -410,7 +410,7 @@ pub fun type-resume-context(b: tau, e: keffect, e0: keffect, r: tau): tau
 
 pub val typeRef = TCon(TypeCon(nameTpRef, kind-fun(kindHeap, kind-fun(kindStar, kindStar))))
 pub val tconLocalVar = TypeCon(nameTpLocalVar, kind-fun(kindHeap, kind-fun(kindStar, kindStar)))
-pub fun is-type-localvar(tp: ktype): bool
+pub fun is-type-local-var(tp: ktype): bool
   match tp.expand-syn
     TApp(TCon(TypeCon(name)), [_, _]) -> name == nameTpLocalVar
     _ -> False

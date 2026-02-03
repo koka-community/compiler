@@ -65,7 +65,7 @@ pub fun show(ni: name-info): _ string
     assumption/InfoExternal(vis, cname, typ, format, fipt, range, doc) -> "InfoExternal(" ++ show(vis) ++ ", " ++ show(cname) ++ ", " ++ show(typ) ++ ", " ++ show-list(format, _.show-tuple(show, id)) ++ ", " ++ show(fipt) ++ ", " ++ show-full-range(range, "".path) ++ "," ++ show(doc) ++ ")"
     InfoImport(vis, typ, nameAlias, fullName, range) -> "InfoImport(" ++ show(vis) ++ ", " ++ show(typ) ++ ", " ++ show(nameAlias) ++ ", " ++ show(fullName) ++ ", " ++ show-full-range(range, "".path) ++ ")"
 
-pub fun info-sort(ni: name-info)
+pub fun sort(ni: name-info)
   match ni
     InfoVal -> "val"
     InfoFun -> "fun"

@@ -1011,7 +1011,7 @@ fun create-canonical-name(nm-ctx: name, gamma: gamma, qname: name)
   qname
 
 fun get-local-vars(): _ list<(name, ktype)>
-  infer-env.inf-gamma.inf-gamma/list.filter(fn((_, info)) info.is-type-localvar)
+  infer-env.inf-gamma.inf-gamma/list.filter(fn((_, info)) info.is-type-local-var)
 
 pub effect val scope-depth: int
 pub effect val local-depth: int

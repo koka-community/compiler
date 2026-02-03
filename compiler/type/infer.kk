@@ -169,6 +169,63 @@ fun effect-name-core(eff: keffect, rng: range): _ (maybe<core/core/expr>, name)
 // Infer Variables
 //////////////////////////////////////////
 
+fun infer-var-name(prop, expect, name: name, rng: range, is-rhs: bool, (qname: name, tp: ktype, info: assumption/name-info))
+  if tp.is-type-local-var && is-rhs then 
+    val irng = rng.range/extend(-1)
+    val (tp1, eff1, core1) = expr/infer(prop, expect, Parens(App(Var(nameLocalGet, False, irng), [(Nothing, App(Var(nameByref, False, irng), [(Nothing, Var(name, False, irng))], irng))], irng), name, "var", rng))
+    add-range-info(rng, RIId(qname, NIValue(info.sort, tp1, info.doc, False), [], False))
+    (tp1, eff1, core1)
+  else 
+    match info
+      InfoVal(isVar=isVar) | isVar && is-rhs -> // is it a right hand side variable?
+        val (tp1, eff1, core1) = expr/infer(prop, expect, App(Var(nameDeref, False, rng), [(Nothing, App(Var(nameByref, False, rng), [(Nothing, Var(name, False, rng))], rng))], rng))
+        add-range-info(rng, RIId(qname, NIValue(info.sort, tp1, info.doc, False), [], False))
+        (tp1, eff1, core1)
+      InfoVal() | tp.is-value-operation ->
+        add-range-info(rng, RIId(qname, NIValue(info.sort, tp, info.doc, False), [], False))
+        expr/infer(prop, expect, App(Var(qname.to-value-operation-name, False, null), [], null))
+      _ -> 
+        val eff = fresh-effect()
+        match compilation-constants.lookup(_ == qname)
+          Just((tp', fcore)) -> (tp', eff, fcore(module-name(), rng))
+          Nothing -> 
+            val core-var = info.core-expr(qname)
+            val fixed-effect = match tp.split-fun-scheme
+              Just((_, _, eff', _)) -> eff'.is-effect-fixed
+              _ -> False
+            val (itp, coref) = maybe-instantiate(rng, expect, tp)
+            val sitp = itp.subst
+            val (rm-name, rm-doc) = 
+              if qname.hidden/starts-with("eta") then 
+                match qname.lookup-nice-name
+                  Nothing -> ()
+                  Just(nice) -> add-range-info(rng.end, RInlayHint(True, nice))
+                (new-name("_"), "eta-expanded parameter")
+              else (info.canonical-name(qname), info.doc)
+            add-range-info(rng, RIId(rm-name, NIValue(info.sort, sitp, rm-doc, False), [], False))
+            val depth = local-scope-depth
+            fun inject-local(n)
+              val hp = fresh-tvar(kindHeap, Meta)
+              val local-tp = TApp(typeLocal, [hp])
+              val mask-expr = eta-expand(n, rng, fn(apply) Inject(local-tp, Lam([], apply(Var(qname, False, rng)), False, rng), False, rng))
+              val (tp, eff, core) = 
+                with no-local-scope
+                expr/infer(Nothing /* do not propagate as the effect is different */, Instantiated, mask-expr)
+              (tp, eff, core)
+            match (itp.expand-syn, prop)
+              (TFun(pars), _) | !fixed-effect && info.allow-implicit-mask && !qname.is-hidden && depth > 0 ->
+                inject-local(pars.length)
+              (_, Just(open-tp as TFun(pars, open-eff, tres))) | !fixed-effect && info.allow-implicit-mask && !qname.is-hidden && depth > 0 -> 
+                inject-local(pars.length)
+              _ -> (sitp, eff, coref(core-var))
+
+val compilation-constants = 
+  [
+   // for now, use the module name to not leak info of a dev system
+   (nameCoreFileFile, (typeString, fn(mod, rng) ELit(LitString(mod.show-plain ++ ".kk")))), 
+   (nameCoreFileLine, (typeString, fn(mod, rng) ELit(LitString(rng.start.line.show)))),
+   (nameCoreFileModule, (typeString, fn(mod, rng) ELit(LitString(mod.show-plain))))
+  ]
 
 //////////////////////////////////////////
 // infer match, branches and patterns
@@ -181,7 +238,10 @@ type pattern-kind
 fun infer-case(prop: maybe<(ktype, range)>, expect: expect, expr: syntax/syntax/expr<ktype>, 
               branches: list<syntax/syntax/branch<ktype>>, is-lazy-match: bool, rng: range): _ (ktype, keffect, core/core/expr)
   with maybe-instantiate-or-generalize(rng, branches.range, expect)
-  val (ctp, ceff, ccore0) = no-allow-return{disallow-hole{infer(Nothing, Instantiated, expr)}}
+  val (ctp, ceff, ccore0) =
+    with no-allow-return
+    with disallow-hole
+    infer(Nothing, Instantiated, expr)
   // infer branches
   val matched-names = expr.extract-matched-names
   val pat-kind = PatternOutermost(is-lazy-match)
@@ -203,16 +263,15 @@ fun infer-case(prop: maybe<(ktype, range)>, expect: expect, expr: syntax/syntax/
   // ensure branches match 
   val rngs = branches.map(_.branchGuard.range)
   val brngs = branches.map(range)
-  val res-tp =
-    fun recur(tpsx: list<(ktype, (range, range))>)
-      match tpsx
-        Cons((tp, _)) -> tp.subst
-        Cons((tp1, r), Cons((tp2, (ctx2, rng2)), tps')) -> 
-          val _ = 
-            with val ctxt = checkMatch(ctx2)
-            infer-unify(rng2, tp1, tp2)
-          recur(Cons((tp1,r), tps'))
-    recur(zip(tps, zip(brngs, rngs)))
+  fun recur(tpsx: list<(ktype, (range, range))>)
+    match tpsx
+      Cons((tp, _)) -> tp.subst
+      Cons((tp1, r), Cons((tp2, (ctx2, rng2)), tps')) -> 
+        val _ = 
+          with val ctxt = checkMatch(ctx2)
+          infer-unify(rng2, tp1, tp2)
+        recur(Cons((tp1,r), tps'))
+  val res-tp = recur(zip(tps, zip(brngs, rngs)))
   val res-eff = fresh-effect()
   val _ = 
     with val ctxt = checkEffectSubsume(rng)
@@ -381,7 +440,7 @@ fun infer-pattern(pat-kind: pattern-kind, match-type: ktype, branch-range: range
         infer-part(infgamma)
     PatParens(pat) -> infer-pattern(pat-kind, match-type, branch-range, pat, with-pattern, infer-part)
     PatLit(lit) -> 
-      val (pat, tp) = match lit 
+      val (pat', tp) = match lit 
         LitInt(i, _) -> (PatLit(LitInt(i)), typeInt)
         LitChar(c, _) -> (PatLit(LitChar(c)), typeChar)
         LitFloat(f, _) -> (PatLit(LitFloat(f)), typeFloat)
@@ -390,7 +449,7 @@ fun infer-pattern(pat-kind: pattern-kind, match-type: ktype, branch-range: range
         with val ctxt = checkLitMatch(lit.range)
         infer-unify(branch-range, tp, match-type)
       val (btpeffs,x) = infer-part([])
-      (btpeffs, with-pattern(pat, x))
+      (btpeffs, with-pattern(pat', x))
 
 fun infer-binders(inf-gamma, binders: list<value-binder<_, _>>)
   match binders
@@ -649,7 +708,7 @@ fun arg-expr/range(a: arg-expr): range
 
 fun pp-arg-expr(ae: arg-expr): <comp-flags,div,exn> doc
   match ae
-    ArgExpr(e, _) -> "ArgExpr".text |+| e.pretty
+    ArgExpr(e, _) -> "ArgExpr".text |+| e.pretty 
     ArgCore((_, tp, _, _)) -> "ArgCore".text |+| tp.pp-type
     ArgImplicit(n, _, _) -> "ArgImplicit".text |+| n.pp-name
 
@@ -828,7 +887,7 @@ fun maybe-instantiate(rng: range, expect: expect, tp: scheme): _ (rho, core/core
       val (rho, _, coref) = tp.infer-effect/instantiate(rng)
       (rho, coref)
 
-fun maybe-instantiate-or-generalize(ctx-range: range, rng: range, expect: expect, f: () -> (ktype, keffect, core/core/expr)): _ (ktype, keffect, core/core/expr)
+fun maybe-instantiate-or-generalize(ctx-range: range, rng: range, expect: expect, f: () -> _ (ktype, keffect, core/core/expr)): _ (ktype, keffect, core/core/expr)
   match expect
     Generalized(close) -> generalize(ctx-range, rng, close, f)
     Instantiated -> 
