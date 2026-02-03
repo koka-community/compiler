@@ -45,8 +45,3 @@ withNiceNames create names finf
            nms = [(name, create name i) | (i,name) <- zip [n..] names]
            env'= env{ niceNames = NM.union (niceNames env) (NM.fromList nms) }
        withEnv (\_ -> env') $ finf (map snd nms)
-
-lookupNiceName :: Name -> Inf (Maybe Doc)
-lookupNiceName name
-  = do env <- getEnv
-       return (NM.lookup name (niceNames env))

@@ -54,7 +54,7 @@ fun con/pretty(u: user-con<t,t,user-kind>, ?t/pretty: t -> div doc): div doc
    u.params.map(fn((vis,bind)) tupled([vis.pretty, bind.pretty]) ).vcat |+| 
    u.result.pretty |+| u.vis.pretty |.| u.doc.pretty
 
-fun dg/pretty(d: def-group<t>, ?t/pretty: t -> div doc): div doc
+fun dg/pretty(d: def-group<t>, ?t/pretty: t -> <div|e> doc): <div|e> doc
   match d
     DefRec(defs) -> defs.map(_.pretty |+| "\n".text).vcat
     DefNonRec(df) -> df.pretty
@@ -62,7 +62,7 @@ fun dg/pretty(d: def-group<t>, ?t/pretty: t -> div doc): div doc
 fun tdefvb/pretty(v: value-binder<t,maybe<expr<t>>>, ?t/pretty: t -> div doc): div doc
   v.name.pretty |+| v.expr.pretty
 
-fun lamvb/pretty(v: value-binder<maybe<t>,maybe<expr<t>>>, ?t/pretty: t -> div doc): div doc
+fun lamvb/pretty(v: value-binder<maybe<t>,maybe<expr<t>>>, ?t/pretty: t -> <div|e> doc): <div|e> doc
   val tp = match v.binderType 
     Just -> ":".text |+| v.binderType.pretty
     Nothing -> empty
@@ -83,7 +83,7 @@ fun definline/pretty(d: def-inline): doc
     InlineAlways -> "inline".text
     InlineAuto -> pretty/pprint/empty
 
-fun dbinder/pretty(vb: value-binder<(), expr<t>>, sort: def-sort, ?t/pretty: t -> div doc): div doc
+fun dbinder/pretty(vb: value-binder<(), expr<t>>, sort: def-sort, ?t/pretty: t -> <div|e> doc): <div|e> doc
   match sort
     DefFun -> 
       match vb.expr
@@ -95,16 +95,16 @@ fun dbinder/pretty(vb: value-binder<(), expr<t>>, sort: def-sort, ?t/pretty: t -
     DefVal -> vb.name.pretty |+| "=".text |+| vb.expr.pretty
     DefVar -> vb.name.pretty |+| ":=".text |+| vb.expr.pretty
 
-fun def/pretty(d: def<t>, ?t/pretty: t -> div doc): div doc
+fun def/pretty(d: def<t>, ?t/pretty: t -> <div|e> doc): <div|e> doc
   val prf = d.doc.text |-| d.visibility.pretty |.| d.defInline.pretty |.| d.sort.pretty
   prf |+| d.binder.pretty(d.sort)
 
-fun arg/pretty(a: (maybe<(name,range)>, expr<t>), ?t/pretty: t -> div doc): div doc
+fun arg/pretty(a: (maybe<(name,range)>, expr<t>), ?t/pretty: t -> <div|e> doc): <div|e> doc
   match a
     (Just((n, _)), expr) -> n.pretty |+| "=".text |+| expr.pretty
     (Nothing, expr) -> expr.pretty
 
-fun expr/pretty(expr: expr<t>, ?t/pretty: t -> div doc): div doc
+fun expr/pretty(expr: expr<t>, ?t/pretty: t -> <div|e> doc): <div|e> doc
   match expr
     Lam(binder, e) -> "fn".text |.| binder.map(lamvb/pretty).tupled |--| e.pretty.indent(2)
     Let(d, e) -> d.dg/pretty |--| e.expr/pretty 
@@ -125,7 +125,7 @@ fun expr/pretty(expr: expr<t>, ?t/pretty: t -> div doc): div doc
     Handler(_, _, _, _, _, _, _, hReturn, _, branches) -> 
       "handler".text |--| Cons(hReturn.pretty, branches.map(handbranch/pretty)).vcat.indent(2)
 
-fun handbranch/pretty(b: handler-branch<t>, ?t/pretty: t -> div doc): div doc
+fun handbranch/pretty(b: handler-branch<t>, ?t/pretty: t -> <div|e> doc): <div|e> doc
   b.branchSort.pretty |+| b.branchName.pretty |--| b.branchExpr.pretty.indent(2)
 
 fun branchsort/pretty(b: operation-sort): doc
@@ -152,15 +152,15 @@ fun hs/pretty(h: handler-scope): doc
     HandlerScoped -> "scoped".text
     HandlerNoScope -> empty
 
-fun branch/pretty(b: branch<t>, ?t/pretty: t -> div doc): div doc
+fun branch/pretty(b: branch<t>, ?t/pretty: t -> <div|e> doc): <div|e> doc
   b.branchPattern.pretty |+| b.branchGuard.map("->".text |--| _.guardExpr.pretty.indent(2)).vcat
 
-fun patarg/pretty(pa: (maybe<(name, range)>, pattern<t>), ?t/pretty: t -> div doc): div doc
+fun patarg/pretty(pa: (maybe<(name, range)>, pattern<t>), ?t/pretty: t -> <div|e> doc): <div|e> doc
   match pa
     (Just((n, _)), p) -> n.pretty |+| "as".text |+| p.pretty
     (Nothing, p) -> p.pretty
 
-fun pat/pretty(p: pattern<t>, ?t/pretty: t -> div doc): div doc
+fun pat/pretty(p: pattern<t>, ?t/pretty: t -> <div|e> doc): <div|e> doc
   match p
     PatWild -> "_".text
     PatVar(patvar) -> patvar.vbm/pretty
@@ -172,7 +172,7 @@ fun pat/pretty(p: pattern<t>, ?t/pretty: t -> div doc): div doc
     PatParens(p) -> tupled([p.pretty])
     PatLit(value) -> value.pretty
 
-fun vbm/pretty(ValueBinder(nm, tp, subpat): value-binder<maybe<t>, pattern<t>>, ?t/pretty: t -> div doc): div doc
+fun vbm/pretty(ValueBinder(nm, tp, subpat): value-binder<maybe<t>, pattern<t>>, ?t/pretty: t -> <div|e> doc): <div|e> doc
   if subpat.is-patWild then
     nm.pretty |.| tp.map(" : ".text |.| _.pretty).default(empty)
   else

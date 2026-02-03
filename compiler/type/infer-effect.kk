@@ -982,6 +982,9 @@ pub struct inferEnv
   inf-gamma: inf-gamma
   gamma: gamma
 
+pub fun lookup-nice-name(nm: name)
+  infer-env.niceNames.lookup(nm)
+
 pub fun current-def-name()
   match infer-env.currentDefNames
     Cons(n, _) -> n

@@ -169,7 +169,35 @@ fun effect-name-core(eff: keffect, rng: range): _ (maybe<core/core/expr>, name)
 // Infer Variables
 //////////////////////////////////////////
 
-fun infer-var-name(prop, expect, name: name, rng: range, is-rhs: bool, (qname: name, tp: ktype, info: assumption/name-info))
+fun infer-var(prop: maybe<(ktype, range)>, expect, name, rng, is-rhs)
+  if name.is-constructor-name then 
+    // constructor
+    val (qname1, tp1, con-repr, con-info) = resolve-con-name(name, prop.map(tuple2/fst), rng)
+    val info1 = InfoCon(Public, tp1, con-repr, con-info, rng, con-info.doc)
+    val (qname, tp, info) = 
+      val def-name: name = current-def-name()
+      val creator-name: name = qname1.new-creator-name
+      if def-name != creator-name.unqualify && def-name != nameCopy then 
+        // a bit hacky, but ensure we don't call the creator function inside itself or the copy function
+        match lookup-fun-name(creator-name, prop, rng)
+          Just((qname', tp', info')) -> (qname', tp', info')
+          Nothing -> (qname1, tp1, info1)
+      else (qname1, tp1, info1)
+    val core-var = info.core-expr(qname)
+    add-range-info(rng, RIId(info1.canonical-name(qname1), NICon(tp, info1.doc), [], False))
+    val (itp, coref) = maybe-instantiate(rng, expect, tp)
+    (itp, fresh-effect(), coref(core-var))
+  else 
+    // variable
+    // we cannot directly "resolveName" with a propagated type
+    // as sometimes the types do not match and need to coerce due to local variables or references on the right-hand-side
+    val vinfo = 
+      match prop
+        Just(p) | is-rhs -> resolve-rhs-name(name, p, rng)
+        _ -> resolve-name(name, prop, rng)
+    infer-var-name(prop, expect, name, rng, is-rhs, vinfo)
+
+fun infer-var-name(prop: maybe<(ktype, range)>, expect, name: name, rng: range, is-rhs: bool, (qname: name, tp: ktype, info: assumption/name-info))
   if tp.is-type-local-var && is-rhs then 
     val irng = rng.range/extend(-1)
     val (tp1, eff1, core1) = expr/infer(prop, expect, Parens(App(Var(nameLocalGet, False, irng), [(Nothing, App(Var(nameByref, False, irng), [(Nothing, Var(name, False, irng))], irng))], irng), name, "var", rng))
@@ -199,23 +227,23 @@ fun infer-var-name(prop, expect, name: name, rng: range, is-rhs: bool, (qname: n
               if qname.hidden/starts-with("eta") then 
                 match qname.lookup-nice-name
                   Nothing -> ()
-                  Just(nice) -> add-range-info(rng.end, RInlayHint(True, nice))
+                  Just(nice) -> add-range-info(rng.end-of-range, RIInlayHint(True, nice))
                 (new-name("_"), "eta-expanded parameter")
               else (info.canonical-name(qname), info.doc)
             add-range-info(rng, RIId(rm-name, NIValue(info.sort, sitp, rm-doc, False), [], False))
-            val depth = local-scope-depth
+            val depth = infer-effect/scope-depth
             fun inject-local(n)
               val hp = fresh-tvar(kindHeap, Meta)
               val local-tp = TApp(typeLocal, [hp])
               val mask-expr = eta-expand(n, rng, fn(apply) Inject(local-tp, Lam([], apply(Var(qname, False, rng)), False, rng), False, rng))
-              val (tp, eff, core) = 
-                with no-local-scope
+              val (tp', eff', core) = 
+                with with-no-local-scope
                 expr/infer(Nothing /* do not propagate as the effect is different */, Instantiated, mask-expr)
-              (tp, eff, core)
+              (tp', eff', core)
             match (itp.expand-syn, prop)
-              (TFun(pars), _) | !fixed-effect && info.allow-implicit-mask && !qname.is-hidden && depth > 0 ->
+              (TFun(pars), _) | !fixed-effect && info.allow-implicit-mask && !qname.is-hidden-name && depth > 0 ->
                 inject-local(pars.length)
-              (_, Just(open-tp as TFun(pars, open-eff, tres))) | !fixed-effect && info.allow-implicit-mask && !qname.is-hidden && depth > 0 -> 
+              (_, Just((TFun(pars, _, _), _))) | !fixed-effect && info.allow-implicit-mask && !qname.is-hidden-name && depth > 0 -> 
                 inject-local(pars.length)
               _ -> (sitp, eff, coref(core-var))
 
@@ -706,13 +734,11 @@ fun arg-expr/range(a: arg-expr): range
     ArgCore((rng, _, _, _)) -> rng
     ArgImplicit(_, app-rng, _) -> app-rng
 
-fun pp-arg-expr(ae: arg-expr): <comp-flags,div,exn> doc
+fun pp-arg-expr(ae: arg-expr): _ doc
   match ae
     ArgExpr(e, _) -> "ArgExpr".text |+| e.pretty 
     ArgCore((_, tp, _, _)) -> "ArgCore".text |+| tp.pp-type
     ArgImplicit(n, _, _) -> "ArgImplicit".text |+| n.pp-name
-
-
 
 // Try to match the propagated type with a function type,
 // returning the propagated argument, effect, and result type, and the expected instantiation of the result

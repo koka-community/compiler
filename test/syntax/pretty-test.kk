@@ -8,11 +8,13 @@ import std/test
 
 fun suite()
   val v = "v".new-name
-  val vvar = Var(v, False, null)
+  val vvar : expr<user-type> = Var(v, False, null)
   val tint = TpCon("int".new-name, null)
   val texn = TpCon("exn".new-name, null)
-  val vzero = Literal(LitInt(0, null))
+  val vzero : expr<user-type> = Literal(LitInt(0, null))
   val pzero = PatLit(LitInt(0, null), null)
+  fun simple/pretty(a: user-type)
+    pprint/empty
   group("pretty-printing")
     test("expressions")
       expect("v")
