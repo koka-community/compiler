@@ -27,6 +27,7 @@ import compiler/syntax/pretty
 import compiler/syntax/range-map
 import compiler/core/core
 import compiler/core/corevar
+import compiler/core/analysis-match
 import compiler/lib/pprint
 import std/data/linear-map
 import std/data/linear-set
@@ -225,35 +226,33 @@ fun infer-case(prop: maybe<(ktype, range)>, expect: expect, expr: syntax/syntax/
   val data-info = stp.get-type-name.find-data-info
   val def-name = current-def-name()
   val sbcores = bcores.subst 
-  val newtypes = get-newtypes()
   // TODO: Analysis match 
-  val (is-total, warnings, cbranches) = throw("Analysis match")
-  warnings.map(inf-warning(_, _))
-  val cbranches = 
+  val (is-total, cbranches) = branches/analyze(def-name, rng, sbcores, [stp], [data-info], is-lazy-match)
+  val cbranches' = 
     if is-total then cbranches
     else 
-      val modName = get-module-name()
-      val lit-pos = Lit(LitString(modName.show ++ rng.show), rng)
-      val lit-def = Lit(LitString(defName.show), rng)
-      val exn-branch = Branch(PatWild(rng), [Guard(guardTrue, App(Var(namePatternMatchError, False, rng), [(Nothing, litPos), (Nothing, litDef)], rng))])
+      val mod-name = module-name()
+      val lit-pos = Literal(syntax/syntax/LitString(mod-name.show ++ rng.show, rng))
+      val lit-def = Literal(syntax/syntax/LitString(def-name.show, rng))
+      val exn-branch = Branch(PatWild(rng), [Guard(guardTrue, App(Var(namePatternMatchError, False, rng), [(Nothing, lit-pos), (Nothing, lit-def)], rng))])
       val cexn-branch = infer-branch(pat-kind, Just((res-tp, rng)), ctp, expr.range, matched-names, exn-branch)
       match cexn-branch 
-        (Cons((tp, eff)), cbranch) -> // already propagated
+        (Cons((_, eff)), cbranch) -> // already propagated
           with val ctxt = checkEffectSubsume(rng)
           infer-unify(rng, eff, res-eff)
           cbranches ++ [cbranch]
         _ -> failure/fail("type/infer/infer-case: should never, happen, cexn-branch always contains a guard")
   // add lazy force
   // todo: warning if lazy match on regular datatype?
-  val ccore = 
+  val ccore1 = 
     if !is-lazy-match && data-info.di/is-lazy then 
       val forceName = data-info.lazy-name("force")
       val (force, force-tp, force-info) = resolve-fun-name(forceName, CtxFunArgs(False, 1, [], Nothing), rng, expr.range)
       val cforce = force-info.core-expr(force)
       match ccore0
-        App(Var(fname), [_]) | force == fname.name -> ccore0 // don't duplicate as force(force(expr)) -- this can happen in kind/infer where force is explicitly inserted sometimes
+        core/core/App(Var(fname), [_]) | force == fname.get-name -> ccore0 // don't duplicate as force(force(expr)) -- this can happen in kind/infer where force is explicitly inserted sometimes
         _ -> 
-          val (ftp, _, coref) = instantiate(force-tp, rng) 
+          val (ftp, _, coref) = infer-effect/instantiate(force-tp, rng) 
           match ftp.split-fun-type
             Just((_, eff, rtp)) -> 
               val _ = 
@@ -261,10 +260,10 @@ fun infer-case(prop: maybe<(ktype, range)>, expect: expect, expr: syntax/syntax/
                 infer-unify(expr.range, ctp, rtp)
               val _ = 
                 with val ctxt = checkEffectSubsume(rng)
-                infer-unify(expr.range, eff, resEff)
+                infer-unify(expr.range, eff, res-eff)
               App(coref(cforce), [ccore0])
     else ccore0
-  val core = get-subst() |-> Case([ccore1], cbranches)
+  val core = get-subst() |-> Case([ccore1], cbranches')
   val sres-eff = res-eff.subst
   (res-tp, sres-eff, core)  
 

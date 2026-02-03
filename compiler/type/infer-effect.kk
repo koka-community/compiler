@@ -991,7 +991,7 @@ pub effect infer-state
   fun hole-allowed(): bool
   fun use-hole(): ()
 
-fun module-name()
+pub fun module-name()
   infer-env.contxt
 
 fun in-hidden-term-doc(): infer-env bool
