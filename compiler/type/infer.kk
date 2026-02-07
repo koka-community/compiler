@@ -164,6 +164,99 @@ fun effect-name-core(eff: keffect, rng: range): _ (maybe<core/core/expr>, name)
 // Infer Lambda
 //////////////////////////////////////////
 
+fun infer-lam(top: bool, prop: maybe<(ktype, range)>, expect: expect, bindersl: list<value-binder<maybe<ktype>, maybe<expr<ktype>>>>, body0: expr<ktype>, rng: range)
+  with is-named <- is-named-lam
+  with with-scope
+  with disallow-hole
+  fun inf-body()
+    val (bindersX, unpack-implicitss) = bindersl.map(infer-implicit-param).unzip
+    val body = unpack-implicitss.foldr(body0, fn(f, x) f(x))
+    val FunMatchResult(prop-args, prop-eff, prop-body, skolems, expect-body) = match-fun(bindersX.length, prop)
+    val binders0 = bindersX.zipwith(prop-args) fn(binder, mb-prop)
+      match binder.tp
+        Nothing -> ValueBinder(binder.name, mb-prop.map(snd))
+        Just(_) -> ValueBinder(binder.name, binder.tp)
+    val binders1 = binders0.map(instantiate-binder)
+    val eff = 
+      match prop-eff
+        Nothing -> operations/fresh-effect() 
+        Just((eff, _)) -> eff
+    val ldepth = infer-effect/local-depth
+    val (infgamma, sub, defs) = infer-optionals(ldepth == 0, eff, [], binders1)
+    fun coref(c) make-let(defs.map(DefNonRec), sub |-> c)
+    val return-tp = 
+      match prop-body
+        Nothing -> fresh-star()
+        Just((tp, _)) -> tp
+    // nice names for eta-expanded expressions for in the IDE 
+    val eta-expanded = !binders0.is-empty && binders0.all(_.name.hidden/starts-with("eta"))
+    fun create-eta(name: name, n: int) 
+      match "xyz".list.drop(n)
+        Cons(c, rest) -> c.char
+        Nil -> pretty(n+1)
+    fun nice-eta(act)
+      if eta-expanded then 
+        with with-nice-names(create-eta, binders0.map(name))
+        add-range-info(rng.start, RIInlayHint(False /* append before */, "fn".text |.| parens(docs.map("_".text |.| _).intersperse(comma).hcat) |.| " ".text))
+        act()
+      else act()
+    val (tp, eff1, core) = 
+      with trace-indent
+      with with-scope
+      with extend-inf-gamma(infgamma)
+      with extend-inf-gamma([(nameReturn, create-name-infoX(Public, nameReturn, ldepth, DefVal, body.range, return-tp, ""))])
+      with nice-eta
+      if is-named then infer-isolated(rng, body.rng, body, infer-expr(prop-body, expect-body, body))
+      else infer(prop-body, expect-body, body)
+    val _ = 
+      with val ctxt = checkReturnResult(rng)
+      infer-unify(body.range, return-tp, tp)
+    val _ = 
+      with val ctxt = Infer(rng)
+      infer-unify(body.range, eff, eff1)
+    val top-eff = 
+      match prop-eff
+        Nothing -> eff.subst
+        Just((top-eff, r)) -> 
+          val _ = 
+            with val ctxt = checkEffectSubsume(rng)
+            infer-unify(r, eff, top-eff)
+          top-eff.subst
+    val opt-pars = binders1.map(fn(b) (b.name, b.tp.subst))
+    val body-core1 = add-lambdas(opt-pars, top-eff, Lam([], top-eff, coref(core)))
+    val body-core2 = body-core1.subst
+    val pars = opt-pars
+    val sftp0 = TFun(pars, top-eff, tp).subst
+    // check skolem escape (should this be after generalize?)
+    if !top then 
+      checkSkolemEscape(rng, sftp0, Nothing, skolems, tvsEmpty) // TODO: not having this check improves error messages but is it really safe?
+    
+    // substitute back skolems to meta variables
+    val (sktvars, sksubs) = fresh-sub(Meta, skolems)
+    val sftp1 = sksubs |-> sftp0
+    val body-core3 = sksubs |-> body-core2
+    subst-implicit-constraints(sksubs)
+
+    // check for polymorphic parameters
+    val unannot-binders = binders0.zip(binders1).filter(fn((b0, b1)) b0.is-nothing).map fn((b0, b1))
+      (b.name, b.tp.subst)
+    val poly-binders = unannot-binders.filter(fn((_, tp)) !tp.is-tau)
+    if !poly-binders.is-empty then 
+      val b = poly-binders[0].unjust
+      type-error(rng, b.range, "unnannotated parameters cannot be polymorphic ".text, b.tp, [("hint".text, "annotate the parameter with a polymorphic type".text)])
+
+    // add range info for each parameter
+    if !eta-expanded then 
+      opt-pars.zipwith(par-types) fn(b, tp)
+        val annotated = 
+          match (prop, b.tp)
+            (Just((_, rng)), Just()) | rng.is-hidden -> True // actual annotation
+            _ -> False
+        add-range-info(b.name-range, RIId(b.name, NIValue("val", tp, "", annotated)), [], True)
+    (sftp1, type-total, body-core3)
+  val (ftp, _, fcore) = maybe-generalize(rng, body0.range, expect, inf-body)
+  val eff = operations/fresh-effect()
+  (ftp, eff, fcore)
 
 //////////////////////////////////////////
 // Infer Variables
