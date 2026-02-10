@@ -344,7 +344,7 @@ fun resolve-name-ex(info-filter: (assumption/name-info -> bool), mb-info-filter-
 // lookup an application name `f(...)` where the name context usually contains (partially) inferred
 // argument types. We reuse the lookup for implicit arguments as it works the same
 // (except that for implicit arguments we allow value types to be resolved with unit functions (for conversions))
-fun lookup-app-name(allow-disambiguate : bool, name: name, name-ctx: name-context, ctx-range: range, rng: range): _ either<list<doc>, (ktype, syntax/syntax/expr<ktype>, list<((name, range), syntax/syntax/expr<ktype>, bool -> pretty-eff doc)>)>
+pub fun lookup-app-name(allow-disambiguate : bool, name: name, name-ctx: name-context, ctx-range: range, rng: range): _ either<list<doc>, (ktype, syntax/syntax/expr<ktype>, list<((name, range), syntax/syntax/expr<ktype>, bool -> pretty-eff doc)>)>
   val roots = 
     if !name.is-constructor-name then // normal identifiers
       [(is-info-val-fun-ext, name)]
