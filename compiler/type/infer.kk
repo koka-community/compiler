@@ -159,117 +159,148 @@ fun effect-name-core(eff: keffect, rng: range): _ (maybe<core/core/expr>, name)
 ///////////////////////////////////////////////////////////
 // Infer Applications and Resolve Overloaded Identifiers
 //////////////////////////////////////////////////////////
+fun infer-app-fun-first(prop, fexpr, fresolved, fixed0, named0, implicits0: list<((name, range), syntax/syntax/expr<ktype>, bool -> _ doc)>, rng, origFun: syntax/syntax/expr<_>, expect)
+  with maybe-instantiate-or-generalize(rng, origFun.range, expect)
+  // infer type of function
+  val fprop = match (prop, fexpr)
+    (Nothing, syntax/syntax/Var(name)) | !name.is-constructor-name ->
+      val (_, ptp, info) = resolve-name(name, prop, rng)
+      match (ptp, info.allow-implicit-mask)
+        (TVar(), True) -> 
+          // we propagate a function type (for example to mask<local> for function parameters)
+          val teff = operations/fresh-effect()
+          val tres = fresh-star() 
+          val tpars = list(1, fixed0.list/length + named0.list/length + implicits0.list/length).map(fn(_) fresh-star())
+          val ftp = TFun(tpars.map((nil, _)), teff, tres)
+          Just((ftp, rng))
+        _ -> prop
+    _ -> prop
+  val (ftp, eff1, fcore) = 
+    with no-allow-return
+    infer(fprop, Instantiated, fexpr)
+  // we allow passing implicit parameters as a fixed argument: here we name those explicitly based on the type
+  // todo: for now disallow implicit parameters as fixed ones as it can lead to long inference times?
+  val allow-implicits-as-fixed = True
+  val (fixed, named1) =  
+    match ftp.split-fun-type
+      Just((pars, _, _)) | allow-implicits-as-fixed -> 
+        val (tfixed, toptionals, timplicits) = split-optional-implicit(pars)
+        val (fixed1, fixed-implicit-args) = fixed0.split(tfixed.length + toptionals.length)
+        if fixed-implicit-args.is-empty || fixed-implicit-args.length > timplicits.length then // too many arguments? see `test/static/wrong/rec1`
+          (fixed0, named0)
+        else 
+          val fixed-implicits = timplicits.zipwith(fixed-implicit-args, fn((name, tp), expr: syntax/syntax/expr<_>) ((name, expr.range), expr))
+          (fixed1, fixed-implicits ++ named0)
+      _ -> (fixed0, named0)
+  // only add resolved implicits that were not already named
+  val already-given = named1.map(_.fst.fst)
+  val rimplicits = implicits0.filter(fn(((name,_), _, _)) !already-given.contains(name))
+  val named' = named1 ++ rimplicits.map(fn(((name, _), expr, _)) ((name, range/null), expr)) // so no range info is emitted when checking 
+  rimplicits.foreach fn((_, _, doc)) 
+    add-range-info(fexpr.range, RIImplicits(doc))
+  
+  // match the type with a function type, wrap optional arguments, and order named arguments
+  val FunMatchTypeArgs(iargs, pars0, fun-eff0, fun-tp0, core-app) = match-fun-type-args(rng, fexpr, ftp, fresolved, fixed, named')
+  
+  // match propagated type with the function result type
+  // note: we may disable this in the future?
+  val (pars, fun-eff, fun-tp) = 
+    match prop
+      Just((pres, prng)) -> 
+        val _ = 
+          with val ctxt = checkAnn(prng)
+          infer-subsume(rng, fun-tp0, pres)
+        (pars0.subst, fun-eff0.subst, fun-tp0.subst)
+      Nothing -> (pars0, fun-eff0, fun-tp0)
+  
+  // infer the argument expressions and subsume the type
+  val sftp = ftp.subst
+  val unused = fresh-name("unused")
+  val sd = infer-effect/scope-depth
+  val (eff-args, core-args) = 
+    with extend-inf-gamma([(unused, InfoVal(Public, unused, sftp, sd, rng, False, False, ""))]) // don't generalize over free propagated types
+    val free = free-in-gamma() 
+    val par-args = pars.map(snd).zip(iargs.map(snd))
+    match origFun
+      Var(name, _, _) | name == nameRunLocal -> 
+        with with-local-scope
+        with val ctxt = checkLocalScope(rng)
+        infer-argsN(rng, par-args)
+      _ -> infer-argsN(rng, par-args)
+  
+  // ensure arguments are evaluated in the declaration order
+  val core = 
+    match short-circuit(fcore, core-args)
+      Just(c) -> c
+      Nothing -> 
+        // ensure named arguments are evaluated in the correct order
+        if iargs.map(fst).monotonic || core-args.all(is-total) then 
+          core-app(fcore, core-args)
+        else 
+          // let bind in evaluation order
+          val vars = iargs.map(fn(_) unique-name("arg"))
+          val vargs = zip(vars, core-args.zipwith(iargs, fn(carg, (i, _)) (i, carg)))
+          val eargs: list<(name,(int,core/core/expr))> = vargs.sort(fn((_: name, (i: int, _)), (_: name, (j: int, _))) i < j)
+          val defs = eargs.map fn((v, (_, arg)))
+            DefNonRec(Def(v, arg.type-of, arg, Private, DefVal, InlineAuto, null, ""))
+          val cargs = vargs.map fn((v, (_, arg)))
+            Var(TName(v, arg.type-of), InfoNone)
+          if fcore.is-total then 
+            make-let(defs, core-app(fcore, cargs))
+          else
+            val fname = "fct".unique-name
+            val fdef = DefNonRec(Def(fname, ftp, fcore, Private, DefFun([]) /* all own, TODO: maintain borrow annotations? */, InlineAuto, null, ""))
+            val fvar = Var(TName(fname, ftp), InfoNone)
+            Let(Cons(fdef, defs), core-app(fvar, cargs))
+  
+  // take top effect
+  // todo: sub effecting should add core terms
+  val top-eff = 
+    with val ctxt = checkEffect(rng)
+    infer-unifies(Cons((origFun.range, eff1), zip(iargs.map(_.snd.range), eff-args)))
+  val _ = 
+    with val ctxt = checkEffectSubsume(rng)
+    infer-unify(rng, fun-eff, top-eff)
+  
+  // instantiate or generalize result type
+  (fun-tp.subst, top-eff.subst, core)
 
+// inferAppFirst <guessed fixed arg types> <priority order fixed args> <fixed args> <named args>
+fun infer-app-args-first(fresolved, funExpr, args, fixed, named0, rng, expect, prop)
+  match args
+    Nil -> // we inferred all fixed arguments
+      // this always fails since we have not been able to resolve the function name
+      infer-app-fun-first(Nothing, funExpr, fresolved, fixed, named0, [], rng, funExpr, expect)
+    Cons((idx,fix: syntax/syntax/expr<_>), fixs) -> 
+      // try to improve our guess
+      val (tp-arg, eff-arg, core-arg) = 
+        with no-allow-return 
+        infer(Nothing, Instantiated, fix)
+      val fresolved' = fresolved ++ [(idx, (fix.range, tp-arg, eff-arg, core-arg))]
+      val amb = 
+        match funExpr.root-expr
+          Var(name, _, name-range) ->
+            val sctx = fixed-context(prop, fresolved', fixed.length, named0.map(_.fst.fst))
+            match lookup-app-name(fixs.is-empty /* allow disambiguate */, name, sctx, rng, name-range)
+              Right((itp, fexpr, implicits: list<((name,range), syntax/syntax/expr<ktype>, bool -> pretty-eff doc)>)) -> Just(((itp,rng), fexpr, implicits))
+              Left() -> Nothing
+          _ -> Nothing
+      match amb
+        Just((prop-tp, fexpr, implicits)) -> infer-app-fun-first(Just(prop-tp), fexpr, fresolved', fixed, named0, implicits, rng, funExpr, expect) 
+        Nothing -> infer-app-args-first(fresolved', funExpr, fixs, fixed, named0, rng, expect, prop)
+  
 fun infer-app(prop: maybe<(ktype, range)>, expect: expect, funExpr: syntax/syntax/expr<ktype>, nargs: list<(maybe<(name,range)>, syntax/syntax/expr<ktype>)>, rng: range): _ (ktype, keffect, core/core/expr)
-  fun infer-app-fun-first(prop', fexpr, fresolved, fixed0, named0, implicits0)
-    with maybe-instantiate-or-generalize(rng, funExpr.range, expect)
-    // infer type of function
-    val fprop = match (prop', fexpr)
-      (Nothing, Var(name)) | !name.is-constructor-name ->
-        val (_, ptp, info) = resolve-name(name, prop', rng)
-        match (ptp, info.allow-implicit-mask)
-          (TVar(), True) -> 
-            // we propagate a function type (for example to mask<local> for function parameters)
-            val teff = operations/fresh-effect()
-            val tres = fresh-star() 
-            val tpars = list(1, fixed0.length + named0.length + implicits0.length).map(fresh-star)
-            val ftp = TFun(tpars.map((nil, _)), teff, tres)
-            Just((ftp, rng))
-          _ -> prop'
-      _ -> prop'
-    val (ftp, eff1, fcore) = 
-      with no-allow-return
-      infer(fprop, Instantiated, fexpr)
-    // we allow passing implicit parameters as a fixed argument: here we name those explicitly based on the type
-    // todo: for now disallow implicit parameters as fixed ones as it can lead to long inference times?
-    val allow-implicits-as-fixed = True
-    val (fixed, named1) =  
-      match ftp.split-fun-type
-        Just((pars, _, _)) | allow-implicits-as-fixed -> 
-          val (tfixed, toptionals, timplicits) = split-optional-implicits(pars)
-          val (fixed1, fixed-implicit-args) = fixed0.split-at(tfixed.length + toptionals.length)
-          if fixed-implicit-args.is-empty || fixed-implicit-args.length > timplicits.length then // too many arguments? see `test/static/wrong/rec1`
-            (fixed0, named0)
-          else 
-            val fixed-implicits = timplicits.zipwith(fn((name, tp), expr) ((name, expr.range), expr))
-            (fixed1, fixed-implicits ++ named0)
-        _ -> (fixed0, named0)
-    // only add resolved implicits that were not already named
-    val already-given = named1.map(_.fst.fst)
-    val rimplicits = implicits0.filter(fn(((name,_), _, _)) !already-given.contains(name))
-    val named' = named1 ++ rimplicits.map(fn(((name, _), expr, _)) ((name, range/null), expr)) // so no range info is emitted when checking 
-    rimplicits.foreach fn(((name, _), _, doc)) 
-      add-range-info(fexpr.range, RIImplicits(doc))
-    
-    // match the type with a function type, wrap optional arguments, and order named arguments
-    val FunMatchTypeArgs(iargs, pars0, fun-eff0, fun-tp0, core-app) = match-fun-type-args(rng, fexpr, ftp, fresolved, fixed, named')
-    
-    // match propagated type with the function result type
-    // note: we may disable this in the future?
-    val (pars, fun-eff, fun-tp) = 
-      match prop
-        Just((pres, prng)) -> 
-          val _ = 
-            with val ctxt = checkAnn(pres)
-            infer-subsume(rng, fun-tp0, pres)
-          (pars0.subst, fun-eff0.subst, fun-tp0.subst)
-        Nothing -> (pars0, fun-eff0, fun-tp0)
-    
-    // infer the argument expressions and subsume the type
-    val sftp = ftp.subst
-    val unused = fresh-name("unused")
-    val sd = infer-effect/scope-depth
-    val (eff-args, core-args) = 
-      with extend-inf-gamma([(unused, InfoVal(Public, unused, sftp, sd, rng, False, False, ""))]) // don't generalize over free propagated types
-      val free = free-in-gamma()
-      val par-args = pars.map(snd).zip(iargs.map(snd))
-      match funExpr
-        Var(name, _, _) | name == nameRunLocal -> 
-          with with-local-scope
-          with val ctxt = checkLocalScope(rng)
-          infer-argsN(rng, par-args)
-        _ -> infer-argsN(rng, par-args)
-    
-    // ensure arguments are evaluated in the declaration order
-    val core = 
-      match short-circuit(fcore, core-args)
-        Just(c) -> c
-        Nothing -> 
-          // ensure named arguments are evaluated in the correct order
-          if iargs.map(fst).monotonic || core-args.all(is-total) then 
-            core-app(fcore, core-args)
-          else 
-            // let bind in evaluation order
-            val vars = iargs.map(_.unique-name("arg"))
-            val vargs = zip(vars, core-args.zipwith(iargs, fn(carg, (i, _)) (i, carg)))
-            val eargs = vars.sort(fn((_, (i, _)), (_, (j, _))) i < j)
-            val defs = eargs.map fn((v, (_, arg)))
-              DefNonRec(Def(v, arg.type-of, arg, Private, DefVal, InlineAuto, null, ""))
-            val cargs = vargs.map fn((v, (_, arg)))
-              Var(TName(v, arg.type-of), InfoNone)
-            if fcore.is-total then 
-              make-let(defs, core-app(fcore, cargs))
-            else
-              val fname = "fct".unique-name
-              val fdef = DefNonRec(Def(fname, ftp, fcore, Private, DefFun([]) /* all own, TODO: maintain borrow annotations? */, InlineAuto, null, ""))
-              val fvar = Var(TName(fname, ftp), InfoNone)
-              Let(Cons(fdef, defs), core-app(fvar, cargs))
-    
-    // take top effect
-    // todo: sub effecting should add core terms
-    val top-eff = 
-      with val ctxt = checkEffect(rng)
-      infer-unifies(Cons((funExpr.range, eff1), zip(iargs.map(_.snd.range)), eff-args))
-    val _ = 
-      with val ctxt = checkEffectSubsume(rng)
-      infer-unify(rng, fun-eff, top-eff)
-    
-    // instantiate or generalize result type
-    (fun-tp.subst, top-eff.subst, core)
   
 
-
-
+  // we cannot resolve an overloaded function name: infer types of arguments without propagation first.
+  // The code handles inferring arguments in any order by keeping track of the index, but at the moment
+  // we always infer from left to right until we can resolve the function type and then propagate argument types. 
+  fun infer-app-from-args(fixed, named0)
+    match fixed
+      Nil -> 
+        // there are no fixed arguments, use fun first anyways (and error..)
+        infer-app-fun-first(Nothing, funExpr, [], [], named0, [], rng, funExpr, expect)
+      _ -> infer-app-args-first([], funExpr, fixed.indexed, fixed, named0, rng, expect, prop)
 
   val (fixed, named-args) = nargs.split-named-args
   val amb = 
@@ -283,8 +314,9 @@ fun infer-app(prop: maybe<(ktype, range)>, expect: expect, funExpr: syntax/synta
           // for example in `fn(f) f()` the `f` has a type `_a` and will not match `sctx`
       _ -> Just((Nothing, funExpr, [])) // Function expression first
   match amb
-    Just((prop, fexpr, implicits)) -> infer-app-fun-first(prop, fexpr, [], fixed, named-args, implicits)
+    Just((prop-tp, fexpr, implicits)) -> infer-app-fun-first(prop-tp, fexpr, [], fixed, named-args, implicits, rng, funExpr, expect)
     _ -> infer-app-from-args(fixed, named-args)
+
 //////////////////////////////////////////
 // Infer Lambda
 //////////////////////////////////////////

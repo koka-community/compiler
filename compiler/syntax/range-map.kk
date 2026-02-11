@@ -60,7 +60,7 @@ type range-info
   RIError(d: doc)
   RIWarning(d: doc)
   RIId(name: name, ninfo: name-info, docs: list<doc>, isDefinition: bool) // qualified name, info, extra doc (from implicits), is this the definition?
-  RIImplicits(shorten: (bool) -> doc) // inferred implicit arguments and (implicit) resume arguments
+  RIImplicits(shorten: (bool) -> pretty-eff doc) // inferred implicit arguments and (implicit) resume arguments
   RIInlayHint(append: bool, doc: doc) // Inlay hint in the editor, append after the range (or before it)
 
 type name-info
@@ -193,7 +193,7 @@ fun lookup(rm: range-map, r: range)
   val (rinfos, rm') = rm.drop-while(is-before).span(starts-at)
   (rinfos.prioritize, rm')
 
-fun find-in(rm: range-map, r: range, for-inlay: bool): list<(range, range-info)>
+fun find-in(rm: range-map, r: range, for-inlay: bool): _ list<(range, range-info)>
   val s = r.start
   val e = r.end
   val res = rm.filter fn((ri, _))
@@ -333,7 +333,7 @@ fun drop-auto-gen-closing(lexes: list<lexeme>)
     _ -> lexes
 
 // We should use the lexemes to find the right start token
-fun find-at(rm: range-map, p: pos, lexemes: list<lexeme>): exn maybe<(range, range-info)>
+fun find-at(rm: range-map, p: pos, lexemes: list<lexeme>): _ maybe<(range, range-info)>
   val lexstart = 
         match lexemes.drop-while(!_.range.contains(p))
           Cons(l) -> l.range.start

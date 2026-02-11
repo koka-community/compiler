@@ -1022,7 +1022,7 @@ pub effect val local-depth: int
 pub effect val ctxt : infer-context
 pub alias infer = <pretty-eff, ctxt, infer-state, infer-eff, range-map-eff, local-depth, scope-depth, def-infer-effect, infer-env, synonyms-eff, newtypes-eff, unify, unique>;
 
-fun free-in-gamma()
+pub fun free-in-gamma()
   (sub/(|->)(get-subst(), infer-env.inf-gamma.inf-gamma/list.map(snd))).free-type-vars
 
 fun with-hole-allowed(allowed0: bool, action: () -> _ a): _ a
