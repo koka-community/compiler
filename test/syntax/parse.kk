@@ -4,6 +4,7 @@ import compiler/syntax/pretty
 import compiler/lib/pprint
 import std/os/path
 import std/os/dir
+import std/os/task
 
 fun main()
   "/Users/timwhiting/koka/lib/std/".path.list-directory-recursive.foreach fn(f)
@@ -11,7 +12,18 @@ fun main()
       println("Parsing... " ++ f.show)
       with catch fn(err) err.show.trace 
       parse-program-from-file(f, True, True)
-      println("Parsed " ++ f.show)
+      println("Parsed " ++ f.show)  
+
+// fun main()
+//   task-set-default-concurrency(8)
+//   "/Users/timwhiting/koka/lib/std/".path.list-directory-recursive.take(8).map fn(f)
+//     fn()
+//       if f.is-file && f.string.ends-with(".kk").bool then
+//         println("Parsing... " ++ f.show)
+//         with catch fn(err) err.show.trace 
+//         parse-program-from-file("/Users/timwhiting/koka/lib/std/num/random.kk".path, True, True)
+//         println("Parsed " ++ f.show)
+//   .parallel
 
 fun test-x1()
   val f = "/Users/timwhiting/koka/lib/std/num/random.kk".path
