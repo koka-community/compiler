@@ -147,6 +147,37 @@ pub type operation-sort
   OpControl
   OpControlErr
 
+// Automatically generated.
+// Comparison of the `operation-sort` type.
+pub fun operation-sort/cmp(this : operation-sort, other : operation-sort) : e order
+  match (this, other)
+    (OpVal, OpVal) -> Eq
+    (OpVal, _) -> Lt
+    (_, OpVal) -> Gt
+    (OpFun, OpFun) -> Eq
+    (OpFun, _) -> Lt
+    (_, OpFun) -> Gt
+    (OpExcept, OpExcept) -> Eq
+    (OpExcept, _) -> Lt
+    (_, OpExcept) -> Gt
+    (OpControlRaw, OpControlRaw) -> Eq
+    (OpControlRaw, _) -> Lt
+    (_, OpControlRaw) -> Gt
+    (OpControl, OpControl) -> Eq
+    (OpControl, _) -> Lt
+    (_, OpControl) -> Gt
+    (OpControlErr, OpControlErr) -> Eq
+
+pub fun operation-sort/(==)(o1: operation-sort, o2: operation-sort): bool
+  match (o1, o2)
+    (OpVal, OpVal) -> True
+    (OpFun, OpFun) -> True
+    (OpExcept, OpExcept) -> True
+    (OpControl, OpControl) -> True
+    (OpControlRaw, OpControlRaw) -> True
+    (OpControlErr, OpControlErr) -> True
+    _ -> False
+
 pub fun op-sort/show(o: operation-sort): string
   match o
     OpVal -> "val"

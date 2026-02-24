@@ -143,6 +143,262 @@ pub fun remove-local-effect(ftp: ktype)
 //////////////////////////////////////////
 // Infer Effect Handlers
 //////////////////////////////////////////
+
+fun infer-handler(propagated: maybe<(ktype, range)>, expect: expect, handlerSort: handler-sort, 
+                  handlerScoped: handler-scope, allowMask: bool, mbeff: maybe<keffect>, 
+                  localPars: list<value-binder<maybe<ktype>, ()>>, 
+                  initially: maybe<(syntax/syntax/expr<ktype>)>, ret: maybe<(syntax/syntax/expr<ktype>)>, 
+                  finally: maybe<(syntax/syntax/expr<ktype>)>, branches: list<handler-branch<ktype>>, hrng: range, rng: range): _ (ktype, keffect, core/core/expr)
+  // Regular handler
+  match localPars
+    Cons -> 
+      context-error(hrng, rng, "text \"Type.Infer.inferHandler: TODO: not supporting local parameters\"".text, [])
+      failure/fail("abort")
+    Nil -> 
+      // get the handled effect
+      val heff = infer-handled-effect(hrng, handlerSort, mbeff, branches)
+
+      throw("Unimplemented")
+
+// inferHandler :: Maybe (Type,Range) -> Expect -> HandlerSort -> HandlerScope -> Bool
+//                       -> Maybe Effect
+//                       -> [ValueBinder (Maybe Type) ()] -> Maybe (Expr Type) -> Maybe (Expr Type) -> Maybe (Expr Type)
+//                       -> [HandlerBranch Type] -> Range -> Range -> Inf (Type,Effect,Core.Expr)
+// -- Regular handler
+// inferHandler propagated expect handlerSort handlerScoped allowMask
+//              mbEffect (_:localPars) initially ret finally branches hrng rng
+//   = do contextError hrng rng (text "Type.Infer.inferHandler: TODO: not supporting local parameters") []
+//        failure "abort"
+// inferHandler propagated expect handlerSort handlerScoped allowMask
+//              mbEffect [] initially ret finally branches hrng rng
+//   = do -- get the handled effect
+//        heff <- inferHandledEffect hrng handlerSort mbEffect branches
+//        let isInstance = isHandlerInstance handlerSort
+//            effectName = effectNameFromLabel heff
+//            handlerConName = toHandlerConName effectName
+//        -- check operations
+//        checkCoverage rng heff handlerConName branches
+
+//        -- infer the result type to improve inference
+//        res  <- case (propagated,ret) of
+//                 (Nothing,Just expr) -> do (tp,_,_) <- inferExpr propagated Instantiated expr
+//                                           case splitFunScheme tp of
+//                                             Just (_,_,_,retTp) -> return retTp
+//                                             _ -> Op.freshStar
+//                 (Just (retTp,_),_) -> return retTp
+//                 _ -> Op.freshStar
+//        eff  <- Op.freshEffect
+//        resumeArgs <- mapM (\_ -> Op.freshStar) branches  -- TODO: get operation result types to improve inference
+
+//        -- construct the handler
+//        let -- create expressions for each clause
+//            opName b1 b2 = compare (show (unqualify (hbranchName b1))) (show (unqualify (hbranchName b2)))
+//            clause (HandlerBranch opName pars body opSort nameRng patRng, resumeArg)
+//             = withScope $
+//               do (clauseName, cparams, prefix) <- case opSort of
+//                           OpVal        -> return (nameClause "tail" (length pars), pars, "val")
+//                           OpFun        -> return (nameClause "tail" (length pars), pars, "fun")
+//                           OpExcept     -> return (nameClause "never" (length pars), pars, "final ctl")
+//                           -- don't optimize ctl to exc since exc runs the finalizers before the clause (unlike ctl)
+//                           -- OpControl    | not (hasFreeVar body (newName "resume"))
+//                           --             -> (nameClause "never" (length pars), pars)  -- except
+//                           OpControl    -> do let resumeTp = TFun [(nameNil,resumeArg)] eff res
+//                                                  resumeDoc shorten = if shorten then text "resume" else empty
+//                                              addRangeInfo nameRng (RM.Implicits resumeDoc)
+//                                              return (nameClause "control" (length pars),
+//                                                      pars ++ [ValueBinder (newName "resume") (Just resumeTp) () (rangeHide nameRng) nameRng],
+//                                                      "ctl")
+//                           OpControlRaw -> do let eff0 = effectExtend heff eff
+//                                                  resumeContextTp = typeResumeContext resumeArg eff eff0 res
+//                                                  resumeDoc shorten = if shorten then text "rcontext" else empty
+//                                              addRangeInfo nameRng (RM.Implicits resumeDoc)
+//                                              return (nameClause "control-raw" (length pars),
+//                                                      pars ++ [ValueBinder (newName "rcontext") (Just resumeContextTp) () (rangeHide hrng) patRng],
+//                                                      "raw ctl")
+//                           OpControlErr -> failure "Type.Infer.inferHandler: using a bare operation is deprecated.\n  hint: start with 'val', 'fun', 'brk', or 'ctl' instead."
+//                           -- _            -> failure $ "Type.Infer.inferHandler: unexpected resume kind: " ++ show rkind
+
+//                  let qopname = if isQualified opName then opName else qualify (qualifier effectName) opName
+//                  (_,gtp,_) <- resolveFunName qopname (CtxFunArgs False (length pars + (if isInstance then 1 else 0)) [] Nothing) patRng nameRng -- todo: resolve more specific with known types?
+//                  (tp,_,_)  <- instantiateEx nameRng gtp
+//                  let parTps = case splitFunType tp of
+//                                 Just (tpars,_,_) -> (if (isInstance) then tail else id) $ -- drop the first parameter of an op for an instance (as it is the instance name)
+//                                                     map (Just . snd) tpars ++ repeat Nothing  -- TODO: propagate result type as well?
+//                                 _ -> failure $ "Type.Infer.inferHandler: bad operation type: " ++ show opName ++ ": " ++ show (pretty gtp)
+//                      cparamsx = map (\(b,mbtp) -> case b of
+//                                                     ValueBinder name Nothing _ nameRng rng -> ValueBinder name mbtp Nothing nameRng rng
+//                                                     ValueBinder name annTp _ nameRng rng   -> ValueBinder name annTp Nothing nameRng rng)
+//                                 $ zip (cparams :: [ValueBinder (Maybe Type) ()]) (parTps)
+//                      frng = combineRanged nameRng body
+//                      cname = case opSort of
+//                                OpVal -> fromValueOperationsName opName
+//                                _     -> opName
+//                      capp  = App (Var clauseName False (rangeHide hrng))
+//                                  [(Nothing,Parens (Lam cparamsx body False (getRange body)) cname prefix nameRng)] frng
+//                  -- addRangeInfo nameRng (RM.Id cname (RM.NIValue "fun" gtp "" False) [] False)
+//                  return (Nothing, capp)
+
+//        clauses <- mapM clause (zip (sortBy opName branches) resumeArgs)
+
+//        let grng = rangeNull
+//        let handlerCon = let hcon = Var handlerConName False hrng
+//                         in App hcon ([(Nothing,Lit (LitInt handlerCfc grng))] ++ clauses) rng
+//            handlerCfc = -- (\i -> App (Var nameInternalInt32 False grng) [(Nothing,Lit (LitInt i grng))] grng) $
+//                         if (null branches) then 1 --linear
+//                                            else foldr1 cfcLub (map hbranchCfc branches)
+//                       where
+//                         cfcLub x y   = if ((x==0&&y==1)||(x==1&&y==0)) then 2 else max x y
+//                         hbranchCfc b = case hbranchSort b of -- todo: more refined analysis
+//                                         OpVal    -> 1
+//                                         OpFun    -> 1
+//                                         OpExcept -> 0
+//                                         _        -> 3 --multi/wild
+//            -- create handler expression
+//            actionName = newHiddenName "action"
+//            handleName = toHandleName effectName
+//            handleRet  = case ret of -- todo: optimize return by using maybe<a->b> value in case no clause was given?
+//                           Nothing -> let argName = (newHiddenName "res")
+//                                      in Lam [ValueBinder argName Nothing Nothing rng rng] (Var argName False rng) False hrng -- don't pass `id` as it needs to be opened
+//                           Just expr -> expr
+//            handleExpr action = App (Var handleName False rng)
+//                                 [{-(Nothing,handlerCfc),-}(Nothing,handlerCon),(Nothing,handleRet),(Nothing,action)] hrng
+
+
+
+//        -- extract the action type for the case where it is higher-ranked (for scoped effects)
+//        -- this way we can annotate the action parameter with a higher-rank type if needed
+//        -- so it is propagated automatically.
+//        penv <- getPrettyEnv
+//        (_,handleTp,_)  <- resolveFunName handleName CtxNone rng rng
+//        (handleRho,_,_) <- instantiateEx rng handleTp
+//        actionTp <- case splitFunType handleRho of
+//                         Just ([_,_,actionTp],_,_)
+//                           -> subst (snd actionTp)
+//                         _ -> failure ("Type.Infer: unexpected handler type: " ++ show (ppType penv handleRho))
+//        let handlerExpr = Parens (Lam [ValueBinder actionName (Just actionTp) Nothing rng rng]
+//                                      (handleExpr (Var actionName False rng)) False hrng) (newName "handler") "expr" rng
+
+//        -- and check the handle expression
+//        hres@(xhtp,_,_) <- inferExpr propagated expect handlerExpr
+//        htp <- subst xhtp
+
+//        -- extract handler effect
+//        let (actionTp1,heffect) = case splitFunScheme(htp) of
+//                         Just (_,[arg],heff,hresTp) -> (snd arg,heff)
+//                         _ -> failure $ "Type.Infer.inferHandler: unexpected handler type: " ++ show (ppType penv htp)
+
+//        if (not (labelIsLinear heff))
+//         then return ()
+//         else checkLinearity effectName heffect branches hrng rng
+
+//        -- insert a mask<local> over the action?
+//        if True -- (not (containsLocalEffect heffect) || not allowMask)
+//          then return hres
+//          else do
+//                  hp <- Op.freshTVar kindHeap Meta
+//                  let actionTp2  = removeLocalEffect penv actionTp1
+//                      handlerExprMask
+//                         = if isInstance
+//                            then let instName   = newHiddenName "hname"
+//                                 in Lam [ValueBinder actionName (Just actionTp2) Nothing rng rng]
+//                                     (handleExpr (Lam [ValueBinder instName Nothing Nothing rng rng]
+//                                                    (Inject (TApp typeLocal [hp])
+//                                                       (Lam [] (App (Var actionName False rng) [(Nothing,Var instName False rng)] rng) False rng)
+//                                                       False hrng) False hrng)) False hrng
+//                            else Lam [ValueBinder actionName (Just actionTp2) Nothing rng rng]
+//                                   (handleExpr (Lam [] (Inject (TApp typeLocal [hp]) (Var actionName False rng) False hrng) False hrng)) False hrng
+//                  inferExpr propagated expect handlerExprMask  -- and re-infer :-)
+
+
+
+fun check-linearity(effectName: name, heffect: ktype, branches: list<handler-branch<ktype>>, hrng: range, rng: range)
+  fun check-linear-clauses()
+    fun check(hbranch)
+      if hbranch.branchSort <= OpFun then ()
+      else context-error(rng, hbranch.branchPatRange, 
+        "operation".text |+| hbranch.branchName.pp-name |+| 
+        "needs to be linear but is handled in a non-linear way (as '".text |.| hbranch.branchSort.show.text |.| "')".text, 
+        [("hint".text, "use a 'val' or 'fun' operation clause instead".text)])
+    branches.map(check)
+  fun check-linear-effect()
+    val (effs, tl) = heffect.extract-effect-extend
+    match effs.drop-while(_.label-is-linear)
+      Cons(e) -> 
+        context-error(rng, hrng, 
+          "handler for".text |+| pp-name(effectName) |+| 
+          "needs to be linear but uses a non-linear effect:".text |+| e.pp-type, 
+          [("hint".text, "ensure only linear effects are used in a handler".text)])
+      [] -> ()
+  check-linear-clauses()
+  check-linear-effect()
+
+// Infer the handled effect from looking at the operation clauses
+fun infer-handled-effect(rng: range, handlerSort: handler-sort, mbeff: maybe<keffect>, ops: list<handler-branch<ktype>>): _ keffect
+  match mbeff
+    Just(eff) -> eff
+    Nothing -> 
+      match ops
+        Cons(HandlerBranch(name, pars, expr, opSort, nameRng, rng), _) ->
+          // TODO: handle errors if we find a non-operator
+          val isInst = handlerSort.is-handlerInstance
+          val (qname, tp, info) = resolve-fun-name(name, CtxFunArgs(isInst, pars.length + (if isInst then 1 else 0), [], Nothing), rng, nameRng)
+          val (_, rho, _) = instantiate-ex(tp, nameRng)
+          match rho.split-fun-type
+            Just((Cons((op-name, rtp)), _, _)) | isInst && op-name == new-hidden-name("hname") ->
+              match rtp
+                TApp(TCon(ev), [teff]) | ev.type-con/name == nameTpEv ->
+                  val dataInfo = find-data-info(teff.get-type-name)
+                  wrap-handled-from-data-effect(dataInfo.dEffect, teff)
+                _ -> inf-error(rng, "Type.Infer.inferHandledEffect: illegal named effect type in operation?".text)
+            Just((_, eff, _)) | handlerSort.is-handlerInstance -> 
+              match eff.extract-effect-extend
+                (ls, _) ->
+                  match ls.filter(_.is-handled-effect)
+                    Cons(l, _) -> l // TODO: can we assume the effect comes first?
+                    Nil -> inf-error(rng, "Type.Infer.inferHandledEffect: not an effect operation:".text |+| qname.pp-name |.| ".".text)
+                _ -> inf-error(rng, "Type.Infer.inferHandledEffect: cannot resolve effect operation:".text |+| qname.pp-name |.| ".".text |-| " hint: maybe wrong number of parameters?".text)
+            _ -> inf-error(rng, "Type.Infer.inferHandledEffect: unable to determine the handled effect.".text |-| " hint: use a `handler<eff>` declaration?".text)
+
+// Check coverage is not needed for type inference but gives nicer error messages
+fun check-coverage(rng: range, eff: ktype, handler-con-name: name, branches: list<handler-branch<ktype>>)
+  val mod-name = handler-con-name.qualifier
+  fun field-to-op-name(fname: name)
+    val (pre, post) = fname.nameLocalQual.list.span(_ != '-')
+    val (op-sort, op-name) = 
+      match (read-op-sort(pre.string), pre.take(1), post) 
+        (Just(op-sort), ['@'], Cons(_, op-name)) -> (op-sort, op-name.string)
+        _ -> failure/fail("Type.Infer.checkCoverage: illegal operation field name: " ++ fname.show ++ " in " ++ handler-con-name.show)
+    (mod-name.qualify(new-qualified(fname.nameModule, op-name)), op-sort)
+  fun branch-to-op-name(hbranch: handler-branch<ktype>)
+    val nm = 
+      if is-value-operation-name(hbranch.branchName) then // .val-<op>
+        from-value-operation-name(hbranch.branchName) 
+      else hbranch.branchName
+    (mod-name.qualify(nm.unqualify), hbranch.branchSort)
+  fun check-coverage-of(all-op-names: list<name>, op-names: list<(name, operation-sort)>, branch-names: list<(name, operation-sort)>)
+    match op-names 
+      [] ->
+        if branch-names.is-empty then () 
+          // should not occur if branches typechecked previously
+        else match branch-names.filter(fn((bname, _)) !all-op-names.contains(bname))
+          Cons((bname, _), _) -> term-error(rng, "operator".text |+| bname.pp-name |+| "is not part of the handled effect".text, eff, [])
+          Nil -> inf-error(rng, "some operators are handled multiple times for effect".text |+| eff.pretty)
+      Cons((op-name, op-sort),op-names') ->
+        val (matches, branch-names') = branch-names.partition(fn((bname, _)) bname == op-name)
+        match matches
+          [(bname, bsort)] -> 
+            if bsort != op-sort && op-sort == OpVal then 
+              inf-error(rng, "cannot handle a 'val' operation".text |+| op-name.pp-name |+| "with".text |+| squotes(bsort.show.text))
+            elif bsort > op-sort then 
+              inf-warning(rng, "operation".text |+| op-name.pp-name |+| "is declared as '".text |+| op-sort.show.text |+| "' but handled here using '".text |+| bsort.show.text |+| "'".text)
+            else ()
+          [] -> inf-error(rng, "operator".text |+| op-name.pp-name |+| "is not handled".text)
+          _ -> inf-error(rng, "operator".text |+| op-name.pp-name |+| "is handled multiple times".text)
+  val (_, _, _, con-info) = resolve-con-name(handler-con-name, Nothing, rng)
+  val op-names = con-info.params.drop(1).map(fn((fname, _)) field-to-op-name(fname)) // Drop (cfc) parameter
+  val branch-names = branches.map(_.branch-to-op-name)
+  check-coverage-of(op-names.map(fst), op-names, branch-names)
+
 // resolve the effect tag core expression for handled effects.
 fun effect-name-core(eff: keffect, rng: range): _ (maybe<core/core/expr>, name)
   match eff.expand-syn
@@ -189,7 +445,7 @@ fun infer-app-fun-first(prop, fexpr, fresolved, fixed0, named0, implicits0: list
         if fixed-implicit-args.is-empty || fixed-implicit-args.length > timplicits.length then // too many arguments? see `test/static/wrong/rec1`
           (fixed0, named0)
         else 
-          val fixed-implicits = timplicits.zipwith(fixed-implicit-args, fn((name, tp), expr: syntax/syntax/expr<_>) ((name, expr.range), expr))
+          val fixed-implicits = timplicits.zipwith(fixed-implicit-args, fn((name, _), expr: syntax/syntax/expr<_>) ((name, expr.range), expr))
           (fixed1, fixed-implicits ++ named0)
       _ -> (fixed0, named0)
   // only add resolved implicits that were not already named
@@ -290,8 +546,6 @@ fun infer-app-args-first(fresolved, funExpr, args, fixed, named0, rng, expect, p
         Nothing -> infer-app-args-first(fresolved', funExpr, fixs, fixed, named0, rng, expect, prop)
   
 fun infer-app(prop: maybe<(ktype, range)>, expect: expect, funExpr: syntax/syntax/expr<ktype>, nargs: list<(maybe<(name,range)>, syntax/syntax/expr<ktype>)>, rng: range): _ (ktype, keffect, core/core/expr)
-  
-
   // we cannot resolve an overloaded function name: infer types of arguments without propagation first.
   // The code handles inferring arguments in any order by keeping track of the index, but at the moment
   // we always infer from left to right until we can resolve the function type and then propagate argument types. 
@@ -330,9 +584,9 @@ fun infer-lam(top: bool, prop: maybe<(ktype, range)>, expect: expect, bindersl: 
     val body = unpack-implicitss.foldr(body0, fn(f, x) f(x))
     val FunMatchResult(prop-args, prop-eff, prop-body, skolems, expect-body) = match-fun(bindersX.length, prop)
     val binders0 = bindersX.zipwith(prop-args) fn(binder, mb-prop)
-      match binder.tp
-        Nothing -> ValueBinder(binder.name, mb-prop.map(snd))
-        Just(_) -> ValueBinder(binder.name, binder.tp)
+      match binder.binderType
+        Nothing -> ValueBinder(binder.name, mb-prop.map(snd), binder.expr, binder.name-range, binder.range)
+        Just(_) -> ValueBinder(binder.name, binder.binderType, binder.expr, binder.name-range, binder.range)
     val binders1 = binders0.map(instantiate-binder)
     val eff = 
       match prop-eff
