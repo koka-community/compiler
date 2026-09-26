@@ -9,7 +9,7 @@
   found in the LICENSE file at the root of this distribution.
 ---------------------------------------------------------------------------*/
 
-#define KKLIB_BUILD          178    // modify on changes to trigger recompilation..
+#define KKLIB_BUILD          188    // modify on changes to trigger recompilation..
 // #define KK_DEBUG_FULL       1    // set to enable full internal debug checks
 
 // Includes
@@ -111,6 +111,17 @@ static inline bool kk_refcount_is_thread_shared(kk_refcount_t rc) {
 }
 
 // Is the reference unique, or are there (possibly) references from other threads? (includes static variables)
+// Sticky/stuck refcounts (see refcount.c). A block with a stuck refcount is a
+// process-lifetime static shared across threads: dup and drop are semantically
+// no-ops on it. They were still routed out-of-line to kk_block_check_dup/drop,
+// because a stuck refcount is negative and so takes the `rc <= 0` slow path --
+// so every dup/drop of a static cost a real call (measured 3.4ns -> 1.6ns per
+// dup+drop pair once tested inline). The test below is only ever reached on
+// that slow path, so ordinary blocks (rc > 0) pay nothing.
+#define KK_RC_STUCK          INT32_MIN
+#define KK_RC_STICKY         (KK_RC_STUCK + 0x10000000)
+#define KK_RC_STICKY_DROP    (KK_RC_STUCK + 0x20000000)
+
 static inline bool kk_refcount_is_unique_or_thread_shared(kk_refcount_t rc) {
   return (rc <= 0);
 }
@@ -499,6 +510,14 @@ kk_decl_export void kk_warning_message(const char* msg, ...);
 kk_decl_export void kk_info_message(const char* msg, ...);
 kk_decl_export void kk_unsupported_external(const char* msg);
 
+// The single statically-allocated empty evidence vector. Exposed so
+// `kk_evv_empty` (std/core/inline/hnd.h) can inline to its address rather than
+// calling into kklib: `@open-none` wraps every effect operation in
+// `evv-swap-create0(); ..; evv-set(w)`, so that call ran twice per operation
+// purely to hand back a constant -- 4.5% of self time in a profile of interface
+// parsing. Its refcount is stuck, so no dup is needed either.
+kk_decl_export kk_block_t kk_evv_empty_static_block;
+
 kk_decl_export kk_datatype_ptr_t kk_evv_empty_singleton(kk_context_t* ctx);
 
 
@@ -507,39 +526,13 @@ kk_decl_export kk_datatype_ptr_t kk_evv_empty_singleton(kk_context_t* ctx);
 --------------------------------------------------------------------------------------*/
 
 #ifdef KK_MIMALLOC
-#if MI_MALLOC_VERSION < 3000
-#ifdef KK_MIMALLOC_INLINE
-  static inline void* kk_malloc_small(kk_ssize_t sz, kk_context_t* ctx) {
-    return kk_mi_heap_malloc_small_inline(ctx->heap, (size_t)sz);
-  }
-#else
-  static inline void* kk_malloc_small(kk_ssize_t sz, kk_context_t* ctx) {
-    return mi_heap_malloc_small(ctx->heap, (size_t)sz);
-  }
-#endif
-
-static inline void* kk_malloc(kk_ssize_t sz, kk_context_t* ctx) {
-  return mi_heap_malloc(ctx->heap, (size_t)sz);
-}
-
-static inline void* kk_zalloc(kk_ssize_t sz, kk_context_t* ctx) {
-  kk_unused(ctx);
-  return mi_heap_zalloc(ctx->heap, (size_t)sz);
-}
-
-static inline void* kk_realloc(void* p, kk_ssize_t sz, kk_context_t* ctx) {
-  kk_unused(ctx);
-  return mi_heap_realloc(ctx->heap, p, (size_t)sz);
-}
-
-static inline void kk_free_small(const void* p, kk_context_t* ctx) {
-  kk_free(p,ctx);
-}
-
-#else
 // mimalloc v3
 static inline void* kk_malloc_small(kk_ssize_t sz, kk_context_t* ctx) {
-  return mi_theap_malloc_small(ctx->heap, (size_t)sz);
+  return mi_theap_wmalloc_small(ctx->heap, mi_wsize_from_size((size_t)sz));
+}
+
+static inline void* kk_zalloc_small(kk_ssize_t sz, kk_context_t* ctx) {
+  return mi_theap_wzalloc_small(ctx->heap, mi_wsize_from_size((size_t)sz));
 }
 
 static inline void* kk_malloc(kk_ssize_t sz, kk_context_t* ctx) {
@@ -547,24 +540,20 @@ static inline void* kk_malloc(kk_ssize_t sz, kk_context_t* ctx) {
 }
 
 static inline void* kk_zalloc(kk_ssize_t sz, kk_context_t* ctx) {
-  kk_unused(ctx);
   return mi_theap_zalloc(ctx->heap, (size_t)sz);
 }
 
 static inline void* kk_realloc(void* p, kk_ssize_t sz, kk_context_t* ctx) {
-  kk_unused(ctx);
   return mi_theap_realloc(ctx->heap, p, (size_t)sz);
 }
 
 static inline void kk_free_small(const void* p, kk_context_t* ctx) {
   kk_unused(ctx);
-  mi_free_small((void*)p);
+  mi_free_small_nonnull((void*)p);
 }
 
-#if MI_PAGE_META_ALIGNED_FREE_SMALL
+#if MI_PAGE_META_ALIGNED_FREE_SMALL || MI_PAGE_META_SMALL_IS_ALIGNED
 #define KK_HAS_FAST_FREE_SMALL  1
-#endif
-
 #endif
 
 static inline void kk_free(const void* p, kk_context_t* ctx) {
@@ -592,6 +581,10 @@ static inline void* kk_malloc_small(kk_ssize_t sz, kk_context_t* ctx) {
 static inline void* kk_zalloc(kk_ssize_t sz, kk_context_t* ctx) {
   kk_unused(ctx);
   return calloc(1, (size_t)sz);
+}
+
+static inline void* kk_zalloc_small(kk_ssize_t sz, kk_context_t* ctx) {
+  return kk_zalloc(sz,ctx);
 }
 
 static inline void* kk_realloc(void* p, kk_ssize_t sz, kk_context_t* ctx) {
@@ -674,6 +667,15 @@ static inline kk_block_t* kk_block_alloc(kk_ssize_t size, kk_ssize_t scan_fsize,
   return b;
 }
 
+static inline kk_block_t* kk_block_zalloc(kk_ssize_t size, kk_ssize_t scan_fsize, kk_tag_t tag, kk_context_t* ctx) {
+  kk_assert_internal(scan_fsize >= 0 && scan_fsize < KK_SCAN_FSIZE_MAX);
+  kk_assert(!kk_tag_is_raw(tag) || scan_fsize == 0);
+  kk_block_t* b = (kk_block_t*)kk_zalloc_small(size, ctx);
+  kk_block_init(b, size, scan_fsize, 0, tag);
+  return b;
+}
+
+
 static inline kk_block_t* kk_block_alloc_raw(kk_ssize_t size, kk_tag_t tag, kk_context_t* ctx) {
   kk_assert(kk_tag_is_raw(tag));
   return kk_block_alloc(size, 0, tag, ctx);
@@ -682,6 +684,13 @@ static inline kk_block_t* kk_block_alloc_raw(kk_ssize_t size, kk_tag_t tag, kk_c
 static inline kk_block_t* kk_block_alloc_any(kk_ssize_t size, kk_ssize_t scan_fsize, kk_tag_t tag, kk_context_t* ctx) {
   kk_assert_internal(scan_fsize >= 0 && scan_fsize < KK_SCAN_FSIZE_MAX);
   kk_block_t* b = (kk_block_t*)kk_malloc(size, ctx);
+  kk_block_init(b, size, scan_fsize, 0, tag);
+  return b;
+}
+
+static inline kk_block_t* kk_block_zalloc_any(kk_ssize_t size, kk_ssize_t scan_fsize, kk_tag_t tag, kk_context_t* ctx) {
+  kk_assert_internal(scan_fsize >= 0 && scan_fsize < KK_SCAN_FSIZE_MAX);
+  kk_block_t* b = (kk_block_t*)kk_zalloc(size, ctx);
   kk_block_init(b, size, scan_fsize, 0, tag);
   return b;
 }
@@ -763,6 +772,7 @@ static inline kk_block_t* kk_block_dup(kk_block_t* b) {
   kk_assert_internal(kk_block_is_valid(b));
   const kk_refcount_t rc = kk_block_refcount(b);
   if kk_unlikely(kk_refcount_is_thread_shared(rc)) {  // (signed)rc < 0
+    if (rc <= KK_RC_STICKY) return b;                 // sticky/stuck: dup is a no-op
     return kk_block_check_dup(b, rc);                 // thread-shared or sticky (overflow) ?
   }
   else {
@@ -776,6 +786,7 @@ static inline void kk_block_drop(kk_block_t* b, kk_context_t* ctx) {
   kk_assert_internal(kk_block_is_valid(b));
   const kk_refcount_t rc = kk_block_refcount(b);
   if (kk_refcount_is_unique_or_thread_shared(rc)) {  // (signed)rc <= 0
+    if (rc <= KK_RC_STICKY_DROP) return;             // sticky/stuck: drop is a no-op
     kk_block_check_drop(b, rc, ctx);    // thread-shared, sticky (overflowed), or can be freed?
   }
   else {
@@ -938,6 +949,9 @@ static inline void kk_reuse_drop(kk_reuse_t r, kk_context_t* ctx) {
 kk_decl_export void        kk_block_mark_shared(kk_block_t* b, kk_context_t* ctx);
 kk_decl_export void        kk_box_mark_shared(kk_box_t b, kk_context_t* ctx);
 kk_decl_export void        kk_box_mark_shared_recx(kk_box_t b, kk_context_t* ctx);
+kk_decl_export void        kk_block_make_stuck(kk_block_t* b);  // refcount becomes stuck: dup/drop no-ops, never freed (for process-lifetime globals)
+kk_decl_export void        kk_block_mark_static(kk_block_t* b, kk_context_t* ctx);  // mark a reachable graph stuck (toplevel constants)
+kk_decl_export void        kk_box_mark_static(kk_box_t b, kk_context_t* ctx);
 
 
 /*--------------------------------------------------------------------------------------
@@ -1299,6 +1313,25 @@ static inline kk_datatype_t kk_datatype_null(void) {
 
 static inline bool kk_datatype_is_null(kk_datatype_t d) {
   return kk_datatype_eq(d, kk_datatype_null());
+}
+
+// Atomic access to a datatype slot that is published at most once, going
+// null -> value by a single successful `kk_datatype_atomic_publish` (used for
+// lazily initialized statics like string literals). The acquire load pairs
+// with the release CAS so everything written before the publish is visible
+// through the loaded value; once non-null is observed the slot is immutable
+// and plain reads are race-free.
+static inline kk_datatype_t kk_datatype_atomic_load_acquire( kk_datatype_t* p ) {
+  kk_datatype_t d;
+  d.dbox = kk_atomic_load_acquire((_Atomic(kk_intb_t)*)&(p->dbox));
+  return d;
+}
+
+// Publish `d` into a null slot; returns `false` if another thread already
+// published (the slot keeps the winner's value and `d` should be discarded).
+static inline bool kk_datatype_atomic_publish( kk_datatype_t* p, kk_datatype_t d ) {
+  kk_intb_t expected = kk_datatype_null().dbox;
+  return kk_atomic_cas_strong_acq_rel((_Atomic(kk_intb_t)*)&(p->dbox), &expected, d.dbox);
 }
 
 static inline kk_datatype_t kk_datatype_unbox(kk_box_t b) {

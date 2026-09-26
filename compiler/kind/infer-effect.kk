@@ -21,7 +21,7 @@ import compiler/syntax/range-map
 import compiler/syntax/syntax
 import compiler/core/core
 import compiler/common/error
-import std/data/linear-map
+import std/data/rb-map
 
 pub type infer-kind-env
   InferKindEnv(
@@ -44,30 +44,51 @@ pub effect infer-kind-effect
   fun add-synonym(syn: syn-info): ()
   fun add-external(name: name, rng: range): ()
   fun lookup-external(name: name): maybe<range>
-  val platform: platform
+  // Kind errors ACCUMULATE (inference continues with a fallback) and are raised together at the end of the kind phase --
+  // aborting at the first one loses upstream's follow-on errors
+  fun kind-add-error(rng: range, msg: doc): ()
+  // raise the accumulated errors NOW (no-op when none): called between kind phases 
+  fun kind-flush-errors(): ()
+  val target-platform: target-platform
 
 pub fun allnewtypes(env: infer-kind-env)
   env.newtypesImported.compose(env.newtypesExtended)
 
-fun run-kind-infer(platform: platform, moduleName: name, imports: import-map, kgamma: kGamma, syns: synonyms, datas: newtypes, f: () -> _ a): _ a
+pub fun get-platform(): _ platform
+  target-platform.tpl-platform
+
+pub fun run-kind-infer(tplatform: target-platform, moduleName: name, imports: import-map, kgamma: kGamma, syns: synonyms, datas: newtypes, f: () -> _ a): _ a
   with val current-error-kind = ErrKind
   val imports' = match imports.extend(moduleName, moduleName)
     Just(imp) -> imp
     Nothing -> imports // ignore
   with handler
-    val inf-kind-env = InferKindEnv(imports', kgamma, LinearMap([]), syns, datas, newtypes/empty, LinearMap([]))
+    val inf-kind-env = InferKindEnv(imports', kgamma, rb-map/empty(), syns, datas, newtypes/empty, rb-map/empty())
   var local-syns := synonyms/empty
-  var ksub := LinearMap([])
-  var externals: name-map<range> := LinearMap([])
+  var ksub := ksubEmpty
+  var externals: name-map<range> := rb-map/empty()
+  var kerrs : errors := []
   with handler
+    // All phases run collecting errors (kind-add-error below); 
+    // only when the whole kind phase RETURNS are they raised together
+    // type inference never runs when any kind error  occurred. 
+    // NOTE: raise from the `return` clause -- a statement placed
+    // after this `with handler` gets miscompiled by the reference compiler
+    // (same class as the `with val pp-env` mlift bug, see code-gen.kk).
+    return(x)
+      if !kerrs.is-nil then add-errors(kerrs) else ()
+      x
     fun get-ksub() ksub
-    fun extend-ksub(s) ksub := ksub.compose(s)
+    fun extend-ksub(s) ksub := s.compose(ksub)
     fun get-local-syns() local-syns
     fun get-syns() inf-kind-env.synonyms.compose(local-syns)
     fun add-synonym(syn) local-syns := local-syns.extend(syn)
     fun lookup-external(nm) externals.lookup(nm)
-    fun add-external(nm, rng) externals := externals.add(nm, rng)
-    val platform = platform
+    fun add-external(nm, rng) externals := rb-map/set(externals, nm, rng) // upstream M.insert overwrites
+    fun kind-add-error(rng, msg) kerrs := kerrs ++ [msg.error-message(rng)]
+    fun kind-flush-errors()
+      if !kerrs.is-nil then add-errors(kerrs) else ()
+    val target-platform = tplatform
   f()
 
 pub fun fresh-kind()
@@ -83,9 +104,9 @@ pub fun subst(x: inf-kind)
 pub fun extend-infgamma(tbinders: list<type-binder<inf-kind>>, f)
   fun check(TypeBinder(nm, infkind, nmrng, _): type-binder<inf-kind>, infgamma: inf-kgamma)
     match infgamma.lookup(nm)
-      Nothing -> infgamma.add(nm, infkind)
+      Nothing -> infgamma.set(nm, infkind) // upstream M.insert (key absent here, but keep insert semantics)
       Just(_) ->
-        add-error(nmrng, "Type".text |+| nm.pp-type |+| "is already defined".text)
+        kind-add-error(nmrng, "Type".text |+| nm.pp-type |+| "is already defined".text)
         infgamma.set(nm, infkind) // replace
   val infgammaNew = tbinders.foldl(inf-kind-env.infgamma, fn(acc, tb) tb.check(acc))
   with override
@@ -105,7 +126,7 @@ pub fun extend-kgamma(rngs: list<range>, dg: compiler/core/core/typedef-group, f
       match kgamma.lookup-qualified(nm)
         Nothing -> (kgamma.extend(nm, knd, doc), Cons(tdef, tdefs))
         Just(_) ->
-          add-error(rng, "Type".text |+| nm.pp-type |+| "is already defined".text)
+          kind-add-error(rng, "Type".text |+| nm.pp-type |+| "is already defined".text)
           (kgamma, tdefs)
   val (_, tdefs) = zip(rngs, dg).foldl((inf-kind-env.kGamma, []), check)
   
@@ -136,7 +157,7 @@ pub fun check-external(name: name, range: range)
   val mbres = lookup-external(name)
   match mbres
     Just(rng0) ->
-      add-error(range, "external".text |+| name.pretty-name(colors) |+| "is already defined at".text |+| rng0.start.show.text |-| "hint: use a local qualifier?".text)
+      kind-add-error(range, "external".text |+| name.pretty-name(colors) |+| "is already defined at".text |+| rng0.start.show.text |-| "hint: use a local qualifier?".text)
     _ -> 
       add-external(name, range)
 
@@ -146,19 +167,38 @@ fun inf-qualified-name(nm: name, rng: range)
     match expand(inf-kind-env.imports, nm)
       Right((name', alias0)) ->
         if !nm.qualifier.name-case-equal-prefix-of(alias0) then
-          add-error(rng, "module".text |+| nm.pp-module |+| "should be cased as".text |+| alias0.pretty.color(colors.colorModule))
+          kind-add-error(rng, "module".text |+| nm.pp-module |+| "should be cased as".text |+| alias0.pretty.color(colors.colorModule))
           name'
         else
           name'
       Left([]) ->
-        add-error(rng, "module".text |+| nm.pp-module |+| "is undefined".text)
+        kind-add-error(rng, "module".text |+| nm.pp-module |+| "is undefined".text)
         nm
       Left(aliases) ->
-        add-error(rng, "module".text |+| nm.pp-module |+| ambiguous(aliases))
+        kind-add-error(rng, "module".text |+| nm.pp-module |+| ambiguous(aliases))
         nm
 
 fun pp-module(nm: name)
   nm.nameModule.text.color(colors.colorModule)
+
+// Resolve a type name WITHOUT reporting errors: used by implicit-parameter
+// unpacking (`.?name`), where the parameter name may not be a type at all
+// (the unpack type then comes from the parameter's type annotation instead).
+pub fun lookup-infkind-name(nm0: name): _ maybe<name>
+  val nm = match expand(inf-kind-env.imports, nm0)
+    Right((name', _)) -> name'
+    _ -> nm0
+  val qname = if nm.is-qualified then nm else qualify(current-modname(), nm)
+  val infgamma = inf-kind-env.infgamma
+  match infgamma.lookup(nm)
+    Just(_) -> Just(nm)
+    Nothing ->
+      match infgamma.lookup(qname)
+        Just(_) -> Just(qname)
+        Nothing ->
+          match inf-kind-env.kGamma.lookup(current-modname(), nm)
+            Found((qname', _)) -> Just(qname')
+            _ -> Nothing
 
 pub fun find-infkind(nm0: name, rng: range)
   val (nm, mbAlias) = match expand(inf-kind-env.imports, nm0)
@@ -180,28 +220,28 @@ pub fun find-infkind(nm0: name, rng: range)
             Found((qname', TypeNameInfo(kind, doc))) ->
               val name' = if nm.is-qualified then qname' else qname'.unqualify
               if !name'.name-case-equal(nm) then
-                add-error(rng, "type".text |+| nm0.unqualify.pp-type |+| "should be cased as".text |+| name'.unqualify.pp-type)
+                kind-add-error(rng, "type".text |+| nm0.unqualify.pp-type |+| "should be cased as".text |+| name'.unqualify.pp-type)
               else
                 ()
               match mbAlias
                 Just(alias0) | nm0.nameModule != alias0.nameModule ->
-                  add-error(rng, "module".text |+| nm0.nameModule.text.color(colors.colorModule) |+| "should be cased as ".text |+| alias0.pretty.color(colors.colorModule))
+                  kind-add-error(rng, "module".text |+| nm0.nameModule.text.color(colors.colorModule) |+| "should be cased as".text |+| alias0.pretty.color(colors.colorModule))
                 _ -> ()
-              (qname, KICon(kind), doc)
+              (qname', KICon(kind), doc)
             NotFound ->
               // trace("cannot find type: " ++ nm.pp-type(colors).show)
-              add-error(rng, "Type".text |+| nm.pp-type |+| "is not defined".text |-| " hint: bind the variable using".text |+| ("forall<".text |.| nm.pp-type |.| ">".text).color(colors.colorType) |+| "?".text)
+              kind-add-error(rng, "Type".text |+| nm.pp-type |+| "is not defined".text |-| " hint: bind the variable using".text |+| ("forall<".text |.| nm.pp-type |.| ">".text).color(colors.colorType) |+| "?".text)
               val k = fresh-kind()
               (nm, k, "")
             Ambiguous(names) ->
-              add-error(rng, "Type".text |+| nm.pp-type |+| ambiguous(names))
+              kind-add-error(rng, "Type".text |+| nm.pp-type |+| ambiguous(names))
               val k = fresh-kind()
               (nm, k, "")
 
 fun ambiguous(lst: list<name>)
   match lst
     [name1, name2] -> "is ambiguous.".text |-| " hint: It can refer to either".text |+| name1.pp-type |.| ", or".text |+| name2.pp-type
-    [name1, name2, name3] -> "is ambiguous.".text |-| " hint: It can refer to either".text |+| name1.pp-type |.| ", ".text |+| name2.pp-type |.| ", or".text |+| name3.pp-type
+    [name1, name2, name3] -> "is ambiguous.".text |-| " hint: It can refer to either".text |+| name1.pp-type |.| ",".text |+| name2.pp-type |.| ", or".text |+| name3.pp-type
     [name] -> "should be cased as:".text |+| name.unqualify.pp-type
     names -> "is ambiguous and can refer to multiple imports:".text |-| names.map(pp-type).list.indent(1)
 

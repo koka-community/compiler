@@ -15,7 +15,6 @@ import compiler/platform/config
 import std/os/env
 import std/core/unsafe
 import std/os/process
-import std/core-extras
 
 fun is-literal-doc(fname: path)
   fname.string.ends-with(source-ext ++ ".md").bool ||
@@ -105,6 +104,71 @@ fun build-env(env: env): _ maybe<env>
   if env.is-empty then return Nothing
   val old = get-env()
   Just(env ++ old.filter(fn((k,_)) env.lookup(_ == k).is-nothing))
+
+// File modification time, in epoch seconds.
+//
+// A direct `stat(2)`. This used to shell out (`sh -c 'stat -f %m ... || stat -c
+// %Y ...'`), which cost a fork+exec per query -- MEASURED AT 8ms EACH. That is
+// paid per module AND per dependency by `stale-p`, so a warm build spent
+// seconds doing nothing but asking the shell for timestamps. Cheap mtimes are
+// also what makes it viable to check interface freshness before deciding
+// whether a source needs scanning at all.
+//
+// A missing or unreadable file reports 0, which makes a missing artifact
+// infinitely stale without needing a special case at the call sites.
+extern import
+  c file "file-inline.c"
+
+extern file-mtime-prim( p : string ) : ndet int
+  c "kk_compiler_file_mtime"
+
+pub fun file-mtime( p : path ) : io int
+  file-mtime-prim(p.string)
+
+// Read at most `max-bytes` from the head of a file. For scanning a header out
+// of a file whose tail is irrelevant -- an interface's import block is the
+// first thing in it, and interfaces run to megabytes.
+extern read-head-prim( p : string, max-bytes : int ) : ioc string
+  c "kk_compiler_read_head"
+
+pub fun read-head( p : path, max-bytes : int = 65536 ) : io string
+  read-head-prim(p.string, max-bytes)
+
+// Monotonic-ish CPU millisecond clock for coarse timing (KOKA_TIMING).
+// Named `now-ms` to avoid clashing with driver.kk's private `cpu-ms`.
+extern import
+  c include-inline "#include <time.h>"
+
+pub extern now-ms(): ndet int
+  c inline "kk_integer_from_int((kk_intx_t)(clock()/(CLOCKS_PER_SEC/1000)), kk_context())"
+
+// Wall-clock epoch NANOSECONDS -- the same unit and origin as `file-mtime`, so
+// the two are directly comparable. An in-memory source (a language server's
+// edited buffer) needs a timestamp on this scale or staleness comparisons
+// against on-disk interfaces are meaningless.
+pub extern epoch-nanos(): ndet int
+  c "kk_compiler_epoch_nanos"
+
+// Atomic text-file write: write to a unique temp file in the target
+// directory, then rename over the destination. `rename(2)` within one
+// filesystem is atomic, so concurrent koka processes sharing a build cache
+// never observe a half-written interface or C file (8 sweep workers do exactly
+// this).
+//
+// One `mkstemp`+`rename` syscall pair, not `mktemp` and `mv -f`. The shell
+// version cost TWO fork+execs per file -- ~8ms each -- and this runs three
+// times per compiled module (.kki, .c, .h), so it was six spawns per module
+// sitting inside the codegen phase. It also built its command lines by
+// pasting paths into single quotes, which a path containing a quote would
+// have broken.
+extern write-atomic-prim( p : string, content : string ) : ioc bool
+  c "kk_compiler_write_atomic"
+
+pub fun write-text-file-atomic( p : path, content : string ) : io ()
+  // false on any failure; fall back to a direct (non-atomic) write, as the
+  // shell version did when `mktemp` was unavailable
+  if write-atomic-prim(p.string, content) then ()
+  else write-text-file(p, content)
 
 // TODO: Missing file time and exists functions - in koka std core - though the libuv branch would have it
 // Compare to file modification times (uses 0 for non-existing files)

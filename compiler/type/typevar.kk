@@ -1,4 +1,5 @@
 module compiler/type/typevar
+// Updated as of 7/23/26: Commit 0ed6ce0
 
 import compiler/type/type
 import compiler/core/core
@@ -8,10 +9,12 @@ import compiler/common/syntax
 import compiler/common/name
 import compiler/common/range
 import compiler/common/unique
-import std/data/linear-set
-import std/data/linear-map
+import std/data/rb-set
+import std/data/int-map
+import std/num/int64
 import std/core/undiv
-import std/core-extras // list.contains
+import std/data/rb-map
+import compiler/common/name-collections
 
 pub infixr 5 (|->)
 
@@ -45,35 +48,42 @@ pub fun all-tv(a: a, ?bound-type-vars: (a) -> _ tvs, ?free-type-vars: (a) -> _ t
 //--------------------------------------------------------------------------}
 
 // A substitution from type variables to 'Tau's.
+// PERF: keyed by the tvar id in a Patricia-tree int-map (upstream: Data.Map
+// over TypeVar whose Ord compares ids). The value keeps the type-var itself
+// for `sub/lookup`'s kind/flavour sanity checks and for `sub/list`/`sub/dom`.
+// The previous assoc-list representation made substitution lookup/compose
+// the hottest code in type inference (profiled on test/algeff/implicits:
+// port 144s vs upstream 1.7s, dominated by assoc-list update + tv (==)).
 pub struct sub
-  map: linear-map<type-var, ktype>
+  map: int-map<(type-var, ktype)>
   tvs: tvs
 
-pub fun sub/unsub(s: sub): linear-map<type-var, ktype>
-  s.map
+fun tv-key(tv: type-var): int64
+  tv.tid.int64
 
 pub fun sub/count(Sub(sub): sub): int
-  sub.list.length
+  sub.size
 
-pub val sub/null = Sub(LinearMap([]), LinearSet([]))
+pub val sub/null = Sub(empty-intmap, tvs/empty)
 
 pub fun sub/is-null(Sub(sub): sub): bool
-  sub.list.is-empty
+  sub.is-empty
 
 pub fun new/sub(sub: list<(type-var, ktype)>): _ sub
-  if sub.all(fn((tv, t)) tv.kind == t.kind) then
-    Sub(LinearMap([]) + sub, sub.map(fst).tvs.union(sub.map(snd).free-type-vars))
-  else
-    throw("type/typevar: subNew kind mismatch")
+  // upstream subNew's kind-mismatch assertion is COMMENTED OUT (TypeVar.hs) --
+  // inlined .kki bodies can produce benign kind-mismatched pairings during
+  // type-beta (algeff/shallow1); making this a hard throw diverges from upstream
+  Sub(int-map/from-list(sub.map(fn((tv, tp)) (tv.tv-key, (tv, tp)))),
+      sub.map(fst).tvs.union(sub.map(snd).free-type-vars))
 
 pub fun sub/dom(Sub(sub): sub): tvs
-  (sub.list.map(fst)).tvs
+  Tvs(sub.map(fn((tv, _)) tv))
 
 pub fun sub/range(s: sub): list<ktype>
   s.list.map(snd)
 
 pub fun sub/list(s: sub): list<(type-var, ktype)>
-  s.map.list
+  s.map.list.map(snd)
 
 pub fun sub/common(s1: sub, s2: sub): _ list<(type-var, (tau, tau))>
   s1.list.map(fn(s) s2.lookup(s.fst).map((s.fst, (s.snd, _)))).concat-maybe
@@ -89,13 +99,12 @@ pub fun sub/single(tvar: type-var, tau: tau)
     throw("type/typevar: subSingle: recursive type " ++ tvar.show-tv)
   if tau.kind != tvar.kind then
     throw("type/typevar: subSingle: kind mismatch " ++ tau.show ++ " " ++ tvar.show)
-  Sub(LinearMap([(tvar, tau)]), free-type-vars(tau).add(tvar))
+  Sub(int-map/from-list([(tvar.tv-key, (tvar, tau))]), free-type-vars(tau).add(tvar))
 
 pub fun sub/lookup(Sub(s): sub, tvar: type-var): _ maybe<tau>
-  match s.lookup-index(tvar) 
+  match s.lookup(tvar.tv-key)
     Nothing -> Nothing
-    Just(i) ->
-      val (ktvar, tau) = s.elem-at(i).unjust
+    Just((ktvar, tau)) ->
       if !(ktvar.flavour == tvar.flavour) then
         throw("type/typevar: subLookup: flavour mismatch " ++ ktvar.show ++ " " ++ tvar.show)
       if !(ktvar.kind == tvar.kind) then
@@ -103,22 +112,22 @@ pub fun sub/lookup(Sub(s): sub, tvar: type-var): _ maybe<tau>
       Just(tau)
 
 pub fun sub/remove(Sub(sub, tvs): sub, tvars: list<type-var>): sub
-  Sub(sub.remove-all(tvars), tvs - tvars)
+  Sub(tvars.foldl(sub, fn(m, tv) m.remove(tv.tv-key)), tvs - tvars)
 
 pub fun subtvs/remove(s: sub, tvars: tvs): sub
   s.remove(tvars.list)
 
 pub fun sub/find(Sub(sub): sub, tv: type-var): _ tau
-  match sub.lookup(tv)
+  match sub.lookup(tv.tv-key)
     Nothing -> TVar(tv)
-    Just(tau) -> tau
+    Just((_, tau)) -> tau
 
 pub fun show-tv(tv: type-var): string
   tv.tid.show
 
 // (s1 \@\@ s2) |-> x == s1 |-> (s2 |-> x)
 pub fun sub/compose(sub1 as Sub(s1, tv1): sub, sub2 as Sub(_, tv2): sub): _ sub
-  Sub(s1.union((sub1 |-> sub2).unsub), tv1.union(tv2)) // Assume: left biased union
+  Sub(s1.union((sub1 |-> sub2).map), tv1.union(tv2)) // int-map union is left-biased
 
 pub fun sub/extend(sub: sub, tv: type-var, tau: tau): _ sub
   single(tv, tau).compose(sub)
@@ -130,25 +139,80 @@ pub fun sub/insert(Sub(s, tvs): sub, tvar: type-var, tau: tau)
   elif !tau.is-tau then
     throw("type/typevar: insert: not a tau " ++ tau.show)
   else
-    Sub(s.add(tvar, tau), union(tvs, tau.free-type-vars.add(tvar)))
+    // upstream M.insert OVERWRITES an existing tvar entry (int-map `update`
+    // with a constant Just does the same)
+    Sub(s.update(tvar.tv-key, fn(_) Just((tvar, tau))), union(tvs, tau.free-type-vars.add(tvar)))
 
 pub fun sub/inserts(Sub(sub, tvars): sub, assoc: list<(type-var, tau)>)
-  Sub(LinearMap([]) + assoc + sub.list, // ASSUME: left-biased union
+  Sub(int-map/from-list(assoc.map(fn((tv, tp)) (tv.tv-key, (tv, tp)))).union(sub), // left-biased: assoc wins
       unions([tvars, assoc.map(fst).tvs, assoc.map(snd).free-type-vars]))
 
 
 // Type variables
 
-// A set of type variables
-pub alias tvs = linear-set<type-var>
-pub val tvs/empty:tvs = LinearSet([])
-// All the tvar functions defer to Set functions, just alias here
+// A set of type variables.
+// PERF: an int-map keyed by tvar id used set-wise (an int-set alone would
+// lose the type-var payload that `tvs/list` needs for quantification).
+pub struct tvs
+  imap: int-map<type-var>
+
+pub val tvs/empty: tvs = Tvs(empty-intmap)
 
 pub fun tv/single(tv: type-var) 
   [tv]
 
+pub fun tvs/single(tv: type-var): tvs
+  Tvs(int-map/from-list([(tv.tv-key, tv)]))
+
 pub fun new/tvs(tv: list<type-var>): tvs
-  LinearSet([]) + tv
+  Tvs(int-map/from-list(tv.map(fn(t) (t.tv-key, t))))
+
+pub fun tvs/is-empty(t: tvs): bool
+  t.imap.is-empty
+
+pub fun tvs/member(t: tvs, tv: type-var): bool
+  t.imap.member(tv.tv-key)
+
+pub fun tvs/add(t: tvs, tv: type-var): tvs
+  Tvs(t.imap.update(tv.tv-key, fn(_) Just(tv)))
+
+pub fun tvs/list(t: tvs): list<type-var>
+  t.imap.list.map(snd)
+
+pub fun tvs/length(t: tvs): int
+  t.imap.size
+
+pub fun tvs/union(t1: tvs, t2: tvs): tvs
+  Tvs(t1.imap.union(t2.imap))
+
+pub fun tvs/unions(ts: list<tvs>): tvs
+  ts.foldl(tvs/empty, tvs/union)
+
+pub fun tvs/(+)(t1: tvs, t2: tvs): tvs
+  t1.union(t2)
+
+pub fun tvslist/(+)(t: tvs, l: list<type-var>): tvs
+  l.foldl(t, tvs/add)
+
+pub fun tvs/(-)(t1: tvs, t2: tvs): tvs
+  Tvs(t1.imap.difference(t2.imap))
+
+pub fun tvsminus/(-)(t: tvs, l: list<type-var>): tvs
+  Tvs(l.foldl(t.imap, fn(m, tv) m.remove(tv.tv-key)))
+
+pub fun tvs/remove(t: tvs, tv: type-var): tvs
+  Tvs(t.imap.remove(tv.tv-key))
+
+pub fun tvs/filter(t: tvs, p: (type-var) -> e bool): e tvs
+  new/tvs(t.list.filter(p))
+
+pub fun tvs/disjoint(t1: tvs, t2: tvs): bool
+  // walk the smaller side
+  val (small, big) = if t1.length <= t2.length then (t1, t2) else (t2, t1)
+  small.list.all(fn(tv) !big.member(tv))
+
+pub fun tvs/intersection(t1: tvs, t2: tvs): tvs
+  new/tvs(t1.list.filter(fn(tv) t2.member(tv)))
 
 pub fun tvs/common(tvs1: tvs, tvs2: tvs): bool
   !tvs1.disjoint(tvs2)
@@ -173,7 +237,8 @@ pub fun oftv(x: a, ?odftv: (a) -> _ list<type-var>): _ list<type-var>
   val (es, ws) = vs.partition(_.kind.is-special)
   ws ++ es
 
-pub alias type-cons = linear-set<type-con>
+// upstream `S.Set TypeCon`, ordered by the constructor name
+pub alias type-cons = rbset<type-con>
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 // Utilities for types and expressions
@@ -188,10 +253,29 @@ pub fun sub/(|->)(s: sub, a: a, ?substitute: (sub, a) -> _ a): _ a
   else substitute(s, a)
 
 
-// Substitute a substitution into another substitution
+// Substitute a substitution into another substitution.
+//
+// DISJOINTNESS GUARD: if nothing `sub` rewrites occurs anywhere in the target,
+// applying it is the identity and the rebuild can be skipped entirely.
+// `Sub`'s `tvs` holds the domain AND the range free-vars, so "none of sub's
+// keys appear in tvs2" is sufficient (it can say "not disjoint" when the key is
+// only a domain var of the target -- a false positive, which merely does the
+// work we would have done anyway; it never wrongly skips).
+//
+// Why this matters: `extend` is `single(tv,tau).compose(sub)` and `compose`
+// does `sub1 |-> sub2`, so EVERY unification re-applies the substitution across
+// the whole accumulated map, rebuilding each stored type -- O(n) per extend,
+// O(n^2) over a module. Profiling put `add-sub` at 8.1% of a cold compile and
+// 14.2% of ALL reference counting, with `substitute` a further 6.7%.
+//
+// The scan short-circuits and allocates nothing (`int-map/all` walks the trie
+// over a borrowed map), against a full traversal of every stored type when it
+// does not fire.
 pub fun sub/substitute(sub: sub, Sub(s, tvs2): sub): _ sub
-  val Sub(_, tvs1) = sub
-  Sub(s.map(fn(k, v) sub.substitute(v)), tvs1.union(tvs2))
+  val Sub(dom, tvs1) = sub
+  if dom.all(fn(k, _) !tvs2.imap.member(k))
+    then Sub(s, tvs1.union(tvs2))
+    else Sub(s.map(fn((tv, tau)) (tv, sub.substitute(tau))), tvs1.union(tvs2))
 
 // Type utilities for lists
 pub fun list/free-type-vars(ps: list<a>, ?free-type-vars: (a) -> _ tvs): _ tvs
@@ -209,12 +293,12 @@ pub fun tuple/free-type-vars(tup: (a, b), ?a/free-type-vars: a -> _ tvs, ?b/free
   a.free-type-vars.union(b.free-type-vars)
 
 // Type utilities for ktype
-pub fun ktype/free-type-vars(tp: ktype): _ tvs
+pub fun ktype/free-type-vars(tp: ktype): div tvs
   match tp
     TForAll(vars, t) -> t.free-type-vars - vars
     TFun(args, eff, res) -> (args.map(_.snd) ++ [res, eff]).free-type-vars
     TCon -> tvs/empty
-    TVar(tv) -> LinearSet([tv])
+    TVar(tv) -> tvs/single(tv)
     TApp(t, args) -> t.free-type-vars + args.free-type-vars
     TSyn(_, xs, t) -> t.free-type-vars + xs.free-type-vars
 pub fun ktype/bound-type-vars(tp: ktype): _ tvs
@@ -228,10 +312,16 @@ pub fun ktype/free-type-constructors(tp: ktype): _ type-cons
   match tp
     TForAll(_, t) -> t.free-type-constructors
     TFun(args, eff, res) -> (args.map(_.snd) ++ [res, eff]).free-type-constructors
-    TCon(c) -> LinearSet([c])
-    TVar(_) -> LinearSet([])
+    TCon(c) -> rb-set/empty() + c
+    TVar(_) -> rb-set/empty()
     TApp(t, args) -> t.free-type-constructors + args.free-type-constructors
-    TSyn(_, xs, t) -> t.free-type-constructors + xs.free-type-constructors
+    // the synonym's OWN constructor counts too, not just its expansion's: a
+    // consumer deriving which modules a type mentions (`deps-from-expr`, for
+    // the extra imports an inlined definition needs) otherwise misses the
+    // module that DEFINES the synonym, and the synonym then reads back from
+    // an interface as a bare, unexpandable `TCon`
+    TSyn(syn, xs, t) -> (t.free-type-constructors + xs.free-type-constructors)
+                          + TypeCon(syn.type-syn/name, syn.type-syn/kind)
 pub fun ktype/substitute(s: sub, tp: ktype): _ tau
   match tp
     TForAll(vars, t) -> TForAll(vars, s.remove(vars) |-> t) // TODO: Assertion
@@ -376,7 +466,7 @@ pub fun posneg(tp: ktype, is-pos: bool): tvs
     TForAll(vars, tp') -> tp'.posneg(is-pos) - vars
     TFun(args, eff, res) -> eff.posneg(is-pos) + res.posneg(is-pos) + args.map(_.snd.pretend-decreasing.posneg(!is-pos)).unions
     TCon() -> tvs/empty
-    TVar(tv) -> if is-pos then linear-set([tv]) else tvs/empty
+    TVar(tv) -> if is-pos then tvs/single(tv) else tvs/empty
     TApp(tp', args) -> tp'.posneg(is-pos) + args.map(_.pretend-decreasing.posneg(is-pos)).unions
     TSyn(_, _, t) -> t.posneg(is-pos)
 

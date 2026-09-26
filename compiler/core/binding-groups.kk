@@ -7,14 +7,16 @@ import compiler/core/corevar
 import compiler/common/name
 import compiler/common/failure
 import compiler/platform/config
-import std/data/linear-map
-import std/data/linear-set
+import std/data/rb-set
+import std/data/sort
+import std/data/rb-map
+import compiler/common/name-collections
 
 // Re-analyze a recursive binding group just after type checking.
 // Due to overloading, functions that seem mutually recursive may not
 // actually be mutually recursive after the types are resolved.
-alias deps = linear-map<tName, linear-set<tName>>
-alias freeVar = linear-set<tName>
+alias deps = rbmap<tName, rbset<tName>>
+alias freeVar = rbset<tName>
 
 // Re-analyze a recursive binding group and return a list of new
 // definition groups. After type checking it is possible that definitions
@@ -32,11 +34,12 @@ pub fun regroup(dfs: list<def>): _ list<def-group>
         [DefNonRec(d)]
     defs ->
       val def-names = defs.map(fn(d) TName(d.def-name, d.ktype))
-      val def-name-set = LinearSet(def-names)
-      val defMap = LinearMap(def-names.zip(defs))
-      val deps = LinearMap(def-names.zip(defs.map(_.free-vars.intersection(def-name-set))))
+      val defMap = rb-map/from-list(def-names.zip(defs))
+      // The elements come
+      // from the FIRST set, i.e. the definitions' own TNames
+      val deps = rb-map/from-list(def-names.zip(defs.map(fn(d) rb-set/from-list(def-names).intersection(d.free-vars))))
       // determine strongly connected components
-      val defOrder = deps.list.map(fn((nm, fvs)) (nm, fvs.linear-set/list)).scc
+      val defOrder = deps.list.map(fn((nm, fvs)) (nm, fvs.list)).scc
       // create a definition group
       fun makeGroup(names)
         match names

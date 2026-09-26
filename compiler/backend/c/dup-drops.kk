@@ -11,7 +11,7 @@ import compiler/platform/config
 import compiler/common/syntax
 import std/data/sort
 
-fun gen-box-unbox(nm: name, info: dataInfo, drepr: dataRepr)
+pub fun gen-box-unbox(nm: name, info: data-info, drepr: data-repr)
   val tname = nm.type-class-name
   tname.gen-box(info, drepr)
   tname.gen-unbox(info, drepr)
@@ -20,7 +20,7 @@ pub fun gen-box-call(tp: ktype, arg: doc)
   val prim = "box"
   match tp.c-type
     CFun -> prim-name-type(prim, "function_t") |.| tupled([arg, contextDoc])
-    CPrim(v) | v == "kk_unit_t" || v == "bool" || v == "kk_string_t" -> prim-name-type(prim, v) |.| parens(arg)
+    CPrim(v) | v == "kk_unit_t" || v == "bool" || v == "kk_string_t" || v == "kk_bytes_t" -> prim-name-type(prim, v) |.| parens(arg)
     CData(nm) -> prim-name(prim, nm.cpp-name) |.| tupled([arg, contextDoc])
     _ -> prim-name-type(prim, tp.cpp-type.show) |.| tupled([arg, contextDoc])
 
@@ -34,18 +34,18 @@ fun gen-unbox-call(tp: ktype, arg: doc, argBorrow: doc)
   val prim = "unbox"
   match tp.c-type
     CFun -> prim-name-type(prim, "function_t") |.| tupled([arg, contextDoc]) // no borrow
-    CPrim(v) | v == "kk_unit_t" || v == "bool" || v == "kk_string_t" -> prim-name-type(prim, v) |.| arg.parens // no borrow, no context
+    CPrim(v) | v == "kk_unit_t" || v == "bool" || v == "kk_string_t" || v == "kk_bytes_t" -> prim-name-type(prim, v) |.| arg.parens // no borrow, no context
     CPrim(v) -> prim-name-type(prim, v) |.| tupled(if v.cprim-can-be-boxed then [arg, argBorrow, contextDoc] else [arg, contextDoc])
     CData(nm) -> prim-name(prim, nm.cpp-name) |.| tupled([arg, argBorrow, contextDoc])
     CBox -> prim-name-type(prim, tp.cpp-type.show) |.| tupled([arg, contextDoc])
 
-fun data-struct-as-maybe-split(l: list<conInfo>)
+fun data-struct-as-maybe-split(l: list<con-info>)
   match l
     Cons(ci1, Cons(ci2, Nil)) -> if ci1.params.is-nil then (ci1, ci2) else (ci2, ci1)
     _ -> failure/fail("backend/c/from-core data-struct-as-maybe-split: expected two constructors for a maybe like type, got: " ++ l.show-list(show))
 
-fun gen-box(nm: name, info: dataInfo, drepr: dataRepr)
-  val initDoc = "static inline kk_box_t".text |.| nm.cpp-name |.| "_box".text |.| parameters([nm.cpp-name |+| "_x".text])
+fun gen-box(nm: name, info: data-info, drepr: data-repr)
+  val initDoc = "static inline kk_box_t".text |+| nm.cpp-name |.| "_box".text |.| parameters([nm.cpp-name |+| "_x".text])
   val restDoc = match drepr
     DataEnum -> "return".text |+| "kk_enum_box".text |.| tupled(["_x".text]) |.| semi
     DataIso ->
@@ -55,7 +55,7 @@ fun gen-box(nm: name, info: dataInfo, drepr: dataRepr)
     DataStructAsMaybe ->
       val (conNothing, conJust) = info.constrs.data-struct-as-maybe-split
       val (conJustFieldName, conJustFieldTp) = conJust.params.head.unjust
-      val boxField = gen-box-call(conJustFieldTp, "_x._cons.".text) |.| conJust.name.ppDefName |.| ".".text |.| conJustFieldName.unqualify.cpp-name
+      val boxField = gen-box-call(conJustFieldTp, "_x._cons.".text |.| conJust.name.ppDefName |.| ".".text |.| conJustFieldName.unqualify.cpp-name)
       "if".text |+| parens(conNothing.con-test-name |.| arguments(["_x".text])) |+| "{ return kk_box_Nothing(); }".text |-|
       "  else".text |+| "{ return kk_box_Just".text |.| arguments([boxField]) |.| semi |+| "}".text
     _ ->
@@ -66,7 +66,7 @@ fun gen-box(nm: name, info: dataInfo, drepr: dataRepr)
         _ -> "return".text |+| (if drepr.data-repr-may-have-singletons then "kk_datatype_box" else "kk_datatype_ptr_box").text |.| tupled(["_x".text]) |.| semi
   emit-to-h(initDoc |+| block(restDoc))
 
-fun gen-unbox(nm: name, info: dataInfo, drepr: dataRepr)
+fun gen-unbox(nm: name, info: data-info, drepr: data-repr)
   val initDoc = "static inline".text |+| nm.cpp-name |+| nm.cpp-name |.| "_unbox".text |.| parameters(["kk_box_t _x".text, "kk_borrow_t _borrow".text])
   val restDoc = match drepr
     DataEnum -> "return".text |+| nm.cpp-name.parens |.| "kk_enum_unbox".text |.| tupled(["_x".text])
@@ -75,7 +75,7 @@ fun gen-unbox(nm: name, info: dataInfo, drepr: dataRepr)
       val isoTp = conInfo.params.head.unjust.snd
       "return".text |+| conInfo.con-create-name |.| arguments([gen-unbox-call(isoTp, "_x".text, "_borrow".text)])
     DataStructAsMaybe ->
-      val (conNothing, conJust) = info.constrs.sort(?(<)=fn(ci1:conInfo, ci2:conInfo) ci1.params.length < ci2.params.length).data-struct-as-maybe-split
+      val (conNothing, conJust) = info.constrs.sort(?(<)=fn(ci1:con-info, ci2:con-info) ci1.params.length < ci2.params.length).data-struct-as-maybe-split
       val (_, conJustFieldTp) = conJust.params.head.unjust
       "if (kk_box_is_Nothing(_x))".text |+| "{ return".text |+| conNothing.con-create-name |.| arguments([]) |.| semi |+| "}".text
       |-| "  else".text |+| (
@@ -85,39 +85,40 @@ fun gen-unbox(nm: name, info: dataInfo, drepr: dataRepr)
       )
     _ | drepr.is-value -> [nm.cpp-name |+| "_unbox;".text, "kk_valuetype_unbox".text |.| arguments([nm.cpp-name, "_unbox".text, "_x".text, "_borrow".text]) |.| semi, "return _unbox".text].vcat
     _ -> "return".text |+| (if drepr.data-repr-may-have-singletons then "kk_datatype_unbox" else "kk_datatype_ptr_unbox").text |.| tupled(["_x".text])
-  emit-to-h(initDoc |+| block(restDoc) |.| semi)
+  emit-to-h(initDoc |+| block(restDoc |.| semi))
 
 // con infos are sorted with singletons first
-fun gen-dup-drop(nm: name, info: dataInfo, drepr: dataRepr, conInfos: list<(conInfo, conRepr, list<(name, ktype)>, int)>)
+pub fun gen-dup-drop(nm: name, info: data-info, drepr: data-repr, conInfos: list<(con-info, con-repr, list<(name, ktype)>, int)>)
   gen-dup-dropX(True, nm, info, drepr, conInfos)
   gen-dup-dropX(False, nm, info, drepr, conInfos)
 
-fun gen-dup-dropX(isDup: bool, nm: name, info: dataInfo, drepr: dataRepr, conInfos: list<(conInfo, conRepr, list<(name, ktype)>, int)>)
-  val ret = if isDup then ["return _x".text] else []
+fun gen-dup-dropX(isDup: bool, nm: name, info: data-info, drepr: data-repr, conInfos: list<(con-info, con-repr, list<(name, ktype)>, int)>)
+  val ret = if isDup then ["return _x;".text] else []
   val dupDropTests =
     if drepr.is-dataEnum then ret
     elif conInfos.all(fn((_, cr, _, _)) cr.is-conSingleton) then ret
     elif drepr.is-dataIso then [gen-dup-drop-iso(isDup, conInfos.head.unjust)] ++ ret
-    elif drepr.isDataStructOrLess then
+    elif drepr.is-value then
       conInfos.map(gen-dup-drop-tests(isDup, drepr, _)).gen-dup-drop-match ++ ret
     else
       if isDup then ["return".text |+| (
         if drepr.data-repr-may-have-singletons then "kk_datatype_dup".text |.| arguments(["_x".text])
         else "kk_datatype_ptr_dup".text |.| arguments(["_x".text])) |.| semi]
+      // danger: we must never generate constructors with more than 128 fields in order to use _small
       else [
-        (if drepr.data-repr-may-have-singletons then "kk_datatype_drop" else "kk_datatype_ptr_drop").text |.| 
+        (if drepr.data-repr-may-have-singletons then "kk_datatype_drop_small" else "kk_datatype_ptr_drop_small").text |.|
         arguments(["_x".text]) |.| semi]
   emit-to-h("static inline".text |+| 
     (if isDup then nm.cpp-name |+| nm.cpp-name |.| "_dup".text else "void".text |+| nm.cpp-name |.| "_drop".text) |.| 
     parameters([nm.cpp-name |+| "_x".text]) |+| block(vcat(dupDropTests)))
 
-fun gen-dup-drop-iso(isDup: bool, (_, _, tnames, _): (conInfo, conRepr, list<(name, ktype)>, int))
+fun gen-dup-drop-iso(isDup: bool, (_, _, tnames, _): (con-info, con-repr, list<(name, ktype)>, int))
   match tnames
     [(name, tp)] -> gen-dup-drop-call(isDup, tp, "_x.".text |.| name.cpp-name).map(_ |.| semi).hcat
     _ -> failure/fail("backend/c/gen-dup-drop-iso: invalid arguments")
 
 // coninfos are sorted with singletons first
-fun gen-dup-drop-maybe(isDup: bool, l: list<(conInfo, conRepr, list<(name, ktype)>, int)>)
+fun gen-dup-drop-maybe(isDup: bool, l: list<(con-info, con-repr, list<(name, ktype)>, int)>)
   match l
     [(conNothing, _, _, _), (conJust, _, [(fname, ftp)], _)] ->
       "if".text |+| parens("!".text |.| conNothing.con-test-name |.| arguments(["_x".text])) |+|
@@ -136,26 +137,34 @@ fun gen-dup-drop-match(branches0: list<(doc, list<doc>)>)
       (if complete then bs.init else bs).map(fn(b') gen-branch("else if", b')) ++
       (if complete then ["else".text |+| block1(bs.last.unjust.snd)] else [])
 
-fun gen-dup-drop-tests(isDup: bool, drepr: dataRepr, (ci, _, cfields, _): (conInfo, conRepr, list<(name, ktype)>, int))
-  val dupdropfields = gen-dup-drop-fields(isDup, drepr, ci, cfields)
+fun gen-dup-drop-tests(isDup: bool, drepr: data-repr, (ci, cr, cfields, _): (con-info, con-repr, list<(name, ktype)>, int))
+  val dupdropfields = gen-dup-drop-fields(isDup, drepr, ci, cr, cfields)
   (ci.con-test-name |.| arguments(["_x".text]), dupdropfields)
 
-fun gen-dup-drop-testsX(isDup: bool, drepr: dataRepr, lastIdx: int, ((ci, _, cfields, _), idx): ((conInfo, conRepr, list<(name, ktype)>, int), int))
-  val stats = gen-dup-drop-fields(isDup, drepr, ci, cfields)
+fun gen-dup-drop-testsX(isDup: bool, drepr: data-repr, lastIdx: int, ((ci, cr, cfields, _), idx): ((con-info, con-repr, list<(name, ktype)>, int), int))
+  val stats = gen-dup-drop-fields(isDup, drepr, ci, cr, cfields)
   if lastIdx == idx then 
     if stats.is-nil then pprint/empty elif lastIdx == 1 then stats.vcat else "else".text |+| stats.vcat.block
   else
     val t = if idx == 1 then "if".text else "else if".text
     t |+| parens(ci.con-test-name |.| arguments(["_x".text])) |+| (if stats.is-nil then "{ }".text else stats.vcat.block)
 
-fun gen-dup-drop-fields(isDup: bool, drepr: dataRepr, ci: conInfo, cfields: list<(name,ktype)>)
-  cfields.map(fn((nm, tp)) gen-dup-drop-call(isDup, tp, if drepr.needsTagField then "_x._cons.".text |.| ci.name.ppDefName else "_x".text |.| dot |.| nm.cpp-name)).concat.map(_ |.| semi)
+fun gen-dup-drop-fields(isDup: bool, drepr: data-repr, ci: con-info, cr: con-repr, cfields: list<(name,ktype)>)
+  if drepr.isDataStructOrLess then
+    // value types
+    cfields.map(fn((nm, tp)) gen-dup-drop-call(isDup, tp, (if drepr.needsTagField then "_x._cons.".text |.| ci.name.ppDefName else "_x".text) |.| dot |.| nm.cpp-name)).concat.map(_ |.| semi)
+  elif cr.is-conSingleton then []
+  else
+    // reference types
+    (["struct".text |+| ci.name.cpp-name |.| "* _con =".text |+| ci.con-as-name |.| arguments(["_x".text])] ++
+     cfields.map(fn((nm, tp)) gen-dup-drop-call(isDup, tp, "_con->".text |.| nm.cpp-name)).concat ++
+     ["kk_constructor_free_small".text |.| arguments(["_con".text])]).map(_ |.| semi)
 
 fun gen-dup-drop-callx(prim: string, tp: ktype, args: doc)
   match tp.c-type
     CFun -> [prim-name-type(prim, "function_t") |.| args]
     CBox -> [prim-name-type(prim, "box_t") |.| args]
-    CPrim(v) | v == "kk_integer_t" || v == "kk_string_t" || v == "kk_vector_t" || v == "kk_evv_t" || v == "kk_ref_t" || v == "kk_reuse_t" || v == "kk_box_t"
+    CPrim(v) | v == "kk_integer_t" || v == "kk_bytes_t" || v == "kk_string_t" || v == "kk_vector_t" || v == "kk_evv_t" || v == "kk_ref_t" || v == "kk_reuse_t" || v == "kk_box_t"
       -> [prim-name-type(prim, v) |.| args]
     CPrim -> [text("kk_skip_" ++ prim) |.| args] // [] // text "value" |.| args
     CData(nm) -> [prim-name(prim, nm.cpp-name) |.| args]
@@ -175,11 +184,12 @@ pub fun gen-dup-drop-call(isDup: bool, tp: ktype, arg: doc)
 pub fun gen-unique-call(tp: ktype, arg: doc)
   ["kk_likely".text |.| parens("kk_datatype_ptr_is_unique".text |.| arguments([arg]))]
 
+// danger: we assume we never generate free or decref for bytes, strings or vectors!
 pub fun gen-free-call(tp: ktype, arg: doc)
-  ["kk_datatype_ptr_free".text |.| arguments([arg])]
+  ["kk_datatype_ptr_free_small".text |.| arguments([arg])]
 
 pub fun gen-decref-call(tp: ktype, arg: doc)
-  ["kk_datatype_ptr_decref".text |.| arguments([arg])]
+  ["kk_datatype_ptr_decref_small".text |.| arguments([arg])]
 
 pub fun gen-drop-reuse-call(tp: ktype, arg: list<doc>)
   ["kk_datatype_ptr_dropn_reuse".text |.| arguments(arg)]
@@ -194,5 +204,6 @@ pub fun gen-hole-call(tp: ktype)
   match tp.c-type
     CPrim("kk_integer_t") -> "kk_integer_zero".text
     CPrim("kk_string_t") -> "kk_string_empty()".text
+    CPrim("kk_bytes_t") -> "kk_bytes_empty()".text
     CPrim("kk_vector_t") -> "kk_vector_empty()".text
     _ -> "kk_datatype_null()".text

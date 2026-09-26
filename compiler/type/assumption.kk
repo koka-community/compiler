@@ -1,4 +1,5 @@
 module compiler/type/assumption
+// Updated as of 7/23/26: Commit 9bc234e
 
 import compiler/common/syntax
 import compiler/common/name
@@ -12,11 +13,12 @@ import compiler/type/typevar
 import compiler/core/core
 import compiler/core/corevar
 import compiler/type/pretty
+import compiler/common/nice
 import compiler/lib/pprint
-import std/data/linear-map
-import std/data/linear-set
+import std/data/rb-set
 import std/os/path
 import std/data/sort
+import std/data/rb-map
 // Updated to #ddac17b on 11/19/25
 pub infixr 5 (|->)
 
@@ -24,7 +26,7 @@ pub type name-info
   InfoVal(vis: visibility, cname: name, typ: scheme, scopeDepthX: int, range: range, isVar: bool, allowImplicitMaskX: bool, doc: string)
   InfoFun(vis: visibility, cname: name, typ: scheme, scopeDepthX: int, arity: (int, int), fipt: fipT, range: range, doc: string)
   InfoCon(vis: visibility, typ: scheme, repr: con-repr, conInfo: con-info, range: range, doc: string)
-  InfoExternal(vis: visibility, cname: name, typ: scheme, format: list<(target, string)>, fipt: fipT, range: range, doc: string)
+  InfoExternal(vis: visibility, cname: name, typ: scheme, format: string, fipt: fipT, range: range, doc: string)
   InfoImport(vis: visibility, typ: scheme, nameAlias: name, fullName: name, range: range)
 
 pub fun tp/update-type(ni : name-info, tp: scheme): name-info
@@ -34,6 +36,22 @@ pub fun tp/update-type(ni : name-info, tp: scheme): name-info
     InfoCon(vis, _, repr, conInfo, range, doc) -> InfoCon(vis, tp, repr, conInfo, range, doc)
     InfoExternal(vis, cname, _, format, fipt, range, doc) -> InfoExternal(vis, cname, tp, format, fipt, range, doc)
     InfoImport(vis, _, nameAlias, fullName, range) -> InfoImport(vis, tp, nameAlias, fullName, range)
+
+// Treat every Private entry as Public. Used for the module currently being
+// compiled so its own (private) definitions and generated constructors
+// (e.g. `@Hnd-<eff>`) resolve during its own type inference
+// (upstream Compile/TypeCheck: `extractGamma isValue True coreProgram`).
+pub fun info/private-as-public(ni: name-info): name-info
+  match ni
+    InfoVal(Private, cname, tp, s, r, iv, aim, doc) -> InfoVal(Public, cname, tp, s, r, iv, aim, doc)
+    InfoFun(Private, cname, tp, s, ar, f, r, doc) -> InfoFun(Public, cname, tp, s, ar, f, r, doc)
+    InfoCon(Private, tp, repr, ci, r, doc) -> InfoCon(Public, tp, repr, ci, r, doc)
+    InfoExternal(Private, cname, tp, fmt, f, r, doc) -> InfoExternal(Public, cname, tp, fmt, f, r, doc)
+    InfoImport(Private, tp, na, full, r) -> InfoImport(Public, tp, na, full, r)
+    _ -> ni
+
+pub fun gamma/private-as-public(g: gamma): gamma
+  g.map(info/private-as-public)
 
 pub fun scheme(ni: name-info): scheme
   match ni
@@ -62,7 +80,7 @@ pub fun show(ni: name-info): _ string
     InfoVal(vis, cname, typ, scope, range, isVar, allowImplicitMask, doc) -> "InfoVal(" ++ show(vis) ++ ", " ++ show(cname) ++ ", " ++ show(typ) ++ ", " ++ show(scope) ++ ", " ++ show-full-range(range, "".path) ++ ", " ++ show(isVar) ++ "," ++ show(allowImplicitMask) ++ "," ++  show(doc) ++ ")"
     InfoFun(vis, cname, typ, scope, arity, fipt, range, doc) -> "InfoFun(" ++ show(vis) ++ ", " ++ show(cname) ++ ", " ++ show(typ) ++ ", " ++ show(scope) ++ ", " ++ show-tuple(arity, show, show) ++ ", " ++ show(fipt) ++ ", " ++ show-full-range(range, "".path) ++ "," ++ show(doc) ++ ")"
     InfoCon(vis, typ, repr, conInfo, range, doc) -> "InfoCon(" ++ show(vis) ++ ", " ++ show(typ) ++ ", " ++ show(repr) ++ ", " ++ show(conInfo) ++ ", " ++ show-full-range(range, "".path) ++ "," ++ show(doc) ++ ")"
-    assumption/InfoExternal(vis, cname, typ, format, fipt, range, doc) -> "InfoExternal(" ++ show(vis) ++ ", " ++ show(cname) ++ ", " ++ show(typ) ++ ", " ++ show-list(format, _.show-tuple(show, id)) ++ ", " ++ show(fipt) ++ ", " ++ show-full-range(range, "".path) ++ "," ++ show(doc) ++ ")"
+    assumption/InfoExternal(vis, cname, typ, format, fipt, range, doc) -> "InfoExternal(" ++ show(vis) ++ ", " ++ show(cname) ++ ", " ++ show(typ) ++ ", " ++ show(format) ++ ", " ++ show(fipt) ++ ", " ++ show-full-range(range, "".path) ++ "," ++ show(doc) ++ ")"
     InfoImport(vis, typ, nameAlias, fullName, range) -> "InfoImport(" ++ show(vis) ++ ", " ++ show(typ) ++ ", " ++ show(nameAlias) ++ ", " ++ show(fullName) ++ ", " ++ show-full-range(range, "".path) ++ ")"
 
 pub fun sort(ni: name-info)
@@ -148,13 +166,13 @@ pub fun core-expr(info: name-info, qname: name)
 // Due to overloading there may be multiple entries for the same qualified name
 
 pub alias gamma = name-map<list<(name, name-info)>>
-pub val empty:gamma = LinearMap([])
+pub val empty:gamma = rb-map/empty()
 
 pub fun schemes(g: gamma): list<scheme>
   g.assumption/list.map(_.snd.typ)
 
 pub fun single(name: name, ni: name-info)
-  assumption/empty.set(name, [(name, ni)])
+  rb-map/set(assumption/empty, name, [(name, ni)])
 
 pub fun gamma/new(xs: list<(name, name-info)>): gamma
   extends(empty, xs)
@@ -163,7 +181,21 @@ pub fun extends(g: gamma, ls: list<(name,name-info)>): gamma
   ls.foldl(g, fn(m, (name,tp)) m.extend(name, tp))
 
 pub fun extend(g: gamma, name: name, ni: name-info)
-  g.update(name.unqualify-full, [(name, ni)], fn(old:list<_>, new) old ++ new) // TODO: Check for overlapping type schemes?
+  // note: linear-map update calls f(old, new); upstream `M.insertWith combine key [new] old`
+  // computes `new ++ old` — the NEW entry comes first
+  rb-map/update(g, name.unqualify-full, [(name, ni)], fn(old:list<_>, new) new ++ old) // TODO: Check for overlapping type schemes?
+
+// a single-entry gamma keyed by the full stem
+pub fun gamma/single(name: name, ni: name-info): gamma
+  empty.extend(name, ni)
+
+// Diagnostic: every entry sharing this name's unqualified stem, with full
+// qualifiers, so a failed lookup can show HOW the stored names differ from
+// the requested one (module vs local qualifier splits are easy to get wrong).
+pub fun lookup-candidates(g: gamma, name: name): list<name>
+  match g.lookup(name.unqualify-full)
+    Nothing -> []
+    Just(xs) -> xs.map(fst)
 
 pub fun lookup-canonical(g: gamma, name: name)
   g.lookupQ(name).filter(_.canonical-name(nil) == name)
@@ -197,21 +229,17 @@ pub fun gamma-lookup(g: gamma, name: name)
 pub fun match-qualifiers(uname: name, name: name)
   match-rev-qualifier-paths(uname.split-rev-qualifiers, name.split-rev-qualifiers)
 
-pub fun is-prefix-of(u: list<string>, p: list<string>)
-  u.length <= p.length && u.zip(p).all(fn((a, b)) a == b)
-
 pub fun match-rev-qualifier-paths(upaths: (list<string>,list<string>), paths: (list<string>,list<string>)): bool
   match (upaths, paths)
-    (([], []), (Cons, Cons)) -> True // not qualified
-    ((umpath, []), (mpath, [])) -> umpath.is-prefix-of(mpath) // no user specified local path
+    (([], []), _) -> True // not qualified
+    ((umpath, []), (mpath, [])) -> umpath.list/is-prefix-of(mpath) // no user specified local path
     ((umpath, []), (mpath, lpath)) -> // not (null lpath)
-      umpath.is-prefix-of(lpath) || // user module is a postfix the local qualifier
-      lpath.is-prefix-of(umpath) && umpath.drop(lpath.length).is-prefix-of(mpath) || // stradle both
-      umpath.is-prefix-of(mpath) // user module is postfix of the module qualifier (we can not mention local qualfiiers, so `std/core/show` matches `std/core/#int/show` for example)
+      umpath.list/is-prefix-of(lpath) || // user module is a postfix the local qualifier
+      lpath.list/is-prefix-of(umpath) && umpath.drop(lpath.length).list/is-prefix-of(mpath) // stradle both
     ((umpath, ulpath), (mpath, lpath)) -> // not (null ulpath)
       match umpath
-        [] -> ulpath.is-prefix-of(lpath)
-        _ -> ulpath == lpath && umpath.is-prefix-of(mpath)
+        [] -> ulpath.list/is-prefix-of(lpath)
+        _ -> ulpath == lpath && umpath.list/is-prefix-of(mpath)
 
 // Split out the module and local qualifier as a _reverse_ list of components
 // e.g. `std/core/#int/show` -> (["core","std"],["int"])
@@ -230,16 +258,20 @@ pub fun map(g: gamma, f: (name-info -> name-info)): gamma
   g.map(fn(k, xs) xs.list/map(fn((n, ni)) (n, f(ni))))
 
 pub fun list(g: gamma): list<(name, name-info)>
-  g.linear-map/list.map(snd).concat.sort(?(<)=fn((n, _), (n2, _)) n.name/name/cmp(n2).is-lt)
+  rb-map/list(g).map(snd).concat.sort(?(<)=fn((n, _), (n2, _)) n.name/name/cmp(n2).is-lt)
 
 pub fun remove(g: gamma, name: name)
-  g.linear-map/remove(name.unqualify)
+  rb-map/remove(g, name.unqualify)
 
 pub fun union(g1: gamma, g2: gamma)
-  g2.union-with(g1, fn(xs1: list<_>, xs2) xs1 ++ xs2)
+  rb-map/union-with(g2, g1, fn(xs1: list<_>, xs2) xs1 ++ xs2)
 
 pub fun unions(gs: list<gamma>)
-  gs.foldl(compiler/type/assumption/empty, assumption/union)
+  // O(n log n) key-sorted merge instead of the O(n^2) `foldl union` (which is a
+  // hot path when combining the ~40 stdlib module gammas in defs-from-modules).
+  // `union(g1,g2) = g2.union-with(g1, ++)` puts g2's entries first for a shared
+  // key, so unions-with (which orders later maps first) reproduces the same order.
+  rb-map/unions-with(gs, fn(xs1: list<_>, xs2) xs1 ++ xs2)
 
 // Filter out signature belonging to a module
 pub fun filter(g: gamma, mod: name)
@@ -257,7 +289,7 @@ pub fun extract-gamma-imports(imports: list<(name,name)>, modName: name): gamma
   imports.map(extract-import).assumption/unions.extend(modAlias, InfoImport(Private, typeVoid, modAlias, modName, null))
 
 pub fun extract-import((name, qname))
-  qname-map/single(name, InfoImport(Private, typeVoid, name, qname, null))
+  gamma/single(name, InfoImport(Private, typeVoid, name, qname, null))
 
 // Extract a Gamma from a Core module
 pub fun extract-gamma(isValue: (data-info -> bool), privateAsPublic: bool, c: core): _ gamma
@@ -276,7 +308,7 @@ fun extract-type-def-group(td: typedef-group, isValue: (data-info -> bool), upda
 
 fun extract-type-def(isValue: (data-info -> bool), update-vis, td: typedef)
   fun extract-con-info((info, repr): (con-info, con-repr))
-    qname-map/single(info.name, InfoCon(update-vis(info.vis), info.typeScheme, repr, info, info.range, info.doc))
+    gamma/single(info.name, InfoCon(update-vis(info.vis), info.typeScheme, repr, info, info.range, info.doc))
   match td
     Data(dataInfo) -> zip(dataInfo.constrs, dataInfo.data-repr(isValue).snd).map(extract-con-info).assumption/unions
     _ -> assumption/empty
@@ -287,7 +319,7 @@ fun extract-def-group(d: def-group, update-vis)
     DefNonRec(v) -> extract-def(v, update-vis)
 
 fun extract-def(d: def, update-vis)
-  qname-map/single(d.def-name, create-name-infoX(update-vis(d.vis), d.def-name, 0, d.sort, d.nameRange, d.ktype, d.doc)) // specials since we cannot call isTopLevel as in coreDefInfo
+  gamma/single(d.def-name, create-name-infoX(update-vis(d.vis), d.def-name, 0, d.sort, d.nameRange, d.ktype, d.doc)) // specials since we cannot call isTopLevel as in coreDefInfo
 
 pub fun core-def-info(d: def, scopeDepth)
   (d.def-name, create-name-infoX(d.vis, d.def-name, scopeDepth, if d.sort.is-defFun && !d.is-top-level then DefVal else d.sort, d.nameRange, d.ktype, d.doc))
@@ -301,15 +333,11 @@ pub fun create-name-infoX(vis, name, scopeDepth: int, sort, rng, tp, doc)
   create-name-infoEX(vis, name, scopeDepth, sort, False, rng, tp, doc)
 
 pub fun create-name-infoEX(vis, name, scopeDepth: int, sort, allowImplicitMask, rng, tp, doc)
-  fun is-default(nm: name)
-    match nm.split-local-qual-name
-      Cons("default") -> True 
-      _ -> False
-  val d = if scopeDepth == 0 && name.is-default then -1 else scopeDepth 
+  val d = if scopeDepth == 0 && name.is-in-default-namespace then -1 else scopeDepth
   match sort
-    DefFun(_, fipT) -> InfoFun(vis, name, tp, scopeDepth, tp.arity, fipT, rng, doc)
-    DefVar -> InfoVal(vis, name, tp, scopeDepth, rng, True, False, doc)
-    _ -> InfoVal(vis, name, tp, scopeDepth, rng, False, allowImplicitMask, doc)
+    DefFun(_, fipT) -> InfoFun(vis, name, tp, d, tp.arity, fipT, rng, doc)
+    DefVar -> InfoVal(vis, name, tp, d, rng, True, False, doc)
+    _ -> InfoVal(vis, name, tp, d, rng, False, allowImplicitMask, doc)
 
 pub fun arity(tp: ktype): _ (int, int)
   match tp.expand-syn
@@ -322,7 +350,7 @@ pub fun arity(tp: ktype): _ (int, int)
 pub fun extract-external(external: external, update-vis)
   match external
     External(name, tp, _, body, vis, fipT, nameRng, doc) ->
-      qname-map/single(name, InfoExternal(update-vis(vis), name, tp, body, fipT, nameRng, doc))
+      gamma/single(name, InfoExternal(update-vis(vis), name, tp, body, fipT, nameRng, doc))
     _ -> assumption/empty
 
 // TODO: ftc
@@ -355,12 +383,26 @@ pub fun map-type(ni: name-info, f: (ktype) -> e ktype): e name-info
     InfoImport(vis, typ, nameAlias, fullName, range) -> InfoImport(vis, f(typ), nameAlias, fullName, range)
 
 fun pp-gamma-internal(g: gamma, showHidden: bool)
+  // upstream `gammaList` sorts by `compare (show n1) (show n2)` where Name's
+  // Show is `showExplicit` (operators wrapped in parens, `/#` before a local
+  // qualifier) -- the port's `name/show` is exactly that, so sorting by
+  // `show` reproduces upstream's exact ordering (e.g. `#`-qualified locals
+  // first, then `(op)`s, then capitalized constructors, then lowercase)
   val nameSchemes = g.assumption/list.filter(fn((_, i)) !i.is-infoImport).map(fn((n, i)) (n, i.typ))
+                     .sort(fn((n1, _), (n2, _)) n1.show < n2.show)
   val maxWidth = nameSchemes.map(fn((n, _)) n.show.count).maximum(0).min(12)
+  // upstream calls `niceTypes` fresh per scheme (nice-naming isn't threaded
+  // across the whole listing -- each entry's quantified vars start at 'a'
+  // again), so install a fresh nice-env per item rather than relying on
+  // whatever ambient one the caller installed
   fun nice(scheme: ktype)
+    with nice-env
     align(nice-types([scheme]).head.unjust)
   vcat(nameSchemes.filter(fn((n, _)) showHidden || !n.is-hidden-name).map(fn((n, s))
-    fill(n.show-plain.text |.| type-colon().color(colors.colorSep) |+| align(nice(s)), maxWidth) // TODO: Tim new color?
+    // `fill` pads only the bare NAME, not name+colon together, and prettyName
+    // (the port's `pretty-name`) wraps operators in parens (`(>>=)`) and
+    // prefixes implicit-parameter names with `?`
+    fill(pretty-name(n, colors), maxWidth) |.| type-colon().color(colors.colorSep) |+| align(nice(s)) // TODO: Tim new color?
   ))
 
 pub fun pp-gamma(g: gamma)

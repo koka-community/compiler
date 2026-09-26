@@ -45,5 +45,14 @@ pub import std/time/astro
 // pub import std/time/timezone
 // pub import std/time/ut1
 
+pub import std/async
+pub import std/async/async
+pub import std/async/channel
+pub import std/async/interleave
+// Not reached by the imports above, but used by several tests. Anything missing
+// here is built concurrently by every test that needs it, and those builds race.
+pub import std/async/thread
+pub import std/async/bchannel
+
 pub fun main()
   println("toc")

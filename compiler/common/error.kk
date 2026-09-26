@@ -11,8 +11,7 @@ import compiler/common/range
 import compiler/common/message
 import compiler/common/color-scheme
 import compiler/lib/pprint
-import compiler/lib/printer
-import std/core-extras
+import std/pretty/printer
 import std/os/path
 
 //------------------------------
@@ -89,8 +88,8 @@ pub fun error-kind/(==)(this : error-kind, other : error-kind) : bool
 pub fun range(errs: errors): range
   errs.map(range).combine
 
-pub fun err/show(err: error-msg): div string
-  err.pretty.show
+pub fun err/show(err: error-msg, cwd: path = "".path): div string
+  err.err/pretty(cwd).show
 
 pub fun errs/show(errs: errors): div string
   errs.errs/pretty.show
@@ -119,21 +118,24 @@ pub fun error-message(d: doc, rng: range): _ error-msg
 //---------------------------------
 // pretty
 //---------------------------------
-pub fun err/pretty(msg: error-msg): doc
+// `cwd` shortens the displayed path (upstream threads the process's working
+// directory in from `Main/Run.hs`); the empty default leaves it untouched,
+// which is what a consumer keyed by absolute path (the language server) wants.
+pub fun err/pretty(msg: error-msg, cwd: path = "".path): doc
   with color-scheme-default
-  msg.pp-error-message("".path, False)
+  msg.pp-error-message(cwd, False)
 
 pub fun errs/pretty(msgs: errors): doc
   with color-scheme-default
   msgs.pp-errors("".path, False)
 
 pub fun pp-error-severity(sev: error-severity, ekind: error-kind): _ doc
-  val ekindTxt = match ekind
-    ErrParse -> "parse"
-    ErrKind -> "kind"
-    ErrType -> "type"
-    ErrBuild -> "build"
-    ErrInternal -> "internal"
+  val ekindTxt = match ekind // upstream includes the trailing space in the kind text
+    ErrParse -> "parse "
+    ErrKind -> "kind "
+    ErrType -> "type "
+    ErrBuild -> "build "
+    ErrInternal -> "internal "
     _ -> ""
   fun header(clr: colorScheme -> color, txt: string)
     text(ekindTxt ++ txt ++ ":").color(clr(colors))
@@ -181,10 +183,10 @@ pub fun doc/add-error(rng: range, error: doc): _ a
   add-errors([error-message(error, rng)])
 
 pub fun doc/add-warning(rng: range, warning: doc): _ ()
-  add-warnings([error-message(warning, rng)])
+  add-warnings([warning-message(warning, rng)])
 
 pub fun doc/add-info(rng: range, info: doc): _ ()
-  add-infos([error-message(info, rng)])
+  add-infos([info-message(info, rng)])
 
 // check an 'error'
 pub fun check-error(f: () -> _ a): either<errors, (a, warnings)>

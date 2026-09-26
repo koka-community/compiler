@@ -21,7 +21,8 @@ typedef kk_datatype_ptr_t kk_ref_t;
 
 kk_decl_export kk_box_t  kk_ref_get_thread_shared(struct kk_ref_s* r, kk_context_t* ctx);
 kk_decl_export kk_box_t  kk_ref_swap_thread_shared_borrow(struct kk_ref_s* r, kk_box_t value);
-kk_decl_export kk_unit_t kk_ref_vector_assign_borrow(kk_ref_t r, kk_integer_t idx, kk_box_t value, kk_context_t* ctx);
+kk_decl_export kk_unit_t kk_ref_vector_assign_borrow(kk_ref_t r, kk_ssize_t idx, kk_box_t value, kk_context_t* ctx);
+kk_decl_export kk_unit_t kk_ref_update_borrow(kk_ref_t _r, kk_function_t update, kk_context_t* ctx);
 
 static inline kk_decl_const kk_box_t kk_ref_box(kk_ref_t r, kk_context_t* ctx) {
   kk_unused(ctx);
@@ -71,7 +72,14 @@ static inline kk_box_t kk_ref_swap_borrow(kk_ref_t _r, kk_box_t value, kk_contex
     return b;
   }
   else {
-    // thread shared
+    // Thread shared: the cell is reachable from more than one thread, so anything
+    // published into it becomes reachable from more than one thread too. Mark the
+    // value's graph thread-shared first, or a concurrent `kk_ref_get_thread_shared`
+    // will `kk_box_dup` a block whose refcount is still non-atomic and the two
+    // threads will race on it -- the block is then freed while another thread still
+    // holds it. (`kk_block_mark_shared` leaves already-shared/static blocks alone,
+    // so re-publishing costs nothing.)
+    kk_box_mark_shared(value, ctx);
     return kk_ref_swap_thread_shared_borrow(r, value);
   }
 }

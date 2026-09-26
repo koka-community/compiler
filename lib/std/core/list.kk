@@ -344,6 +344,19 @@ fun partition-acc(xs : list<a>, ^pred : a -> e bool, acc1 : ctx<list<a>>, acc2 :
       then partition-acc(xx,pred,acc1 ++ ctx Cons(x,hole),acc2)
       else partition-acc(xx,pred,acc1,acc2 ++ ctx Cons(x,hole))
 
+// Partition a list in two lists where the first list contains
+// those elements that satisfy the given predicate `pred`.
+// For example: `partition([1,2,3],fn(i) if i.is-odd then Left(i.show) else Right(-i)) == (["1","3"],[-2])`
+pub fun partition-map( xs : list<a>, ^pred : a -> e either<b,c> ) : e (list<b>,list<c>)
+  partition-map-acc(xs, pred, ctx hole, ctx hole)
+
+fun partition-map-acc(xs : list<a>, ^pred : a -> e either<b,c>, acc1 : ctx<list<b>>, acc2 : ctx<list<c>>): e (list<b>, list<c>)
+  match xs
+    Nil -> (acc1 ++. Nil, acc2 ++. Nil)
+    Cons(x,xx) -> match pred(x)
+      Left(y)  -> partition-map-acc(xx,pred,acc1 ++ ctx Cons(y,hole),acc2)
+      Right(z) -> partition-map-acc(xx,pred,acc1,acc2 ++ ctx Cons(z,hole))      
+
 // Retain only those elements of a list that satisfy the given predicate `pred`.
 // For example: `filterMap([1,2,3],fn(i) { if i.odd? then Nothing else Just(i*i) }) == [4]`
 pub fun filter-map( xs : list<a>, pred : a -> e maybe<b> ) : e list<b>
@@ -509,6 +522,13 @@ pub fun init( xs : list<a> ) : list<a>
     Cons(x, xx as Cons) -> Cons(x,init(xx))
     _ -> Nil
 
+// Return the prefix of list and its last element.
+pub fun split-last( xs : list<a>, acc : ctx<list<a>> = ctx hole ) : maybe2<list<a>,a>
+  match xs
+    Cons(x, xx as Cons) -> split-last(xx, acc ++ ctx Cons(x,hole) )
+    Cons(x,Nil) -> Just2(acc ++. Nil, x)
+    Nil         -> Nothing2    
+
 // Get (zero-based) element `n`  of a list. Return a `:maybe` type.
 pub fun @index( xs : list<a>, n : int ) : maybe<a>
   match xs
@@ -545,6 +565,119 @@ pub fun maximum( xs : list<int>, default : int = 0 ) : int
     Nil -> default
     Cons(x,xx) -> xx.foldl( x, max )
 
+
+// Check if the list has a particular element `y`
+pub fun contains( xs : list<a>, y : a, ?(==) : (a,a) -> bool) : bool
+  match xs
+    Cons(x,xx) -> if x==y then True else xx.contains(y)
+    Nil        -> False
+
+// Remove duplicate elements, keeping the FIRST occurrence of each.
+// Quadratic: for a long list use a set.
+pub fun nub( xs : list<a>, ?(==) : (a,a) -> e bool ) : e list<a>
+  fun loop( ys, acc )
+    match ys
+      Nil -> acc.list/reverse
+      // `any`, not `contains`: that one's comparison is total, and `nub`'s is
+      // effect-polymorphic (a caller may compare with a diverging `==`)
+      Cons(y,yy) -> if acc.any(fn(x) x == y) then loop(yy.pretend-decreasing, acc)
+                                             else loop(yy.pretend-decreasing, Cons(y,acc))
+  loop(xs, Nil)
+
+// Are all elements `True`? (`True` for the empty list)
+pub fun and( xs : list<bool> ) : bool
+  match xs
+    Nil -> True
+    Cons(True,xx) -> xx.and
+    Cons(False) -> False
+
+// Are all elements `False`? (`False` for the empty list)
+pub fun or( xs : list<bool> ) : bool
+  match xs
+    Nil -> False
+    Cons(True) -> True
+    Cons(False,xx) -> xx.or
+
+// Is `xs` a prefix of `ys`?
+pub fun is-prefix-of( xs : list<a>, ys : list<a>, ?(==) : (a,a) -> e bool ) : e bool
+  match (xs, ys)
+    (Nil, _) -> True
+    (_, Nil) -> False
+    (Cons(x,xx), Cons(y,yy)) -> x == y && xx.pretend-decreasing.is-prefix-of(yy)
+
+// The largest element under `cmp`, or `Nothing` for the empty list.
+// Ties keep the EARLIER element.
+pub fun maximum-by( xs : list<a>, cmp : (a,a) -> e order ) : e maybe<a>
+  fun loop( ys, acc )
+    match ys
+      Nil -> acc
+      Cons(y,yy) -> match acc
+        Nothing -> loop(yy, Just(y))
+        Just(mx) -> match cmp(y, mx)
+          Gt -> loop(yy, Just(y))
+          _  -> loop(yy, acc)
+  loop(xs, Nothing)
+
+// Remove duplicates under an arbitrary equivalence, keeping the FIRST
+// occurrence. Quadratic, like `nub`.
+pub fun nub-by( xs : list<a>, eq : (a,a) -> e bool ) : e list<a>
+  match xs
+    Cons(x,xx) -> Cons(x, xx.filter(fn(y) !eq(x,y)).pretend-decreasing.nub-by(eq))
+    Nil -> Nil
+
+// Is the list strictly increasing?
+pub fun monotonic( xs : list<int> ) : bool
+  match xs
+    Cons(x,Cons(y,yy)) -> x < y && monotonic(Cons(y,yy).pretend-decreasing)
+    _ -> True
+
+// Pair each element with its index
+pub fun indexed( xs : list<a> ) : list<(int,a)>
+  xs.map-indexed( fn(i,x) (i,x) )
+
+// Zip three lists, stopping at the shortest
+pub fun zip3( xs : list<a>, ys : list<b>, zs : list<c> ) : list<(a,b,c)>
+  match (xs, ys, zs)
+    (Cons(x,xx), Cons(y,yy), Cons(z,zz)) -> Cons((x,y,z), zip3(xx.pretend-decreasing,yy,zz))
+    _ -> Nil
+
+// Partition a list of `either` into its `Left`s and its `Right`s, each in order
+pub fun unzip-either( xs : list<either<a,b>> ) : (list<a>,list<b>)
+  fun loop( ys : list<either<a,b>>, las : ctx<list<a>>, lbs : ctx<list<b>> ) : (list<a>,list<b>)
+    match ys
+      Nil -> (las ++. Nil, lbs ++. Nil)
+      Cons(Left(a), yy) -> loop(yy, las ++ ctx Cons(a, hole), lbs)
+      Cons(Right(b), yy) -> loop(yy, las, lbs ++ ctx Cons(b, hole))
+  loop(xs, ctx hole, ctx hole)
+
+// ----------------------------------------------------------------------------
+// Association lists: `list<(k,v)>` looked up by KEY (`lookup` above takes a
+// PREDICATE instead). These scan: for anything keyed and long-lived use a map.
+// ----------------------------------------------------------------------------
+
+// The value of the FIRST entry for `key`
+pub fun key/lookup( xs : list<(k,v)>, key : k, ?(==) : (k,k) -> e bool ) : e maybe<v>
+  match xs
+    Cons((k,v), xx) -> if k == key then Just(v) else xx.key/lookup(key)
+    Nil -> Nothing
+
+// Is there an entry for `key`?
+pub fun key/contains( xs : list<(k,v)>, key : k, ?(==) : (k,k) -> e bool ) : e bool
+  xs.any( fn((k,_)) k == key )
+
+// The value of the first entry for `key`, or `default` if there is none
+pub fun key/get-default( xs : list<(k,v)>, key : k, default : v, ?(==) : (k,k) -> e bool ) : e v
+  match xs.key/lookup(key)
+    Just(v) -> v
+    Nothing -> default
+
+// Present: replace the FIRST entry's value with `f(old,value)`.
+// Absent: append `(key,value)`.
+pub fun key/update( xs : list<(k,v)>, key : k, value : v, f : (v,v) -> e v, ?(==) : (k,k) -> e bool ) : e list<(k,v)>
+  match xs
+    Cons((k,v), xx) -> if key == k then Cons((k, f(v,value)), xx)
+                                   else Cons((k,v), xx.key/update(key, value, f))
+    Nil -> [(key,value)]
 
 // Split a string into a list of lines
 pub fun lines( s : string ) : list<string>

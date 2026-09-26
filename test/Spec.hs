@@ -171,7 +171,7 @@ runKoka cfg kokaDir fp
   = do caseFlags <- readFlagsFile (fp ++ ".flags")
        let relTest = makeRelative kokaDir fp
            optFlag   = if (opt (options cfg) /= 0) then ["-O" ++ show (opt (options cfg))] else []
-           kokaFlags = optFlag ++ flags cfg ++ caseFlags
+           kokaFlags = optFlag ++ flags cfg ++ caseFlags           
        if (cabal (options cfg))
          then do let argv = ["new-run", "koka", "--"] ++ kokaFlags ++ [relTest]
                  (exitCode, stdout, stderr) <- readProcessWithExitCode "cabal" argv ""
@@ -272,6 +272,7 @@ getOptions
 
 main :: IO ()
 main = do
+  setEnv "LC_ALL" "C"  -- for unicode
   pwd <- getCurrentDirectory
   (options0, args) <- getOptions
   cabalEnv <- do stackExe <- lookupEnv "STACK_EXE"
@@ -285,6 +286,12 @@ main = do
   runKoka stdcfg{flags = "-e" : flags stdcfg} "" "util/link-test.kk"
   -- precompile bench by compiling a dependent file (ensures correct module name resolution)
   runKoka stdcfg "" "test/lazy/queue/bankers.kk"
+  -- precompile mpat-lib so test/cgen/mpat.kk deterministically loads it from the .kki
+  -- (checks the inline-definition pattern roundtrip; see mpat-lib.kk)
+  runKoka stdcfg "" "test/cgen/mpat-lib.kk"
+  -- precompile specbox-lib so test/cgen/specbox.kk loads it from the .kki
+  -- (both carry a -O2 .flags file so they share one build directory)
+  runKoka stdcfg "" "test/cgen/specbox-lib.kk"
   runKoka stdcfg{flags = "--target=js":(flags stdcfg)} "" "util/link-test.kk" -- precompiled js libraries as well
   putStrLn "ok."
   let spec = if target options == "names"

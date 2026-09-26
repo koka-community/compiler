@@ -8,7 +8,7 @@ import compiler/common/syntax
 import compiler/common/unique
 import compiler/core/corevar
 import std/core/undiv
-import std/data/linear-set
+import std/data/rb-set
 
 pub fun defs/unroll(unrollMax: int)
   set-core-defs(unroll(get-core-defs()))
@@ -30,7 +30,14 @@ pub fun recdef/unroll(d: def)
 
 pub fun body/unroll(d: def, tpars: list<type-var>, pars: list<tName>, eff: keffect, body: expr)
   match body
-    Case(exprs, brnchs as Cons(Branch(pats))) | pretend-no-div{exprs.all(fn(x:expr) x.cost == 0)} ->
+    // `Case exprs (branches@((Branch pats _):(_:_)))`: at least TWO
+    // branches. Matching one-or-more is NOT equivalent: with a single branch
+    // `extract-nonrec-branches`'s overlap early-exit can still return a
+    // non-empty `recs`, so the `nonrecbs > 0 && recbs > 0` guard below passes
+    // and a one-branch match gets unrolled into a recursive helper plus a
+    // wildcard branch that calls it -- producing a function that returns the
+    // wrong result.
+    Case(exprs, brnchs as Cons(Branch(pats), Cons)) | pretend-no-div{exprs.all(fn(x:expr) x.cost == 0)} ->
       match extract-nonrec-branches(d.defTname, [], brnchs)
         (nonrecbs, recbs) | nonrecbs.length > 0 && recbs.length > 0 ->
           val dname = d.defTname
@@ -38,7 +45,10 @@ pub fun body/unroll(d: def, tpars: list<type-var>, pars: list<tName>, eff: keffe
           val info = InfoArity(tpars.length, pars.length)
           val sub = [(dname, Var(rname, info))]
           val rdef = d(def-name=rname.get-name, defExpr=(sub |-> d.defExpr), vis=Private)
-          val rcall = App(TypeApp(Var(rname, info), tpars.map(TVar)), pars.map(Var(_, InfoNone)))
+          // Using make-type-app: NO TypeApp node when there are no type args
+          // (a bare `TypeApp(e, [])` around a monomorphic def later crashes
+          // specialize's fn-type-params, which requires a matching TypeLam)
+          val rcall = App(make-type-app(Var(rname, info), tpars.map(TVar)), pars.map(Var(_, InfoNone)))
           val wild = Branch(pats.map(fn(_) PatWild), [Guard(exprTrue, rcall)])
           fun mkFun(b)
             val l = Lam(pars, eff, b)
@@ -101,5 +111,6 @@ fun dont-skip(Branch(pats, guards): branch)
       _ -> pat 
   Branch(pats.map(no-skip), guards)
 
+// Don't call `std/core`'s `unique()`! That makes builds non-deterministic
 fun unique-tname-from(tn: tName): _ tName
-  TName(to-hidden-unique-name(unique(), "unroll", tn.get-name), tn.type-of)
+  TName(to-hidden-unique-name(new-unique(), "unroll", tn.get-name), tn.type-of)

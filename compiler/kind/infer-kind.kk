@@ -12,8 +12,12 @@ import compiler/common/name-collections
 import compiler/platform/config
 import compiler/kind/kind
 import compiler/kind/pretty
-import std/data/linear-map
-import std/data/linear-set
+import std/data/int-map
+import std/data/int-set
+import std/num/int64
+import std/data/rb-set
+import std/data/sort
+import std/data/rb-map
 
 pub infixr 5 (|->)
 // Inference Kind: These kinds contain meta kind variables
@@ -29,7 +33,7 @@ pub fun (==)(k1: inf-kind, k2: inf-kind): _ bool
     (KIApp(k11, k12), KIApp(k21, k22)) -> k11 == k21 && k12 == k22
     _ -> False
 
-alias inf-kgamma = linear-map<name, inf-kind>
+pub alias inf-kgamma = name-map<inf-kind>
 
 pub val infKindStar = KICon(kindStar)
 pub val infKindHandled = KICon(kindHandled)
@@ -60,8 +64,13 @@ pub fun lift-kapp(infkind: inf-kind)
 
 // extract arguments
 pub fun inf-extract-kind-fun(infkind: inf-kind)
-  fun inj(k1, (ks, _))
-    (Cons(k1, ks), k1)
+  // UPSTREAM ISSUE: upstream's patterns write `KICon kindArrow` where
+  // `kindArrow` is a fresh pattern VARIABLE (shadowing the constant), so
+  // upstream accidentally matches ANY constructor head. We deliberately keep
+  // the arrow-equality guards -- a binary kind application with a non-arrow
+  // head shouldn't occur, so behavior only differs on ill-formed input.
+  fun inj(k1, (ks, k))
+    (Cons(k1, ks), k)
   match infkind
     KIApp(KIApp(KICon(ka), k1), k2) | ka == kindArrow -> k1.inj(k2.inf-extract-kind-fun)
     KIApp(KICon(KApp(ka, k1)), k2) | ka == kindArrow -> KICon(k1).inj(k2.inf-extract-kind-fun)
@@ -74,43 +83,48 @@ pub fun is-infkind-handled(ikind: inf-kind): _ bool
     _ -> False
 
 // Substitution
-alias ksub = id-map<inf-kind>
-val ksubEmpty = LinearMap([])
+// PERF: keyed by the kind-var id in a Patricia-tree int-map (upstream:
+// `newtype KSub = KSub (IM.IdMap InfKind)`, Kind/InferKind.hs). `compose` runs
+// once per unification, so an association list makes it O(n*m) -- it dominated
+// a cold compile at 34% of self time. Trie union is O(n+m) and shares subtrees.
+pub alias ksub = int-map<inf-kind>
+pub val ksubEmpty: ksub = empty-intmap
 pub alias kvs = id-set
 
 pub fun ksub-single(id: id, infkind: inf-kind): ksub
-  LinearMap([(id, infkind)])
+  int-map/from-list([(id.int64, infkind)])
 
 pub fun compose(sub1: ksub, sub2: ksub): ksub
-  sub1.union(sub1 |-> sub2)
+  int-map/union(sub1, sub1 |-> sub2) // left-biased union: sub1 wins
 
 pub fun inf/(|->)(sub: ksub, k: inf-kind): inf-kind
   match k
-    KIVar(kid) -> sub.lookup(kid).default(k)
+    KIVar(kid) -> sub.lookup(kid.int64).default(k)
     KIApp(k1, k2) -> KIApp(sub |-> k1, sub |-> k2)
     KICon(k) -> KICon(k)
  
 pub fun sub/(|->)(sub1: ksub, sub2: ksub): ksub
-  sub2.map(fn(k, v) inf/(|->)(sub1, v))
+  int-map/map(sub2, fn(v) inf/(|->)(sub1, v))
 
 pub fun sub/fkv(sub: ksub): _ kvs
   sub.list.map(fn((_, s)) s.fkv).unions
 
 pub fun inf/fkv(k: inf-kind): kvs
   match k
-    KIVar(kid) -> LinearSet([]) + kid
+    KIVar(kid) -> int-set/empty().insert(kid.int64)
     KIApp(k1, k2) -> k1.fkv.union(k2.fkv)
-    KICon(_) -> LinearSet([])
+    KICon(_) -> int-set/empty()
 
 // Pretty printing
 fun infkind/show(infkind: inf-kind): _ string
   with nice-kind-env()
-  infkind.fkv.list.foreach(extend-nice)
+  infkind.fkv.list.foreach(fn(kid) extend-nice(kid.int))
   infkind.pp-infkind(precInfKindTop).pprint/show
 
 pub fun nice-infkinds(kinds: list<inf-kind>): _ list<doc>
   with nice-kind-env()
-  kinds.map(fkv).unions.list.map(extend-nice)
+  // upstream `kvsList (fkv kinds)` iterates a Data.Set: sorted by kind-var id
+  kinds.map(fkv).unions.list.map(int).sort(?(<) = fn(id1: id, id2: id) id1 < id2).map(extend-nice)
   kinds.map(_.lift-kapp.pp-infkind(precInfKindTop))
 
 fun pp-infkind(k: inf-kind, prec: int): _ doc
@@ -138,20 +152,31 @@ fun pp-infkind(k: inf-kind, prec: int): _ doc
       doc.pparens(prec, precInfKindApp)
 
 fun nice-kind-env(f: () -> _ a): _ a
-  var nice := LinearMap([])
+  var nice := int-map/empty()
   var kindIndex := -1
+  var saved := []
   with handler
     fun extend-nice(k: id)
       kindIndex := kindIndex + 1
+      // "k", "k1", "k2", ... (the letter pool is just 'k')
       if kindIndex == 0 then
         nice := nice.extend(k, "k")
       else
-        nice := nice.extend(k, (kindIndex + 'k'.int).char.string)
+        nice := nice.extend(k, "k" ++ kindIndex.show)
       ()
     fun get-nice(k: id)
       nice.nice/show(k)
     fun get-nice-doc(k: id)
       nice.nice/pretty(k)
+    fun nice-push()
+      saved := Cons((nice, kindIndex), saved)
+    fun nice-pop()
+      match saved
+        Cons((n, i), rest) ->
+          nice := n
+          kindIndex := i
+          saved := rest
+        Nil -> ()
   f()
 
 alias prec = int

@@ -5,15 +5,18 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
-// Updated as of 9/29/25 Commit: 0554632
+// Updated as of 7/23/26 Commit: 045e2dc
+
+module compiler/common/name
 
 import compiler/common/color-scheme
 import compiler/common/range
 import compiler/common/failure
-import compiler/lib/printer
+import std/pretty/printer
 import compiler/lib/pprint
 import std/core/undiv
-import std/core-extras
+import std/num/int32
+import std/data/rb-map
 
 
 // | Names defined by the user.
@@ -38,6 +41,8 @@ pub struct name
   pub hashLocalQual: int
   pub nameStem: string  // the stem (`show`)
   pub hashStem: int
+  // strong case-insensitive hash of nameStem; equality filter + `nkey` bucket
+  pub keyStem: int32
 
 // names
 pub alias names = list<name>
@@ -71,10 +76,57 @@ fun name-case-overlap-prefix-of(n1: name, n2: name): bool
 pub fun is-same-namespace(n1: name, n2: name): bool
   n1.is-constructor-name == n2.is-constructor-name
 
-fun lower/cmp(Name(m1, _, l1, _, n1, _): name, Name(m2, _, l2, _, n2, _): name): order
-  match cmp(m1.to-lower, m2.to-lower)
-    Eq -> match cmp(l1.to-lower, l2.to-lower)
-      Eq -> cmp(n1.to-lower, n2.to-lower)
+// ASCII case-insensitive compare with no allocation. `cmp(a.to-lower, b.to-lower)`
+// lowers (allocating) both sides on every call; this is one of the hottest functions in
+// the compiler. `kk_string_icmp_borrow` folds with the SAME `kk_ascii_tolower`
+// that `kk_string_to_lower` uses -- which is ASCII-only, byte-wise over UTF-8 --
+// so it is equivalent by construction. A microbenchmark over 2M comparisons of
+// prefix-sharing generated names agreed on every result and ran ~3x faster
+// (160ms -> 56ms).
+extern str-icmp(^s1: string, ^s2: string): int
+  c  inline "kk_integer_from_int(kk_string_icmp_borrow(#1,#2,kk_context()),kk_context())"
+  js inline "((#1).toLowerCase() < (#2).toLowerCase() ? -1 : ((#1).toLowerCase() > (#2).toLowerCase() ? 1 : 0))"
+
+// Case-insensitive FNV-1a over the FULL stem, computed ONCE at construction.
+//
+// The three stored hashes are only the first FOUR characters, because
+// `name/cmp` needs `h1 < h2 => name1 < name2` for `Ord Name` parity. That makes
+// them near-useless as equality filters: every `compiler/...` module hashes to
+// "comp", so 72.6% of comparisons over a real 44-module population fell through
+// to `str-icmp`. Equality has no ordering obligation, so it can use a strong
+// hash -- 0 collisions on that same population.
+//
+// `int32`, not `int`/`int64`: a microbenchmark over 8.8M triple comparisons
+// measured int 52ms / int32 34ms / int64 46ms. Koka's `int` is a tagged bigint
+// (comparison is a call) and `int64` cannot be tag-packed inside tuples.
+//
+// `kk_ascii_tolower` is static inside kklib's string.c, so its fold is
+// replicated here verbatim -- byte-wise over UTF-8, matching `kk_memicmp`, so
+// two names equal under `str-icmp` always hash alike.
+extern import
+  c include-inline "static int32_t kk_name_ikey(kk_string_t s, kk_context_t* ctx) {\n  kk_ssize_t len; const uint8_t* p = kk_string_buf_borrow(s, &len, ctx);\n  uint32_t h = 2166136261u;\n  for (kk_ssize_t i = 0; i < len; i++) {\n    uint8_t c = p[i]; c = (c >= 'A' && c <= 'Z' ? (uint8_t)(c - 'A' + 'a') : c);\n    h ^= (uint32_t)c; h *= 16777619u;\n  }\n  return (int32_t)(h & 0x7FFFFFFFu);\n}"
+
+extern str-ikey(^s: string): int32
+  c  inline "kk_name_ikey(#1,kk_context())"
+  js inline "(function(s){var h=2166136261;for(var i=0;i<s.length;i++){var c=s.charCodeAt(i);if(c>=65&&c<=90)c+=32;h=(h^c)>>>0;h=Math.imul(h,16777619)>>>0;}return (h&0x7FFFFFFF)|0;})(#1)"
+
+// Byte length, O(1) and non-allocating (`kk_string_len_borrow` reads the
+// header). Only sound as an EQUALITY pre-filter, never for ordering: byte
+// length says nothing about lexicographic order, but `kk_ascii_tolower` maps
+// bytes to bytes, so two names equal ignoring ASCII case must have equal byte
+// length. A mismatch is therefore a definitive "not equal".
+extern str-len(^s: string): int
+  c  inline "kk_integer_from_ssize_t(kk_string_len_borrow(#1,kk_context()),kk_context())"
+  js inline "(#1).length"
+
+fun icmp-order(s1: string, s2: string): order
+  val r = str-icmp(s1, s2)
+  if r < 0 then Lt elif r > 0 then Gt else Eq
+
+fun lower-cmp(n1: name, n2: name): order
+  match icmp-order(n1.nameModule, n2.nameModule)
+    Eq -> match icmp-order(n1.nameLocalQual, n2.nameLocalQual)
+      Eq -> icmp-order(n1.nameStem, n2.nameStem)
       lg -> lg
     lg -> lg
 
@@ -92,11 +144,28 @@ fun slice/cmp-lower(s1: sslice, s2: sslice): order
     (_, _) -> Eq
 
 pub fun name/(==)(n1: name, n2: name): bool
-  val eq = n1.hashStem == n2.hashStem && n1.hashModule == n2.hashModule && n1.hashLocalQual == n2.hashLocalQual
-  assert("common/name/(==): wrong hashes: " ++ n1.show-fully-explicit ++ 
-         " " ++ n2.show-fully-explicit, 
-         eq || n1.show-fully-explicit != n2.show-fully-explicit)
-  eq && n1.lower/cmp(n2) == Eq
+  // NOTE: upstream has a hash-consistency `assertion` here that GHC compiles
+  // out in release builds. The port's strict `assert` built FOUR
+  // fully-explicit name strings on every call (message + condition) -- this
+  // is the hottest function in the compiler, and that dominated whole-module
+  // profiles (kk_bytes_cat/show-fully-explicit in lib/time*). Drop it.
+  //
+  // `hash` is only the FIRST FOUR characters (it must stay order-preserving for
+  // `Ord Name` parity), so it barely discriminates module names: every
+  // `compiler/...` module hashes to "comp" and every `std/...` to "std/". In a
+  // `bmodules` scan that rejects almost nothing and each comparison falls
+  // through to three `str-icmp` calls -- 5% of the whole compile sat in
+  // `kk_memicmp`. Byte length costs O(1), needs no allocation, and is a sound
+  // reject for case-insensitive equality (see `str-len`), so test it first.
+  // `keyStem` first: one int32 compare, and a near-perfect discriminator (0
+  // collisions over the real module population), so the three tagged-bigint
+  // hash compares and the string work below almost never run.
+  val eq = int32/(==)(n1.keyStem, n2.keyStem)
+        && n1.hashStem == n2.hashStem && n1.hashModule == n2.hashModule && n1.hashLocalQual == n2.hashLocalQual
+  eq && str-len(n1.nameStem) == str-len(n2.nameStem)
+     && str-len(n1.nameModule) == str-len(n2.nameModule)
+     && str-len(n1.nameLocalQual) == str-len(n2.nameLocalQual)
+     && n1.lower-cmp(n2) == Eq
 
 val nameEq = fn(n1: name, n2: name) n1 == n2
 
@@ -108,21 +177,25 @@ pub fun name/cmp(n1: name, n2: name): order
   match n1.hashModule.cmp(n2.hashModule)
     Eq -> match n1.hashStem.cmp(n2.hashStem)
       Eq -> match n1.hashLocalQual.cmp(n2.hashLocalQual)
-        Eq -> n1.lower/cmp(n2)
+        Eq -> n1.lower-cmp(n2)
         lg -> lg
       lg -> lg
     lg -> lg
 
-// Effects compare by name first, then by module name for efficiency at runtime
-// Labels are name@module, so if a name looks like name-x@module and name@module, we need to compare @ and - (which is what the runtime does)
-fun label-name/cmp(n1: name, n2: name): order
+// Effects compare by name first, then by local qualifier, then by module name.
+// Labels are name@module, so if a name looks like name-x@module and name@module, we
+// need to compare @ and - (which is what the runtime does).
+//
+// Unlike `name/cmp` above, this order is LOAD-BEARING: it fixes the layout of the
+// evidence vector, so it has to agree both with upstream `labelNameCompare` and with
+// the runtime's own `kk_string_cmp_borrow` over the htag strings. `name/cmp` compares
+// hashes first because any total order will do for a map key; doing that here orders
+// labels essentially arbitrarily and yields static evidence indices that do not match
+// the vector the runtime actually builds.
+pub fun label-cmp(n1: name, n2: name): order
   match (n1.nameStem ++ "@").cmp-lower(n2.nameStem ++ "@")
-    Eq -> match n1.hashLocalQual.int/cmp(n2.hashLocalQual)
-      Eq -> match n1.nameLocalQual.cmp-lower(n2.nameLocalQual)
-        Eq -> match n1.hashModule.int/cmp(n2.hashModule)
-          Eq -> n1.nameModule.cmp-lower(n2.nameModule)
-          lg -> lg
-        lg -> lg
+    Eq -> match string/cmp(n1.nameLocalQual, n2.nameLocalQual)
+      Eq -> string/cmp(n1.nameModule, n2.nameModule)
       lg -> lg
     lg -> lg
 
@@ -136,7 +209,7 @@ fun is-id-start-char(c: char): bool
   c.is-alpha || c == '_' || c == '@'
 
 fun is-id-end-char(c: char): bool
-  c.is-id-char || c == '\''
+  c != '-' && (c.is-id-char || c == '\'')
 
 fun is-symbol-id(s: string): bool
   s != "" && 
@@ -147,13 +220,13 @@ fun is-symbol-id(s: string): bool
 fun wrap-id(s: string): string
   if is-symbol-id(s) then "(" ++ s ++ ")" else s
 
-fun name/show-name(Name(m, _, l, _, n, _): name, explicitLocalQualifier: bool): string
+pub fun name/show-name(Name(m, _, l, _, n, _, _): name, explicitLocalQualifier: bool): string
   val ln = l.join(n.wrap-id)
   if m == "" then ln 
   elif ln == "" then m
   else m ++ (if explicitLocalQualifier && l != "" then "/#" else "/") ++ ln
 
-fun show-fully-explicit(Name(m, _, l, _, n, _): name): string
+pub fun show-fully-explicit(Name(m, _, l, _, n, _, _): name): string
   val ln = l.join(n.wrap-id)
   if m == "" then "#" ++ ln
   elif ln == "" then m
@@ -168,14 +241,24 @@ pub fun show-plain(n: name): string
 pub fun name/show(n: name): string
   n.show-explicit()
 
+// An implicit parameter must print with its `?` sugar: written out as its raw
+// stem (`@implicit/a/show`) it is no longer an implicit parameter when the
+// source is read back, so generated code -- the code-action definitions in
+// particular -- would silently lose the implicit and require explicit passing.
+// `pretty-name` already does this for the coloured printer; this is the plain
+// one the syntax pretty-printer uses.
 pub fun pretty(n: name): doc
-  n.show.text
+  val s = n.show
+  val pre = implicit-namespace ++ "/"
+  if s.starts-with(pre).bool
+    then ("?" ++ s.list.drop(pre.count).string).text
+    else s.text
 
-fun pretty-name-ex(Name(m, _, l, _, n, _): name, lsep: string, cs: colorScheme): doc // explicit /# if needed
+fun pretty-name-ex(Name(m, _, l, _, n, _, _): name, lsep: string, cs: colorScheme): doc // explicit /# if needed
   val ln = join(l, n.wrap-id)
   if m == "" then ln.text
   else 
-   (m.text |.| (if ln.is-empty then pretty/pprint/empty elif l.is-empty then "/".text else lsep.text)).color(cs.colorModule)
+   (m.text |.| (if ln.is-empty then pprint/empty elif l.is-empty then "/".text else lsep.text)).color(cs.colorModule)
            |.| ln.text
 
 pub fun pretty-name(nm: name, cs: colorScheme): _ doc // not explicit /#
@@ -185,19 +268,23 @@ pub fun pretty-name(nm: name, cs: colorScheme): _ doc // not explicit /#
 pub fun pretty-core-name(nm: name, cs: colorScheme): doc // explicit /# if needed
   nm.pretty-name-ex("/#", cs)
 
-fun pretty-local-name(Name(_, _, l, _, n, _): name): doc
+pub fun pretty-local-name(Name(_, _, l, _, n, _, _): name): doc
   if l.is-empty then n.text else join(l, n.wrap-id).text
 
-fun pretty-full-name(Name(m, _, l, _, n, _): name): doc
+pub fun pretty-full-name(Name(m, _, l, _, n, _, _): name): doc
   join(m, join(l, n.wrap-id)).text
 
-fun show-tupled(Name(m, _, l, _, n, _): name): string
+pub fun show-tupled(Name(m, _, l, _, n, _, _): name): string
   "(" ++ m ++ "," ++ l ++ "," ++ n ++ ")"
 
 fun tupled/read(s: string): exn name
   val s' = s.slice.drop(1).extend(-1).string // Drop ()
   val Cons(m, Cons(l, Cons(n, Nil))) = s'.split(",")
-  new-locally-qualified(m, l, n)
+  fun unquote(x: string): string
+    if x.starts-with("\"").bool && x.ends-with("\"").bool
+      then x.slice.drop(1).extend(-1).string
+      else x
+  new-locally-qualified(m.unquote, l.unquote, n.unquote)
 
 pub fun qualified/read(s: string): _ name
   if s.starts-with("(").bool then tupled/read(s)
@@ -213,23 +300,32 @@ pub fun new-qualified(mod: string, name: string): name
   new-locally-qualified(mod, "", name)
 
 pub fun new-locally-qualified(m: string, l: string, n: string): name
-  Name(m, m.hash, l, l.hash, n, n.hash)
+  Name(m, m.hash, l, l.hash, n, n.hash, n.str-ikey)
 
 // The hash function:
 //  1) can be compared: h1 < h2  => name1 < name2 && h1 > h2 => name1 > name2
 //  2) assumes 32 bit integers and no characters in strings >= \x128
 //  3) is case in-sensitive (ie. does tolower first)
 // The hash is done taking the first 4 characters. This is of course a
-// terrible hash but we use it mostly to speed up *comparisions* for the nameMap
+// terrible hash but we use it mostly to speed up *comparisons* for the nameMap
 fun hash(s: string)
   if s.is-empty then 0
   else
-    val sn = (s ++ "____").list.take(4).string.to-lower.list.map(fn (c) { c.int })
-    sn.foldl(0, fn(c, h) { h * 256 + c})
+    // upstream pads with '\0' (`take 4 (s ++ "\0\0\0\0")`), NOT '_' -- '_'
+    // (95) sorts ABOVE digits/'-'/'/' so e.g. `st` vs `st2` compared
+    // reversed relative to upstream's Ord Name
+    val sn = (s.to-lower.list.map(fn(c) c.int) ++ [0,0,0,0]).take(4)
+    // upstream: `foldl (\h c -> h*256 + fromEnum c) 0` -- the accumulator is
+    // the FIRST parameter. The previous lambda had the parameters swapped
+    // (`fn(c, h) h*256 + c` computes elem*256 + acc), making the hash
+    // last-char-dominant so `name/cmp`'s hash-first ordering disagreed with
+    // upstream's Ord Name (e.g. `std/core/console` sorted BELOW
+    // `scratchpad/...`, breaking effect re-aliasing's subset walk).
+    sn.foldl(0, fn(h, c) { h * 256 + c})
 
-fun name-map-stem(Name(m, hm, l, hl, n, _): name, f: (string) -> e string): e name
+fun name-map-stem(Name(m, hm, l, hl, n, _, _): name, f: (string) -> e string): e name
   val n' = f(n)
-  Name(m, hm, l, hl, n', n'.hash)
+  Name(m, hm, l, hl, n', n'.hash, n'.str-ikey)
 
 pub fun read-qualified-name(s0: string): _ name
   if s0.starts-with("?").bool then s0.slice.drop(1).string.read-qualified-name.requalify-locally.to-implicit-param-name
@@ -283,11 +379,12 @@ pub fun is-constructor-name(n: name): bool
         _ -> False
     _ -> False
 
-fun un-wildcard(n: name, post: string): name
-  match n.nameStem.list
-    Cons('_')  -> n.name-map-stem(_.tail ++ post)
-    Cons('@',Cons('_')) -> n.name-map-stem("@" ++ _.list.drop(2).string ++ post)
-    _           -> n
+pub fun un-wildcard(n: name): name
+  n.name-map-stem fn(stem)
+    match stem.list
+      Cons('@', Cons('_', rest)) -> "@wild" ++ rest.drop-while(fn(c) c == '_').string
+      Cons('_', rest) -> "wild" ++ rest.drop-while(fn(c) c == '_').string
+      _ -> stem
 
 pub fun is-wildcard(n: name): bool
   match n.nameStem.slice.next
@@ -306,36 +403,36 @@ pub fun missing-qualifier(current-mod: name, n: name, qname: name): string
   val standard = [current-mod.show, "std/core/types", "std/core/hnd", "std/core"]
   val missing = 
         match standard.filter(fn(std) (std ++ "/").is-prefix-of(missing0))
-          Cons(std, _) -> missing0.list.drop(std.count).string
+          Cons(std, _) -> missing0.list.drop(std.count + 1).string
           _ -> missing0
   if missing.starts-with(implicit-namespace ++ "/").bool then "?" ++ missing.list.drop(implicit-namespace.count + 1).string
   else missing
 
 pub val name/nil = "".new-name
 
-fun is-nil(Name(m, _, _, _, n, _)): bool
+pub fun is-nil(Name(m, _, _, _, n, _, _)): bool
   n == "" && m == ""
 
 pub fun qualify(a: name, b: name): name
   match (a, b)
-    (Name(m, hm, _, 0, _, 0), Name(_, 0, l, hl, n, hn)) -> Name(m, hm, l, hl, n, hn)
-    (Name(m1, _, _, 0, _, 0), name as Name(m2)) | m1 == m2 -> name
+    (Name(m, hm, _, 0, _, 0, _), Name(_, 0, l, hl, n, hn, kn)) -> Name(m, hm, l, hl, n, hn, kn)
+    (Name(m1, _, _, 0, _, 0, _), name as Name(m2)) | m1 == m2 -> name
     _ ->
       trace("Cannot use qualify on qualified names " ++ a.show-fully-explicit ++ ", " ++ b.show-fully-explicit)
       new-name("")
 
-fun unqualify(Name(_, _,l, hl, n, hn)): name
-  Name("", 0, l, hl, n, hn)
+pub fun unqualify(Name(_, _,l, hl, n, hn, kn)): name
+  Name("", 0, l, hl, n, hn, kn)
 
 pub fun qualifier(Name(m, hm)): name
-  Name(m, hm, "", 0, "", 0)
+  Name(m, hm, "", 0, "", 0, "".str-ikey)
 
 pub fun name-as-module-name(n: name): name
   new-module-name(join(n.nameModule, join(n.nameLocalQual, n.nameStem)))
 
 pub fun qualify-locally(nl: name, n: name): exn name
   match nl
-    Name(l, _, _, 0, _, 0) ->
+    Name(l, _, _, 0, _, 0, _) ->
       new-locally-qualified(n.nameModule, join(l, n.nameLocalQual), n.nameStem)
     _ -> failure/fail("common/name/qualify-locally: illegal qualification: " ++ nl.show-explicit ++ ", " ++ n.show-explicit)
 
@@ -348,7 +445,7 @@ pub fun qualify-unpacked(pname: name, fname: name)
 
 // Only keep the stem
 pub fun unqualify-full(n: name): name
-  Name("", 0, "", 0, n.nameStem, n.hashStem)
+  Name("", 0, "", 0, n.nameStem, n.hashStem, n.keyStem)
 
 // Full qualifier: module + local qualifier
 pub fun full-qualifier(n: name): string
@@ -363,7 +460,7 @@ pub fun unqualify-as-module-name(n: name): name
 
 // Module paths
 pub fun split-module-name(n: name): list<string>
-  n.nameModule.split("/")
+  if n.nameModule.is-empty then [] else n.nameModule.split("/")
 
 pub fun unsplit-module-name(l: list<string>): name
   l.join("/").new-module-name
@@ -384,7 +481,30 @@ pub fun merge-common-path(n1: name, n2: name): name
   new
 
 pub fun split-local-qual-name(n: name): list<string>
-  n.nameLocalQual.split("/")
+  if n.nameLocalQual.is-empty then [] else n.nameLocalQual.split("/")
+
+pub fun is-in-special-namespace(n: name, ns: string): bool
+  match n.split-local-qual-name
+    Cons(first) -> first == ns
+    _ -> False
+
+pub fun is-in-default-namespace(n: name): bool
+  n.is-in-special-namespace("default")
+
+pub fun is-in-wrong-namespace(n: name): bool
+  n.is-in-special-namespace("wrong")
+
+// Remove the common module prefix of `mname` from `n`
+pub fun remove-common-prefix(mname: name, n: name): name
+  val ns = n.split-module-name
+  val ms = mname.split-module-name
+  val common = zip(ns, ms).take-while(fn((a, b)) a == b).length
+  val ns' = ns.drop(common)
+  if ns'.is-nil then n
+  else qualify(ns'.unsplit-module-name, n.unqualify)
+
+pub fun split-name(n: name): list<string>
+  (n.split-module-name ++ n.split-local-qual-name ++ [n.nameStem]).filter(fn(x) x != "")
 
 pub fun to-constructor-name(n: name): name
   n.name-map-stem fn(stem)
@@ -412,24 +532,42 @@ pub fun is-handler-con-name(n: name): bool
 pub fun name/starts-with(n: name, s: string): bool
   n.nameStem.starts-with(s).bool
 
+// append two identifier strings making sure dashes are correct
+fun dash-append(s1: string, s2: string): string
+  val pre = match s1.list
+    Cons('-') -> "x" ++ s1
+    _ -> s1
+  match (pre.list.reverse, s2.list)
+    (Cons('-'), Cons(c)) | !(c.is-alpha || c == '@') -> pre ++ "x" ++ s2
+    _ -> pre ++ s2
+
 pub fun prepend(s: string, n: name): name
-  val sl = s.list
-  val new = match n.nameStem.list
-    Cons('@', t) -> match sl
-      Cons('@', _) -> sl ++ t // Keep hidden names hidden
-      _ -> Cons('@', sl ++ t)
-    t -> sl ++ t
-  new-qualified(n.nameModule, new.string)
+  if s == "" then n else
+    n.name-map-stem fn(stem)
+      fun unhide(x: string): string
+        match x.list
+          Cons('@', t) -> t.string
+          _ -> x
+      match s.list
+        Cons('@', Cons(c)) | c.is-digit -> dash-append("@x" ++ s.list.tail.string, stem.unhide) // make sure it stays lowercase
+        Cons('@') -> dash-append(s, stem.unhide) // no need for duplicate '@'s
+        _ -> match stem.list
+          Cons('@') -> "@" ++ dash-append(s, stem.unhide) // keep hidden
+          _ -> dash-append(s, stem)
+
+pub fun prepend-raw(s: string, n: name): name
+  n.name-map-stem fn(stem) s ++ stem
+
+pub fun postpend-raw(n: name, post: string): name
+  n.name-map-stem fn(stem) stem ++ post
 
 pub fun postpend(n: name, post: string): name
-  if n.is-symbol-name then // we must always end in symbols for operators so postpend inserts before the symbols
-    n.name-map-stem fn(stem)
-      val (rsyms, rid) = stem.list.reverse.span(!_.is-id-char)
-      val start = if rid.is-empty || rid.string == "@" then "@x" else rid.reverse.string // ensure it becomes a valid lowerid
-      start ++ post ++ rsyms.reverse.string
+  if n.is-symbol-name then
+    // we must always end in symbols for operators so postpend inserts before the symbols
+    prepend(post, n)
   else n.name-map-stem fn(stem)
-    val (xs, ys) = stem.list.reverse.span(fn(c) c == '?' || c == '\'')
-    ys.reverse.string ++ post ++ xs.reverse.string
+    val (idChars, finalChars) = stem.list.reverse.span(fn(c) c == '?' || c == '\'')
+    (idChars ++ post.list.reverse ++ finalChars).reverse.string
 
 pub fun type-qualified-name(typeName : name, stem : string): exn name
   typeName.qualifier.qualify(typeName.unqualify.name-as-module-name.qualify-locally(stem.new-name))
@@ -646,6 +784,7 @@ pub fun path-to-module-name(p: string): name
       Cons('_', Cons('_', t)) -> Cons('_', decode(pretend-decreasing(t)))
       Cons('_', t) -> Cons('/', decode(pretend-decreasing(t)))
       Cons('@', t) -> Cons('@', decode(pretend-decreasing(t)))
+      Cons('.', t) -> decode(pretend-decreasing(t))
       Cons('\\', t) -> Cons('/', decode(pretend-decreasing(t)))
       Cons(c, t) -> Cons(c, decode(pretend-decreasing(t)))
       Nil -> Nil
@@ -660,7 +799,9 @@ pub fun ascii-encode(n: string, is-module: bool): string
       _ | c.is-alpha-num -> c.string
       '/' | is-module -> "_"
       '-' | !is-module && post.is-alpha-num -> "_"
-      '@' | post.is-digit || post == ' ' || pre == ' ' -> "_"
+      // note: `pre == '/'` covers locally-qualified hidden segments like
+      // `assign/@index` -> `assign_fs__index` (matching the reference JS exports)
+      '@' | post.is-digit || post == ' ' || pre == ' ' || pre == '/' -> "_"
 
       '_' -> "__"
       '.' -> "_dot_"

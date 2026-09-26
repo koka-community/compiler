@@ -2,26 +2,32 @@
 module compiler/core/inlines
 
 import compiler/core/core
+import std/data/rb-map
 import compiler/common/name
 import compiler/common/name-prim
 import compiler/common/name-collections
-import std/data/linear-map
 
 pub alias inlines = name-map<inline-def>
 
-val empty:inlines = LinearMap([])
+val empty:inlines = rb-map/empty()
 
 pub fun inlines(xs: list<inline-def>)
   empty.extends(xs)
 
+// `foldr` applies the LAST list element's extend first (outermost),
+// so the FIRST entry in `xs` ends up applied last and wins
 pub fun extends(inls: inlines, xs: list<inline-def>)
-  xs.foldl(inls, extend)
+  xs.foldr(inls, fn(inl, acc) acc.extend(inl))
 
 pub fun extend(inls: inlines, inl: inline-def)
-  inls.add(inl.def-name, inl)
+  rb-map/set(inls, inl.def-name, inl) // upstream M.insert: the new definition overwrites
 
 pub fun merge(inls1: inlines, inls2: inlines)
   inls1.union(inls2)
+
+// keep only inline defs whose name satisfies `p`
+pub fun inlines-filter(inls: inlines, p: (name) -> e bool): e inlines
+  rb-map/from-list(inls.entries.filter(fn((k, _)) p(k)))
 
 pub fun defs/extract-inlines(dgs: def-groups, costMax: int)
   dgs.map(_.extract-inlines(costMax)).concat

@@ -89,6 +89,15 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Check if the compiler has updated
   await checkCompilerUpdate(context, vsConfig, kokaConfig)
+
+  // Returned for tests: the integration test needs to observe whether the
+  // language client stays RUNNING, which is not inferable from the outside --
+  // a server that dies looks like a request that never answers.
+  return {
+    getLanguageServer: () => languageServer,
+    getLanguageClient: () => languageServer?.languageClient,
+    getKokaConfig: () => kokaConfig,
+  }
 }
 
 // Check if the compiler has updated
@@ -249,13 +258,14 @@ function createCommands(
     }),
 
     vscode.commands.registerCommand('koka.selectTarget', async () => {
-      const result = await vscode.window.showQuickPick(['c', 'c32', 'c64c', 'jsnode', 'jsweb', 'wasmjs', 'wasmweb'])
+      const result = await vscode.window.showQuickPick(['c', 'c32', 'c64c', 'jsnode', 'jsweb', 'wasm', 'wasmweb'])
       if (result) {
         kokaConfig.selectTarget(result)
       }
       if (selectCompileTarget) {
         selectCompileTarget.text = `Koka Target: ${kokaConfig.target}`
       }
+      await vscode.commands.executeCommand("koka.restartLanguageServer")  // updates backend compiler path
     }),
 
     vscode.commands.registerCommand('koka.installSpecificCompiler', async () => {

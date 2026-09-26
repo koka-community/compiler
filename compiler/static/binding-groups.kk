@@ -1,14 +1,23 @@
+module compiler/static/binding-groups
+
+import std/core/undiv
+import std/data/rb-map
 import compiler/common/name
 import compiler/common/name-collections
 import compiler/common/range
 import compiler/common/syntax
 import compiler/syntax/syntax
 import compiler/lib/scc
-import std/data/linear-set
-import std/data/linear-map
-// Updated 7/12/25; Commit #752748d
+import std/data/sort
+import std/data/rb-set
+// Updated 7/23/26; Commit #4eb1128
 
 pub effect val modname: name
+
+pub fun with-modname(nm: name, action: () -> <modname|e> a): e a
+  with val modname = nm
+  action()
+
 // Program
 pub fun program/group-bindings(program: user-program)
   with val modname = program.name
@@ -36,8 +45,8 @@ fun normalize(n: name)
 
 fun typedef/dependencies(td: user-typedef): _ (name, name-set)
   match td
-    Synonym(_, _, t) -> (td.name, t.free-types.list.map(normalize).linear-set)
-    DataType(_, _, c) -> (td.name, c.free-types.list.map(normalize).linear-set)
+    Synonym(_, _, t) -> (td.name, rb-set/from-list(t.free-types.list.map(normalize)))
+    DataType(_, _, c) -> (td.name, rb-set/from-list(c.free-types.list.map(normalize)))
 
 // Free type constructors
 fun list/free-types(l: list<t>, ?free-types: (t) -> _ name-set): _ name-set
@@ -49,7 +58,7 @@ fun ktp/free-types(tp: user-type): _ name-set
     TpFun(args, eff, t) -> args.map(snd).free-types + eff.free-types + t.free-types
     TpApp(t, args) -> Cons(t, args).free-types
     TpVar -> names/empty
-    TpCon(nm) -> LinearSet([]) + nm
+    TpCon(nm) -> rb-set/empty() + nm
     TpParens(t) -> t.free-types
     TpAnn(t) -> t.free-types
 
@@ -63,31 +72,43 @@ fun uc/free-types(c: user-con<t,u,k>, ?free-types: (t) -> pure name-set): pure n
 pub fun defgroups/group-bindings(dgs: list<def-group<t>>): _ list<def-group<t>>
   val (defs0, deps0) = dgs.map(group-bindings).unzip
   val defs = defs0.concat
-  val deps1 = deps0.unions
+  val deps1 = deps0.deps/unions
   val extraDefs = dgs.extract
   fun extend-name(defName: name, n: name)
     match extraDefs.lookup(n.unqualify)
       Just(extra) -> extra
       Nothing -> []
   fun extend(def-name: name, ndeps: name-set)
-    ndeps.union(ndeps.list.flatmap(extend-name(def-name, _)).linear-set)
+    ndeps.union(rb-set/from-list(ndeps.list.flatmap(extend-name(def-name, _))))
   val deps = deps1.map(fn(k, v) extend(k, v))
   group-bindings(defs, deps)
 
 alias extraDeps = name-map<list<name>>; // maps base names (`eq`) to internally qualified names (`int/eq`, `char/eq`)
 
+// combine extra-dependency maps, concatenating the name lists on key collision
+// For example: `eq -> [int/eq, list/eq]` keeps both
+fun ed/unions(ms: list<extraDeps>): extraDeps
+  ms.foldl(rb-map/empty(), fn(acc, m) acc.union-with(m, fn(xs, ys) list/(++)(xs, ys)))
+
+// Combine dependency maps, taking the SET UNION of the free-var sets on key
+// collision. When two defs map to the same key their free-var SETS must be merged, not
+// have one silently discarded -- an entirely dropped dependency would let the
+// SCC pass miss real mutual recursion between definitions.
+fun deps/unions(ms: list<deps>): deps
+  ms.foldl(rb-map/empty(), fn(acc, m) acc.union-with(m, fn(s1 : name-set, s2 : name-set) s1.union(s2)))
+
 fun def-groups/extract(dgs: list<def-group<t>>): exn extraDeps
-  dgs.map(ee).unions
+  dgs.map(ee).ed/unions
 
 fun defgroup/ee(d0: def-group<t>): exn extraDeps
   match d0
     DefNonRec(d) -> d.def/ee
-    DefRec(defs) -> defs.map(def/ee).unions
+    DefRec(defs) -> defs.map(def/ee).ed/unions
 
 fun def/ee(d: def<t>): extraDeps
   val nm = d.binder.name
-  if nm.is-locally-qualified then LinearMap([(nm.unqualify-full, [nm])])
-  else LinearMap([])
+  if nm.is-locally-qualified then rb-map/from-list([(nm.unqualify-full, [nm])])
+  else rb-map/empty()
 
 pub fun defgroup/group-bindings(g: def-group<t>): _ (list<def<t>>, deps)
   match g
@@ -99,7 +120,7 @@ pub fun defgroup/group-bindings(g: def-group<t>): _ (list<def<t>>, deps)
 
 fun udefs/dependencies(defs: list<def<t>>): _ (list<def<t>>, deps)
   val (defDeps, depss) = defs.map(def/dependencies).unzip
-  (defDeps, depss.unions)
+  (defDeps, depss.deps/unions)
 
 fun def/dependencies(d: def<t>): _ (def<t>, deps)
   val (depBinding, deps) = d.binder.dependencies
@@ -107,7 +128,7 @@ fun def/dependencies(d: def<t>): _ (def<t>, deps)
 
 fun binding/dependencies(vb: value-binder<(), expr<t>>): _ (value-binder<(), expr<t>>, deps)
   val (depExpr, free-var) = vb.expr.dependencies
-  (vb(expr=depExpr), emptyDeps.add(vb.name, free-var))
+  (vb(expr=depExpr), rb-map/set(emptyDeps, vb.name, free-var)) // upstream M.singleton; set for insert semantics
 
 fun fv/dependencies(d: def<t>): _ (def<t>, name-set)
   val (depDef, deps) = d.def/dependencies
@@ -115,7 +136,7 @@ fun fv/dependencies(d: def<t>): _ (def<t>, name-set)
 
 fun groupfv/dependencies(dg: def-group<t>): _ (list<def-group<t>>, name-set, name-set)
   val (defs, deps) = dg.group-bindings
-  val names = defs.map(_.binder.name).linear-set
+  val names = rb-set/from-list(defs.map(_.binder.name))
   val free-vars = deps.list.map(snd).unions - names
   (defs.group-bindings(deps), free-vars, names)
 
@@ -143,7 +164,11 @@ fun expr/dependencies(ex: expr<t>): _ (expr<t>, name-set)
     Var(name) ->
       val uname = name.unqualify
       if uname.is-constructor-name then
-        (ex, names/empty + uname + uname.new-creator-name)
+        // Records ONLY the creator name here: with case-insensitive name
+        // equality, a constructor dep like `Num` would otherwise match the
+        // extra-deps key `num` and drag locally-qualified vals (int/num,
+        // float/num) into a spurious recursive group with their function
+        (ex, names/empty + uname.new-creator-name)
       else
         (ex, names/empty + uname + uname.to-value-operation-name)
     App(f, nargs, rng) ->
@@ -266,7 +291,7 @@ fun dg/free-bound-var(dg: def-group<t>): pure (name-set, name-set)
 // Dependencies
 alias deps = name-map<name-set>
 alias free-var = name-set
-val emptyDeps: linear-map<name, name-set> = LinearMap([])
+val emptyDeps: deps = rb-map/empty()
 
 // Topological sort
 
@@ -284,7 +309,7 @@ pub fun dfs/group-bindings(defs: list<def<t>>, deps: deps): pure list<def-group<
   val defOrderScc = scc(defDepsList.map(fn((d, ddeps)) (d.name, ddeps)))
 
   // create a map from definition id's to definitions
-  val defMap = defs.map(fn(d) (d.name, [d])).foldl(LinearMap([])) fn(acc, (id, v))
+  val defMap = defs.map(fn(d) (d.name, [d])).foldl(rb-map/empty()) fn(acc, (id, v))
     acc.update(id, v, fn(old: list<_>, new) old ++ new)
 
   // try to maintain original source order as much as possible
@@ -322,15 +347,19 @@ pub fun dfs/group-bindings(defs: list<def<t>>, deps: deps): pure list<def-group<
     // and reverse to go from least to most dependent
     defOrderScc.foldl([], insert).reverse 
   
-  // create a definition group from a list of mutual recursive identifiers
-  fun make-group(ids:list<name>)
+  // create a definition group from a list of mutual recursive identifiers.
+  // split out `wrong/...` id's always into separate groups (as these usually contain errors)
+  fun make-group(ids0:list<name>)
+    fun grp(ids: list<name>)
       match ids
         [id] ->
           if defDeps.find(id).member(id) then
-          [DefRec(defMap.get(id))]
+            [DefRec(rb-map/get(defMap, id))]
           else
             defMap.get(id).map(DefNonRec)
         _ -> [DefRec(ids.map(defMap.get(_)).concat)]
+    val (wids, gids) = ids0.partition(is-in-wrong-namespace)
+    wids.map(fn(wid) grp([wid])).concat ++ grp(gids)
 
   defOrder.map(make-group).concat
 
@@ -343,7 +372,7 @@ fun typedefs/group(tdefs: list<user-typedef>, deps: deps)
   val typeOrder0 = scc(typeDeps0)
   // create a map from type id's to type defs
   // note: due to duplicate definitions (which are checked for during kind checking), we map to a list of possible definitions
-  val typeMap = tdefs.map(fn(d) (d.name, [d])).foldl(LinearMap([])) fn(acc, (id, v))
+  val typeMap = tdefs.map(fn(d) (d.name, [d])).foldl(rb-map/empty()) fn(acc, (id, v))
     acc.update(id, v, fn(old:list<user-typedef>, new) old ++ new)
   // create a (recursive) definition group
   fun make-group(ids: list<name>)

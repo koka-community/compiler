@@ -2,6 +2,7 @@
 module compiler/kind/unify
 
 import compiler/lib/pprint
+import std/num/int64
 import compiler/common/name
 import compiler/common/range
 import compiler/common/message
@@ -11,7 +12,8 @@ import compiler/platform/config
 import compiler/kind/kind
 import compiler/kind/infer-kind
 import compiler/kind/infer-effect
-import std/data/linear-set
+import std/data/rb-set
+import std/data/int-set
 
 // Unify
 pub type unify-ctx
@@ -43,7 +45,7 @@ fun kind-error(rng: range, err: unify, k1: inf-kind, k2: inf-kind)
       Check(msg, range) -> (range, "expected kind", [("because".text, msg.text)])
       Infer(range) -> (range, "expected kind", inferExtra)
   val [niceKind1, niceKind2] = nice-infkinds([k1, k2])
-  add-error(rng, message.text |-| 
+  kind-add-error(rng, message.text |-| 
     table([
       ("type context".text, doc-from-range(rangeContext)),
       ("type".text, doc-from-range(rng)),
@@ -68,7 +70,7 @@ fun mgu(k1': inf-kind, k2': inf-kind)
       match mgu(k1, l1)
         UnifyKindOk(sub1) ->
           match mgu(sub1 |-> k2, sub1 |-> l2)
-            UnifyKindOk(sub2) -> UnifyKindOk(sub2 |-> sub1)
+            UnifyKindOk(sub2) -> UnifyKindOk(sub2.compose(sub1))
             err -> err
         err -> err
     // pull up KApp's
@@ -82,7 +84,7 @@ fun mgu(k1': inf-kind, k2': inf-kind)
     _ -> NoMatch
 
 fun unify-var(id: int, k: inf-kind)
-  if k.fkv.member(id) then InfiniteKind else UnifyKindOk(ksub-single(id, k))
+  if int-set/member(k.fkv, id.int64) then InfiniteKind else UnifyKindOk(ksub-single(id, k))
 
 pub fun match-kind(k1': kind, k2': kind)
   match (k1', k2')

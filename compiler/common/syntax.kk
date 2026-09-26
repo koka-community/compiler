@@ -6,7 +6,8 @@
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
 module compiler/common/syntax
-// Updated as of 11/3/25: Commit 486ef0d
+// Updated as of 8/3/26: Commit eb98b61d (content-verified identical to
+// src/Common/Syntax.hs at this commit, not just commit-count-based)
 
 pub type jsTarget
   JsDefault
@@ -36,11 +37,25 @@ pub fun ctarget/(==)(c1: cTarget, c2: cTarget): bool
     (WasmWeb, WasmWeb) -> True
     _ -> False
 
+// backend:  c js cs
+// host:     c : libc wasm wasmweb  (wasm==wasi wasmweb==emscripten)
+//           js: node web
+//           cs: dotnet
+// platform: 32 64 64c js cs
+// arch:     x86 x64 arm32 arm64 riscv  -<variant>
+// os:       windows linux macos unix   -<variant>
+//
+// target option:
+//   c    c64 c32 c64c
+//   js   jsnode jsweb
+//   wasm wasm32 wasm64 wasmjs wasmweb
+//   cs
 pub value type target
+  DefaultTarget
   CS
   JS(t: jsTarget)
   C(t: cTarget)
-  DefaultTarget
+  Unsupported
 
 pub fun target/(==)(t1: target, t2: target): bool
   match (t1, t2)
@@ -48,6 +63,7 @@ pub fun target/(==)(t1: target, t2: target): bool
     (JS(j1), JS(j2)) -> j1 == j2
     (C(c1), C(c2)) -> c1 == c2
     (DefaultTarget, DefaultTarget) -> True
+    (Unsupported, Unsupported) -> True
     _ -> False
 
 pub fun is-target-wasm(t: target): bool
@@ -57,18 +73,23 @@ pub fun is-target-wasm(t: target): bool
     C(WasmWeb) -> True
     _ -> False
 
+pub fun unsupported-external(fname: string): string
+  trace("warning: unsupported external: " ++ fname)
+  "kk_unsupported_external(" ++ fname.show ++ ")"
+
 pub fun target/show(t: target): string
   match t
-    CS -> "cs"
-    JS(JsWeb) -> "jsweb"
-    JS(JsNode) -> "jsnode"
-    JS -> "js"
+    C(CDefault) -> "c"
+    C(LibC) -> "libc"
     C(Wasm) -> "wasm"
     C(WasmJs) -> "wasmjs"
     C(WasmWeb) -> "wasmweb"
-    C(LibC) -> "libc"
-    C -> "c"
-    DefaultTarget -> ""
+    JS(JsNode) -> "jsnode"
+    JS(JsWeb) -> "jsweb"
+    JS(JsDefault) -> "js"
+    CS -> "cs"
+    DefaultTarget -> "default"
+    Unsupported -> "unsupported"
 
 pub struct platform
   ptrSize: int // sizeof(intptr_t)
@@ -81,15 +102,32 @@ pub val platform64 = Platform(8, 8, 8, 8)
 pub val platform64c = Platform(8, 8, 4, 8) // Compressed fields
 pub val platformJS = Platform(8, 4, 8, 0)
 pub val platformCS = Platform(8, 4, 8, 0)
+pub val platformNone = Platform(0, 0, 0, 0)
 
 pub fun platform/(==)(p1: platform, p2: platform): bool
   p1.ptrSize == p2.ptrSize && p1.sizeSize == p2.sizeSize && p1.fieldSize == p2.fieldSize && p1.headerSize == p2.headerSize
+
+pub fun platform/cmp(p1: platform, p2: platform): order
+  val c = p1.ptrSize.cmp(p2.ptrSize)
+  if !c.is-eq then return c
+  val c2 = p1.sizeSize.cmp(p2.sizeSize)
+  if !c2.is-eq then return c2
+  val c3 = p1.fieldSize.cmp(p2.fieldSize)
+  if !c3.is-eq then return c3
+  p1.headerSize.cmp(p2.headerSize)
 
 pub fun has-compressed-fields(p: platform): bool
   p.ptrSize != p.fieldSize
 
 pub fun platform/show(p: platform): string
-  "Platform(sizeof(void*)=" ++ p.ptrSize.show ++ ", sizeof(size_t)=" ++ p.sizeSize.show ++ ", sizeof(kk_box_t)=" ++ p.fieldSize.show ++ ", sizeof(kk_header_t)=" ++ p.headerSize.show ++ ")"
+  if p == platform32 then "p32"
+  elif p == platform64 then "p64"
+  elif p == platform64c then "p64c"
+  elif p == platformNone then "none"
+  else p.show-detail
+
+pub fun platform/show-detail(p: platform): string
+  "p(sizeof(void*)=" ++ p.ptrSize.show ++ ", sizeof(size_t)=" ++ p.sizeSize.show ++ ", sizeof(kk_box_t)=" ++ p.fieldSize.show ++ ", sizeof(kk_header_t)=" ++ p.headerSize.show ++ ")"
 
 pub fun aligned/sum(start: int, xs: list<int>): int
   xs.foldl(start, aligned/add)
@@ -107,12 +145,170 @@ pub type buildType
   RelWithDebInfo
   Release
 
+pub fun build-type/(==)(b1: buildType, b2: buildType): bool
+  match (b1, b2)
+    (DebugFull, DebugFull) -> True
+    (Debug, Debug) -> True
+    (RelWithDebInfo, RelWithDebInfo) -> True
+    (Release, Release) -> True
+    _ -> False
+
+// ordered debugfull < debug < relwithdebinfo < release (used by e.g.
+// `buildType flags <= Debug`)
+pub fun build-type/rank(b: buildType): int
+  match b
+    DebugFull -> 0
+    Debug -> 1
+    RelWithDebInfo -> 2
+    Release -> 3
+
+pub fun build-type/(<=)(b1: buildType, b2: buildType): bool
+  b1.rank <= b2.rank
+
 pub fun build-type/show(b: buildType): string
   match b
     DebugFull -> "debugfull"
     Debug -> "debug"
     RelWithDebInfo -> "drelease"
     Release -> "release"
+
+// A `:target` refined with os, architecture, platform sizes, and arbitrary build defines
+pub type target-platform
+  TargetPlatform(
+    tpl-target: target,
+    tpl-os: string,
+    tpl-arch: string,
+    tpl-platform: platform,
+    tpl-build-defs: list<string> // arbitrary build defines
+  )
+
+pub fun targetplatform/(==)(t1: target-platform, t2: target-platform): bool
+  t1.tpl-target == t2.tpl-target && t1.tpl-os == t2.tpl-os && t1.tpl-arch == t2.tpl-arch &&
+  t1.tpl-platform == t2.tpl-platform && t1.tpl-build-defs == t2.tpl-build-defs
+
+fun target/show-backend(t: target): string
+  match t
+    C -> "c"
+    JS -> "js"
+    CS -> "cs"
+    _ -> "default"
+
+fun target/host-attr(t: target): list<string>
+  match t
+    C(LibC) -> ["host=libc"]
+    C(Wasm) -> ["host=wasm"]
+    C(WasmJs) -> ["host=wasmjs"]
+    C(WasmWeb) -> ["host=wasmweb"]
+    JS(JsNode) -> ["host=jsnode"]
+    JS(JsWeb) -> ["host=jsweb"]
+    _ -> []
+
+pub fun targetplatform/show(tp: target-platform): string
+  val attrs = [
+    tp.tpl-target.host-attr,
+    if tp.tpl-os == "" then [] else ["os=" ++ tp.tpl-os],
+    if tp.tpl-arch == "" then [] else ["arch=" ++ tp.tpl-arch],
+    if tp.tpl-platform == platformNone then [] else ["platform=" ++ tp.tpl-platform.show],
+    if tp.tpl-build-defs.is-empty then [] else ["buildcfg=" ++ tp.tpl-build-defs.join("|")]
+  ].concat
+  tp.tpl-target.show-backend ++ (if attrs.is-empty then "" else "[" ++ attrs.join(",") ++ "]")
+
+pub val target-platform-c64 = TargetPlatform(C(LibC), "", "", platform64, [])
+
+pub val target-platform-default = target-platform-from-target(DefaultTarget)
+
+pub fun target-platform-from-target(t: target): target-platform
+  TargetPlatform(t, "", "", platformNone, [])
+
+pub fun target-platform-is-default(tp: target-platform): bool
+  match tp
+    TargetPlatform(DefaultTarget, "", "", Platform(0, 0, 0, 0), Nil) -> True
+    _ -> False
+
+pub val host-ids: list<(string, target)> = [
+  ("libc", C(LibC)),
+  ("wasm", C(Wasm)),
+  ("wasmjs", C(WasmJs)),
+  ("wasmweb", C(WasmWeb)),
+  ("jsnode", JS(JsNode)),
+  ("jsweb", JS(JsWeb))
+]
+
+pub fun target-from-host(s: string): maybe<target>
+  host-ids.lookup(fn(k) k == s)
+
+pub val backend-ids: list<(string, target)> = [
+  ("c", C(CDefault)),
+  ("js", JS(JsDefault)),
+  ("cs", CS),
+  ("default", DefaultTarget)
+]
+
+pub fun target-from-backend(s: string): maybe<target>
+  backend-ids.lookup(fn(k) k == s)
+
+pub val platform-ids: list<(string, platform)> = [
+  ("32", platform32), ("p32", platform32),
+  ("64", platform64), ("p64", platform64),
+  ("64c", platform64c), ("p64c", platform64c),
+  ("js", platformJS), ("pjs", platformJS),
+  ("cs", platformCS), ("pcs", platformCS),
+  ("none", platformNone)
+]
+
+pub fun platform-from-string(s: string): maybe<platform>
+  platform-ids.lookup(fn(k) k == s)
+
+pub val target-platform-ids: list<(string, target-platform)> = [
+  ("c", target-platform-default(tpl-target = C(LibC), tpl-platform = platform64)),
+  ("c64", target-platform-default(tpl-target = C(LibC), tpl-platform = platform64)),
+  ("c32", target-platform-default(tpl-target = C(LibC), tpl-platform = platform32)),
+  ("c64c", target-platform-default(tpl-target = C(LibC), tpl-platform = platform64c)),
+  ("js", target-platform-default(tpl-target = JS(JsNode), tpl-platform = platformJS)),
+  ("jsnode", target-platform-default(tpl-target = JS(JsNode), tpl-platform = platformJS)),
+  ("jsweb", target-platform-default(tpl-target = JS(JsWeb), tpl-platform = platformJS)),
+  ("wasm", target-platform-default(tpl-target = C(Wasm), tpl-platform = platform32)),
+  ("wasm32", target-platform-default(tpl-target = C(Wasm), tpl-platform = platform32)),
+  ("wasm64", target-platform-default(tpl-target = C(Wasm), tpl-platform = platform64)),
+  ("wasmjs", target-platform-default(tpl-target = C(WasmJs), tpl-platform = platform32)),
+  ("wasmweb", target-platform-default(tpl-target = C(WasmWeb), tpl-platform = platform32)),
+  ("cs", target-platform-default(tpl-target = CS, tpl-platform = platformCS))
+]
+
+pub fun target-platform-from-string(s: string): maybe<target-platform>
+  target-platform-ids.lookup(fn(k) k == s)
+
+pub fun match-target-platform(tp1: target-platform, tp2: target-platform): bool
+  match-target(tp1.tpl-target, tp2.tpl-target) && match-str(tp1.tpl-os, tp2.tpl-os) &&
+  match-str(tp1.tpl-arch, tp2.tpl-arch) && match-platform(tp1.tpl-platform, tp2.tpl-platform) &&
+  match-build-defs(tp1.tpl-build-defs, tp2.tpl-build-defs)
+
+pub fun match-os(s1: string, s2: string): bool
+  match-str(s1, s2)
+
+pub fun match-arch(s1: string, s2: string): bool
+  match-str(s1, s2)
+
+fun match-str(s1: string, s2: string): bool
+  if s1 == "" then True
+  else s1.split("-").list/is-prefix-of(s2.split("-"))
+
+pub fun match-platform(p1: platform, p2: platform): bool
+  match-int(p1.ptrSize, p2.ptrSize) && match-int(p1.sizeSize, p2.sizeSize) &&
+  match-int(p1.fieldSize, p2.fieldSize) && match-int(p1.headerSize, p2.headerSize)
+
+fun match-int(i1: int, i2: int): bool
+  if i1 == 0 then True else i1 == i2
+
+pub fun match-target(t1: target, t2: target): bool
+  match (t1, t2)
+    (DefaultTarget, _) -> True
+    (C(CDefault), C(_)) -> True
+    (JS(JsDefault), JS(_)) -> True
+    _ -> t1 == t2
+
+pub fun match-build-defs(defs1: list<string>, defs2: list<string>): bool
+  defs1.all(fn(d) defs2.any(fn(d2) d2 == d))
 
 // Visibility
 pub type visibility
@@ -287,7 +483,7 @@ pub fun valuerepr/(==)(v1: value-repr, v2: value-repr): bool
   v1.rawSize == v2.rawSize && v1.scan-count == v2.scan-count && v1.alignment == v2.alignment
 
 pub fun valuerepr/show(v: value-repr): string
-  "{" ++ v.rawSize.show ++ ", " ++ v.scan-count.show ++ ", " ++ v.alignment.show ++ "}"
+  "{" ++ v.rawSize.show ++ "," ++ v.scan-count.show ++ "," ++ v.alignment.show ++ "}"
 
 pub fun scan-size(p: platform, v: value-repr): (int, int)
   (p.size(v), v.scan-count)

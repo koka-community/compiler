@@ -33,10 +33,13 @@ pub fun unique-ids(s: string, n: int): _ list<id>
   uniques(n).map(gen-id(s, _))
 
 pub fun unique-name(s: string): _ name
-  new-hidden-name(s ++ "." ++ new-unique().int/show)
+  new-hidden-name-ex(s, new-unique().int/show)
 
+// the result must be HIDDEN (`@uniq-<stem>@<i>`) -- `ppParam` suppresses
+// hidden names, so specialize/lift signatures render nameless params like
+// upstream (`(list<int>) -> ...`, not `(xs@8016 : list<int>) -> ...`)
 pub fun unique-name-from(nm: name): _ name
-  new-unique().to-unique-name(nm)
+  to-hidden-unique-name(new-unique(), "uniq", nm)
 
 pub fun fresh-name(pfx: string)
-  new-name(pfx ++ "." ++ get-unique().int/show)
+  new-name(pfx ++ "@" ++ new-unique().int/show)

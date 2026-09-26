@@ -16,7 +16,7 @@ import compiler/type/assumption
 import compiler/core/core
 import compiler/core/corevar
 import compiler/platform/config
-import std/data/linear-set
+import std/data/rb-set
 
 pub fun lift-functions()
   with handle-fun-lift()
@@ -93,7 +93,8 @@ fun lift-defgroup(defg: def-group, topLevel: bool)
         val names = defs.map(defTName)
         val fvs = exprs.map(free-locals).unions - names
         val tvs = exprs.map(free-type-vars).unions
-        val (callExprs, liftedDefs0) = pinfoss.zip(names.zip(exprDocs)).map(fn((infos, (name, doc))) make-def(fvs.list, tvs.list, infos, name, doc)).unzip
+        // upstream: `tnamesList`/`tvsList` -- sorted set iteration
+        val (callExprs, liftedDefs0) = pinfoss.zip(names.zip(exprDocs)).map(fn((infos, (name, doc))) make-def(fvs.tnames-list, tvs.tvs-sorted, infos, name, doc)).unzip
         val subst = names.zip(callExprs)
         val liftedDefs = liftedDefs0.map(_.subst-with-lifted-expr(subst))
         val groups = DefRec(liftedDefs).lift-defgroup(True) // lift all recs to top-level
@@ -133,7 +134,7 @@ fun make-def(fvs: list<tName>, tvs: list<type-var>, pinfos: list<param-info>, or
   val dnames = current-def-names()
   val (name, inl) = unique-name-current-def()
   fun unwild(TName(nm, tp): tName)
-    TName(if nm.nameStem.head-char.unjust == '_' then prepend("wild", name) else name, tp) 
+    TName(if nm.is-wildcard then nm.un-wildcard else nm, tp) 
   val (tpars, pars, eff, body) = match expr
     TypeLam(tpars, Lam(pars, eff, lbody)) -> (tpars, pars.map(unwild), eff, lbody)
     Lam(pars, eff, lbody) -> ([], pars.map(unwild), eff, lbody)
@@ -147,7 +148,7 @@ fun make-def(fvs: list<tName>, tvs: list<type-var>, pinfos: list<param-info>, or
   val funExpr = Var(TName(name, liftedTp), InfoArity(alltpars.length, allargs.length))
   val etaExpr = match (tvs, fvs)
     (Nil, Nil) -> funExpr
-    _ -> add-type-lambdas(tpars, Lam(pars, eff, App(add-type-apps(alltpars, funExpr), allargs)))
+    _ -> add-type-lambdas(tpars, Lam(pars, eff, App(beta/add-type-apps(alltpars, funExpr), allargs)))
   val liftedDef = Def(name, liftedTp, liftedFun, Private, def-fun(allpinfos), inl, null, 
                       "// lifted local: " ++ (dnames ++ [origName.get-name]).map(_.unqualify.show).join(", ") ++ "\n" ++ doc)
   (etaExpr, liftedDef)

@@ -6,6 +6,9 @@
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
 // Syntax building helpers, taken from parse.kk
+// Updated as of 8/3/26: Commit eb98b61d (of Syntax/Parse.hs) -- content-
+// verified identical modulo the single-line error-message wording fix
+// (upstream eb98b61dc "better grammar")
 module compiler/syntax/builders
 import std/os/path
 import std/os/file
@@ -18,10 +21,9 @@ import compiler/common/name-prim
 import compiler/common/parse // not actually parsing, but need it for types
 import compiler/syntax/syntax
 import compiler/syntax/promote
-// Updated to commit #ddac17b (of Parse.hs)
+// Updated to commit #b1b8078 (of Parse.hs)
 
 // Effect definitions
-// 
 // We don't return a syntactic construction for effects
 // but immediately build the underlying data structures.
 // ---------------------------------------------------------
@@ -172,6 +174,10 @@ pub fun split-top-defs(dfs: list<top-def>): (list<user-def>, list<user-typedef>,
       Nil -> (user-defs ++. Nil, typedefs ++. Nil, externDefs ++. Nil)
   dfs.split(ctx hole, ctx hole, ctx hole)
 
+// the kind of a handled effect type: `(E, V) -> V`
+fun builders/make-kind-handled(rng: range): user-kind
+  KindArrow(KindCon(nameKindEffect, rng), KindArrow(KindCon(nameKindStar, rng), KindCon(nameKindStar, rng)))
+
 pub fun make-effect-decl(decl: effect-decl): _ list<top-def>
   // TODO: Use record operations
   val EffectDecl(vis, _, vrng, erng, doc, tpSort, singleShot, isInstance, isScoped, id, irng, tpars, effkind, _, effectsExtra, operations, oprng) = decl
@@ -184,7 +190,7 @@ pub fun make-effect-decl(decl: effect-decl): _ list<top-def>
   // effect eff<a,b,c>
   // infkind::<_,_,_E,V> -> V
   val infKind = match effkind
-    KindNone -> tpars.map(kind).foldr(KindCon(if isInstance then nameKindStar elif singleShot then nameKindHandled1 else nameKindHandled, null)) fn(e, acc)
+    KindNone -> tpars.map(kind).foldr(builders/make-kind-handled(krng)) fn(e, acc)
       KindArrow(e, acc)
     _ -> effkind
   val ename = TypeBinder(id, infKind, irng, rng)
@@ -208,8 +214,13 @@ pub fun make-effect-decl(decl: effect-decl): _ list<top-def>
   // Effect tag
   val tagName = id.to-effect-tag-name
   val tagDef = Def(ValueBinder(tagName, (), Ann(App(Var(nameHTag, False, krng), 
-  // TODO: This needs to be prefixed with the actual module name
-    [(Nothing, Literal(LitString(id.show ++ "@" ++ irng.source.name.path.basename, krng)))], krng), 
+  // todo: this needs to be prefixed with the actual module name (upstream carries the
+  // same todo). Upstream's `basename` is notdir MINUS the extension, so the tag reads
+  // `colors@color-scheme`; std/os/path's `basename` keeps the extension, which produced
+  // `colors@color-scheme.kk`. The htag string is what the runtime compares in
+  // `kk_evv_insert`/`kk_evv_index`, so it has to agree with what every other compiler
+  // emits for the same effect -- `stemname` is the faithful equivalent.
+    [(Nothing, Literal(LitString(id.show ++ "@" ++ irng.source.name.path.stemname, krng)))], krng), 
       quantify(QForall, tpars, TpApp(TpCon(nameTpHTag, krng), 
         [TpApp(TpCon(hndName, krng), tpars.map(tp-var), krng)], krng)), krng),
        krng, krng), krng, vis, DefVal, InlineNever, "// runtime tag for the " ++ docEffect)
@@ -296,7 +307,10 @@ pub fun make-operation-decl(opCount: int, vis: visibility, forallsScoped: list<u
   val forallParams = foralls.map(fn(par) TpVar(par.name, krng))
   val tpParams = forallParams ++ exists1.map(fn(par) TpVar(par.name, krng))
   fun make-clause-field-name(name: name): exn name
-    make-hidden-name(opSort.show, if name.is-value-operation-name then name.from-value-operation-name else name)
+    // The FIELD-SAFE sort form (`brk`, no space/dash) --
+    // `show` gives the surface syntax `final ctl` which breaks the field-name
+    // round-trip in checkCoverage
+    make-hidden-name(opSort.op-sort/string, if name.is-value-operation-name then name.from-value-operation-name else name)
   val clauseId = make-clause-field-name(id)
   val (clauseName, clauseParsTp) = 
     if pars.length <= 2 then // Set by std/core/hnd
@@ -325,13 +339,13 @@ pub fun make-operation-decl(opCount: int, vis: visibility, forallsScoped: list<u
                            make-tp-total(grng), clauseRhoTp, grng))
     val body = Ann(Lam([hndParam], innerBody, False, grng), fullTp, grng)
     val binder = ValueBinder(selectId, (), body, krng, krng)
-    Def(binder, krng, vis, DefFun([Borrow]), InlineAlways, ("// select `" ++ id.show ++ "` operation out of the " ++ docEffect ++ " handler"))
+    Def(binder, krng, vis, DefFun([Borrow]), InlineAlways, ("// select `" ++ id.show ++ "` operation out of " ++ docEffect))
   val opSelect = create-select()
 
-  val docDef = if doc.is-empty then "" else doc ++ "\n" ++ 
+  val docDef = (if doc.is-empty then "" else doc ++ "\n") ++ 
                 (if id.is-value-operation-name
-                  then  "// Call then `val " ++ id.from-value-operation-name.show ++ "` operation of the " ++ docEffect
-                  else "// Call then `" ++ opSort.show ++ " " ++ id.show ++ "` operation of the " ++ docEffect)    
+                  then "// Call the `val " ++ id.from-value-operation-name.show ++ "` operation of the " ++ docEffect
+                  else "// Call the `" ++ opSort.show ++ " " ++ id.show ++ "` operation of the " ++ docEffect)    
   // create a typed perform wrapper: fun op(x1:a1,..,xN:aN) : <l> b { performN(evv-at(0),clause-op,x1,..,xN) }
   fun create-op()    
     val nameRng = idrng.hide
@@ -361,7 +375,7 @@ pub fun make-operation-decl(opCount: int, vis: visibility, forallsScoped: list<u
   if id.is-value-operation-name then
     // create a temporary value definition for type checking
     val opName = id.from-value-operation-name
-    val qualTpe = promote-type(TpApp(TpCon(nameTpValueOp, krng), [tres], krng))
+    val qualTpe = promote-type(TpApp(TpCon(nameTpValueOp, krng), [teff, tres], krng))
     val phantom = Var(nameValueOp, False, krng)
     val annot = Ann(phantom, qualTpe, null)
     (conField, opSelect, opDef, Just(Def(ValueBinder(opName, (), annot, idrng.hide, krng), idrng, vis, DefVal, InlineNever, docDef)))
@@ -471,13 +485,13 @@ pub fun partition-clauses(clauses: list<clause>, rng: range): _ (maybe<user-expr
         else
           separate(rst, ret, fin, Just(e), br)
       Cons(ClauseBranch(e), rst) -> separate(rst, ret, fin, init, br ++ (ctx Cons(e, hole)))
-      Nil -> (ret, fin, init, br ++. Nil)
+      Nil -> (init, ret, fin, br ++. Nil)  // caller expects (reinit, ret, finally, ops)
   separate(clauses, Nothing, Nothing, Nothing, ctx hole)
 
 pub val userTpRange = fn(tp: user-type) tp.range
 
 pub fun make-nil(r: range): expr<user-type>
-  make-app(Var(nameListNil, False, r), [], userTpRange)
+  Var(nameListNil, False, r)
 
 pub fun make-cons(r: range, x: expr<t>, xs: expr<t>, rT: (t) -> range): expr<t>
   make-app(Var(nameCons, False, r), [x, xs], rT)
@@ -496,13 +510,17 @@ pub fun tuple(tps: list<(name, user-type)>, r: range): user-type
 pub fun eta-expand(e: user-expr): user-expr
   val (e', binders) = e.eta-transform
   if binders.is-empty then e'
-  else Lam(binders, e', False, e.range)
+  else
+    // we sort the binders by position since an expression like `_x.inc._f()` gets
+    // already rewritten to `_f(inc(_x))` by the application parser.
+    val seqbinders = binders.sort(?(<) = fn(b1: value-binder<maybe<user-type>, maybe<user-expr>>, b2: value-binder<maybe<user-type>, maybe<user-expr>>) b1.name-range.cmp(b2.name-range).is-lt)
+    Lam(seqbinders, e', False, e.range)
 
 fun eta-transform(ue : user-expr): (user-expr, list<value-binder<maybe<user-type>, maybe<user-expr>>>)
   match ue
     Var(name, isOp, rng) | name.is-eta-hole ->
       val name' = "eta".unique-range-hidden-name(rng)
-      (Var(name', isOp, rng), [ValueBinder(name', Nothing, Nothing, range/null, range/null)])
+      (Var(name', isOp, rng), [ValueBinder(name', Nothing, Nothing, rng, rng)])
     Ann(e, tp, r) ->
       val (e', binders) = e.eta-transform
       (Ann(e', tp, r), binders)

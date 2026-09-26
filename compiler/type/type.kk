@@ -1,4 +1,5 @@
 module compiler/type/type
+// Updated as of 7/23/26: Commit dd91082
 
 import compiler/common/syntax
 import compiler/common/name
@@ -63,11 +64,34 @@ pub type type-var
 pub fun show(t: type-var): string
   t.tid.show-id ++ "::" ++ t.kind.show
 
+pub fun flav/dump(f: flavour): string
+  match f
+    Bound -> "B"
+    Skolem -> "S"
+    Meta -> "M"
+
+fun dumpjoin(xs: list<string>, sep: string): string
+  match xs
+    Nil -> ""
+    Cons(x, Nil) -> x
+    Cons(x, rst) -> x ++ sep ++ dumpjoin(rst, sep)
+
+pub fun type/dump(t: ktype): div string
+  match t
+    TForAll(vars, r) -> "AA[" ++ vars.map(fn(v) v.tid.show-id ++ v.flavour.flav/dump).dumpjoin(",") ++ "]" ++ r.type/dump
+    TFun(args, e, res) -> "Fun(" ++ args.map(fn(a) a.snd.type/dump).dumpjoin(",") ++ ")!{" ++ e.type/dump ++ "}->" ++ res.type/dump
+    TCon(c) -> "C:" ++ c.name.show-plain
+    TVar(v) -> "V" ++ v.tid.show-id ++ v.flavour.flav/dump
+    TApp(t2, args) -> "Ap[" ++ t2.type/dump ++ "|" ++ args.map(type/dump).dumpjoin(",") ++ "]"
+    TSyn(syn, args, t2) -> "Yn:" ++ syn.name.show-plain ++ "[" ++ args.map(type/dump).dumpjoin(",") ++ "]=" ++ t2.type/dump
+
 pub fun tv/(==)(t1: type-var, t2: type-var): bool
   t1.tid == t2.tid // also flavours?
 
 pub fun tv/cmp(t1: type-var, t2: type-var)
   cmp(t1.tid, t2.tid) // also flavours?
+
+// By id
 
 // The flavour of a type variable. Types in a "Type.Assumption" (Gamma) and inferred types in "Core.Core"
 // are always of the 'Bound' flavour. 'Meta' and 'Skolem' type variables only ever occur during type inference.
@@ -95,6 +119,7 @@ pub type type-con
 
 pub fun typecon/(==)(t1: type-con, t2: type-con): bool
   name/(==)(t1.name, t2.name)
+
 
 pub fun typecon/cmp(t1: type-con, t2: type-con): order
   t1.name.name/name/cmp(t2.name)
@@ -436,7 +461,7 @@ pub fun extract-ordered-effect(tp: tau): _ (list<tau>, tau)
     if tl'.is-effect-empty && !ls.is-nil then ls else [l]
   val labss = labs.map(expand).concat
   fun label/(<)(l1: tau, l2: tau) 
-    label-name/cmp(l1.label-name, l2.label-name).is-lt
+    label-cmp(l1.label-name, l2.label-name).is-lt
   val slabs = labss.sort()
   (slabs, tl)
 
@@ -446,11 +471,6 @@ pub fun contains-local-effect(eff: tau): _ bool
 
 pub fun label-name(tp: tau): _ name
   tp.label-name-ex.fst
-
-pub fun label-name-full(tp: tau): _ name
-  val (name, i, _) = tp.label-name-ex
-  val ids = i.show-id
-  postpend(name, "$" ++ ids)
 
 pub fun label-name-ex(tp: tau): _ (name, int, list<tau>)
   match tp.expand-syn
@@ -599,8 +619,9 @@ pub fun kind-of(tau: ktype)
 
 fun unsafe-type(f: () -> _ tau): tau
   unsafe-total
-    try(f) fn(e) // TODO: Replace this with exit
+    fun on-exn(e: exception) // TODO: Replace this with exit
       TCon(TypeCon("error".new-name, kindStar))
+    try(on-exn, f)
 
 pub val typeDivergent = unsafe-type({single-eff(nameTpDiv)})
 fun single-eff(nm:name)
@@ -664,7 +685,13 @@ pub fun type-make-tuple(tps)
     _ -> type-app(type-tuple(tps.length), tps)
 
 pub fun type-tuple(n: int)
-  TCon(TypeCon(name-tuple(n), kind-fun-n(kindStar.replicate(n), kindStar)))
+  // upstream `typeTuple n = TCon (TypeCon (nameTpTuple n) ...)` -- the TYPE
+  // constructor needs the lowercase TYPE name ("tuple2"), not the
+  // capitalized constructor name ("Tuple2") `name-tuple` produces; using the
+  // constructor name here leaked into every generated tuple-typed C
+  // declaration/box-function reference (e.g. `kk_..._Tuple2`/`Tuple2_box`
+  // instead of the real kklib `kk_..._tuple2`/`tuple2_box`).
+  TCon(TypeCon(name-tp-tuple(n), kind-fun-n(kindStar.replicate(n), kindStar)))
 pub val typeOptional = TCon(tconOptional)
 pub val tconOptional = TypeCon(nameTpOptional, kind-fun(kindStar, kindStar))
 pub fun is-optional(tp: ktype): bool

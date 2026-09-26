@@ -5,19 +5,20 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
-// Updated as of 11/11/24: Commit 08af0fb
+// Updated as of 7/23/26: Commit d026468
+
+module compiler/syntax/highlight
 
 import compiler/common/color-scheme
 import compiler/common/range
 import compiler/common/name
-import compiler/lib/printer
+import std/pretty/printer
 import compiler/lib/pprint
 import compiler/syntax/lexeme
 import compiler/syntax/lexer
 import compiler/syntax/layout
 import std/os/path
-import std/core-extras
-// TODO: Isocline stuff
+// note: upstream removed highlightInput/isocline formatting (d026468), so no isocline port is needed
 
 // TODO: FmtAttr
 
@@ -90,12 +91,14 @@ fun normalize(s: string)
       val x = rst.string.split(".")
       c.string ++ x.head.unjust
 
+// A keyword is an OPERATOR keyword when it does NOT
+// start with a letter (`:`, `->`, `|`), with `=` called out as an exception.
 pub fun is-keyword-op(s: string)
   match s
     "=" -> False
     _ -> 
       match s.slice.next
-        Just((c, _)) -> c.is-alpha
+        Just((c, _)) -> !c.is-alpha
         Nothing -> False
 
 pub type highlight-ctx
@@ -176,7 +179,7 @@ pub fun highlight-lexemes(transform: list<lexeme> -> _ list<lexeme>, c: highligh
     match lexemes
       Nil -> acc.list/reverse
       Cons(l, ls) -> 
-        val (ctx2', content) = highlight-lexeme(transform, c, l, ls)
+        val (ctx2', content) = highlight-lexeme(transform, ctx', l, ls)
         highlight-acc(ctx2', Cons(content, acc), ls)
   highlight-acc(c, [], lexes.special-to-keywords.transform)
 

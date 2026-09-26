@@ -5,8 +5,13 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
-// Updated to commit #a22ccc2 (of Parse.hs) + extras for Koka parsing framework
+// Updated as of 8/3/26: Commit eb98b61d (of Parse.hs) + extras for Koka
+// parsing framework -- content-verified identical modulo the single-line
+// error-message wording fix (upstream eb98b61dc "better grammar")
 
+module compiler/common/parse
+
+import std/core/unsafe
 import compiler/syntax/layout
 import compiler/syntax/lexer
 import compiler/syntax/lexeme
@@ -16,130 +21,232 @@ import compiler/common/name
 import compiler/common/name-prim
 import compiler/common/range
 import std/core/debug
+import std/os/env
 
 pub effect parse-error
   final ctl parse-error(e: string, r: range): a
 
 pub linear effect token-parse
   val source-info: source
+  val ptarget-platform: target-platform
+  // KOKA_PARSE_CONTEXT=1: report errors with the full "When parsing ..."
+  // context stack + surrounding lexemes (richer than upstream, whose Parsec
+  // errors show only the failure point). Off by default so error-expectation
+  // tests match the upstream-recorded outputs.
+  val perr-context: bool
   fun add-warning(w: string, r: range): ()
   fun ppeek(): maybe<lexeme>
-  fun undelimit(msg: string): ()
-  fun reset(msg: string): ()
-  fun delimit(msg: string): ()
   fun pnext(): maybe<lexeme>
-  fun took-input(msg: string): bool
-  fun ptrace(s: string): ()
+  // One handler round-trip per token ATTEMPT, instead of peek-then-next on
+  // success and peek-then-peek-again on failure. `Right` consumed, `Left(Just)`
+  // did not and hands back the lexeme it looked at (so the caller needs no
+  // second `ppeek` for the range), `Left(Nothing)` is end of input.
+  fun ptoken(f: (lexeme) -> maybe<a>): either<maybe<lexeme>, a>
+  // Backtracking state is saved LEXICALLY by the combinator that needs it (see
+  // `parse-maybe`), not pushed on a shared history stack. `get-pos` is what
+  // makes Parsec's consumed-input test possible without a frame.
+  fun get-pos(): int
+  fun set-pstate(l: list<lexeme>, p: int): ()
+  // parsec-style farthest-failure tracking: token-level parsers record what
+  // they EXPECTED at the position they failed; the outermost handler reports
+  // the farthest such failure ("unexpected X\n expecting A, B or C") like
+  // upstream's Parsec errors, instead of whichever error happened to
+  // propagate out of the backtracking structure last
+  // Carries the LEXEME, not a rendered string: `parse-token` records an
+  // expectation on every failed token match, and in a backtracking combinator
+  // parser that is normal control flow -- `parse-choices` fails its way down
+  // the alternatives. Only the FARTHEST failure is ever printed, so rendering
+  // here formatted a lexeme per failure and discarded nearly all of them
+  // (`lexeme/show` was 2.6% of a warm no-op build). Render at the point of use.
+  fun precord-expect(lbl: string, unexp: maybe<lex>, r: range): ()
+  fun pfar-snapshot(): (range, maybe<lex>, list<string>)
+  fun pfar-restore(snap: (range, maybe<lex>, list<string>)): ()
   fun take-all(): list<lexeme>
   fun put-all(lexemes: list<lexeme>): ()
   fun get-lexemes_(): list<lexeme>
 
-fun parse-delimited(msg: string, f: () -> _ a): _ a
-  delimit(msg)
+// Context only -- it adds "When parsing X" to an error under
+// KOKA_PARSE_CONTEXT=1. It used to push a backtrack frame as well, which bought
+// nothing: it never rewinds.
+inline fun parse-delimited(msg: string, f: () -> _ a): _ a
   with override
     final ctl parse-error(e, r)
-      undelimit(msg)
-      parse-error("\nWhen parsing " ++ msg ++ " " ++ e, r)
-  val x = f()
-  undelimit(msg)
-  x
+      // default: re-raise UNCHANGED (upstream Parsec errors report only the
+      // failure point, and the error-expectation tests match that); with
+      // KOKA_PARSE_CONTEXT=1 keep the richer "When parsing" context stack
+      if perr-context && msg != ""
+        then parse-error("\nWhen parsing " ++ msg ++ " " ++ e, r)
+        else parse-error(e, r)
+  f()
 
-fun peek(): _ lexeme
+pub inline fun peek(): _ lexeme
   val p = ppeek()
   match p
     Just(l) -> l
     Nothing -> parse-error("unexpected end of file", null)
 
-fun next(): _ lexeme
+pub inline fun next(): _ lexeme
   val p = pnext()
   match p
     Just(l) -> l
     Nothing -> parse-error("unexpected end of file", null)
 
-fun lex-parse(allow-at: bool, insert-semis: bool, preprocess: list<lexeme> -> pure list<lexeme>, p: () -> _ a, sourceName: string, input: string): _ a
+pub fun lex-parse(allow-at: bool, insert-semis: bool, preprocess: list<lexeme> -> pure list<lexeme>, p: () -> _ a, tpl: target-platform, sourceName: string, input: string): _ a
   val src = Source(sourceName, input)
   val lexes = lexing(src, 1, input)
   // trace(lexes.map(show).join("\n"))
   val lexes' = preprocess(layout(lexes, allow-at, insert-semis))
   // trace(lexes'.map(show).join("\n"))
-  with parse-lexemes(src, lexes')
+  with parse-lexemes(src, lexes', tpl)
   p()
 
-fun parse-lexemes(src: source, lexemes0: list<lexeme>, p: () -> _ a): _ a
+// first occurrence wins, order preserved -- the accumulation side is now a
+// plain cons (see `precord-expect`), so this is where duplicates are removed
+fun dedup-first(xs: list<string>): list<string>
+  xs.foldl([]) fn(acc: list<string>, x: string)
+    if acc.any(fn(y) y == x) then acc else Cons(x, acc)
+  .reverse
+
+// parsec `showErrorMessages` list format: "A, B or C"
+fun expects-join(ls: list<string>): string
+  match ls
+    Nil -> ""
+    [l] -> l
+    Cons(l, rest) -> match rest.reverse
+      Cons(lst, mid) -> (Cons(l, mid.reverse)).join(", ") ++ " or " ++ lst
+      Nil -> l
+
+// read once; `unsafe-total` keeps `ndet` out of every parse's row
+val parse-stats-flag : bool = unsafe-total{ get-env-value("KOKA_PARSE_STATS").is-just }
+// KOKA_KIND_TRACE=1: trace the `local kind` section -- what the emitter
+// declares, what the reader parses, and every use site that falls back and
+// finds nothing. Lives here because `core/parse` cannot import `std/os/env`:
+// that module exports `get-env`, which collides with the parser's own `eenv`
+// operation of the same name.
+pub val kind-trace-flag : bool = unsafe-total{ get-env-value("KOKA_KIND_TRACE").is-just }
+pub fun kind-trace-on(): bool
+  kind-trace-flag
+fun parse-stats-on(): bool
+  parse-stats-flag
+
+pub fun parse-lexemes(src: source, lexemes0: list<lexeme>, tpl: target-platform, p: () -> _ a): _ a
+  // A backtrack frame records the not-yet-consumed SUFFIX of the (immutable)
+  // lexeme list at its `delimit`, plus the absolute token position, so
+  // delimit/undelimit/reset/took-input are all O(1) and frames share the
+  // token list instead of copying it. (The previous representation kept a
+  // consumed-lexeme list per frame which `pnext` consed onto and `undelimit`
+  // merged into its parent with `++` -- O(n^2) time and memory on deeply
+  // nested frames, e.g. nested parens or core inline sections.)
   var lexemes := lexemes0
-  // trace(lexemes0.show)
-  var history := Cons(([], "top", 0), Nil)
+  var pos := 0
   val debug = True
+  val verbose-errors = get-env-value("KOKA_PARSE_CONTEXT").is-just
+  // farthest-failure record (see the token-parse effect doc)
+  var far-rng := range/null
+  var far-unexp : maybe<lex> := Nothing
+  var far-msgs : list<string> := []
+  // DIAGNOSTIC (KOKA_PARSE_STATS=1): rewinds against tokens, the number that says
+  // how close this parser is to Parsec's non-backtracking `<|>`. Reported with
+  // `trace`, NOT `println`: trace carries no effect, so it cannot leak `console`
+  // into this function's row (which would break the closure type `build.kk`
+  // annotates on `parse-core`).
+  var n-restore := 0
+  var n-tokens := 0
+  // The metric that actually matters: TOKENS THROWN AWAY. A 1-token rewind costs
+  // almost nothing now that saving is lexical; a 50-token rewind wastes 50
+  // token-parses. Rewind COUNT is a poor proxy -- cutting it 17% moved no time.
+  var n-rewound := 0
+  // `precord-expect` fires on every FAILED token match. At one position it
+  // dedups with a linear scan of string compares and appends with `++ [lbl]`,
+  // which copies -- so k alternatives failing at the same spot cost O(k^2).
+  var n-expect := 0
   with override
     final ctl parse-error(e: string, r: range)
-      parse-error("Got error: " ++ e ++ "\n" ++ " when parsing:\n\t" ++ lexemes.take(2).map(show).join("\n\t"), r)
+      // default: re-raise unchanged (upstream reports only the failure
+      // message); KOKA_PARSE_CONTEXT=1 adds the upcoming-lexeme context
+      if verbose-errors
+        then parse-error("Got error: " ++ e ++ "\n" ++ " when parsing:\n\t" ++ lexemes.take(2).map(show).join("\n\t"), r)
+      // report the FARTHEST recorded expectation when it lies beyond the
+      // propagated error (Parsec merge semantics: furthest failure wins)
+      elif !far-rng.is-null && far-msgs.is-cons && far-rng.start.off > r.start.off then
+        val unexpLine = match far-unexp
+          Just(u) -> "unexpected " ++ u.show ++ "\n"
+          Nothing -> ""
+        parse-error(unexpLine ++ "expecting " ++ expects-join(far-msgs.reverse.dedup-first), far-rng)
+      else parse-error(e, r)
   with handler
     val source-info = src
+    val ptarget-platform = tpl
+    val perr-context = verbose-errors
     fun get-lexemes_() lexemes
     fun take-all()
       val l = lexemes
-      lexemes := Nil // TODO: This ruins the history -- especially with delimiting
-      // history := Cons((ctx hole, "top", 0), Nil)
+      lexemes := Nil // note: outer frames keep their own saved suffixes
       l
     fun put-all(lexemes': list<lexeme>)
-      lexemes := lexemes' // TODO: This ruins the history -- especially with delimiting
-      // history := Cons((ctx hole, "top", 0), Nil)
+      lexemes := lexemes' // note: outer frames keep their own saved suffixes
     fun add-warning(w: string, r: range)
       ()
     fun pnext()
       match lexemes
         Cons(l, rst) ->
+          n-tokens := n-tokens + 1
           lexemes := rst
-          match history
-            Cons((h, msg, i), tl) ->
-              history := Cons((Cons(l, h), msg, i + 1), tl)
-            Nil -> 
-              impossible("unexpected top of context")
+          pos := pos + 1
           Just(l)
         Nil -> Nothing
-    fun reset(msg)
-      match history
-        Cons((h, str, _), rst) -> 
-          if str != msg then
-            // trace("Resetting " ++ str ++ " but expected " ++ msg)
-            impossible("Reset error")
-          else
-            lexemes := h.reverse ++ lexemes
-            history := rst
-            // if debug then
-            //   trace("Resetting " ++ str ++ "\n" ++ history.map(fn(x) "\tWhen parsing " ++ x.snd).join("\n") ++ " at " ++ lexemes.head.map(show).default("eof") ++ "\nputting back:\n\t" ++ (h ++. Nil).map(show).join("\n\t"))
-        Nil ->
-          impossible("mismatched reset")
-    fun delimit(msg)
-      history := Cons(([], msg, 0), history)
-    fun undelimit(msg)
-      match history
-        Cons((lexes, str, _), Cons((lexes2, str2, i2), rst)) ->
-          if str == msg then
-            history := Cons((lexes ++ lexes2, str2, i2), rst)
-          else
-            trace("Undelimiting " ++ str ++ " but expected " ++ msg)
-            impossible("Undelimit error")
-        _ ->
-          impossible("Undelimiting from top")
+    fun get-pos() pos
+    fun set-pstate(l, p0)
+      n-restore := n-restore + 1
+      n-rewound := n-rewound + (pos - p0)
+      lexemes := l
+      pos := p0
     fun ppeek()
       match lexemes
         Cons(l, _) -> Just(l)
         Nil -> Nothing
-    fun took-input(str)
-      match history
-        Cons((_, msg, i), _) ->
-          if str != msg then
-            trace("Checking if input was taken for " ++ str ++ " but expected " ++ msg)
-            impossible("Take input error")
-          else
-            i != 0
-        Nil ->
-          False
-    fun ptrace(s: string)
-      if debug then
-        trace(s ++ "\n  " ++ history.map(fn(x) "When parsing " ++ x.snd).join("\n\t") ++ " next parse-token: " ++ lexemes.take(1).map(show).join(","))
-  mask<local>{p()}
+    fun ptoken(f)
+      match lexemes
+        Cons(l, rst) ->
+          match f(l)
+            Just(a) ->
+              n-tokens := n-tokens + 1
+              lexemes := rst
+              pos := pos + 1
+              Right(a)
+            Nothing -> Left(Just(l))
+        Nil -> Left(Nothing)
+    fun pfar-snapshot()
+      (far-rng, far-unexp, far-msgs)
+    fun pfar-restore(snap)
+      val (r0, u0, m0) = snap
+      far-rng := r0
+      far-unexp := u0
+      far-msgs := m0
+    fun precord-expect(lbl: string, unexp: maybe<lex>, r: range)
+      if far-rng.is-null || r.start.off > far-rng.start.off then
+        far-rng := r
+        far-unexp := unexp
+        far-msgs := (if lbl == "" then [] else [lbl])
+      elif r.start.off == far-rng.start.off then
+        val _ = match unexp
+          Just(u) -> far-unexp := Just(u)
+          Nothing -> ()
+        // Just CONS it. This fires on every failed token match -- 11.5M times in
+        // one warm build -- and it used to dedup by scanning the list with string
+        // compares and appending with `++ [lbl]`, which copies: 33M string
+        // compares and 11.5M list copies, O(k^2) in the alternatives tried at a
+        // position. Parsec does not dedup as it accumulates either; it merges
+        // and only tidies up in `showErrorMessages`. So do the same and dedup
+        // when the message is RENDERED, which happens at most once per parse.
+        if lbl != "" then far-msgs := Cons(lbl, far-msgs)
+  // NB: keep this row free of `console`/`ndet` -- `build.kk` annotates the
+  // closure `parse-core` returns, and a stray effect here breaks that
+  // annotation. Counting instrumentation must not live in this function.
+  val presult = mask<local>{p()}
+  if parse-stats-on() then
+    trace("PARSE-STATS " ++ src.name ++ " tokens=" ++ n-tokens.show ++ " restore=" ++ n-restore.show ++ " rewound=" ++ n-rewound.show ++ " expect=" ++ n-expect.show)
+  presult
 
 
 pub fun peof()
@@ -159,10 +266,20 @@ pub fun parse-many1(kind: string, l: () -> _ a): _ list<a>
     Nothing -> parse-error("at least 1 of " ++ kind, peek().range)
 
 fun parse-many-end(kind: string, l: () -> _ a, p: () -> _ b): _ list<a>
+  parse-many-endx(kind, l, p, True)
+
+fun parse-many-endx(kind: string, l: () -> _ a, p: () -> _ b, isFirst: bool): _ list<a>
+  val snap = pfar-snapshot()
   match parse-maybe-nb("many " ++ kind, l)
     Just(r) -> 
+      // parsec `sepBy1 p sep = p >>= many (sep >> p)`: `many` DISCARDS the
+      // expectation records of a successful (consuming) iteration; only the
+      // FIRST element's failed-alternative expectations merge into the final
+      // error (compare `Cons(x -> ...` which lists "as"/":" vs
+      // `Cons(x,xx -> ...` which lists only ","/")" upstream)
+      if !isFirst then pfar-restore(snap)
       match parse-maybe-nb("sep " ++ kind, p)
-        Just(_) -> Cons(r, parse-many-end(kind, l, p))
+        Just(_) -> Cons(r, parse-many-endx(kind, l, p, False))
         Nothing -> Cons(r, Nil)
     Nothing -> Nil
 
@@ -174,25 +291,22 @@ fun parse-many-end1(kind: string, l: () -> _ a, p: () -> _ b): _ list<a>
         Nothing -> Cons(r, [])
     Nothing -> parse-error("at least 1 of " ++ kind, peek().range)
 
-fun parse-token(msg: string, f: (lexeme) -> _ maybe<a>): _ a
-  val t = peek()
-  match f(t) 
-    Just(a) -> 
-      next() 
-      // ptrace("Consuming " ++ t.show)
-      a
-    Nothing ->
-      parse-error("expecting " ++ msg, peek().range)
+pub inline fun parse-token(msg: string, f: (lexeme) -> _ maybe<a>): _ a
+  match ptoken(f)
+    Right(a) -> a
+    Left(Just(t)) ->
+      precord-expect(msg, Just(t.lex), t.range)
+      parse-error("expecting " ++ msg, t.range)
+    Left(Nothing) -> parse-error("unexpected end of file", null)
 
 // Version of maybe that does backtrack
-fun parse-maybe<e>(str: string, p: () -> _ a): _ maybe<a>
-  delimit(str)
+pub inline fun parse-maybe<e>(str: string, p: () -> _ a): _ maybe<a>
+  val saved = get-lexemes_()
+  val saved-pos = get-pos()
   with override
-    return(r)
-      undelimit(str)
-      Just(r)
+    return(r) Just(r)
     final ctl parse-error(e, r)
-      reset(str)
+      set-pstate(saved, saved-pos)
       Nothing
   p()
 
@@ -201,32 +315,31 @@ pub fun parse-maybe-list(p: () -> _ list<a>): _ list<a>
     Just(r) -> r
     Nothing -> []
 
-fun parse-try(p: () -> _ a, ?kk-file-line: string): _ a
-  delimit(kk-file-line)
+pub inline fun parse-try(p: () -> _ a, ?kk-file-line: string): _ a
+  val saved = get-lexemes_()
+  val saved-pos = get-pos()
   with override
-    return(r) 
-      undelimit(kk-file-line)
-      r
     final ctl parse-error(e, r)
-      reset(kk-file-line)
-      parse-error(e,r)
+      set-pstate(saved, saved-pos)
+      parse-error(e, r)
   p()
   
 
 // Version of maybe that doesn't backtrack
-fun parse-maybe-nb(str: string, p: () -> _ a): _ maybe<a>
-  delimit(str)
+pub inline fun parse-maybe-nb(str: string, p: () -> _ a): _ maybe<a>
+  val saved-pos = get-pos()
   with override
-    return(r)
-      undelimit(str)
-      Just(r)
+    return(r) Just(r)
     final ctl parse-error(e, r)
-      if took-input(str) then
-        undelimit(str)
-        parse-error("\nWhen parsing " ++ str ++ " " ++ e, r)
-      else
-        undelimit(str)
-        Nothing 
+      // consumed input => propagate (Parsec consumed-input semantics);
+      // consumed nothing => the position is already where we started, so there
+      // is nothing to restore
+      if get-pos() != saved-pos then
+        // context only under KOKA_PARSE_CONTEXT=1 (see parse-delimited)
+        if perr-context && str != ""
+          then parse-error("\nWhen parsing " ++ str ++ " " ++ e, r)
+          else parse-error(e, r)
+      else Nothing
   p()
 
 // Parse parse-choices without backtracking. 
@@ -266,7 +379,12 @@ fun bracketed(open: () -> _ range, close: () -> _ range, f: (a, range) -> _ b, p
   f(x, rng1.range/combine(rng2))
 
 pub fun braced(p: () -> _ a): _ a
-  parse-choices("braced", [{
+  // upstream is a plain <|> chain (Parse.hs:320-335): once the `{` alternative
+  // consumes input, an inner error must PROPAGATE. Full backtracking here made
+  // the whole module body a backtracking boundary -- any unrecovered parse
+  // error re-ran the bare `p` alternative (succeeding on zero tokens) and got
+  // masked as `peof expected end of file`.
+  parse-choices-nb("braced", [{
       parse-left-curly() // TODO: Make sure right is same as left? (inserted versus actual)
       parse-many("semicolons", parse-semicolon)
       val x = p()
@@ -301,7 +419,19 @@ pub fun parse-semi-braced(kind: string, p: () -> _ a): _ a
   x
 
 pub fun semis(kind: string, p: () -> _ a): _ list<a>
-  parse-many-end(kind, p, parse-semi1)
+  // SepEndBy is RECURSIVE
+  // (each element heads its own sepEndBy1), so every element's failed
+  // continuation expectations merge into the final error -- unlike sepBy's
+  // many-based tail (see parse-many-endx)
+  parse-sep-end-by(kind, p, parse-semi1)
+
+fun parse-sep-end-by(kind: string, l: () -> _ a, p: () -> _ b): _ list<a>
+  match parse-maybe-nb("many " ++ kind, l)
+    Just(r) -> 
+      match parse-maybe-nb("sep " ++ kind, p)
+        Just(_) -> Cons(r, parse-sep-end-by(kind, l, p))
+        Nothing -> Cons(r, Nil)
+    Nothing -> Nil
 
 pub fun semis1(kind: string): _ list<range>
   parse-many1("semicolons", parse-semicolon)
@@ -342,25 +472,25 @@ pub inline fun parse-comma(): _ range
   parse-special(",")
 
 pub inline fun parse-semicolon(): _ range
-  parse-range("semicolon", is-semicolon)
+  parse-range("\";\"", is-semicolon)
 
 pub fun parse-left-curly(): _ range
-  parse-range("{", _.lex.is-lcurly)
+  parse-range("\"{\"", _.lex.is-lcurly)
 
 pub fun parse-right-curly(): _ range
-  parse-range("}", _.lex.is-rcurly)
+  parse-range("\"}\"", _.lex.is-rcurly)
 
 pub fun parse-left-bracket(): _ range
-  parse-range("[", _.lex.is-lbracket)
+  parse-range("\"[\"", _.lex.is-lbracket)
 
 pub fun parse-right-bracket(): _ range
-  parse-range("]", _.lex.is-rbracket)
+  parse-range("\"]\"", _.lex.is-rbracket)
 
 pub fun parse-left-paren(): _ range
-  parse-range("(", _.lex.is-lparen)
+  parse-range("\"(\"", _.lex.is-lparen)
 
 pub fun parse-right-paren(): _ range
-  parse-range(")", _.lex.is-rparen)
+  parse-range("\")\"", _.lex.is-rparen)
 
 pub fun parse-left-angle(): _ range
   parse-range("<", _.lex.is-langle)
@@ -371,14 +501,117 @@ pub fun parse-right-angle(): _ range
 pub fun parse-type-binder-id(): _ (name, range)
   parse-choices("tBinderId", [parse-type-ident])
 
-fun parse-import-alias(): _ (name, name, range, range)
+// Returns `Nothing` if this is a conditional import with no matching target
+// Plain <|> (a malformed `{...}` conditional-import
+// block must error, not silently degrade into the "unsupported target"
+// warning path -- audit #18)
+pub fun parse-import-alias(): _ maybe<(name, name, range, range)>
   val (name1, rng1) = parse-module-path()
-  val r = parse-maybe("import alias")
+  parse-choices-nb("import alias", [
+    {
       parse-keyword("=")
-    parse-module-path()
-  match r
-    Just((name2, rng2)) -> (name1, name2, rng1, rng2)
-    Nothing -> (name1, name1, rng1, rng1)
+      val (name2, rng2) = parse-module-path()
+      Just((name1, name2, rng1, rng2))
+    },
+    {
+      val mbentry = firstof(parse-semi-braces("conditional imports", parse-import-conditional))
+      match mbentry
+        Nothing ->
+          pwarning-message("unsupported target in conditional import " ++ name1.show, rng1)
+          Nothing
+        Just((name2, rng2)) -> Just((name1, name2, rng1, rng2))
+    },
+    { Just((name1, name1, rng1, rng1)) }
+  ])
+
+fun parse-import-conditional(): _ maybe<(name, range)>
+  val matches = parse-target-guard()
+  val namerng = parse-module-path()
+  if matches then Just(namerng) else Nothing
+
+pub fun firstof(mbs: list<maybe<a>>): maybe<a>
+  match mbs.drop-while(is-nothing)
+    Cons(x, _) -> x
+    Nil -> Nothing
+
+pub fun pwarning-message(msg: string, rng: range): _ ()
+  add-warning("warning " ++ rng.start.show ++ ": " ++ msg, rng)
+
+// Parse a target guard like `c` or `js [os=windows,arch="x64"|"arm64"]` and
+// return whether it matches the current target platform.
+pub fun parse-target-guard(): _ bool
+  val backend = parse-external-backend()
+  val attrs = parse-external-attrs()
+  (backend ++ attrs).map(match-attrs).all(fn(b) b)
+
+fun parse-external-backend(): _ list<(string, list<(string, range)>, range)>
+  parse-choices("backend", [
+    {val rng = parse-special-id("c"); [("backend", [("c", rng)], rng)]},
+    {val rng = parse-special-id("js"); [("backend", [("js", rng)], rng)]},
+    {val rng = parse-special-id("cs"); [("backend", [("cs", rng)], rng)]},
+    {val rng = parse-special-id("default"); [("backend", [("default", rng)], rng)]},
+    {[]}
+  ])
+
+fun parse-external-attrs(): _ list<(string, list<(string, range)>, range)>
+  parse-choices("target attributes", [
+    {
+      parse-special("[")
+      val attrs = parse-sep-by("target attribute", parse-external-attr, parse-comma)
+      parse-special("]")
+      attrs
+    },
+    {[]}
+  ])
+
+fun parse-external-attr(): _ (string, list<(string, range)>, range)
+  val (attr, rng) = parse-strid()
+  parse-keyword("=")
+  val vals = parse-sep-by1("attribute value", parse-strid, parse-vertical-bar)
+  (attr, vals, rng)
+
+fun parse-strid(): _ (string, range)
+  parse-choices("identifier or string", [
+    {val (id, rng) = parse-var-id(); (id.show, rng)},
+    {parse-string-literal()}
+  ])
+
+fun match-attrs((attr, vals, rng): (string, list<(string, range)>, range)): _ bool
+  vals.map(fn(v) match-attr(attr, v, rng)).any(fn(b) b)  // vals is OR of potential matches
+
+fun match-attr(attr: string, (v, valrng): (string, range), rng: range): _ bool
+  val tpl = ptarget-platform
+  match attr
+    "os" -> match-os(v, tpl.tpl-os)
+    "arch" -> match-arch(v, tpl.tpl-arch)
+    "host" ->
+      match target-from-host(v)
+        Just(tgt) -> match-target(tgt, tpl.tpl-target)
+        Nothing ->
+          pwarning-message("unknown host: " ++ v.show, valrng)
+          False
+    "backend" ->
+      match target-from-backend(v)
+        Just(tgt) -> match-target(tgt, tpl.tpl-target)
+        Nothing ->
+          pwarning-message("unknown backend: " ++ v.show, valrng)
+          False
+    "target" ->
+      match target-platform-from-string(v)
+        Just(tpl') -> match-target-platform(tpl', tpl)
+        Nothing ->
+          pwarning-message("unknown target: " ++ v.show, valrng)
+          False
+    "platform" ->
+      match platform-from-string(v)
+        Just(pl) -> match-platform(pl, tpl.tpl-platform)
+        Nothing ->
+          pwarning-message("unknown platform: " ++ v.show, valrng)
+          False
+    "buildcfg" -> match-build-defs(v.split(",").map(trim), tpl.tpl-build-defs)
+    _ ->
+      pwarning-message("unknown attribute for target: " ++ attr.show, rng)
+      True
 
 pub fun parse-param-id(): _ (name, range)
   parse-choices("param id", [parse-identifier, parse-wildcard])
@@ -488,6 +721,7 @@ pub fun parse-qualified-type-id(): _ (name, range)
   if !name.is-type-var then 
     (name, range)
   else // TODO: This isn't quite the right hack.
+    precord-expect("type name (and not type variable)", Nothing, range)
     parse-error("type name (and not type variable)", range)
 
 pub fun parse-type-id-context(): _ (name, range)
@@ -509,7 +743,7 @@ pub fun parse-prefix-op(): _ expr<a>
 pub fun parse-qualified-var-id(): _ (name, range)
   parse-token("variable id") fn(a)
     match a
-      Lexeme(rng, LexId(id)) -> Just((id.show-plain.new-name, rng))
+      Lexeme(rng, LexId(id)) -> Just((id, rng))
       _ -> Nothing
 
 // is really qidop and idop from the spec
@@ -577,14 +811,18 @@ pub fun default/parse-special-id(s: string): _ range
       LexId(id) | id.show-plain == s -> Just(x.range)
       _ -> Nothing
 
+// The matcher must stay TOTAL so it can go through `ptoken` (one handler
+// round-trip instead of two): it reports a deprecated spelling by returning a
+// flag, and the warning -- an effect -- is raised out here.
 pub fun parse-special-id(s: string, alternates: list<string>): _ range
-  parse-token(s) fn(x)
+  val (r, deprecated) = parse-token(s) fn(x)
     match x.lex
-      LexId(id) | id.show-plain == s -> Just(x.range)
-      LexId(id) | alternates.any(_ == id.show-plain) -> 
-        add-warning("using deprecated keyword " ++ id.show-plain ++ ", use " ++ s ++ " instead", x.range)
-        Just(x.range)
+      LexId(id) | id.show-plain == s -> Just((x.range, ""))
+      LexId(id) | alternates.any(_ == id.show-plain) -> Just((x.range, id.show-plain))
       _ -> Nothing
+  if deprecated != "" then
+    add-warning("using deprecated keyword " ++ deprecated ++ ", use " ++ s ++ " instead", r)
+  r
 
 pub fun parse-special-con-id(s: string): _ range
   parse-token(s) fn(x)
@@ -596,13 +834,14 @@ pub inline fun default/parse-special(s: string): _ range
   parse-special(s, [])
 
 pub fun parse-special(s: string, alternates: list<string>): _ range
-  parse-token(s) fn(x)
+  val (r, deprecated) = parse-token("\"" ++ s ++ "\"") fn(x)
     match x.lex
-      LexSpecial(s') | s == s' -> Just(x.range)
-      LexSpecial(s') | alternates.any(_ == s') -> 
-        add-warning("using deprecated keyword " ++ s' ++ ", use " ++ s ++ " instead", x.range)
-        Just(x.range)
+      LexSpecial(s') | s == s' -> Just((x.range, ""))
+      LexSpecial(s') | alternates.any(_ == s') -> Just((x.range, s'))
       _ -> Nothing
+  if deprecated != "" then
+    add-warning("using deprecated keyword " ++ deprecated ++ ", use " ++ s ++ " instead", r)
+  r
 
 pub inline fun default/parse-keyword(s: string): _ range
   parse-keyword_(s, []).range
@@ -611,13 +850,14 @@ pub inline fun range/parse-keyword(s: string, alts: list<string>): _ range
   parse-keyword_(s, alts).range
 
 fun parse-keyword_(s: string, alternates: list<string>): _ lexeme
-  parse-token("keyword " ++ s) fn(x)
+  val (x, deprecated) = parse-token("\"" ++ s ++ "\"") fn(x)
     match x.lex
-      LexKeyword(s', _) | s == s' -> Just(x)
-      LexKeyword(s', _) | alternates.any(_ == s') -> 
-        add-warning("using deprecated keyword " ++ s' ++ ", use " ++ s ++ " instead", x.range)
-        Just(x)
+      LexKeyword(s', _) | s == s' -> Just((x, ""))
+      LexKeyword(s', _) | alternates.any(_ == s') -> Just((x, s'))
       _ -> Nothing
+  if deprecated != "" then
+    add-warning("using deprecated keyword " ++ deprecated ++ ", use " ++ s ++ " instead", x.range)
+  x
 
 pub fun default/parse-doc-keyword(s: string): _ (range, string)
   parse-doc-keyword(s, [])

@@ -7,19 +7,24 @@
 //----------------------------------------------------------------------------
 // Updated as of 7/23/24: Commits b8074c2 (IdSet) e914563 (IdMap) b8074c2 (Id)
 module compiler/common/id
-import std/data/linear-map
-import std/data/linear-set
+import std/data/rb-set
 import compiler/lib/pprint
+import std/data/rb-map
+import std/data/int-map
+import std/data/int-set
+import compiler/common/name-collections
 
 /// Internal identifiers (just 'Int's).
 
 /// Types aliases
 /// A list of identifiers
 pub alias ids = list<id>
-// A map from identifiers to values
-pub alias id-map<a> = linear-map<int, a>
+// A map from identifiers to values.
+// Patricia tree. Ids are `int`, the tree is keyed by `int64`, so callers convert at the
+// boundary -- the `nice` helpers do it internally so their call sites are unchanged.
+pub alias id-map<a> = int-map<a>
 // A set of identifiers
-pub alias id-set = linear-set<int>
+pub alias id-set = int-set
 
 /// Identifiers are unique compiler generated identities
 pub alias id = int;

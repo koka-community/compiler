@@ -65,7 +65,7 @@ fun suite()
       expect(True)
         C(Wasm).target/show == "wasm" && C(WasmJs).target/show == "wasmjs" && 
         C(WasmWeb).target/show == "wasmweb" && C(LibC).target/show == "libc" && 
-        DefaultTarget.target/show == ""
+        DefaultTarget.target/show == "default"
 
   group("platform definitions")
     test("platform sizes")
@@ -82,7 +82,9 @@ fun suite()
   group("platform/show")
     test("platform display")
       expect(True)
-        platform32.platform/show.contains("4") && platform64.platform/show.contains("8")
+        platform32.platform/show == "p32" && platform64.platform/show == "p64" &&
+        platform64c.platform/show == "p64c" && platformNone.platform/show == "none" &&
+        platformJS.platform/show-detail.contains("8")
 
   group("visibility/show")
     test("visibility display")

@@ -32,6 +32,10 @@ export class KokaLanguageServer {
   outputChannel?: vscode.OutputChannel
   traceOutputChannel?: vscode.OutputChannel
   lspWriteEmitter: vscode.EventEmitter<string> = new vscode.EventEmitter<string>();
+  // Fires for every `publishDiagnostics` the client receives, even one that
+  // repeats the previous set (an edit that changes no diagnostics). Tests time
+  // the edit loop by it; VS Code's own diagnostics event does not fire then.
+  diagnosticsReceived: vscode.EventEmitter<vscode.Uri> = new vscode.EventEmitter<vscode.Uri>();
   lspPty?: vscode.Pseudoterminal
   lspTerminal?: vscode.Terminal
 
@@ -154,6 +158,10 @@ export class KokaLanguageServer {
         supportHtml: true,
       },
       middleware: {
+        handleDiagnostics: (uri, diagnostics, next) => {
+          next(uri, diagnostics)
+          this.diagnosticsReceived.fire(uri)
+        },
         executeCommand: async (command, args, next) => {
           console.log("intercepted command", command, args)
           if (command == "koka/signature-help/set-context") {

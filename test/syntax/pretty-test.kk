@@ -13,8 +13,12 @@ fun suite()
   val texn = TpCon("exn".new-name, null)
   val vzero : expr<user-type> = Literal(LitInt(0, null))
   val pzero = PatLit(LitInt(0, null), null)
+  // Disambiguates the polymorphic `?t/pretty` implicit for `expr<user-type>`.
+  // This previously returned `pprint/empty`, which silently erased every type
+  // annotation and made the "v : int" expectations unsatisfiable; delegate to
+  // the module's real user-type printer instead.
   fun simple/pretty(a: user-type)
-    pprint/empty
+    a.ut/pretty
   group("pretty-printing")
     test("expressions")
       expect("v")

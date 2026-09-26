@@ -2,16 +2,23 @@
 import compiler/common/name
 import compiler/common/range
 import compiler/syntax/lexeme
+import std/core/bslice
 import std/num/float64
 import std/core-extras
 import std/core/undiv
 import std/data/word-set
-// Updated to be roughly equivalent to commit 9e8299f on 2/10/25
+import std/data/trie
+// Updated to be roughly equivalent to commit dd910825 on 7/23/26
 
 pub effect koka-lex
-  fun do-start-chunked(s: string, start: alex-pos): ()
+  fun do-start-chunked(s: string, start: alex-pos, content-off: int): ()
   fun end-chunked(): (string, alex-pos)
-  fun add-chunk(s: bslice): ()
+  // Extend the open chunk over the matched SPAN of the input. Both offsets are
+  // passed so the handler can tell whether this match continues the span it is
+  // already holding; a non-contiguous match (nested block comments can produce
+  // one) materialises what it has and starts a fresh span. Nothing is copied
+  // per match -- the text is sliced once when the chunk is finalised.
+  fun extend-chunk(start-off: int, end-off: int): ()
   fun get-rawdelim(): int
   fun set-rawdelim(i: int): ()
   fun check-linedir(c: lex, start: alex-pos, end: alex-pos): lex
@@ -21,7 +28,9 @@ fun emit(l: lex): <alex,koka-lex> ()
   do-emit(l, get-start(), get-end())
 
 fun start-chunked(s: string): <alex,koka-lex> ()
-  do-start-chunked(s, get-start())
+  // `s` is the already-matched opening text ("//", "/*", or "" for a string);
+  // the chunk's own content starts at the current scan position
+  do-start-chunked(s, get-start(), get-end().offset)
 
 fun end-chunk(f: (string) -> <alex,koka-lex> lex): <alex,koka-lex> ()
   val (s, start) = end-chunked()
@@ -29,7 +38,7 @@ fun end-chunk(f: (string) -> <alex,koka-lex> lex): <alex,koka-lex> ()
 }
 
 
-%encoding "utf8"
+%encoding "latin1"
 %wrapper "effect"
 %effects "koka-lex"
 
@@ -96,7 +105,7 @@ $charesc      = [nrt\\\'\"]    -- "
 @qconid       = @modulepath @conid
 
 @op           = $symbol+ | \/
-@idsym        = @lowerid? $symbol+ | \/
+@idsym        = @lowerid? ($symbol+ | \/)
 @qidop        = @modulepath \(@idsym\)
 @idop         = \(@idsym\)
 
@@ -122,9 +131,9 @@ program :-
 -- white space
 <0> $space+               { fn() { emit(LexWhite(get-string()))} }
 <0> @newline              { fn() { emit(LexWhite("\n")) } }
-<0> "/*" $symbol*         { fn() { push-state(comment); start-chunked("/*"); } }
-<0> "//" $symbol*         { fn() { push-state(linecom); start-chunked("//"); } }
-<0> @newline\# $symbol*   { fn() { push-state(linedir); start-chunked("\n#"); } }
+<0> "/*" $symbol*         { fn() { push-state(comment); start-chunked(get-string()); } }
+<0> "//" $symbol*         { fn() { push-state(linecom); start-chunked(get-string()); } }
+<0> @newline\# $symbol*   { fn() { push-state(linedir); start-chunked(get-string()); } }
 
 
 -- qualified identifiers
@@ -181,15 +190,15 @@ program :-
 -- string literals
 
 <stringlit> @utf8unsafe   { fn() { unsafe-char("string") } }
-<stringlit> @stringchar+  { fn() { extend-slice(id) } }
-<stringlit> \\$charesc    { fn() { extend-slice(bslice/from-char-esc) } }
-<stringlit> \\@hexesc     { fn() { extend-slice(bslice/from-hex-esc) } }
-<stringlit> \"            { fn() { pop-state(); end-chunk(fn(s) LexString(s)) } } -- " 
+<stringlit> @stringchar+  { fn() { extend-span() } }
+<stringlit> \\$charesc    { fn() { extend-span() } }
+<stringlit> \\@hexesc     { fn() { extend-span() } }
+<stringlit> \"            { fn() { pop-state(); end-chunk(fn(s) LexString(s.unescape-string)) } } -- " 
 <stringlit> @newline      { fn() { pop-state(); end-chunk(fn(s) LexError("string literal ended by a new line")) } }
 <stringlit> .             { fn() { pop-state(); end-chunk(fn(s) LexError("illegal character in string: " ++ s.show)) } }
 
 <stringraw> @utf8unsafe   { fn() { unsafe-char("raw string") } }
-<stringraw> @stringraw    { fn() { extend-slice(id) } }
+<stringraw> @stringraw    { fn() { extend-span() } }
 <stringraw> \"\#*         { fn() {
                             val delim = get-sslice().count - 1
                             val curdelim = get-rawdelim()
@@ -203,7 +212,7 @@ program :-
                               pop-state()
                               pop-rawdelim()
                             else // continue
-                              extend-slice(id)
+                              extend-span()
                           }}
 <stringraw> .             { fn() {
   end-chunk(fn(s) LexError("illegal character in raw string: " ++ s.show))
@@ -218,32 +227,33 @@ program :-
 <comment> "*/"            { fn() {
   val st = pop-state()
   // TODO? end-chunked()
-  if st == comment then extend-slice(id)
+  if st == comment then extend-span()
   else
+    extend-span() // upstream `withmore`: include the matched "*/" in the comment text
     end-chunk(fn(s) LexComment(s.list.filter(fn(c) c != '\r').string))
     pop-state()
     ()
 }}
-<comment> "/*"            { fn() { push-state(comment); start-chunked("/*"); } }
+<comment> "/*"            { fn() { push-state(comment); start-chunked(get-string()); } }
 <comment> @utf8unsafe     { fn() { unsafe-char("comment") } }
-<comment> @commentchar    { fn() { extend-slice(id) } }
-<comment> [\/\*]          { fn() { extend-slice(id) } }
+<comment> @commentchar    { fn() { extend-span() } }
+<comment> [\/\*]          { fn() { extend-span() } }
 <comment> .               { fn() { pop-state(); end-chunk(fn(s) LexError("illegal character in comment: " ++ s.show)) } }
 
 --------------------------
 -- line comments
 
 <linecom> @utf8unsafe     { fn() { unsafe-char("line comment") } }
-<linecom> @linechar       { fn() { extend-slice(id) } }
-<linecom> @newline        { fn() { pop-state(); end-chunk(fn(s) LexComment(s.list.filter(fn(c) c !='\r').string)) } }
+<linecom> @linechar       { fn() { extend-span() } }
+<linecom> @newline        { fn() { pop-state(); extend-span(); end-chunk(fn(s) LexComment(s.list.filter(fn(c) c !='\r').string)) } }
 <linecom> .               { fn() { pop-state(); end-chunk(fn(s) LexError("illegal character in line comment: " ++ s.show)) } }
 
 --------------------------
 -- line directives (ignored for now)
 
 <linedir> @utf8unsafe     { fn() { unsafe-char("line directive") } }
-<linedir> @linechar       { fn() { extend-slice(id) } }
-<linedir> @newline        { fn() { pop-state(); end-chunk(fn(s) check-linedir(LexComment(s.list.filter(fn(c) c !='\r').string), get-start(), get-end())) } }
+<linedir> @linechar       { fn() { extend-span() } }
+<linedir> @newline        { fn() { pop-state(); extend-span(); end-chunk(fn(s) check-linedir(LexComment(s.list.filter(fn(c) c !='\r').string), get-start(), get-end())) } }
 <linedir> .               { fn() { pop-state(); end-chunk(fn(s) LexError("illegal character in line directive: " ++ s.show)) } }
 
 {
@@ -268,8 +278,8 @@ fun split-op(s: string): list<lex>
     split(sl)
   else Cons(LexOp(s.new-name), Nil)
 
-fun extend-slice(f: bslice -> bslice)
-  add-chunk(f(get-slice()))
+fun extend-span(): <alex,koka-lex> ()
+  extend-chunk(get-start().offset, get-end().offset)
 
 fun pop-rawdelim()
   set-rawdelim(0)
@@ -305,9 +315,16 @@ val special-names = [ "{", "}"
     , "[", "]"
     , ";", ","
 ]
-val reserved-names = 
-      delay({
-        string-pool().add-all(
+// A fixed keyword set: build it as a PURE IMMUTABLE trie. It used to be a
+// lazy `delay` around `string-pool()`, whose named handler closes over a
+// mutable `var trie`. Forcing a lazy thunk mutates it, and each parallel
+// worker gets its own Koka heap/refcount domain, so two workers forcing this
+// concurrently is a use-after-free (EXC_BAD_ACCESS in tuple2_unbox, with
+// another thread inside kk_block_fast_drop_free). Nothing here needs
+// interning or laziness.
+// the same words as `reserved-names`, as a LIST: a `word-set` cannot be
+// enumerated, and the language server offers keyword completions from it
+pub val reserved-name-list : list<string> =
         ["infix", "infixr", "infixl"
               , "module", "import", "as"
               , "pub", "abstract"
@@ -347,11 +364,13 @@ val reserved-names =
               , "->"
               , "<-"
               , ":="
-              , "|"])
-    })
+              , "|"]
+
+pub val reserved-names : word-set =
+        reserved-name-list.foldl(empty-word-set(), fn(t, w) t.add(w))
 
 fun is-reserved(name: string)
-  reserved-names.force.is-interned(name)
+  reserved-names.contains(name)
 
 fun is-prefix-op(name: string)
   name == "!" || name == "~"
@@ -381,13 +400,68 @@ fun char/from-char-esc(c)
     't' -> '\t'
     _ -> c
 
+// Decode a string literal's escapes over the WHOLE text, once, when the chunk is
+// finalised. Escapes used to be decoded per match, which forced every chunk to
+// be a transformed slice and so forced the accumulate-and-copy shape; with this
+// at the end, every chunk in every state is a plain span of the input.
+fun unescape-string(s: string): string
+  fun hexval(cs: list<char>, n: int, acc: int): (int, list<char>)
+    if n <= 0 then (acc, cs)
+    else match cs
+      Cons(c, rest) -> hexval(rest.pretend-decreasing, n - 1, acc * 16 + hex-digit-val(c.int))
+      Nil -> (acc, Nil)
+  fun go(cs: list<char>, acc: list<char>): list<char>
+    match cs
+      Nil -> acc.reverse
+      Cons('\\', Cons(c, rest)) ->
+        match c
+          'x' ->
+            val (v, r) = hexval(rest, 2, 0)
+            go(r.pretend-decreasing, Cons(v.char, acc))
+          'u' ->
+            val (v, r) = hexval(rest, 4, 0)
+            go(r.pretend-decreasing, Cons(v.char, acc))
+          'U' ->
+            val (v, r) = hexval(rest, 6, 0)
+            go(r.pretend-decreasing, Cons(v.char, acc))
+          _ -> go(rest.pretend-decreasing, Cons(char/from-char-esc(c), acc))
+      Cons(c, rest) -> go(rest.pretend-decreasing, Cons(c, acc))
+  go(s.list, []).string
+
 fun bslice/from-char-esc(s: bslice): bslice
-  s.subslice(0, 2)
+  // s is the matched `\<c>`; skip the backslash, decode the escape to the actual
+  // character, and return it as a fresh single-char byte slice. (Previously this
+  // returned the raw `\c` bytes, so string escapes were never decoded.)
+  match s.next
+    Just2(_, rest) -> match rest.next
+      Just2(code, _) -> slice(string/bytes(char/string(char/from-char-esc(int/char(code)))))
+      Nothing2 -> s
+    Nothing2 -> s
 
+fun hex-digit-val(c: int): int
+  if c >= 0x30 && c <= 0x39 then c - 0x30      // 0-9
+  elif c >= 0x41 && c <= 0x46 then c - 55      // A-F -> 10..15
+  elif c >= 0x61 && c <= 0x66 then c - 87      // a-f -> 10..15
+  else 0
+
+// `s` is a slice over the hex digits of a `\xNN` / `\uNNNN` / `\UNNNNNN` escape
 fun char/from-hex-esc(s: sslice)
-  '\n' // TODO: Implement from-hex-esc
+  match s.string.parse-int(hex = True)
+    Just(code) -> int/char(code)
+    Nothing -> '\n'
 
+// `s` is the matched `\<x|u|U><hexdigits>`; skip the backslash and prefix char,
+// fold the remaining hex digits into a codepoint, and return its UTF-8 bytes.
 fun bslice/from-hex-esc(s: bslice): bslice
-  s.drop(3).extend(-1)
+  fun go(sl: bslice, acc: int): int
+    match sl.next
+      Just2(c, rest) -> go(rest.pretend-decreasing, acc * 16 + hex-digit-val(c))
+      Nothing2 -> acc
+  val code = match s.next
+    Just2(_, r1) -> match r1.next
+      Just2(_, r2) -> go(r2, 0)
+      Nothing2 -> 0
+    Nothing2 -> 0
+  slice(string/bytes(char/string(int/char(code))))
 
 }

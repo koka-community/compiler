@@ -188,6 +188,9 @@ value type flag-kind<a>
   End
   Unknown( arg : string )
   Error( msg : string )
+  // a required argument not attached to its flag: it is the next argument, as
+  // in Haskell's GetOpt (`-o file`, `--output file`); `msg` if there is none
+  Needs( set : (a, string) -> a, msg : string )
 
 // Parse the command line arguments `args` (see `std/env/get-args`)
 // according to the flag descriptions `flags`. Takes an optional argument
@@ -197,19 +200,25 @@ value type flag-kind<a>
 pub fun parse( initial : a, flags : list<flag<a>>, args : list<string>, ordering : flag-order<a> = Permute )
                         : total (a, list<string>, list<string>)
 
-  var done := False  // done scanning flags? (the rest is treated as an argument)
-  val opts = args.map fn(arg)
+  // `done`: scanning flags has ended, and the rest are arguments
+  fun scan( xs : list<string>, done : bool )
+    match xs
+      Nil -> Nil
+      Cons(arg,rest) ->
+        if (done) then Cons(Arg(arg), scan(rest,done)) else
+          val opts = process-next(arg,flags)
+          val done1 = opts.any fn(opt)
+                        match(opt)
+                          End -> True
+                          Arg(_) -> ordering.is-preorder
+                          _ -> False
+          match rest
+            Cons(value,rest1) -> match opts.last
+              Just(Needs(set)) -> opts.init ++ Cons(Flg(fn(o) set(o,value)), scan(rest1,done1))
+              _ -> opts ++ scan(rest,done1)
+            Nil -> opts
 
-    val opts = if (done) then [Arg(arg)] else process-next(arg,flags)
-    opts.foreach fn(opt)
-      match(opt)
-        End -> done := True
-        Arg(_) | ordering.is-preorder -> done := True
-        _   -> ()
-
-    opts
-
-  opts.concat.foldl((initial,[],[])) fn(acc,opt)
+  scan(args,False).foldl((initial,[],[])) fn(acc,opt)
     val (o,xs,errs) = acc
     match(opt)
       Flg(set)   -> (set(o),xs,errs)
@@ -217,6 +226,7 @@ pub fun parse( initial : a, flags : list<flag<a>>, args : list<string>, ordering
       flags/Error(e)   -> (o,xs,Cons(e,errs))
       Arg(x)     -> (o,Cons(x,xs),errs)
       End        -> (o,xs,errs)
+      Needs(_,e) -> (o,xs,Cons(e,errs))
 
 
 
@@ -268,7 +278,7 @@ fun parse-long( s : string, flags : list<flag<a>> ) : total flag-kind<a>
                 then error-negate(baseflagname)
                elif (flagarg.is-notempty)
                 then Flg(fn(o) { parse(o,flagarg) })
-                else error-required(help,optstr)
+                else Needs(parse, error-required-message(help,optstr))
           Opt(parse)
             -> if (negated)
                 then error-negate(baseflagname)
@@ -297,7 +307,7 @@ fun parse-shorts( s : string,  flags : list<flag<a>> ) : list<flag-kind<a>>
                 val arg = s.first.advance(i).after.string
                 if (arg.is-notempty)
                  then { done := True; Just(Flg(fn(o){ parse(o,arg) })) }
-                 else Just(error-required(help,optstr))
+                 else { done := True; Just(Needs(parse, error-required-message(help,optstr))) }
 
               Opt(parse) ->
                 val arg = s.first.advance(i).after.string
@@ -312,8 +322,8 @@ fun error-ambiguous( applicable, opt )
   val header = "flag \"" ++ opt ++ "\" is ambiguous. It could be one of:"
   flags/Error( usage( applicable, header ) )
 
-fun error-required( help, opt )
-  flags/Error( "flag \"" ++ opt ++ "\" requires an argument " ++ help)
+fun error-required-message( help, opt )
+  "flag \"" ++ opt ++ "\" requires an argument " ++ help
 
 fun error-negate( flagname )
   flags/Error( "flag \"--" ++ flagname ++ "\" cannot be negated" );

@@ -45,10 +45,15 @@ pub extern @unsafe-vector : forall<a> ( n : ssize_t ) -> total vector<a>
   js inline "Array(#1)"
 
 // Assign to an entry in a local `:vector` variable.
-pub inline extern assign/@index( ^self : local-var<s,vector<a>>, ^index : int, assigned : a ) : <local<s>,exn|e> ()
+inline extern unsafe-assign/@index( ^self : local-var<s,vector<a>>, ^index : ssize_t, assigned : a ) : <local<s>,exn|e> ()
   c  "kk_ref_vector_assign_borrow"
-  cs inline "(#1)[(int)#2] = #3"  // check bounds?
-  js inline "(#1).value[#2] = #3"       // todo: check bounds!
+  js "$std_core_vector.kk_ref_vector_assign_borrow" 
+
+// Assign to an entry in a local `:vector` variable.
+pub inline fun assign/@index( ^self : local-var<s,vector<a>>, ^index : int, assigned : a ) : <local<s>,exn|e> ()
+  with pretend-no-div
+  val idx = index.ssize_t()
+  if idx < self.lengthz then self[idx] := assigned else throw("index out of bounds",ExnRange)  
 
 // Length of a vector.
 inline extern lengthz( ^v : vector<a> ) : ssize_t
@@ -69,17 +74,53 @@ extern vector-alloc-total(n : ssize_t, f : ssize_t -> a) : vector<a>
   js inline "_vector_initf(#1,#2)"
 
 // Create an empty vector.
-pub inline extern unit/vector : forall<a> () -> vector<a>
-  c inline "kk_vector_empty()"
+extern prim-empty() : vector<a>
+  c  inline "kk_vector_empty()"
   cs inline "new ##1[0]"
   js inline "[]"
 
+// Create an empty vector
+pub fun empty() : vector<a> 
+  prim-empty()
 
 // Return the element at position `index`  in vector `v`.
 // Raise an out of bounds exception if `index < 0`  or `index >= v.length`.
 pub fun @index( ^v : vector<a>, ^index : int ) : exn a
   val idx = index.ssize_t()
   if idx < v.lengthz then unsafe-idx(v,idx) else throw("index out of bounds",ExnRange)
+
+// Build a vector of `n` elements from `(index, element)` pairs, in one pass and
+// without bounds checks: every index in `xs` must be in `[0,n)`, and every
+// position must be covered, or the vector is left with uninitialised slots.
+// Written for generated tables (a lexer's action and transition vectors), where
+// the indices come from the generator.
+pub fun vector-init-list( ^n : int, xs : list<(int,a)> ) : vector<a>
+  val v = unsafe-vector(n.ssize_t)
+  fun assigns( ys : some<a> list<(int,a)> ) : total ()
+    match ys
+      Cons((i,x), yy) ->
+        unsafe-assign(v, i.ssize_t, x)
+        assigns(yy)
+      Nil -> ()
+  assigns(xs)
+  v
+
+// An UNINITIALISED vector of `n` elements, to be filled by `unchecked-assign`.
+// Reading a slot before it is assigned yields the `null` box: fill every slot
+// before the vector escapes.
+pub inline fun unchecked-vector( ^n : ssize_t ) : total vector<a>
+  unsafe-vector(n)
+
+// Assign at `index` WITHOUT a bounds check, for filling a vector built by
+// `unchecked-vector`. The caller must have established `index < v.length`.
+pub inline fun unchecked-assign( v : vector<a>, ^index : ssize_t, x : a ) : total ()
+  unsafe-assign(v, index, x)
+
+// Return the element at position `index` WITHOUT a bounds check. The caller
+// must have established `index < v.length` some other way -- a generated table
+// indexed by a generated state, say.
+pub inline fun unchecked-idx( ^v : vector<a>, ^index : ssize_t ) : total a
+  unsafe-idx(v, index)
 
 // Return the element at position `index` in vector `v`, or `Nothing` if out of bounds
 pub fun at( ^v : vector<a>, ^index : int ) : maybe<a>
@@ -187,13 +228,13 @@ inline fip extern ssize_t/(<)  : (ssize_t,ssize_t) -> bool
   inline "(#1 < #2)"
 
 inline fip extern ssize_t/(+)  : (ssize_t,ssize_t) -> ssize_t
-  inline "(#1 + #2)"
   js inline "((#1 + #2)|0)"
-
+  inline "(#1 + #2)"
+  
 inline fip extern ssize_t/(-)  : (ssize_t,ssize_t) -> ssize_t
-  inline "(#1 - #2)"
   js inline "((#1 - #2)|0)"
-
+  inline "(#1 - #2)"
+  
 inline fip extern ssize_t/is-pos( i : ssize_t ) : bool
   inline "(#1 > 0)"
 
@@ -201,9 +242,9 @@ inline fip extern ssize_t/is-neg( i : ssize_t ) : bool
   inline "(#1 < 0)"
 
 fip extern ssize_t/is-zero( i : ssize_t ) : bool
-  inline "(#1 == 0)"
   js inline "(#1 === 0)"
-
+  inline "(#1 == 0)"
+  
 fip extern ssize_t/decr(i : ssize_t ) : ssize_t
   inline "(#1 - 1)"
 

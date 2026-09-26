@@ -7,7 +7,7 @@
 //---------------------------------------------------------------------------
 // Updated as of 7/12/25: Commit 0c7d513
 module compiler/common/color-scheme
-import compiler/lib/printer
+import std/pretty/printer
 import std/core/undiv
 
 // ----------------------------

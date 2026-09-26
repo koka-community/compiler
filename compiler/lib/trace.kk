@@ -5,10 +5,12 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //---------------------------------------------------------------------------
-// Updated as of 7/23/24: Commit b8074c2
+// Updated as of 7/24/26: Commit 32ada87
+
+module compiler/lib/trace
 
 import std/core/unsafe
-pub import compiler/lib/printer
+pub import std/pretty/printer
 
 fun color/trace(s: string, a: a, ?kk-file-line: string): a
   ctrace(DarkGray, s, a)
@@ -29,8 +31,7 @@ fun trace-eq(s: string, a: a, ?show: (a) -> string, ?kk-file-line: string): a
   trace(s ++ " = " ++ a.show, a)
 
 fun ctrace(c: color, message: string, a: a, ?kk-file-line: string): a
-  with unsafe-total
-  with ansi-printer
-  print-colored(?kk-file-line ++ ": ", Blue)
-  println-colored(message, c)
+  // trace to stderr without color: the language server must not print to stdout
+  // since stdout is used for the jsonrpc protocol (the color argument is kept for API compatibility)
+  std/core/debug/trace(?kk-file-line ++ ": " ++ message)
   a

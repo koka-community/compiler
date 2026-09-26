@@ -7,12 +7,13 @@ import compiler/kind/kind
 import compiler/type/type
 import compiler/type/typevar
 import compiler/core/core
+import compiler/core/corevar
 import compiler/type/assumption
 import compiler/common/syntax
 import compiler/platform/config
-import std/data/linear-set
+import std/data/rb-set
 import std/core/undiv
-// Updated 11/19/25 to commit #7083c02
+// Updated 7/23/26 to commit #045e2dc -- note: upstream moved realiasType/useCommonAliases here; in this port that logic lives in type/infer-effect.kk (nicefy-effect/realias-type)
 
 pub infixr 5 (|->)
 
@@ -84,7 +85,7 @@ fun instantiate-exfl(tp: ktype, fl: flavour, r: range): _ (list<type-var>, ktype
     ([], rho) -> ([], rho, id)
     (vars, rho) ->
       val (tvars, sub) = fresh-subx(TVar, fl, vars, rho.all-tv())
-      (tvars, sub |-> rho, fn(e) add-type-apps(tvars,e))
+      (tvars, sub |-> rho, fn(e) beta/add-type-apps(tvars,e))
 
 pub fun fresh-sub(fl: flavour, vars: list<type-var>)
   val tvars = vars.map(fn(tv) fresh-typevar(tv.kind, fl))

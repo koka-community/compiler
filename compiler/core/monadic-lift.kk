@@ -11,7 +11,7 @@ import compiler/kind/kind
 import compiler/core/core
 import compiler/core/corevar
 import compiler/type/typevar
-import std/data/linear-set
+import std/data/rb-set
 import compiler/platform/config
 import compiler/common/unique
 
@@ -29,12 +29,19 @@ effect lifted
   val currentDef: list<def>
 
 fun run-lifted(f: () -> _ a): _ a 
+  // `dgs` accumulates by prepending, so `collect` must REVERSE to hand back emission order.
+  // Order is load-bearing: `lift-expr-inl` recurses into the continuation body
+  // BEFORE lifting the enclosing continuation, so an inner lift is emitted
+  // first and the outer lift's body refers to it. Handing them back reversed
+  // puts the outer lift ahead of the inner one, and `inl-def-groups` -- which
+  // only registers a group as an inline candidate AFTER processing it -- can
+  // then never inline the inner lift into the outer one.
   var dgs := []
   with handler
     fun emit(dg) 
       dgs := Cons(dg, dgs)
     fun collect() 
-      val dgs' = dgs
+      val dgs' = dgs.reverse
       dgs := []
       dgs'
     val currentDef = Nil
@@ -49,7 +56,18 @@ fun lift-defgroup(dg: def-group, topLevel: bool)
         collect() ++ [DefNonRec(d')]
       DefRec(ds) ->
         val ds' = ds.map(_.lift-def(topLevel))
-        collect() ++ [DefRec(ds')]
+        // `[DefRec (groups' ++
+        // defs')]` -- lifted wrapper defs go INTO the SAME DefRec as the
+        // original defs (not as separate preceding top-level groups), since
+        // a wrapper generated from within a recursive def's own body calls
+        // back into that def (and vice versa): they're genuinely one mutually
+        // recursive group. Keeping them as separate groups (the port's
+        // previous `collect() ++ [DefRec(ds')]`) broke the C backend's
+        // per-DefRec forward-declare-all-then-define-all invariant, since
+        // the wrapper's (now-standalone, non-recursive) group got emitted --
+        // body and all -- before the real DefRec group whose signature it
+        // needed was even forward-declared.
+        [DefRec(collect().flatten ++ ds')]
   else
     match dg
       DefNonRec(d) -> [DefNonRec(d.lift-def(topLevel))]
@@ -143,8 +161,9 @@ fun lift-expr(expr': expr, topLevel: bool): _ expr
     _ -> expr'
 
 fun lift-local-fun(e: expr, eff: keffect)
-  val fvs = e.free-locals.list
-  val tvs = e.free-type-vars.list
+  // upstream: `tnamesList (freeLocals expr)` / `tvsList (ftv expr)` -- sorted
+  val fvs = e.free-locals.tnames-list
+  val tvs = e.free-type-vars.tvs-sorted
   val (expr2, lift-def) = e.make-def(fvs, tvs)
   emit(DefNonRec(lift-def))
   expr2
@@ -152,7 +171,7 @@ fun lift-local-fun(e: expr, eff: keffect)
 fun make-def(e: expr, fvs: list<tName>, tvs: list<type-var>)
     
   fun unwild(TName(name, tp): tName)
-    TName(if name.nameStem == "" || name.nameStem.starts-with("_").is-just then prepend("wild", name) else name, tp)
+    TName(if name.nameStem == "" || name.is-wildcard then name.un-wildcard else name, tp)
   val (tpars, pars, eff, body) = match e
     TypeLam(tpars, Lam(pars, eff, lbody)) -> (tpars, pars.map(unwild), eff, lbody)
     Lam(pars, eff, lbody) -> ([], pars.map(unwild), eff, lbody)
@@ -169,7 +188,7 @@ fun make-def(e: expr, fvs: list<tName>, tvs: list<type-var>)
   fun eta-expr(n: name)
     match (tvs, fvs)
       (Nil, Nil) -> n.fun-expr
-      _ -> add-type-lambdas(tpars, Lam(pars, eff, App(add-type-apps(alltpars, fun-expr(n)), allargs)))
+      _ -> add-type-lambdas(tpars, Lam(pars, eff, App(beta/add-type-apps(alltpars, fun-expr(n)), allargs)))
   val (name, inl) = unique-name-current-def()
   (name.eta-expr, name.lifted-def(inl))
   

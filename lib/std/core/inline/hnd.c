@@ -73,6 +73,193 @@ static kk_std_core_hnd__ev* kk_evv_as_vec(kk_evv_t evv, kk_ssize_t* len, kk_std_
 // }
 
 
+#if KK_EVV_CHECK
+/*-----------------------------------------------------------------------
+  Evidence vector integrity checks
+
+  Enabled at runtime with `KOKA_EVV_CHECK`:
+    1 = report violations on stderr (and keep going)
+    2 = report and abort at the first violation
+
+  The invariants checked here are the ones the *static* evidence indices rely
+  on. The compiler folds `@evv-index` to a constant offset into the evidence
+  vector (`Core/Simplify.effectOffset`) and builds `open`'s index vectors from
+  the static effect row (`Core/OpenResolve`), so if a vector ever deviates from
+  "sorted by htag, no evidence object appearing twice", every constant offset
+  computed against it silently selects the wrong handler. That mis-selection is
+  not detectable later: it surfaces as an operation clause of the wrong arity
+  being called, which puts a Koka value into the `kk_context_t*` argument slot
+  and corrupts the heap far away from the cause. These checks fire at the
+  construction site instead.
+-----------------------------------------------------------------------*/
+
+int kk_evv_check_level(void) {
+  static int level = -1;   // benign race: all writers write the same value
+  if (level < 0) {
+    const char* s = getenv("KOKA_EVV_CHECK");
+    level = (s == NULL || s[0] == 0 ? 0 : atoi(s));
+    if (level < 0) level = 0;
+  }
+  return level;
+}
+
+#define kk_evv_checking()  (kk_evv_check_level() > 0)
+
+// ---------------------------------------------------------------------------
+// A per-thread ring of the last evidence-vector transitions. The vector that a
+// bad `open` reads was produced by an EARLIER operation; this records enough to
+// name it. Dumped by `kk_evv_violation` and by the out-of-range reports below.
+// ---------------------------------------------------------------------------
+#define KK_EVV_RING 24
+typedef struct kk_evv_note_s { const char* op; void* evv; int n; int arg; } kk_evv_note_t;
+static kk_decl_thread kk_evv_note_t kk_evv_ring[KK_EVV_RING];
+static kk_decl_thread int           kk_evv_ring_at = 0;
+static kk_decl_thread uint64_t      kk_evv_ring_seq = 0;
+
+static int kk_evv_len_of(kk_evv_t evv, kk_context_t* ctx) {
+  if (!kk_datatype_is_ptr(evv)) return -1;
+  if (!kk_evv_is_vector(evv,ctx)) return 1;                 // single evidence
+  return (int)kk_block_scan_fsize(kk_datatype_as_ptr(evv,ctx));
+}
+
+void kk_evv_note(const char* op, kk_evv_t evv, int arg, kk_context_t* ctx) {
+  if (!kk_evv_checking()) return;
+  // `evv_set`/`evv_swap` fire in tight open-none pairs and flood the window
+  if (op[4]=='s' && (op[5]=='e' || op[5]=='w')) return;   // "evv_set" / "evv_swap"
+  kk_evv_note_t* e = &kk_evv_ring[kk_evv_ring_at];
+  e->op = op;
+  e->evv = (kk_datatype_is_ptr(evv) ? (void*)kk_datatype_as_ptr(evv,ctx) : NULL);
+  e->n = kk_evv_len_of(evv, ctx);
+  e->arg = arg;
+  kk_evv_ring_at = (kk_evv_ring_at + 1) % KK_EVV_RING;
+  kk_evv_ring_seq++;
+}
+
+// A vector's ORIGIN, keyed by its address. The evidence vector a bad `open` reads
+// may have been built long before the recent-transition window, so a ring alone
+// cannot name it. Direct-mapped, per-thread; the address is verified on lookup, so
+// a collision or a recycled block reports "no recorded origin" rather than a lie.
+#define KK_EVV_ORIG 4096
+typedef struct kk_evv_orig_s { void* p; const char* op; int n; int arg; uint64_t seq; } kk_evv_orig_t;
+static kk_decl_thread kk_evv_orig_t kk_evv_orig[KK_EVV_ORIG];
+
+static void kk_evv_orig_put(const char* op, kk_evv_t evv, int arg, kk_context_t* ctx) {
+  if (!kk_datatype_is_ptr(evv)) return;
+  void* p = (void*)kk_datatype_as_ptr(evv,ctx);
+  kk_evv_orig_t* e = &kk_evv_orig[(((uintptr_t)p) >> 4) % KK_EVV_ORIG];
+  e->p = p; e->op = op; e->n = kk_evv_len_of(evv,ctx); e->arg = arg; e->seq = ++kk_evv_ring_seq;
+}
+
+static void kk_evv_orig_report(const char* label, kk_evv_t evv, kk_context_t* ctx) {
+  if (!kk_datatype_is_ptr(evv)) { fprintf(stderr, "  %s: not a heap vector\n", label); return; }
+  void* p = (void*)kk_datatype_as_ptr(evv,ctx);
+  kk_evv_orig_t* e = &kk_evv_orig[(((uintptr_t)p) >> 4) % KK_EVV_ORIG];
+  if (e->p == p) {
+    fprintf(stderr, "  %s: %p (%d entries) was BUILT BY %s (arg=%d) at evv-op #%llu\n",
+                    label, p, e->n, e->op, e->arg, (unsigned long long)e->seq);
+  }
+  else {
+    fprintf(stderr, "  %s: %p has no recorded origin (built before checking, or entry evicted)\n", label, p);
+  }
+}
+
+static void kk_evv_ring_dump(void) {
+  fprintf(stderr, "  last %d evidence-vector transitions on this thread (oldest first):\n",
+                  (int)(kk_evv_ring_seq < KK_EVV_RING ? kk_evv_ring_seq : KK_EVV_RING));
+  int count = (int)(kk_evv_ring_seq < KK_EVV_RING ? kk_evv_ring_seq : KK_EVV_RING);
+  int start = (int)((kk_evv_ring_at - count + KK_EVV_RING) % KK_EVV_RING);
+  for (int k = 0; k < count; k++) {
+    kk_evv_note_t* e = &kk_evv_ring[(start + k) % KK_EVV_RING];
+    fprintf(stderr, "    %-22s evv=%p n=%-3d arg=%d\n", (e->op ? e->op : "?"), e->evv, e->n, e->arg);
+  }
+}
+
+// A static evidence index ran past the end of the vector: the vector is SMALLER
+// than the statically known row said it would be. Row polymorphism can only make
+// a vector LONGER than the static prefix, never shorter, so this is always wrong.
+void kk_evv_oob(const char* where, kk_ssize_t i, kk_ssize_t len, kk_context_t* ctx) {
+  kk_unused(ctx);
+  fprintf(stderr, "\nkoka: EVV CHECK: %s: static index %zd is past the end of a %zd-entry vector\n",
+                  where, (ssize_t)i, (ssize_t)len);
+  kk_evv_ring_dump();
+  fflush(stderr);
+  if (kk_evv_check_level() >= 2) kk_fatal_error(EFAULT, "koka: EVV CHECK: %s: evidence vector too short\n", where);
+}
+
+static const char* kk_evv_htag_cbuf(kk_std_core_hnd__ev evd, kk_context_t* ctx) {
+  if (kk_datatype_is_ptr(evd)) {
+    struct kk_std_core_hnd_Ev* ev = kk_std_core_hnd__as_Ev(evd,ctx);
+    return kk_string_cbuf_borrow(ev->htag.tagname, NULL, ctx);
+  }
+  return "<not-an-ev>";
+}
+
+static void kk_evv_dump(const char* what, kk_evv_t evv, kk_context_t* ctx) {
+  kk_ssize_t n;
+  kk_std_core_hnd__ev single;
+  kk_std_core_hnd__ev* vec = kk_evv_as_vec(evv, &n, &single, ctx);
+  fprintf(stderr, "  %s: %p, %zd entr%s\n", what,
+                  (kk_datatype_is_ptr(evv) ? (void*)kk_datatype_as_ptr(evv,ctx) : NULL),
+                  (ssize_t)n, (n==1 ? "y" : "ies"));
+  for (kk_ssize_t i = 0; i < n; i++) {
+    int32_t marker = (kk_datatype_is_ptr(vec[i]) ? kk_std_core_hnd__as_Ev(vec[i],ctx)->marker : 0);
+    fprintf(stderr, "    [%zd] ev=%p marker=%d htag=%s\n",
+                    (ssize_t)i, (void*)kk_datatype_as_ptr(vec[i],ctx), (int)marker,
+                    kk_evv_htag_cbuf(vec[i],ctx));
+  }
+}
+
+// Report a violation; abort when KOKA_EVV_CHECK>=2.
+static void kk_evv_violation(const char* where, const char* what, kk_evv_t evv, kk_context_t* ctx) {
+  fprintf(stderr, "\nkoka: EVV CHECK: %s: %s\n", where, what);
+  kk_evv_dump("vector", evv, ctx);
+  kk_evv_orig_report("origin", evv, ctx);
+  kk_evv_ring_dump();
+  fflush(stderr);
+  if (kk_evv_check_level() >= 2) {
+    kk_fatal_error(EFAULT, "koka: EVV CHECK: %s: %s\n", where, what);
+  }
+}
+
+// A well-formed evidence vector is sorted by htag and never contains the same
+// evidence object twice. (Two *distinct* handlers of the same effect are fine
+// and expected -- e.g. nested `exn` handlers -- so only object identity and
+// ordering are checked, not tag uniqueness.)
+static void kk_evv_check(const char* where, kk_evv_t evv, kk_context_t* ctx) {
+  if (!kk_evv_checking()) return;
+  kk_ssize_t n;
+  kk_std_core_hnd__ev single;
+  kk_std_core_hnd__ev* vec = kk_evv_as_vec(evv, &n, &single, ctx);
+  for (kk_ssize_t i = 0; i < n; i++) {
+    if (!kk_datatype_is_ptr(vec[i])) {
+      kk_evv_violation(where, "entry is not an evidence object", evv, ctx); return;
+    }
+  }
+  for (kk_ssize_t i = 1; i < n; i++) {
+    if (kk_datatype_eq(vec[i-1], vec[i])) {
+      kk_evv_violation(where, "the same evidence object appears twice", evv, ctx); return;
+    }
+    struct kk_std_core_hnd_Ev* a = kk_std_core_hnd__as_Ev(vec[i-1],ctx);
+    struct kk_std_core_hnd_Ev* b = kk_std_core_hnd__as_Ev(vec[i],ctx);
+    if (kk_string_cmp_borrow(a->htag.tagname, b->htag.tagname, ctx) > 0) {
+      kk_evv_violation(where, "vector is not sorted by htag", evv, ctx); return;
+    }
+  }
+}
+
+#else
+// Release builds: the checks are not compiled in at all (see `hnd.h`).
+#define kk_evv_checking()                 (false)
+#define kk_evv_check(where,evv,ctx)       ((void)0)
+#define kk_evv_dump(what,evv,ctx)         ((void)0)
+#define kk_evv_ring_dump()                ((void)0)
+#define kk_evv_orig_put(op,evv,arg,ctx)   ((void)0)
+#define kk_evv_orig_report(l,evv,ctx)     ((void)0)
+#define kk_evv_violation(w,what,evv,ctx)  ((void)0)
+#define kk_evv_htag_cbuf(ev,ctx)          ("")
+#endif
+
+
 kk_ssize_t kk_evv_index( struct kk_std_core_hnd_Htag htag, kk_context_t* ctx ) {
   // todo: drop htag?
   kk_ssize_t len;
@@ -82,9 +269,16 @@ kk_ssize_t kk_evv_index( struct kk_std_core_hnd_Htag htag, kk_context_t* ctx ) {
     struct kk_std_core_hnd_Ev* ev = kk_std_core_hnd__as_Ev(vec[i],ctx);
     if (kk_string_cmp_borrow(htag.tagname,ev->htag.tagname,ctx) <= 0) return i; // break on insertion point
   }
-  //string_t evvs = kk_evv_show(dup_datatype_as(kk_evv_t,ctx->evv),ctx);
-  //fatal_error(EFAULT,"cannot find tag '%s' in: %s", string_cbuf_borrow(htag.htag), string_cbuf_borrow(evvs));
-  //drop_string_t(evvs,ctx);
+#if KK_EVV_CHECK
+  if (kk_evv_checking()) {
+    // not found: we are about to return `len`, an index one past the end
+    fprintf(stderr, "\nkoka: EVV CHECK: kk_evv_index: tag '%s' is not in the evidence vector; returning out-of-range index %zd\n",
+                    kk_string_cbuf_borrow(htag.tagname, NULL, ctx), (ssize_t)len);
+    kk_evv_dump("vector", ctx->evv, ctx);
+    fflush(stderr);
+    if (kk_evv_check_level() >= 2) kk_fatal_error(EFAULT, "koka: EVV CHECK: kk_evv_index: tag not found\n");
+  }
+#endif
   return len;
 }
 
@@ -153,6 +347,18 @@ kk_evv_t kk_evv_insert(kk_evv_t evvd, kk_std_core_hnd__ev evd, kk_context_t* ctx
   kk_ssize_t n;
   kk_std_core_hnd__ev single;
   kk_std_core_hnd__ev* const evv1 = kk_evv_as_vec(evvd, &n, &single, ctx);
+#if KK_EVV_CHECK
+  if (kk_evv_checking()) {
+    for (kk_ssize_t j = 0; j < n; j++) {
+      if (kk_datatype_eq(evv1[j], evd)) {
+        fprintf(stderr, "\nkoka: EVV CHECK: kk_evv_insert: evidence '%s' (marker %d) is already in the vector at [%zd]\n",
+                        kk_evv_htag_cbuf(evd,ctx), (int)ev->marker, (ssize_t)j);
+        kk_evv_violation("kk_evv_insert", "double insertion of the same evidence object", evvd, ctx);
+        break;
+      }
+    }
+  }
+#endif
   if (n == 0) {
     // use ev directly as the evidence vector
     kk_evv_drop(evvd, ctx);
@@ -175,7 +381,10 @@ kk_evv_t kk_evv_insert(kk_evv_t evvd, kk_std_core_hnd__ev evd, kk_context_t* ctx
       evv2[i+1] = kk_std_core_hnd__ev_dup(evv1[i],ctx);
     }
     kk_evv_drop(evvd, ctx);  // assigned to evidence already
-    return kk_datatype_from_base(vec2,ctx);
+    kk_evv_t res = kk_datatype_from_base(vec2,ctx);
+    kk_evv_check("kk_evv_insert", res, ctx);
+    kk_evv_note("evv_insert ->", res, (int)n + 1, ctx); kk_evv_orig_put("evv_insert", res, (int)n + 1, ctx);
+    return res;
   }
 }
 
@@ -209,7 +418,10 @@ kk_evv_t kk_evv_delete(kk_evv_t evvd, kk_ssize_t index, bool behind, kk_context_
   //   vec2->cfc = kk_integer_from_int32(cfc,ctx);
   // }
   kk_evv_drop(evvd,ctx);
-  return kk_datatype_from_base(vec2,ctx);
+  kk_evv_t res = kk_datatype_from_base(vec2,ctx);
+  kk_evv_check("kk_evv_delete", res, ctx);
+  kk_evv_note("evv_delete ->", res, (int)index, ctx); kk_evv_orig_put("evv_delete", res, (int)index, ctx);
+  return res;
 }
 
 kk_evv_t kk_evv_create(kk_evv_t evv1, kk_vector_t indices, kk_context_t* ctx) {
@@ -221,14 +433,49 @@ kk_evv_t kk_evv_create(kk_evv_t evv1, kk_vector_t indices, kk_context_t* ctx) {
   kk_ssize_t len1;
   kk_std_core_hnd__ev single;
   kk_std_core_hnd__ev* buf1 = kk_evv_as_vec(evv1,&len1,&single,ctx);
+#if KK_EVV_CHECK
+  kk_ssize_t prev_idx = -1;
+  bool bad = false;
+#endif
   for(kk_ssize_t i = 0; i < len; i++) {
     kk_ssize_t idx = kk_ssize_unbox(elems[i],KK_BORROWED,ctx);
     kk_assert_internal(idx < len1);
+#if KK_EVV_CHECK
+    if (kk_evv_checking()) {
+      if (idx < 0 || idx >= len1) {
+        fprintf(stderr, "\nkoka: EVV CHECK: kk_evv_create: index [%zd] = %zd is out of range (vector has %zd entries)\n",
+                        (ssize_t)i, (ssize_t)idx, (ssize_t)len1);
+        bad = true;
+      }
+      else if (idx <= prev_idx) {
+        // `open` selects a sub-sequence of the ambient vector, so the indices it
+        // emits are strictly increasing. A repeat means the static effect row the
+        // indices were computed from does not describe the vector we actually have.
+        fprintf(stderr, "\nkoka: EVV CHECK: kk_evv_create: index [%zd] = %zd does not increase (previous was %zd)\n",
+                        (ssize_t)i, (ssize_t)idx, (ssize_t)prev_idx);
+        bad = true;
+      }
+      prev_idx = idx;
+    }
+    // clamp so the report below can still be produced; checking builds only
+    if (idx < 0 || idx >= len1) { idx = (len1 > 0 ? len1 - 1 : 0); }
+#endif
     buf2[i] = kk_std_core_hnd__ev_dup( buf1[idx], ctx );
   }
+#if KK_EVV_CHECK
+  if (bad) {
+    fprintf(stderr, "  requested indices:");
+    for(kk_ssize_t i = 0; i < len; i++) { fprintf(stderr, " %zd", (ssize_t)kk_ssize_unbox(elems[i],KK_BORROWED,ctx)); }
+    fprintf(stderr, "\n");
+    kk_evv_violation("kk_evv_create", "bad index vector (source vector follows)", evv1, ctx);
+  }
+#endif
   kk_vector_drop(indices,ctx);
   kk_evv_drop(evv1,ctx);
-  return kk_datatype_from_base(evv2,ctx);
+  kk_evv_t res = kk_datatype_from_base(evv2,ctx);
+  kk_evv_check("kk_evv_create", res, ctx);
+  kk_evv_note("evv_create ->", res, (int)len, ctx); kk_evv_orig_put("evv_create", res, (int)len, ctx);
+  return res;
 }
 
 kk_evv_t kk_evv_swap_create( kk_vector_t indices, kk_context_t* ctx ) {
@@ -268,22 +515,40 @@ static kk_box_t kcompose( kk_function_t fself, kk_box_t x, kk_context_t* ctx) {
   kk_intx_t count = kk_intf_unbox(self->count);
   kk_function_t* conts = &self->conts[0];
   // call each continuation in order
-  for(kk_intx_t i = 0; i < count; i++) {
-    // todo: take uniqueness of fself into account to avoid dup_function
-    kk_function_t f = kk_function_dup(conts[i],ctx);
-    x = kk_function_call(kk_box_t, (kk_function_t, kk_box_t, kk_context_t*), f, (f, x, ctx), ctx);
-    if (kk_yielding(ctx)) {
-      // if yielding, `yield_next` all continuations that still need to be done
-      while(++i < count) {
-        // todo: if fself is unique, we could copy without dup?
-        kk_yield_extend(kk_function_dup(conts[i],ctx),ctx);
+  if kk_likely(kk_datatype_ptr_is_unique(fself, ctx)) {
+    // Special handling for unique continuation function to avoid dup/drop overhead for the continuation and captured variables.
+    for(kk_intx_t i = 0; i < count; i++) {
+      kk_function_t f = conts[i];
+      x = kk_function_call(kk_box_t, (kk_function_t, kk_box_t, kk_context_t*), f, (f, x, ctx), ctx);
+      if (kk_yielding(ctx)) {
+        // if yielding, `yield_next` all continuations that still need to be done
+        while(++i < count) {
+          kk_yield_extend(conts[i],ctx); // just move the continuation (no dup needed since it's parent is unique and being dropped)
+        }
+        kk_free((void*)self, ctx);
+        kk_box_drop(x,ctx);     // still drop even though we yield as it may release a boxed value type?
+        return kk_box_any(ctx); // return yielding
       }
-      kk_function_drop(fself,ctx);
-      kk_box_drop(x,ctx);     // still drop even though we yield as it may release a boxed value type?
-      return kk_box_any(ctx); // return yielding
     }
+    kk_free((void*)self, ctx);
+    // kk_function_drop(self,ctx); Can't do this, since all of it's child functions are dropped!
+  } else {
+    for(kk_intx_t i = 0; i < count; i++) {
+      // todo: take uniqueness of fself into account to avoid dup_function
+      kk_function_t f = kk_function_dup(conts[i],ctx);
+      x = kk_function_call(kk_box_t, (kk_function_t, kk_box_t, kk_context_t*), f, (f, x, ctx), ctx);
+      if (kk_yielding(ctx)) {
+        // if yielding, `yield_next` all continuations that still need to be done
+        while(++i < count) {
+          kk_yield_extend(kk_function_dup(conts[i],ctx),ctx);
+        }
+        kk_function_drop(fself,ctx);
+        kk_box_drop(x,ctx);     // still drop even though we yield as it may release a boxed value type?
+        return kk_box_any(ctx); // return yielding
+      }
+    }
+    kk_function_drop(fself,ctx);
   }
-  kk_function_drop(fself,ctx);
   return x;
 }
 
@@ -420,37 +685,48 @@ kk_unit_t  kk_evv_guard(kk_evv_t evv, kk_context_t* ctx) {
   return kk_Unit;
 }
 
-typedef struct yield_info_s {
-  struct kk_std_core_hnd__yield_info_s _base;
+typedef struct kk_yield_context_s {
   kk_function_t clause;
   kk_function_t conts[KK_YIELD_CONT_MAX];
   kk_intf_t     conts_count;
   kk_marker_t   marker;
   int8_t        yielding;
-}* yield_info_t;
+} kk_yield_context_t;
 
-kk_std_core_hnd__yield_info kk_yield_capture(kk_context_t* ctx) {
+static void kk_yield_context_free( void* yield_context, kk_block_t* block, kk_context_t* ctx) {
+  kk_yield_context_t* yld = (kk_yield_context_t*)yield_context;
+  kk_function_drop(yld->clause,ctx);
+  for(kk_ssize_t i = 0; i < yld->conts_count; i++) {
+    kk_function_drop(yld->conts[i],ctx);
+  }
+  kk_free(yield_context,ctx);
+}
+
+kk_box_t kk_yield_capture(kk_context_t* ctx) {
   kk_assert_internal(kk_yielding(ctx));
-  yield_info_t yld = kk_block_alloc_as(struct yield_info_s, 1 + KK_YIELD_CONT_MAX, (kk_tag_t)1, ctx);
+  kk_yield_context_t* yld = (kk_yield_context_t*)kk_zalloc(sizeof(kk_yield_context_t),ctx);
   yld->clause = ctx->yield.clause;
+  ctx->yield.clause = kk_function_null(ctx);
   kk_ssize_t i = 0;
   for( ; i < ctx->yield.conts_count; i++) {
     yld->conts[i] = ctx->yield.conts[i];
+    ctx->yield.conts[i] = kk_function_null(ctx);
   }
   for( ; i < KK_YIELD_CONT_MAX; i++) {
     yld->conts[i] = kk_function_null(ctx);
   }
   yld->conts_count = ctx->yield.conts_count;
-  yld->marker = ctx->yield.marker;
-  yld->yielding = ctx->yielding;
+  yld->marker      = ctx->yield.marker;
+  yld->yielding    = ctx->yielding;
   ctx->yielding = 0;
   ctx->yield.conts_count = 0;
-  return kk_datatype_from_base(&yld->_base,ctx);
+  ctx->yield.marker = 0;
+  return kk_cptr_raw_box(&kk_yield_context_free,yld,ctx);
 }
 
-kk_box_t kk_yield_reyield( kk_std_core_hnd__yield_info yldinfo, kk_context_t* ctx) {
+kk_box_t kk_yield_reyield( kk_box_t yldb, kk_context_t* ctx) {
   kk_assert_internal(!kk_yielding(ctx));
-  yield_info_t yld = kk_datatype_as_assert(yield_info_t, yldinfo, (kk_tag_t)1, ctx);
+  kk_yield_context_t* yld = (kk_yield_context_t*)kk_cptr_raw_unbox_borrowed(yldb,ctx);
   ctx->yield.clause = kk_function_dup(yld->clause,ctx);
   ctx->yield.marker = yld->marker;
   ctx->yield.conts_count = yld->conts_count;
@@ -458,6 +734,6 @@ kk_box_t kk_yield_reyield( kk_std_core_hnd__yield_info yldinfo, kk_context_t* ct
   for(kk_ssize_t i = 0; i < yld->conts_count; i++) {
     ctx->yield.conts[i] = kk_function_dup(yld->conts[i],ctx);
   }
-  kk_constructor_drop(yld,ctx);
+  kk_box_drop(yldb,ctx);
   return kk_box_any(ctx);
 }

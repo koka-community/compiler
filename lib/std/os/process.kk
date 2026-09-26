@@ -25,3 +25,9 @@ pub extern run-system-read( cmd : string ) : io error<string> {
 pub extern run-system( cmd : string ) : io int {
   c "kk_os_run_system_prim"
 }
+
+// Terminate the program immediately with exit code `code`, without unwinding:
+// nothing further runs, so anything not yet flushed is lost.
+pub extern exit( code : int ) : ioc ()
+  c inline "exit(kk_integer_clamp32(#1, kk_context()))"
+  js inline "(function(){throw(`Exited with code: ${#1}`)})()"

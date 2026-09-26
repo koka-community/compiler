@@ -3,6 +3,7 @@ module compiler/syntax/pretty
 import compiler/syntax/syntax
 import compiler/lib/pprint
 import compiler/common/name
+import compiler/common/name-prim
 import compiler/common/syntax
 import compiler/common/range
 // Updated 7/12/25, Commit: #752748d, TODO: Check that it actually matches now
@@ -39,9 +40,9 @@ fun typedefgroup/pretty(t: typedef-group<t,user-kind>, ?t/pretty: t -> div doc):
 fun typedef/pretty(td: typedef<t,t,user-kind>, ?t/pretty: t -> div doc): div doc
   match td
     Synonym(binder, params, synonym, _, vis, doc) -> 
-     doc.pretty |--| vis.pretty |.| "alias ".text |.| binder.pretty |+| params.map(pretty).vcat |+| synonym.pretty 
+     doc.pretty |--| vis.pretty |.| "alias".text |+| binder.pretty |+| params.map(pretty).vcat |+| synonym.pretty 
     DataType(binder, params, constrs, _, vis, _, _, _, doc) -> 
-      doc.pretty |--| vis.pretty |.| "type ".text |.| binder.pretty |+| params.map(pretty).vcat |+| constrs.map(con/pretty).vcat
+      doc.pretty |--| vis.pretty |.| "type".text |+| binder.pretty |+| params.map(pretty).vcat |+| constrs.map(con/pretty).vcat
 
 fun vis/pretty(v: visibility): doc
   match v
@@ -71,11 +72,15 @@ fun lamvb/pretty(v: value-binder<maybe<t>,maybe<expr<t>>>, ?t/pretty: t -> <div|
   val def = match v.expr 
     Just -> "=".text |+| v.expr.pretty
     Nothing -> empty
-  v.name.pretty |.| tp |.| (if tp.is-empty then def else " ".text |.| def)
+  v.name.pretty |.| tp |.| (if tp.is-empty then def else pprint/empty |+| def)
 
+// The fip annotation belongs with the sort
+// (`fip fun`, `fbip fun`, ...), which is what a reader would have written.
 fun defsort/pretty(d: def-sort): doc
   match d
-    DefFun -> "fun".text
+    DefFun(_, fip) ->
+      val f = fip.show
+      if f.is-empty then "fun".text else (f ++ " fun").text
     DefVal -> "val".text
     DefVar -> "var".text
 
@@ -83,7 +88,7 @@ fun definline/pretty(d: def-inline): doc
   match d
     InlineNever -> "noinline".text
     InlineAlways -> "inline".text
-    InlineAuto -> pretty/pprint/empty
+    InlineAuto -> pprint/empty
 
 fun dbinder/pretty(vb: value-binder<(), expr<t>>, sort: def-sort, ?t/pretty: t -> <div|e> doc): <div|e> doc
   match sort
@@ -97,9 +102,45 @@ fun dbinder/pretty(vb: value-binder<(), expr<t>>, sort: def-sort, ?t/pretty: t -
     DefVal -> vb.name.pretty |+| "=".text |+| vb.expr.pretty
     DefVar -> vb.name.pretty |+| ":=".text |+| vb.expr.pretty
 
+// Separate from the generic `def/pretty`: only at `user-type` can the result
+// type be read out of the annotation and printed as a real signature.
+// An empty comment contributes NOTHING, and a comment ending in a newline has that newline stripped before
+// the line separator is added.
+fun with-comment(d: doc, comment: string): doc
+  if comment == "" then d
+  else
+    val cl = comment.list
+    val cmt = match cl.last
+      Just('\n') -> cl.init.string
+      _ -> comment
+    cmt.text |-| d
+
+pub fun userdef/pretty(d: user-def): div doc
+  val prf = d.visibility.pretty |.| d.sort.pretty
+  val body = match d.sort
+    DefFun -> prf |+| d.binder.funbinder/pretty
+    _ -> prf |+| d.binder.dbinder/pretty(d.sort, ?t/pretty = ut/pretty)
+  body.with-comment(d.doc)
+
+// With an annotation, the RESULT type is printed after the
+// parameter list (`name(pars) : eff res`). Dropping it lost the whole
+// signature, so a generated definition came out untyped.
+fun funbinder/pretty(vb: value-binder<(), user-expr>): div doc
+  match vb.expr
+    Ann(Lam(binders, e), tp) ->
+      val hd = vb.name.pretty |.| binders.map(fn(b) b.lamvb/pretty(?t/pretty = ut/pretty)).tupled
+      match tp.return-type
+        Just((eff, res)) -> hd |+| ":".text |+| eff.pretty |+| res.pretty |--| e.expr/pretty(?t/pretty = ut/pretty).indent(2)
+        Nothing -> hd |--| e.expr/pretty(?t/pretty = ut/pretty).indent(2)
+    Lam(binders, e) ->
+      vb.name.pretty |.| binders.map(fn(b) b.lamvb/pretty(?t/pretty = ut/pretty)).tupled |--|
+        e.expr/pretty(?t/pretty = ut/pretty).indent(2)
+    _ -> vb.name.pretty |+| vb.expr.expr/pretty(?t/pretty = ut/pretty)
+
 pub fun def/pretty(d: def<t>, ?t/pretty: t -> <div|e> doc): <div|e> doc
-  val prf = d.doc.text |-| d.visibility.pretty |.| d.defInline.pretty |.| d.sort.pretty
-  prf |+| d.binder.pretty(d.sort)
+  // inline?
+  val prf = d.visibility.pretty |.| d.sort.pretty
+  (prf |+| d.binder.pretty(d.sort)).with-comment(d.doc)
 
 fun arg/pretty(a: (maybe<(name,range)>, expr<t>), ?t/pretty: t -> <div|e> doc): <div|e> doc
   match a
@@ -114,7 +155,15 @@ pub fun expr/pretty(expr: expr<t>, ?t/pretty: t -> <div|e> doc): <div|e> doc
     App(Handler(_, _, _, _, _, _, _, hReturn, _, branches), [body]) -> 
       "with handler".text |--| Cons(hReturn.pretty, branches.map(handbranch/pretty)).vcat.indent(2)
       |--| body.snd.expr/pretty
-    App(Var(opname, True), [a1, a2]) -> a1.arg/pretty |+| opname.show-plain.pretty |+| a2.arg/pretty
+    // Singleton constructor: no argument list at all.
+    App(Var(na), Nil) | na.is-constructor-name -> na.pretty
+    // INFIX only for an unqualified operator, and with the bare stem -- a
+    // qualified one has to fall through to ordinary application form.
+    App(Var(na, True), [(Nothing, x0), (Nothing, x1)])
+        | !(na.is-qualified || na.is-locally-qualified) ->
+      x0.expr/pretty |+| na.nameStem.text |+| x1.expr/pretty
+    App(Var(na, True), [(Nothing, x0)]) -> x0.expr/pretty |.| na.pretty
+    App(Var(na), args) | na.is-name-tuple -> args.map(arg/pretty).tupled
     App(e, args) -> e.pretty |.| args.map(arg/pretty).tupled 
     Var(n) -> n.pretty
     Literal(l) -> l.pretty
@@ -176,9 +225,9 @@ fun pat/pretty(p: pattern<t>, ?t/pretty: t -> <div|e> doc): <div|e> doc
 
 fun vbm/pretty(ValueBinder(nm, tp, subpat): value-binder<maybe<t>, pattern<t>>, ?t/pretty: t -> <div|e> doc): <div|e> doc
   if subpat.is-patWild then
-    nm.pretty |.| tp.map(" : ".text |.| _.pretty).default(empty)
+    nm.pretty |.| tp.map(" :".text |+| _.pretty).default(empty)
   else
-    nm.pretty |+| "as".text |+| subpat.pretty |.| tp.map(" : ".text |.| _.pretty).default(empty)
+    nm.pretty |+| "as".text |+| subpat.pretty |.| tp.map(" :".text |+| _.pretty).default(empty)
 
 fun lit/pretty(l: lit): doc
   match l
@@ -193,15 +242,27 @@ fun uquant/pretty(u: user-quantifier): doc
     QForall -> "forall".text
     QExists -> "exists".text
 
+// Look through the quantifiers for the function type, and answer its effect and result.
+pub fun return-type(u: user-type): div maybe<(user-type, user-type)>
+  match u
+    TpFun(_, eff, tp) -> Just((eff, tp))
+    TpQuan(_, _, tp) -> tp.return-type
+    _ -> Nothing
+
 pub fun ut/pretty(u: user-type): div doc
   match u
-    TpQuan(q, b, kind) -> q.pretty |+| b.pretty |+| kind.pretty 
-    TpFun(a, b, c) -> a.map(fn((n, ut)) n.pretty |.| ":".text |.| ut.pretty).tupled |+| b.pretty |+| c.pretty 
-    TpApp(a, b) -> a.pretty |.| tupled(b.map(pretty))
+    TpAnn(t) -> t.pretty
     TpVar(n) -> n.pretty
     TpCon(n) -> n.pretty
+    TpQuan(q, b, t) ->
+      val kw = match q
+        QForall -> "forall<"
+        QExists -> "exists<"
+        QSome -> "some<"
+      (kw.text |.| b.name.pretty |.| ">".text) |+| t.pretty
+    TpApp(a, b) -> if b.is-nil then a.pretty else a.pretty |.| angled(b.map(pretty))
+    TpFun(a, e, r) -> a.map(fn((_n, ut)) ut.pretty).tupled |+| "->".text |+| e.pretty |+| r.pretty
     TpParens(t) -> tupled([t.pretty])
-    TpAnn(t, k) -> t.pretty |+| "::".text |+| k.pretty
 
 fun uk/pretty(u: user-kind): doc
   match u
@@ -209,5 +270,3 @@ fun uk/pretty(u: user-kind): doc
     KindArrow(from, to) -> from.pretty |+| "->".text |+| to.pretty
     KindParens(kind) -> kind.pretty
     KindNone -> empty
-fun main()
-  "pprint"

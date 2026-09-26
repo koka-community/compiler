@@ -5,7 +5,9 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
-// Updated as of 11/29/25: Commit ae11c17
+// Updated as of 7/23/26: Commit 045e2dc -- missing substNiceRangeMap (no caller ported yet; needs realias-type from infer-effect)
+
+module compiler/syntax/range-map
 
 import compiler/common/failure
 import compiler/lib/pprint
@@ -18,7 +20,7 @@ import compiler/kind/kind
 import compiler/type/typevar
 import compiler/type/pretty
 import compiler/syntax/lexeme
-import std/data/linear-set
+import std/data/rb-set
 import std/data/sort
 
 pub infixr 5 (|->)
@@ -26,6 +28,7 @@ pub infixr 5 (|->)
 pub effect range-map-eff
   fun add-range-info(rng: range, ri: range-info): ()
   fun get-range-map(): range-map
+  fun set-range-map(rm: range-map): ()
 
 pub fun build-range-map(f)
   var rm := new/range-map
@@ -33,6 +36,7 @@ pub fun build-range-map(f)
     fun add-range-info(rng: range, ri: range-info)
       rm := rm.insert(rng, ri)
     fun get-range-map() rm
+    fun set-range-map(nrm) rm := nrm
   f()
 
 pub alias range-map = list<(range, range-info)>
@@ -46,10 +50,10 @@ fun rm-find-all(rm: range-map, p: (range-info) -> _ bool): _ list<(range, range-
   rm.filter(fn((_,ri)) p(ri))
 
 pub fun mangle-con-name(nm: name)
-  prepend("con", nm)
+  prepend-raw("con ", nm)
 
 pub fun mangle-type-name(nm: name)
-  prepend("type", nm)
+  prepend-raw("type ", nm)
 
 pub fun mangle(nm: name, tp: ktype)
   nm
@@ -144,7 +148,11 @@ fun insert(rm: range-map, r: range, ri: range-info)
 pub fun append(rm1: range-map, rm2: range-map)
   rm1 ++ rm2
 
-fun sort(rm: range-map)
+// `insert` PREPENDS, so a freshly built map is in reverse insertion order --
+// `find-at` scans it with `drop-while`/`take-while` on the start position and
+// needs it sorted ascending. `compile/build` sorts it once after type checking
+// (upstream `rangeMapSort` in Compile/TypeCheck); consumers must not re-sort.
+pub fun rm/sort(rm: range-map)
   rm.sort(?(<) = fn((r1, _), (r2, _)) r1.cmp(r2).is-lt)
 
 // select the best matching range infos from a selection (for hover info etc.)
@@ -200,9 +208,9 @@ pub fun find-in(rm: range-map, r: range, for-inlay: bool): _ list<(range, range-
               ri.start >= s || ri.end <= e
   res.merge-implicits(for-inlay)
 
-// Gets all lexemes less than the given position and then reverses their order
+// Gets all lexemes up to and including the given position, reversed.
 pub fun previous-lexemes-reversed(lexes: list<lexeme>, p: pos)
-  lexes.take-while(_.range.start < p).reverse
+  lexes.take-while(_.range.start <= p).reverse
 
 // Drops everything inside and including matched parentheses, assumes the ending paren is already dropped
 fun drop-matched-parens-reverse(lexes: list<lexeme>)
@@ -215,7 +223,6 @@ pub fun get-function-incomplete-reverse(lexes: list<lexeme>)
   lexes.drop-auto-gen-closing.drop-matched-parens-reverse.get-function-name-reverse
 
 // Assumes it is given reverse ordered lexemes ending at an end of a function invocation
-// 
 // e.g.
 //   a.b(x, y, fn() {z}).abc
 //   => FnChained "b" "abc" -- had a .abc after the b
@@ -237,7 +244,7 @@ pub fun get-function-name-reverse(xs0: list<lexeme>)
       Cons(v as Lexeme(_, LexFloat)) -> FnValue(v)
       Cons(v as Lexeme(_, LexChar)) -> FnValue(v)
       Cons(v as Lexeme(_, LexSpecial("]"))) -> FnValue(v)
-      Cons(v as Lexeme(_, LexId)) -> FnValue(v)
+      Cons(v as Lexeme(_, LexId), Nil) -> FnValue(v)
       // x(). or (x.y). or even (1 + 2). -- The last will return a chain in FnNotFound
       Cons(Lexeme(_, LexKeyword(".")), xs') -> FnIncomplete(xs'.go)
       // x() or (x.y) or even (1 + 2) -- The last will return FnNotFound
@@ -321,7 +328,7 @@ fun n/drop-to-lex-matching(xs: list<lexeme>, is-start: (lex) -> bool, is-end: (l
     [] -> []
     Cons(Lexeme(_, l), xs') | l.is-start -> n/drop-to-lex-matching(xs', is-start, is-end, n + 1)
     Cons(Lexeme(_, l), xs') | n > 1 && l.is-end -> n/drop-to-lex-matching(xs', is-start, is-end, n - 1)
-    Cons(Lexeme, xs') | n == 1 -> xs' // Dropping from 1 to 0
+    Cons(Lexeme(_, l), xs') | n == 1 && l.is-end -> xs' // Dropping from 1 to 0
     Cons(Lexeme, xs') -> n/drop-to-lex-matching(xs', is-start, is-end, n)
 
 // Assumes reverse ordered lexemes dropping till we get to actual written code

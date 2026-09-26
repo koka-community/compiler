@@ -1,3 +1,4 @@
+// Ported as of 2026-01-19; approx upstream baseline commit ddac17b of Type/InfGamma.hs (backfilled 2026-07-23)
 
 
 module compiler/type/infgamma
@@ -14,7 +15,7 @@ import compiler/type/type
 import compiler/type/typevar
 import compiler/type/pretty
 import compiler/type/assumption
-import std/data/linear-map
+import std/data/rb-map
 // Updated to #cf4024e on 7/13/25
 
 pub infixr 5 (|->)
@@ -37,7 +38,11 @@ pub fun inf-gamma/delete(ig: inf-gamma, n : name): inf-gamma
 // (if isQualified name then trace ("gamma-extend: insert qualified: " ++ show name) else id) $
 // overwrite previous names
 pub fun inf-gamma/extend(ig: inf-gamma, name: name, ni: name-info): _ inf-gamma
-  ig.update(name.unqualify-full, [ni], ni/combine)
+  // note: linear-map update calls the combine as f(old, new), but ni/combine
+  // expects (new, old) --
+  // the new (inner) binding must come first so it shadows, and same-cname old
+  // entries are dropped. Passing them un-flipped DISCARDED the new binding.
+  ig.update(name.unqualify-full, [ni], fn(old, new) ni/combine(new, old))
 
 fun inf-gamma/extends(ig: inf-gamma, tnames: list<(name,ktype,int,string)>)
   tnames.foldl(ig, fn(ig', (name,tp,scope-depth,doc)) ig'.extend-tp(name, name, tp, scope-depth, doc))
@@ -58,7 +63,7 @@ pub fun inf-gamma/lookup(ig: inf-gamma, name: name): _ either<list<(name, name-i
 
 // lookup a local name: return either a list of possibly matching (locally qualified) names, or an exact match
 pub fun inf-gamma/lookup-ex(ig: inf-gamma, guard: (name-info) -> bool, name: name): _ either<list<(name, name-info)>, (name, name-info)>
-  val mbinfos = ig.map/lookup(name.unqualify-full)
+  val mbinfos = rb-map/lookup(ig, name.unqualify-full)
   match mbinfos
     Nothing -> Left([])
     Just(infos) ->
@@ -79,7 +84,7 @@ fun inf-gamma/unions(igs: list<inf-gamma>): _ inf-gamma
   igs.foldr(inf-gamma/empty, inf-gamma/union)
 
 fun inf-gamma/is-empty(ig: inf-gamma): bool
-  ig.internal.is-nil
+  rb-map/list(ig).is-nil
 
 fun inf-gamma/single(name: name, tp: ktype, scope-depth: int, doc: string): _ inf-gamma
   inf-gamma/empty.extend-tp(name, name, tp, scope-depth, doc)
@@ -88,9 +93,9 @@ fun inf-gamma/new(tnames: list<(name,ktype,int,string)>): _ inf-gamma
   inf-gamma/empty.extends(tnames)
 
 pub fun inf-gamma/list(ig: inf-gamma): _ list<(name, ktype)>
-  ig.linear-map/list.flatmap(fn((_, infos)) infos.map(fn(info) (info.cname, info.typ)))
+  rb-map/list(ig).flatmap(fn((_, infos)) infos.map(fn(info) (info.cname, info.typ)))
 
-val inf-gamma/empty: inf-gamma = LinearMap([])
+pub val inf-gamma/empty: inf-gamma = rb-map/empty()
 
 fun pp-inf-gamma(ig: inf-gamma)
   val name-schemes = ig.inf-gamma/list()

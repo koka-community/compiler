@@ -103,6 +103,19 @@ export class VersionManager {
       if (!targetRelease) { targetRelease = this.getLatestCompilerRelease(); }
     }
 
+    // A compiler the user configured EXPLICITLY wins: do not offer to download a
+    // different one. Without this the extension blocks in
+    // `showInformationMessage` until someone clicks, which never happens in a
+    // test window (or any automated run) -- `activate` then never reaches
+    // `startLanguageServer` and the editor looks simply inert.
+    if (!force) {
+      const userCompiler = expandHome(this.vsConfig.get('languageServer.compiler') as string || "")
+      if (userCompiler && fs.existsSync(userCompiler)) {
+        console.log(`Koka: using the explicitly configured compiler, no install prompt: ${userCompiler}`)
+        return this.findCompilerPaths(developmentPath);
+      }
+    }
+
     // only prompt once for a download for each new extension version
     if (!force) {
       const latestInstalled = await this.installedVersion();

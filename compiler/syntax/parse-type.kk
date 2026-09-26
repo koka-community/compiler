@@ -7,6 +7,9 @@
 //----------------------------------------------------------------------------
 
 module compiler/syntax/parse-type
+// Updated as of 8/3/26: Commit eb98b61d (of Syntax/Parse.hs) -- content-
+// verified identical modulo the single-line error-message wording fix
+// (upstream eb98b61dc "better grammar")
 import std/os/path
 import std/os/file
 import std/data/sort
@@ -21,7 +24,7 @@ import compiler/common/name-prim
 import compiler/common/range
 import compiler/common/parse
 
-// Updated to commit #752748d (of Parse.hs)
+// Updated to commit #b1b8078 (of Parse.hs)
 
 pub fun parse-type-annot(): _ user-type
   parse-keyword(":")
@@ -29,7 +32,7 @@ pub fun parse-type-annot(): _ user-type
 
 pub fun parse-parameter-type-annotation(): _ user-type
   parse-keyword(":")
-  parse-choices("", [
+  parse-choices-nb("", [ // (commits on `?`/`$`)
     {
       val rng = parse-special("?")
       val tp = parse-type()
@@ -44,10 +47,10 @@ pub fun parse-parameter-type-annotation(): _ user-type
   ])
 
 pub fun parse-type-scheme(): _ user-type
-  promote-type(parse-choices("type signature", [parse-quant-some, parse-type]))
+  promote-type(parse-choices-nb("type signature", [parse-quant-some, parse-type])) 
 
 pub fun parse-type(): _ user-type
-  parse-choices("type", [parse-quant-forall, parse-quant-some, parse-type-qualifier])
+  parse-choices-nb("type", [parse-quant-forall, parse-quant-some, parse-type-qualifier]) 
 
 pub fun parse-s-quantifier(): _ list<user-type-binder>
   parse-maybe-list({parse-keyword("some"); parens(parse-type-binders)})
@@ -79,7 +82,7 @@ pub fun parse-predicate()
 
 fun parse-arrow-type(): _ user-type
   val (tps, rng1) = parse-type-atom()
-  parse-choices("", [
+  parse-choices-nb("", [ // (commits on `->`)
     { parse-keyword("->"); 
       val (teff, tres) = parse-result-type(); 
       TpFun(tps, teff, tres, rng1.combine(tres.range))
@@ -108,7 +111,7 @@ fun parse-row-label(): _ user-type
   val tid = parse-type-id()
   match tid
     TpVar(name, rng) ->
-      parse-error("encountered effect variable " ++ name.show ++ " when an effect label was expected\n  hint: effect variables must be after `|` (e.g. `<labels|e>`), or by themselves (e.g. `e`)", rng)
+      parse-error("encountered effect variable " ++ name.show ++ " when an effect label was expected\n  hint: effect variables must be after `|` (e.g `<labels|e>`), or by themselves (e.g. `e`)", rng)
     t -> parse-type-app(t)
 
 pub fun parse-result-type(): _ (user-type, user-type)
@@ -118,7 +121,7 @@ pub fun parse-result-type(): _ (user-type, user-type)
 
 pub fun parse-tresult(): _ (maybe<user-type>, user-type)
   val (tps1, rng1) = parse-type-atom()
-  parse-choices("", [
+  parse-choices-nb("", [
     { val (tps, rng) = parse-type-atom(); 
       (Just(tuple(tps1, rng)), tuple(tps, rng)) }, 
     { 
@@ -130,13 +133,18 @@ fun parse-type-atom(): _ (list<(name, user-type)>, range)
     ([(nil, tp)], tp.range)
   fun make-tuple(n: int, rng: range)
     TpCon(name-tuple(n).unqualify, rng)
-  parse-choices("type atom", [
+  // No backtracking across these three alternatives: they start with disjoint tokens (id/wildcard, "(", "<"), so
+  // once one is committed its errors must propagate, not be swallowed to try
+  // the next alternative. Using the full-backtrack `parse-choices` here discards specific parse
+  // errors raised deep inside a branch (e.g. the "<e>" bare-effect-variable
+  // check in parse-row-label) in favor of a much-later generic failure.
+  parse-choices-nb("type atom", [
     { val tp1 = parse-type-id(); 
       val tp2 = parse-type-app(tp1); 
       single(tp2) },
     {
       val rng1 = parse-left-paren()
-      parse-choices("", [
+      parse-choices-nb("", [ 
         {
           val tps = parse-sep-by("", parse-param-typex, parse-comma)
           val rng2 = parse-right-paren()
@@ -154,7 +162,7 @@ fun parse-type-atom(): _ (list<(name, user-type)>, range)
   ])
 
 fun parse-type-app(tp: user-type): _ user-type
-  parse-choices("", [
+  parse-choices-nb("", [ // no backtracking (a bad type arg must NOT re-read `<` as comparison)
     {
       val rng1 = parse-left-angle()
       val targs = parse-sep-by("", parse-annotated-type-kind, parse-comma)
@@ -171,7 +179,7 @@ pub fun parse-param-type(): _ (name, range, user-type)
   (id, rng, tp)
 
 fun parse-param-typex(): _ (name, range, user-type)
-  parse-choices("parameter type", [
+  parse-choices-nb("parameter type", [ // no backtracking (inner parse-try covers the ident+colon prefix)
     {
       val (id, rng) = parse-try
         val res = parse-choices("", [parse-identifier, parse-wildcard]); 
@@ -187,7 +195,7 @@ fun parse-param-typex(): _ (name, range, user-type)
   ])
 
 fun parse-parameter-type(r: range): _ user-type
-  parse-choices("parameter type", [
+  parse-choices-nb("parameter type", [ 
     {
       val rng2 = parse-special("?")
       val tp = parse-type()

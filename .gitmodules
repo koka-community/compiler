@@ -1,3 +1,6 @@
+[submodule "vendor/isocline"]
+	path = vendor/isocline
+	url = https://github.com/daanx/isocline
 [submodule "kklib/mimalloc"]
 	path = kklib/mimalloc
-	url = https://github.com/microsoft/mimalloc
+	url = git@github.com:microsoft/mimalloc

@@ -2,13 +2,13 @@
 module compiler/kind/newtypes
 
 import compiler/common/name
+import std/data/rb-map
 import compiler/common/name-collections
 import compiler/core/core
 import compiler/type/type
 import compiler/common/syntax
 import compiler/common/failure
 import compiler/platform/config
-import std/data/linear-map
 
 pub alias newtypes = name-map<data-info>
 
@@ -22,7 +22,7 @@ pub effect newtypes-eff
 pub fun withNewtypes(newtps0: newtypes, f: () -> _ a): _ a
   var newtps := newtps0
   with handler
-    fun newtypes-extend(name: name, k: data-info) newtps := newtps.set(name, k)
+    fun newtypes-extend(name: name, k: data-info) newtps := rb-map/set(newtps, name, k)
     fun newtypes-lookup-any(name: name) newtps.lookup-any(name)
     fun newtypes-lookup-public(name: name) newtps.lookup-public(name)
     fun newtypes-find(name: name) newtps.newtypes/find(name)
@@ -30,9 +30,9 @@ pub fun withNewtypes(newtps0: newtypes, f: () -> _ a): _ a
   f()
 
 pub fun newtypes/new(lst: list<data-info>): newtypes
-  LinearMap(lst.map(fn(di) (di.name, di)))
+  rb-map/from-list(lst.map(fn(di) (di.name, di)))
 pub fun newtypes/extend(newtps: newtypes, name: name, k: data-info)
-  newtps.set(name, k)
+  rb-map/set(newtps, name, k)
 pub fun newtypes/lookup-any(newtps: newtypes, name: name)
   newtps.lookup(name)
 fun newtypes/lookup-public(newtps: newtypes, name: name)
@@ -44,17 +44,17 @@ fun newtypes/find(newtps: newtypes, name: name)
     Just(di) -> di
     _ -> failure/fail("newTypes lookup failed")
 pub fun newtypes/compose(ntps1: newtypes, ntps2: newtypes)
-  unions([ntps2, ntps1])
+  rb-map/unions([ntps2, ntps1])
 
 fun single(name: name, d: data-info): newtypes
-  LinearMap([(name, d)])
-val newtypes/empty:newtypes = LinearMap([])
+  rb-map/from-list([(name, d)])
+pub val newtypes/empty:newtypes = rb-map/empty()
 
 pub fun core/extract-newtypes(c: core): _ newtypes
-  c.typedefs.map(extract-newtypes).unions
+  rb-map/unions(c.typedefs.map(extract-newtypes))
 
 fun tdg/extract-newtypes(g: typedef-group): _ newtypes
-  g.map(extract-newtypes).unions
+  rb-map/unions(g.map(extract-newtypes))
 
 fun td/extract-newtypes(d: typedef): _ newtypes
   match d

@@ -18,7 +18,7 @@ import compiler/kind/newtypes
 import compiler/lib/pprint
 import compiler/platform/config
 import compiler/common/file
-import compiler/lib/printer
+import std/pretty/printer
 import compiler/common/color-scheme
 import std/os/path
 import std/num/float64
@@ -30,7 +30,7 @@ pub effect subst
   val cdef-name: name // current definition
   val cdefToHeader: bool // emit current def to header?
 
-effect asm
+pub effect casm
   fun emit-to-h(d: doc): ()
   fun emit-to-c(d: doc): ()
   fun emitToInit(d: doc): ()
@@ -95,18 +95,25 @@ pub fun local-unique(f)
 pub fun new-var-name(s: string): _ name
   new-name("." ++ s ++ new-unique().show)
 
+// Without the base case this recurses
+// forever, and TRMC turns it into a loop that allocates cons cells until the
+// OS kills the process (no stack overflow to signal the bug)
 pub fun new-var-names(i: int): _ list<name>
-  Cons(new-var-name("x"), new-var-names(i - 1))
+  if i <= 0 then []
+  else Cons(new-var-name("x"), new-var-names(i - 1))
 
 pub fun newDefVarName(s: string)
-  cdef-name.postpend("-" ++ s ++ new-unique().show)
+  cdef-name.postpend-raw("-" ++ s ++ new-unique().show)
 
 pub fun new-canonical-var-name(s: string)
-  modName.postpend("-" ++ s)
+  // modName is a module name (empty stem): postpending produced a "-lambda..."
+  // SYMBOLIC name that rendered parenthesized in C; qualify a fresh stem instead
+  qualify(modName, s.new-name)
 
 pub fun con-name(e: expr)
-  pretend-no-div
-    try({match e {Con(tn) -> tn}}) fn(_)
+  match e
+    Con(tn) -> tn
+    _ ->
       trace("Failed in top level extracting con name of " ++ e.show)
       TName("error".new-name, typeAny)
 
@@ -130,13 +137,13 @@ fun gen-comment-tname(tname: tName)
   tname.get-name.cpp-name |+| comment(tname.tNameType.pp-type)
 
 // Classification
-fun max-scan-count(l: list<(conInfo, conRepr, list<(name,ktype)>, int)>): int
+pub fun max-scan-count-of(l: list<(con-info, con-repr, list<(name,ktype)>, int)>): int
   l.foldl(0, fn(m, (_, _, _, sc)) if sc > m then sc else m)
 
-fun max-scan-count-of(l: list<(conInfo, conRepr, list<(name,ktype)>, int)>): int
-  l.foldl(l.max-scan-count, fn(m, (_, _, _, sc)) if sc < m then sc else m)
+pub fun min-scan-count-of(l: list<(con-info, con-repr, list<(name,ktype)>, int)>): int
+  l.foldl(l.max-scan-count-of, fn(m, (_, _, _, sc)) if sc < m then sc else m)
 
-fun data-repr-may-have-singletons(d: dataRepr): bool
+pub fun data-repr-may-have-singletons(d: data-repr): bool
   match d
     DataAsMaybe -> True
     DataAsList -> True
@@ -156,15 +163,11 @@ fun is-pat(q: pattern, b: bool): bool
     PatCon(tn) -> tn.get-name == (if b then nameTrue else nameFalse)
 
 fun extract-external(e: expr): _ maybe<(tName, string, list<expr>)>
-  fun format(tn:tName, fs:list<(target,string)>)
-    match lookup-target(C(cTarget), fs)
-      Nothing -> failure/fail("backend does not support external in " ++ tn.show ++ fs.show-list(fn((t,s)) t.show ++ ":" ++ s))
-      Just(f) -> f
   match e
-    App(TypeApp(Var(tname, InfoExternal(formats)), _), args) ->
-      Just((tname, tname.format(formats), args))
-    App(Var(tname, InfoExternal(formats)), args) ->
-      Just((tname, tname.format(formats), args))
+    App(TypeApp(Var(tname, InfoExternal(format)), _), args) ->
+      Just((tname, format, args))
+    App(Var(tname, InfoExternal(format)), args) ->
+      Just((tname, format, args))
     _ -> Nothing
 
 fun is-fun-expr(e: expr): bool
@@ -189,7 +192,7 @@ pub fun is-inlineable-expr(ex: expr): pure bool
       val n = v.get-name
       [nameYielding,nameReuseNull,nameCCtxHoleCreate].any(fn(n') n == n')
     // App (Var v (InfoExternal _)) [arg] | get-name v `elem` [nameBox,nameDup,nameInt32] -> is-inlineable-expr arg
-    App(Var(v), [arg]) | [nameBox,nameInt32,nameReuse,nameReuseIsValid,nameIsUnique].any(fn(n') n' == v.get-name) ->
+    App(Var(v), [arg]) | [nameBox,nameInt32,nameInternalInt32,nameSSizeT,nameInternalSSizeT,nameReuse,nameReuseIsValid,nameIsUnique].any(fn(n') n' == v.get-name) ->
       arg.is-inlineable-expr
     // App (Var v (InfoExternal _)) args -> hasTotalEffect (typeOf v) &&  all is-pure-expr args  -- yielding() etc.
 
@@ -234,7 +237,7 @@ pub fun is-tail-calling(ex: expr, n: name): bool
     Let(_, e) -> e.pretend-decreasing.is-tail-calling(n) // tail calls can only happen in the actual body
     Case(_, bs) -> bs.any(f1)
 
-type result
+pub type c-result
   ResultReturn(tn: maybe<tName>, args: list<tName>) // first field carries function name if not anonymous and second the arguments which are always known
   ResultAssign(tn: tName, label: maybe<name>) // variable name nad optional label to break
 
@@ -259,6 +262,7 @@ fun c-type-con(tp: type-con): cType
   val nm = tp.name
   if nm == nameTpInt then CPrim("kk_integer_t")
   elif nm == nameTpString then CPrim("kk_string_t")
+  elif nm == nameTpBytes then CPrim("kk_bytes_t")
   elif nm == nameTpVector then CPrim("kk_vector_t")
   elif nm == nameTpEvv then CPrim("kk_evv_t")
   elif nm == nameTpChar then CPrim("kk_char_t") // 32-bit unicode point
@@ -268,9 +272,10 @@ fun c-type-con(tp: type-con): cType
   elif nm == nameTpBool then CPrim("bool")
   elif nm == nameTpUnit then CPrim("kk_unit_t")
   elif nm == nameTpInt64 then CPrim("int64_t")
+  elif nm == nameTpByte then CPrim("uint8_t")
   elif nm == nameTpInt8 then CPrim("int8_t")
   elif nm == nameTpInt16 then CPrim("int16_t")
-  elif nm == nameTpInt32 then CPrim("int32_t")
+  elif nm == nameTpInt32 || nm == nameTpMarker then CPrim("int32_t")
   elif nm == nameTpFloat32 then CPrim("float")
   elif nm == nameTpFloat16 then CPrim("float") // float16 is only used for storage
   elif nm == nameTpRef || nm == nameTpLocalVar then CPrim("kk_ref_t")
@@ -280,16 +285,16 @@ fun c-type-con(tp: type-con): cType
   else CData(nm.type-class-name)
 
 pub fun type-class-name(n: name)
-  prepend(".", n)
+  prepend-raw("@", n)
 
 pub fun cpp-vis(v: visibility): doc
-  empty
+  pprint/empty
 
 fun type-con-class-name(n: name)
   n
 
 pub fun cprim-can-be-boxed(s: string): bool
-  ["kk_char_t", "int64_t", "int16_t", "int32_t", "float", "double", "intptr_t", "kk_ssize_t"].any(_ == s)
+  ["kk_char_t", "int64_t", "int8_t", "int16_t", "int32_t", "float", "double", "intptr_t", "kk_ssize_t"].any(_ == s)
 
 pub fun cpp-type(tp: ktype): doc
   match tp.c-type
@@ -321,12 +326,22 @@ pub fun ppLit(l: lit): _ doc
     LitInt(i) ->
       if i.is-small-int then text("kk_integer_from_small") |.| parens(i.pretty)
       elif i.is-small-int32 then text("kk_integer_from_int") |.| arguments([i.pretty])
-      else "kk_integer_from_string".text |.| arguments([dquotes(i.pretty)])
+      else "kk_integer_from_str".text |.| arguments([dquotes(i.pretty)])
     LitChar(c) ->
+      // `c` is stored as a 1-character STRING (core.kk `LitChar(c: string)`);
+      // upstream renders `show c` on a real Haskell `Char`, which
+      // single-quotes -- `c.show` here is Koka's STRING show (double-quotes)
+      // and produced an invalid `"a"` string literal where kklib's
+      // `kk_char_t` (a plain `int` codepoint) is expected. Render a proper
+      // single-quoted C char literal instead, with minimal escaping.
       val c' = c.head-char.unjust
-      if c' >= ' ' && c' <= '~' then c.show.text
+      if c' >= ' ' && c' <= '~' then
+        val escaped = if c' == '\'' || c' == '\\' then "\\" ++ c'.string else c'.string
+        ("'" ++ escaped ++ "'").text
       else c'.int.show-hex(4).text
-    LitFloat(d) -> d.show.text
+    // upstream: `showHFloat d` -- a HEXADECIMAL float literal: exact round-trip
+    // AND preserves negative zero (`d.show` prints -0.0 as "0")
+    LitFloat(d) -> d.show-hex(use-capitals=False).text
     LitString(s) -> failure/fail("backend/c/from-core: ppLit: cannot inline string literal: " ++ s.show)
 
 pub fun cString(s: string)
@@ -341,11 +356,20 @@ pub fun cString(s: string)
       else bytes([c.int]), 1)
     elif c <= '\x7F' then
       (if c == '\"' then "\\\"".text
+      elif c == '\'' then "\\'".text
       elif c == '\\' then "\\\\".text
       elif c == '?' then "\\?".text // avoid accidental trigraphs
       else c.char, 1)
-      // TODO: BIG UTF-8
-    else ("".text, 0)
+    else
+      // non-ASCII: emit the codepoint's UTF-8 bytes as \x escapes
+      val x = c.int
+      if x <= 0x07FF then
+        (bytes([0xC0 + x/64, 0x80 + x%64]), 2)
+      elif x <= 0xFFFF then
+        (bytes([0xE0 + x/4096, 0x80 + (x/64)%64, 0x80 + x%64]), 3)
+      elif x <= 0x10FFFF then
+        (bytes([0xF0 + x/262144, 0x80 + (x/4096)%64, 0x80 + (x/64)%64, 0x80 + x%64]), 4)
+      else (bytes([0xEF, 0xBF, 0xBD]), 3) // U+FFFD replacement char
   val (cstr, ccnt) = s.list.map(escape).unzip
   (dquotes(cstr.hcat), ccnt.sum)
 
@@ -366,7 +390,7 @@ pub fun genLitSSizeT(i: int)
 pub fun genLitIntPtrT(i: int)
   parens("KK_IP".text |.| parens(i.pretty))
 
-fun isSmallLitInt(e)
+fun is-small-lit-int(e)
   match e
     ELit(LitInt(i)) -> is-small-int(i)
     _ -> False
@@ -432,22 +456,30 @@ val reserved = [
   "default", "delete", "do", "else", "finally", "for", "function", "if", "in",
   "instanceof", "new", "return", "register", "switch", "this", "throw", "try", "typeof",
   "var", "void", "while", "with", "yield",
+  // C keywords the (JS-derived) list above omits -- a koka binding named after
+  // one of these emits invalid C, e.g. `as_Synonym(typedef, _ctx)` for a
+  // parameter named `typedef` (koka's idiom of naming a parameter after its
+  // type makes this easy to hit). Upstream's list omits them too.
+  "auto", "double", "extern", "float", "goto", "inline", "restrict",
+  "sizeof", "static", "struct", "typedef", "union", "volatile",
   // reserved for future use
   "class", "enum", "export", "extends", "import", "super",
   // special macros
-  "errno", "exception_info"
+  "errno", "exception_info", "or",
+  // common globals
+  "timezone"
 ]
 
 fun pp-con-field(n: name, t: ktype): doc
   t.cpp-type |+| n.unqualify.cpp-name |.| semi
 
-fun con-test-name(c: conInfo): doc
+pub fun con-test-name(c: con-info): doc
   cpp-name(make-hidden-name("is", c.name))
 
 pub fun con-test-nameX(nm: name): doc
   cpp-name(make-hidden-name("is", nm))
 
-fun con-tag-name(c: conInfo): doc
+pub fun con-tag-name(c: con-info): doc
   cpp-name(make-hidden-name("tag", c.name))
 
 pub fun prim-name(prim: string, d: doc)
@@ -459,22 +491,22 @@ pub fun prim-name-type(prim: string, s: string)
   val end = match s.ends-with("_t") { Just(x) -> x.string; _ -> s}  
   prim-name(prim, (start ++ end).text)
 
-fun con-base-case-name(c: conInfo): doc
+pub fun con-base-case-name(c: con-info): doc
   cpp-name(make-hidden-name("base", c.name))
 
 pub fun con-base-case-nameX(c: name): doc
   cpp-name(make-hidden-name("base", c))
 
-fun con-create-name(c: conInfo): doc
+pub fun con-create-name(c: con-info): doc
   make-hidden-name("new", c.name).cpp-name
 
 pub fun con-create-nameX(c: name): doc
   make-hidden-name("new", c).cpp-name
 
-fun con-singleton-name(c: conInfo): doc
+fun con-singleton-name(c: con-info): doc
   make-hidden-name("singleton", c.name).cpp-name
 
-fun con-as-name(c: conInfo): doc
+pub fun con-as-name(c: con-info): doc
   cpp-name(make-hidden-name("as", c.name))
 
 pub fun con-as-nameX(c: name): doc

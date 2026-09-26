@@ -9,8 +9,8 @@ import compiler/type/type
 import compiler/common/syntax
 import compiler/common/failure
 import compiler/platform/config
-import std/data/linear-map
 import std/data/sort
+import std/data/rb-map
 
 pub alias kGamma = qname-map<type-name-info>;
 
@@ -54,7 +54,7 @@ pub fun kgamma/find(kg: kGamma, ctxt: name, name: name)
 pub fun kgamma/filter(kg: kGamma, modName: name)
   kg.filter-names(_ == modName)
 
-val kgamma/empty:kGamma = LinearMap([])
+pub val kgamma/empty:kGamma = rb-map/empty()
 
 pub fun core/extract-typedefs(c: core): _ kGamma
   c.typedefs.map(extract-typedefs).qname-map/unions

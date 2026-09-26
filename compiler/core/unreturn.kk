@@ -23,15 +23,15 @@ pub fun unreturn()
   set-core-defs(tdgs/unreturn(get-core-defs()))
 
 pub fun tdgs/unreturn(def-groups: list<def-group>): _ list<def-group>
-  def-groups.map(unreturn)
+  def-groups.map(tdg/unreturn)
 
 pub fun tdg/unreturn(dg: def-group)
   match dg
-    DefRec(defs) -> DefRec(defs.map(unreturn))
-    DefNonRec(d) -> DefNonRec(d.unreturn)
+    DefRec(defs) -> DefRec(defs.map(topdef/unreturn))
+    DefNonRec(d) -> DefNonRec(d.topdef/unreturn)
 
 pub fun topdef/unreturn(d: def): _ def
-  val (make-def, kexpr) = d.unreturn
+  val (make-def, kexpr) = d.def/unreturn
   match kexpr
     U(e) -> make-def(e)
     I(e) -> make-def(e)
@@ -47,36 +47,36 @@ fun current-effect(eff: keffect, k: () -> _ a): _ a
     val current-eff = Just(eff)
   k()
 
-fun def/unreturn(d: def)
-  val kexpr = d.defExpr.unreturn
+pub fun def/unreturn(d: def): ur-eff (expr -> def, kexpr)
+  val kexpr = d.defExpr.expr/unreturn
   (fn(e) d(defExpr = e), kexpr)
 
-fun expr/unreturn(e: expr): _ kexpr
+pub fun expr/unreturn(e: expr): ur-eff kexpr
   match e
     // lambdas and type lambdas use UnK to contain returns inside their body
     Lam(pars, eff, body) ->
       with current-effect(eff)
-      e.emapUnK(fn(b) Lam(pars, eff, b), body.urExpr)
+      e.emapUnK(fn(b) Lam(pars, eff, b), body.expr/unreturn)
     TypeLam(tvars, body) ->
-      e.emapUnK(fn(b) TypeLam(tvars, b), body.urExpr)
+      e.emapUnK(fn(b) TypeLam(tvars, b), body.expr/unreturn)
     // Type applications may contain return (? todo check this)
     TypeApp(body, targs) ->
-      Just(e).emapK(fn(b) TypeApp(b, targs), body.urExpr)
+      Just(e).emapK(fn(b) TypeApp(b, targs), body.expr/unreturn)
     // bindings
     Let(defgs, body) ->
-      e.unreturn(defgs, body.urExpr)
+      e.let/unreturn(defgs, body.expr/unreturn)
     // case: scrutinee cannot contain return due to grammar
     Case(scruts, branches) ->
-      e.unreturn(scruts, branches)
+      e.case/unreturn(scruts, branches)
     // return
-    App(Var(v), [arg]) | v.get-name == nameReturn -> R(arg)
+    App(Var(v), [arg]) | v.get-name == nameReturn -> R(arg.unreturn-pure)
     // pure expressions that do not contain return (as checked by the grammar)
     App(f, args) ->
       I(App(f.unreturn-pure, args.map(unreturn-pure)))
     _ -> U(e)
 
-fun unreturn-pure(e: expr)
-  e.unreturn.to-expr
+fun unreturn-pure(e: expr): ur-eff expr
+  e.expr/unreturn.to-expr
 
 fun to-expr(k: kexpr)
   match k
@@ -91,10 +91,10 @@ pub fun let/unreturn(org: expr, defgroups: list<def-group>, kbody: kexpr): ur-ef
   fun dg/unreturn(dg: def-group)
     match dg
       DefRec(dfs) ->
-        val (mkDefs, kexprs) = dfs.map(urDef).unzip
+        val (mkDefs, kexprs) = dfs.map(def/unreturn).unzip
         Left((fn(es) DefRec(mkDefs.zipwith(es, fn(make, d) make(d))), kexprs))
       DefNonRec(d) ->
-        val (mkDef, kexpr) = d.urDef
+        val (mkDef, kexpr) = d.def/unreturn
         Right((fn(e) DefNonRec(mkDef(e)), kexpr))
   fun is-unchanged(e: maybechanged): bool
     match e
@@ -118,7 +118,7 @@ pub fun let/unreturn(org: expr, defgroups: list<def-group>, kbody: kexpr): ur-ef
     Just(org).emapK(fn(e) make-let(defgroups, e), kbody)
   else kdefgs.reverse.fold(kbody)
 
-fun case/unreturn(org: expr, scruts: list<expr>, branches: list<branch>): _ kexpr
+pub fun case/unreturn(org: expr, scruts: list<expr>, branches: list<branch>): ur-eff kexpr
   val (mkBranches, kexprss) = branches.map(branch/unreturn).unzip
   val ks = kexprss.concat
   if ks.all(is-u) then U(org)
@@ -144,15 +144,20 @@ fun case/unreturn(org: expr, scruts: list<expr>, branches: list<branch>): _ kexp
       val defVar = Var(TName(name, defTp), InfoNone)
       fun app(e)
         App(defVar, [e])
-      Case(scruts, kexprss.zipwith(mkBranches, fn(kexprs, mk) mk(kexprs.map(fn(k) applyK(app, k)))))
+      // upstream: `makeLet [DefNonRec def] $ Case ...` -- the continuation
+      // def must be BOUND; without the Let the generated `@cont-x` var
+      // dangled free in the def (parc then dup'd an unbound name and the C
+      // backend crashed with "gen-fun-sig: expected lambda" on the wrapper)
+      make-let([DefNonRec(def)],
+        Case(scruts, kexprss.zipwith(mkBranches, fn(kexprs, mk) mk(kexprs.map(fn(k) applyK(app, k))))))
     F(f)
 
 pub fun branch/unreturn(b: branch)
-  val (mkGuards, kexprs) = b.guards.map(unreturn).unzip
+  val (mkGuards, kexprs) = b.guards.map(guard/unreturn).unzip
   (fn(es) Branch(b.patterns, mkGuards.zipwith(es, fn(make, e) make(e))), kexprs)
 
 pub fun guard/unreturn(g: guard)
-  val kexpr = g.body.unreturn
+  val kexpr = g.body.expr/unreturn
   (fn(e) Guard(g.test, e), kexpr)
 
 fun applyK(c: expr -> _ expr, k: kexpr): _ expr

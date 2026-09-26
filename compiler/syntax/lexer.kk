@@ -4,11 +4,25 @@ module compiler/syntax/lexer
 import compiler/syntax/lexeme
 import compiler/syntax/lex
 import compiler/common/range
-import std/core-extras
 import std/core/unsafe
+
+// An open chunk: a SPAN of the input, plus any earlier spans already cut out
+// (see `extend-chunk`). A struct rather than a tuple -- five fields do not
+// pattern-match as a tuple.
+struct chunk
+  opening: string   // `prefix` is reserved (operator fixity)
+  span-start: int
+  span-end: int
+  earlier: list<string>
+  start-pos: alex-pos
 
 fun lex(str: string, pos: pos): _ list<lexeme>
   val src = pos.source
+  // taken ONCE: cutting a chunk out is then a slice of this, not a re-encode
+  // of the whole input per chunk
+  val input-bytes = str.string/bytes
+  fun input-slice(start: int, end: int): string
+    if end <= start then "" else input-bytes.subbytes(start, end - start).string
   var lexemes := []
   var slices := []
   var raw-delim := 0
@@ -16,20 +30,39 @@ fun lex(str: string, pos: pos): _ list<lexeme>
   var line-off := pos.line
   var col-off := pos.col
   with handler
-    fun do-start-chunked(s: string, start: alex-pos)
-      slices := Cons((s.string/bytes, start), slices)
+    // A chunk is a SPAN of the input
+    //
+    // The scanner calls the extend once per CHARACTER inside a comment or string 
+    //
+    // So extending is two integer writes, and the text is cut out of the input exactly once, when the chunk is finalised.
+    //
+    // `parts` exists because a chunk is not always ONE span: a non-contiguous
+    // match (nested block comments can produce one, see koka.x's `TODO?` on the
+    // "*/" rule) flushes the span held so far and starts a fresh one. The
+    // handler decides that by comparing the incoming match's start against the
+    // span's end, so it cannot get this wrong by construction.
+    //
+    // UTF-8 is safe: every offset is an alex match boundary and `@utf8` matches
+    // a COMPLETE sequence, so a span never cuts a character in half.
+    fun do-start-chunked(s: string, start: alex-pos, content-off: int)
+      slices := Cons(Chunk(s, content-off, content-off, [], start), slices)
     fun end-chunked()
       match slices
-        Cons((s, start), rst) -> 
+        Cons(Chunk(opening, sstart, send, parts, start), rst) ->
           slices := rst
-          (s.string, start)
+          val all = Cons(input-slice(sstart, send), parts).reverse
+          (opening ++ all.join, start)
         Nil -> throw("end-chunked when no chunked input")
-    fun add-chunk(f)
+    fun extend-chunk(start-off: int, end-off: int)
       match slices
-        Cons((s, st), rst) -> 
-          slices := Cons((s ++ f.bytes, st), rst)
+        Cons(Chunk(opening, sstart, send, parts, st), rst) ->
+          val entry = if start-off == send
+                        then Chunk(opening, sstart, end-off, parts, st)   // contiguous: O(1)
+                        else Chunk(opening, start-off, end-off,           // gap: keep what we had
+                                   Cons(input-slice(sstart, send), parts), st)
+          slices := Cons(entry, rst)
         Nil ->
-          throw("add-chunk when no chunked input")
+          throw("extend-chunk when no chunked input")
     fun get-rawdelim()
       raw-delim
     fun set-rawdelim(i)
@@ -56,7 +89,9 @@ fun lex(str: string, pos: pos): _ list<lexeme>
     fun do-emit(l, lstart, lend)
       val AlexPos(soff, sline, scol) = lstart.adjust(line-off, if col-off-line == lstart.line then col-off else 0)
       val AlexPos(eoff, eline, ecol) = lend.adjust(line-off, if col-off-line == lend.line then col-off else 0)
-      lexemes := Cons(Lexeme(make-range(Pos(src, soff, sline, scol), Pos(src, eoff, eline, ecol)), l), lexemes)
+      // token ranges END on their last character (inclusive), not one past it;
+      // `before` only decrements the column (offset and line are unchanged)
+      lexemes := Cons(Lexeme(make-range(Pos(src, soff, sline, scol), Pos(src, eoff, eline, max(1, ecol - 1))), l), lexemes)
   alex-scan(str.bytes.slice, 0)
   lexemes.reverse
 

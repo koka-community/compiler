@@ -5,11 +5,11 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
-// Updated as of 11/29/25: Commit ae11c17 -- missing utfDecode, readInput, extractLiterate
+// Updated as of 7/23/26: Commit d026468 -- missing utfDecode, readInput (n/a: Haskell ByteString fallback; we use read-text-file), extractLiterate
 module compiler/common/range
 
 import std/os/path
-import std/pretty/pprint
+import compiler/lib/pprint
 
 pub value struct source 
   name: string
@@ -115,11 +115,34 @@ pub fun range/(==)(r1: range, r2: range): bool
 pub fun show-compact-range(r: range)
   "[" ++ r.start.show-pos(0) ++ "," ++ r.end.show-pos(0) ++ "]"
 
+// upstream `relativeToPath` (Common/File.hs), as applied by `showRange`: a
+// diagnostic's path is shown relative to the compile's working directory when
+// it sits underneath it, so a message reads `samples/learn/lazycons.kk`
+// instead of an absolute path.
+//
+// Components are compared WHOLE, so `/foo/ba` is not a prefix of
+// `/foo/bar/x.kk`. Upstream rejoins with the platform separator; this rejoins
+// with `/` because `common/file.kk`'s `relative-to-path` reaches `pathsep()`,
+// which is `ndet` and would infect every `show`.
+fun relative-to-cwd(src: string, cwd: string): string
+  fun parts(s: string): list<string>
+    s.list.map(fn(c) if c == '/' || c == '\\' then '/' else c).string
+     .split("/").filter(fn(x) !x.is-empty)
+  // length + zip rather than recursion, so this stays total (a recursive
+  // helper here would make every `show-range` -- and so every diagnostic -- div)
+  fun prefix-of(xs: list<string>, ys: list<string>): bool
+    xs.length <= ys.length && zip(xs, ys).all(fn((x, y)) x == y)
+  if cwd.is-empty then src
+  else
+    val cs = cwd.parts
+    val ss = src.parts
+    if !cs.is-nil && prefix-of(cs, ss) then ss.drop(cs.length).join("/")
+    else src
+
 pub fun show-range(r: range, cwd: path, endToo: bool)
   val path = 
         if r.start.line > big-line then ""
-        else  
-          r.start.source.name // TODO: Relative to Path cwd
+        else r.start.source.name.relative-to-cwd(cwd.string)
   if endToo then 
     path ++ "(" ++ r.start.show-pos(0) ++ "-" ++ r.end.show-pos(0) ++ ")"
   else path ++ r.start.show
@@ -173,18 +196,22 @@ pub fun range-list/combine(rs: list<range>): range
 pub fun range/hide(r: range)
   Range(r.start, r.end, True)
 
+// upstream minPos/maxPos compare with `<=`: on a TIE (equal line/col --
+// which every single-character token has, since ranges end inclusively) the
+// ORIGINAL argument order is preserved. `<` would swap the two positions on
+// ties, exchanging their offsets (start.off > end.off => empty source slices).
 pub fun pos/min(p1: pos, p2: pos): pos
   if p1.line <= 0 then // for combining nullRanges sensibly
     p2
   elif p2.line <= 0 then
     p1
-  elif (p1 < p2) then
+  elif (p1 <= p2) then
     p1
   else
     p2
 
 pub fun pos/max(p1: pos, p2: pos): pos
-  if (p1 < p2) then
+  if (p1 <= p2) then
     p2
   else
     p1
@@ -242,7 +269,10 @@ pub fun range/default(m: maybe<range>): range
 
 pub fun source-from-range(Range(start, end)): string
   if start.off >= 0 then
-     " ".replicate(start.col - 1).join ++ start.source.contents.slice.subslice(start.off, end.off).string
+     // positions carry BYTE offsets (the lexer works on utf-8 bytes), so the
+     // slice must be BYTE-based -- sslice/subslice counts CHARACTERS and drifts after any
+     // multi-byte character (test syntax/wrong/utf1)
+     " ".replicate(start.col - 1).join ++ start.source.contents.bytes.substring(start.off, end.off - start.off)
   else
     val l1 = if start.line >= big-line then 1 else start.line
     val l2 = if end.line >= big-line then 
@@ -260,5 +290,4 @@ pub fun source-from-range(Range(start, end)): string
       Nil -> ""
 
 pub fun raw-source-from-range(Range(start, end)): string
-  val s: sslice = start.source.contents.slice
-  s.subslice(start.off, end.off).string
+  start.source.contents.bytes.substring(start.off, end.off - start.off)

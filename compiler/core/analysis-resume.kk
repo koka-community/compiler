@@ -7,7 +7,7 @@ import compiler/common/resume-kind
 import compiler/core/core
 import compiler/core/corevar
 import compiler/type/type
-import std/data/linear-set
+import std/data/rb-set
 import compiler/common/failure
 
 fun analyze(defNm: name, opNm: name, isRaw: bool, e: expr)
@@ -28,7 +28,7 @@ val resumeName = TName(new-name("resume"), typeVoid)
 val resumeShallowName = TName(new-name("resume-shallow"), typeVoid)
 val finalizeName = TName(new-name("finalize"), typeVoid)
 
-fun is-resuming-elem(s: linear-set<tName>)
+fun is-resuming-elem(s: rbset<tName>)
   s.member(resumeName) || s.member(finalizeName) || s.member(resumeShallowName)
 
 fun tname/is-resuming(t: tName)

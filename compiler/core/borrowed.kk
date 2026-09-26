@@ -2,13 +2,13 @@
 module compiler/core/borrowed
 
 import compiler/common/name
+import std/data/rb-map
 import compiler/core/core
 import compiler/common/failure
 import compiler/common/syntax
 import compiler/common/name
 import compiler/common/name-collections
 import compiler/common/range
-import std/data/linear-map
 
 // Map names to their borrowing info. If a name does not use borrowing
 // it may not be in here.
@@ -17,7 +17,7 @@ pub alias borrowed = name-map<list<param-info>>
 alias borrowDef = (name, list<param-info>)
 
 // The initial borrowed
-val empty:borrowed = LinearMap([])
+val empty:borrowed = rb-map/empty()
 
 fun new(xs: list<borrowDef>): borrowed
   borrowed/empty.extend(xs)
@@ -26,7 +26,7 @@ fun list/extend(b: borrowed, xs: list<borrowDef>): borrowed
   xs.foldl(b, extend)
 
 pub fun extend(b: borrowed, b1: borrowDef): borrowed
-  b.add(b1.fst, b1.snd)
+  rb-map/set(b, b1.fst, b1.snd) // upstream M.insert overwrites (linear-map add is add-if-absent)
 
 pub fun core/extend(c: core, b0: borrowed): borrowed
   b0.extend(c.defs.extract-borrow).extend(c.externals.extract-borrow)

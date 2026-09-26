@@ -1,4 +1,5 @@
 module compiler/type/infer
+// Updated as of 7/23/26: Commit 9bc234e
 
 import compiler/common/range
 import compiler/common/name
@@ -6,8 +7,10 @@ import compiler/common/name-prim
 import compiler/common/name-collections
 import compiler/common/syntax
 import compiler/common/color-scheme
+import compiler/common/error
 import compiler/common/failure
 import compiler/common/unique
+import compiler/common/nice
 import compiler/common/message
 import compiler/platform/config
 import compiler/type/kind
@@ -28,122 +31,438 @@ import compiler/syntax/range-map
 import compiler/core/core
 import compiler/core/corevar
 import compiler/core/analysis-match
+import compiler/core/analysis-cctx
+import compiler/core/binding-groups
+import compiler/core/divergent
 import compiler/lib/pprint
-import std/data/linear-map
-import std/data/linear-set
+import std/num/float64
+import std/data/rb-set
 import std/data/sort
 import std/core/undiv
 import std/core/unsafe
-import compiler/lib/core
 import compiler/type/infer-effect
+import compiler/type/infer-support
+import compiler/type/infer-helpers
+import std/data/rb-map
 
-fun checkFun(rng: range) 
-  Check("function type does not match the argument types", rng)
-fun checkMatch(rng: range) 
-  Check("branch has not the same type as previous branches", rng)
-fun checkAnn(rng: range) 
-  Check("type cannot be instantiated to match the annotation", rng)
-fun checkRec(rng: range) 
-  Check("recursive invocations do not match the assumed type; add a type annotation?", rng)
-fun checkGuardTotal(rng: range) 
-  Check("guard expressions must be total", rng)
-fun checkGuardBool(rng: range) 
-  Check("guard expressions must be of a boolean type", rng)
-fun checkConMatch(rng: range) 
-  Check("constructor must have the same the type as the matched term", rng)
-fun checkLitMatch(rng: range) 
-  Check("literal pattern does not match the type of the matched term", rng)
-fun checkConTotal(rng: range) 
-  Check("constructor in a pattern must have a total effect type", rng)
-fun checkLit(rng: range)      
-  Check("literal does not match the expected type", rng)
-fun checkOptional(rng: range) 
-  Check("default value does not match the parameter type", rng)
-fun checkOptionalTotal(rng: range) 
-  Check("default value expression must be total", rng)
-fun checkInject(rng: range) 
-  Check("inject expects a parameter-less function argument", rng)
+fun infer-assign(prop, expect, assign: syntax/syntax/expr<ktype>, arng: range, lhs: (maybe<(name, range)>, syntax/syntax/expr<ktype>), rhs: (maybe<(name, range)>, syntax/syntax/expr<ktype>), rng: range): _ (ktype, keffect, core/core/expr)
+  fun fresh-ref-type()
+    val hvar = fresh-tvar(kindHeap, Meta)
+    val xvar = operations/fresh-star()
+    TApp(typeRef, [hvar, xvar])
+  match lhs.snd
+    App(fun0, args, lrng) -> // array[i] := e
+      val xargs = match args
+        Cons((mbName, arg as Var(target, _, vrng)), rest) -> // var_vec[i] := e   TODO: perhaps unsafe for general use?
+          val (_, gtp, _) = resolve-name(target, Nothing, vrng)
+          val (_, tp, _) = instantiate-noex(gtp, vrng)
+          if tp.is-type-local-var
+            then Cons((mbName, App(Var(nameByref, False, vrng), [(Nothing, arg)], lrng)), rest)
+            else args
+        _ -> args
+      expr/infer(prop, expect, App(fun0, xargs ++ [(Nothing, rhs.snd)], rng))
+    Var(target, _, lrng) ->
+      val (_, gtp, _) = resolve-name(target, Nothing, lrng)
+      val (_, tp, _) = instantiate-ex(gtp, lrng)
+      val nameSet =
+        if tp.is-type-local-var then nameLocalSet
+        else
+          val r = fresh-ref-type()
+          val _ =
+            with val ctxt = Check("an assignable identifier must have a reference type", rng)
+            infer-unify(lrng, r, tp)
+          nameRefSet
+      expr/infer(prop, expect,
+        App(Var(nameSet, False, arng), [(Nothing, App(Var(nameByref, False, lrng.before), [lhs], lrng)), rhs], rng))
+    _ ->
+      context-error(rng, lhs.snd.range, "not an assignable expression".text,
+        [("because".text, "an assignable expression must be an application, index expression, or variable".text)])
+      (typeUnit, typeTotal, core/core/Con(TName(name-tuple(0), typeUnit), ConEnum(nameTpUnit, DataEnum, valuerepr/zero, 0)))
+
+// effect injection: `mask<l>(e)`
+
+fun infer-inject(prop: maybe<(ktype, range)>, label: ktype, expr0: syntax/syntax/expr<ktype>, behind: bool, rng: range): _ (ktype, keffect, core/core/expr)
+  val eff0 = operations/fresh-effect()
+  val eff = if !behind then eff0 else effect-extend(label, eff0)
+  fun tfun(r) TFun([], eff, r)
+  val prop2 = match prop
+    Nothing -> Nothing
+    Just((ptp, prng)) ->
+      val (foralls, rho) = ptp.split-type-scheme
+      Just((quantify-type(foralls, tfun(rho)), prng))
+  val (mbHandled, effName) = effect-name-core(label, rng)
+  val (exprTp, exprEff, exprCore) =
+    if effName == nameTpLocal
+      then with-no-local-scope({expr/infer(prop2, Instantiated, expr0)})
+      else expr/infer(prop2, Instantiated, expr0)
+  val res = operations/fresh-star()
+  val fullRng = combine([rng, expr0.range])
+  val _ =
+    with val ctxt = checkInject(fullRng)
+    infer-unify(expr0.range, tfun(res), exprTp)
+    infer-unify(expr0.range, eff, exprEff)
+  val resTp = res.subst
+  val effTo = effect-extend(label, eff).subst
+  val coreLevel = if behind then exprTrue else exprFalse
+  val core = match mbHandled
+    // general handled effects use "@inject-effect"
+    Just(coreHTag) ->
+      val (maskQName, _maskTp, maskInfo) = resolve-fun-name(nameMaskAt, CtxFunArgs(False, 3, [], Nothing), rng, rng)
+      val (evvIndexQName, _evvIndexTp, evvIndexInfo) = resolve-fun-name(nameEvvIndex, CtxFunArgs(False, 1, [], Nothing), rng, rng)
+      val coreMask = maskInfo.core-expr(maskQName)
+      val coreIndex = core/core/App(TypeApp(evvIndexInfo.core-expr(evvIndexQName), [effTo]), [coreHTag])
+      core/core/App(TypeApp(coreMask, [resTp, eff, effTo]), [coreIndex, coreLevel, exprCore])
+    Nothing ->
+      val (maskQName, _maskTp, maskInfo) = resolve-fun-name(nameMaskBuiltin, CtxFunArgs(False, 1, [], Nothing), rng, rng)
+      val coreMask = maskInfo.core-expr(maskQName)
+      core/core/App(TypeApp(coreMask, [resTp, eff, effTo]), [exprCore])
+  (resTp, effTo, core)
+
+// does the expression use any of the given local variables? (for automatic masking of applied handlers)
+
 val checkEffect = Infer
-fun checkEffectSubsume(rng: range) 
-  Check("effect cannot be subsumed", rng)
-fun checkReturnResult(rng: range) 
-  Check("function returns values of different types", rng)
-fun checkReturn(rng: range)        
-  Check("return type does not match an earlier return type", rng)
-fun checkOp(rng: range)         
-  Check("operator type does not match the parameter types", rng)
-fun checkMakeHandler(rng: range) 
-  Check("handler types do not match the handler maker; please report this as a bug!", rng)
-fun checkMakeHandlerBranch(rng: range) 
-  Check("handle branch types do not match the handler branch maker; please report this as a bug!", rng)
-fun checkEffectTp(rng: range)   
-  Check("operator type does not match the effect type", rng)
-fun checkLocalScope(rng: range) 
-  Check("a reference to a local variable escapes it's scope", rng)
-
-fun expr/infer(mb, expect, expr)
-  throw("Unimplemented")
-//////////////////////////////////////////
-// Infer Types
-//////////////////////////////////////////
-
+// the full effect row of expression inference (the `infer` alias plus error
+// reporting and compiler flags) -- used to tie the recursive knot.
+// `pure` is NOT re-listed: `infer` already carries it transitively via
+// `pretty-eff` (type/pretty.kk), and listing it again duplicated `exn` and
+// `div` in every row that mentions `infer-eff-full` -- exactly the same
+// mistake, and the same fix, as the `colors`/`comp-flags` note on
+// `infer-full` itself (type/infer-effect.kk).
 
 //////////////////////////////////////////
-// Definition Groups
+// The central inference dispatcher:
+// takes a propagated type hint, whether the result should be generalized or
+// instantiated, and the expression; returns its type, effect, and core expression.
 //////////////////////////////////////////
+fun expr/infer(prop: maybe<(ktype, range)>, expect: expect, ex: syntax/syntax/expr<ktype>): infer-eff-full (ktype, keffect, core/core/expr)
+  match ex
+    Lam(binders, body, toplevel, rng) ->
+      infer-lam(toplevel, prop, expect, binders, body, rng)
+    Let(defgroup, body, _rng) ->
+      val (cgroups, (tp, eff, core)) = infer-def-group(False, defgroup, {expr/infer(prop, expect, body)})
+      (tp, eff, make-let(cgroups, core))
+    Bind(def, body, rng) ->
+      val (_tp1, eff1, coreDef) = infer-bind-def(def)
+      val cgroup = core/core/DefNonRec(coreDef)
+      val (tp, eff2, coreBody) =
+        // (perf) no trace-indent handler in the hot path -- see infer-effect.kk note
+        with extend-inf-gamma-core(False, [cgroup])
+        expr/infer(prop, expect, body)
+      val _ =
+        with val ctxt = checkEffect(rng)
+        infer-unify(rng, eff1, eff2)
+      val topEff = eff2.subst
+      (tp, topEff, make-let([cgroup], coreBody))
+    // return expressions
+    App(Var(name, _, nameRng), [(_, expr0)], rng) | name == nameReturn ->
+      match lookup-inf-name(nameReturn)
+        Nothing ->
+          inf-error(rng, "illegal context for a return statement".text)
+          expr/infer(prop, expect, expr0)
+        Just((_, retTp)) ->
+          val (tp, eff, core) = expr/infer(Just((retTp, nameRng)), expect, expr0)
+          val _ =
+            with val ctxt = checkReturn(rng)
+            infer-unify(expr0.range, retTp, tp)
+          val resTp = operations/fresh-star()
+          val typeReturn = TFun([(name/nil, tp)], typeTotal, resTp)
+          add-range-info(nameRng, RIId("return".new-name, NIValue("expr", tp, "", False), [], False))
+          (resTp, eff, core/core/App(core/core/Var(TName(nameReturn, typeReturn), InfoExternal("return #1")), [core])) // TODO: fragile
+    // assign expressions
+    App(assign as Var(name, _, arng), [lhs, rhs], rng) | name == nameAssign ->
+      infer-assign(prop, expect, assign, arng, lhs, rhs, rng)
+    // applied handlers are treated specially by allowing automatic masking of local effects
+    App(Handler(hsort, hscope, hover, Nothing, mbEff, pars, reinit, ret, hfinal, branches, hrng, hrng2), [action], rng) ->
+      val lvars = get-local-vars()
+      val allow = !uses-locals(lvars.map(fst), action.snd)
+      val h = Handler(hsort, hscope, hover, Just(allow), mbEff, pars, reinit, ret, hfinal, branches, hrng, hrng2)
+      expr/infer(prop, expect, App(h, [action], rng))
+    // byref expressions
+    App(Var(byref, _, _), [(_, Var(name, _, rng))], _) | byref == nameByref ->
+      infer-var(prop, expect, name, rng, False)
+    // hole expressions
+    App(fun0 as Var(hname, _, nameRng), [], rng) | hname == nameCCtxHoleCreate ->
+      val ok = hole-allowed()
+      use-hole()
+      if !ok then
+        context-error(rng, rng, "ill-formed constructor context".text,
+          [("because".text, "there can be only one hole, and it must occur under a constructor context 'ctx'".text)])
+      val (tp, eff, core) = infer-app(prop, expect, fun0, [], rng)
+      add-range-info(nameRng, RIId("hole".new-name, NIValue("expr", tp, "", False), [], False))
+      (tp, eff, core)
+    // context expressions
+    App(Var(ctxname, _, nameRng), [(_, expr0)], rng) | ctxname == nameCCtxCreate ->
+      val tpv = operations/fresh-star()
+      val holetp = operations/fresh-star()
+      val ctxTp = TApp(typeCCtxx, [tpv, holetp])
+      val prop2 = match prop
+        Nothing -> Nothing
+        Just((ctp, crng)) ->
+          val _ =
+            with val ctxt = checkMatch(crng)
+            infer-unify(nameRng, ctp, ctxTp)
+          Just((tpv.subst, rng))
+      val ((tp, eff, core), has-hole) = allow-hole({expr/infer(prop2, Instantiated, expr0)})
+      val _ =
+        with val ctxt = Infer(rng)
+        infer-unify(nameRng, tp, tpv)
+      if !has-hole then
+        context-error(rng, rng, "ill-formed constructor context".text,
+          [("because".text, "the context has no hole".text),
+           ("hint".text, "perhaps you used an underscore instead of the \"hole\" keyword?".text)])
+      val score = core.subst
+      val (ccore, errs) = analyze(rng, score, get-target-platform())
+      errs.foreach(fn(err) inf-error(rng, err))
+      val ctp = ccore.type-of
+      add-range-info(nameRng, RIId("ctx".new-name, NIValue("expr", ctp, "", False), [], False))
+      (ctp, eff, ccore)
+    // application nodes: inference is complicated here since we need to disambiguate overloaded identifiers
+    App(fun0, nargs, rng) ->
+      infer-app(prop, expect, fun0, nargs, rng)
+    Ann(expr0, annTp0, rng) ->
+      // match with propagated type first
+      val annTp = match prop
+        Just((propAnn, propRng)) ->
+          val _ =
+            with val ctxt = checkAnn(propRng)
+            infer-unify(rng, propAnn, annTp0)
+          annTp0.subst
+        Nothing -> annTp0
+      val (tp, eff, core) = expr/infer(Just((annTp, rng.hide)), if annTp.is-rho then Instantiated else Generalized(False), expr0)
+      val sannTp = annTp.subst
+      val stp = tp.subst
+      val (resTp0, coref) =
+        with val ctxt = checkAnn(rng)
+        infer-subsume(expr0.range, sannTp, stp)
+      (resTp0.subst, eff.subst, coref(core).subst)
+    Handler(handlerSort, scoped, HandlerNoOverride, mbAllowMask, mbEff, pars, reinit, ret, hfinal, branches, hrng, rng) ->
+      val allowMask = match mbAllowMask
+        Just(True) -> True
+        _ -> False
+      infer-handler(prop, expect, handlerSort, scoped, allowMask, mbEff, pars, reinit, ret, hfinal, branches, hrng, rng)
+    Handler(handlerSort, scoped, HandlerOverride, mbAllowMask, mbEff, pars, reinit, ret, hfinal, branches, hrng, rng) ->
+      val heff = infer-handled-effect(hrng, handlerSort, mbEff, branches)
+      val h = Handler(handlerSort, scoped, HandlerNoOverride, mbAllowMask, mbEff, pars, reinit, ret, hfinal, branches, hrng, rng)
+      val actionName = "override-action".new-hidden-name
+      val actionVar : syntax/syntax/expr<ktype> = Var(actionName, False, rng)
+      val actionBind = ValueBinder(actionName, Nothing, Nothing, rng, rng)
+      val mask-lam =
+        if handlerSort.is-handlerInstance then
+          val instName = "override-inst".new-hidden-name
+          val instBind = ValueBinder(instName, Nothing, Nothing, rng, rng)
+          val instVar : syntax/syntax/expr<ktype> = Var(instName, False, rng)
+          val instLam = Lam([], App(actionVar, [(Nothing, instVar)], rng), False, rng)
+          Lam([instBind], Inject(heff, instLam, True, rng), False, rng) // mask behind
+        else
+          Lam([], Inject(heff, actionVar, True, rng), False, rng) // mask behind
+      val lam = Lam([actionBind], App(h, [(Nothing, mask-lam)], rng), False, rng)
+      expr/infer(prop, expect, lam)
+    Case(expr0, branches, isLazyMatch, rng) ->
+      infer-case(prop, expect, expr0, branches, isLazyMatch, rng)
+    Var(name, _, rng) ->
+      infer-var(prop, expect, name, rng, True)
+    Literal(lit) ->
+      infer-lit(lit)
+    Parens(expr0, name, pre, rng) ->
+      val (tp, eff, core) = expr/infer(prop, expect, expr0)
+      if !name.is-nil then
+        add-range-info(rng, RIId(name, NIValue(if pre == "" then "expr" else pre, tp, "", False), [], False))
+      (tp, eff, core)
+    Inject(label, expr0, behind, rng) ->
+      infer-inject(prop, label, expr0, behind, rng)
 
-
-//////////////////////////////////////////
-// Definition
-//////////////////////////////////////////
-
-fun unskolemize(tp: ktype): _ ktype
-  val svs = tp.fsv.list
-  val uvs = svs.map(fn(tv) fresh-tvar(tv.kind, Meta))
-  val sub' = svs.zip(uvs).sub
-  val tpu = sub' |-> tp
-  tpu
-
-
-
-
-
-
-fun checkValue(rng: range) Check("Values cannot have an effect", rng)
-fun checkPolyValue(rng: range) Check("Polymorphic values cannot have an effect", rng)
-fun unused-warning(rng: range)
-  inf-warning(rng, "expression has no effect and is unused".text |-|
-                   " hint: did you forget an operator? or used \"fun\" instead of \"fn\"?".text)
-
-//////////////////////////////////////////
-// Expression
-//////////////////////////////////////////
-type expect
-  Generalized(b: bool)
-  Instantiated
-
-fun expect/(==)(e1: expect, e2: expect): bool
-  match (e1, e2)
-    (Generalized(b1), Generalized(b2)) -> b1 == b2
-    (Instantiated, Instantiated) -> True
+// show an unsigned integer `x` in binary, left-padded with zeros to `width` bits
+// (upstream `showBinary`; no stdlib equivalent for int)
+fun uses-locals(lvars: list<name>, ex: syntax/syntax/expr<ktype>): div bool
+  fun uses-def(d: syntax/syntax/def<ktype>): div bool
+    uses-locals(lvars, d.binder.expr)
+  fun uses-mb(mb: maybe<syntax/syntax/expr<ktype>>): div bool
+    mb.map(fn(e) uses-locals(lvars, e)).default(False)
+  match ex
+    App(Var(newLocal, False, _), [_, (_, Parens(Lam([ValueBinder(name)], body), _, _, _))], _) | newLocal == nameLocalVar ->
+      uses-locals(lvars.filter(fn(n) !(n == name)), body) // fragile: expects this form from the parser
+    Lam(_, body) -> uses-locals(lvars, body)
+    Let(defs, body) ->
+      val ds = match defs
+        DefRec(defs') -> defs'
+        DefNonRec(d) -> [d]
+      ds.any(uses-def) || uses-locals(lvars, body)
+    Bind(def, body) -> uses-def(def) || uses-locals(lvars, body)
+    App(fun0, nargs) -> Cons(fun0, nargs.map(snd)).any(fn(e) uses-locals(lvars, e))
+    Ann(e) -> uses-locals(lvars, e)
+    Case(e, brs) -> uses-locals(lvars, e) || brs.any fn(Branch(_, gs))
+      gs.any(fn(Guard(t, e')) uses-locals(lvars, t) || uses-locals(lvars, e'))
+    Parens(e) -> uses-locals(lvars, e)
+    Handler(initially = reinit, hReturn = ret, finally = hfinal, branches = ops) ->
+      uses-mb(reinit) || uses-mb(ret) || uses-mb(hfinal) ||
+        ops.any(fn(op) uses-locals(lvars, op.branchExpr))
+    Inject(_, e) -> uses-locals(lvars, e)
+    Var(name) -> lvars.any(fn(n) n == name)
     _ -> False
-fun expect/show(e: expect): string
-  match e
-    Generalized(b) -> "Generalized(" ++ b.show ++ ")"
-    Instantiated -> "Instantiated"
 
-pub fun remove-local-effect(ftp: ktype)
-  match ftp.split-fun-scheme
-    Just((foralls, args, eff, resTp)) -> 
-      val (ls, tl) = eff.extract-ordered-effect
-      quantify-type(foralls, TFun(args, ls.filter(_.label-name != nameTpLocal).foldr(tl, effect-extend), resTp))
-    _ -> failure/fail("type/infer/remove-local-effect: unexpected type: " ++ ftp.show)
+// infer a `Bind` definition (a monomorphic non-generalized local definition)
+fun infer-bind-def(def: syntax/syntax/def<ktype>): _ (ktype, keffect, core/core/def)
+  val Def(ValueBinder(name, _, expr, nameRng, _vrng), rng, vis, sort, inl, doc) = def
+  with with-def-name(name)
+  with with-scope
+  with disallow-hole
+  val (tp, eff, coreExpr) =
+    // (perf) no trace-indent handler in the hot path -- see infer-effect.kk note
+    expr/infer(Nothing, Instantiated, expr)
+  val stp = tp.subst
+  val seff = eff.subst
+  // check for polymorphic values with an effect
+  if !stp.is-rho then
+    val _ =
+      with val ctxt = checkPolyValue(rng)
+      infer-unify(nameRng, typeTotal, seff)
+    ()
+  val coreDef =
+    if !sort.is-defVar then core/core/Def(name, stp, coreExpr, vis, sort, inl, nameRng, doc)
+    else
+      val hp = fresh-tvar(kindHeap, Meta)
+      val (qrefName, _, info) = resolve-name(nameRef, Nothing, rng)
+      val refTp = TApp(typeRef, [hp, stp])
+      val refVar = info.core-expr(qrefName)
+      val refExpr = core/core/App(TypeApp(refVar, [hp, stp]), [coreExpr]) // TODO: fragile: depends on order of quantifiers of the ref function!
+      core/core/Def(name, refTp, refExpr, vis, sort, inl, nameRng, doc)
+  if !name.is-wildcard then
+    val sortDoc = if defIsVal(def) then "val" else "fun"
+    add-range-info(nameRng, RIId(name, NIValue(sortDoc, coreDef.ktype, doc, expr.is-annot), [], True))
+  elif coreDef.ktype.is-type-unit then ()
+  else
+    // NOTE (shared bug with upstream, do not fix here unilaterally): this
+    // check is ORDER-SENSITIVE for recursive groups -- if a val member is
+    // inferred before a fun member, the group's shared effect meta collapses
+    // to total and this warns spuriously (upstream reproduces: rename
+    // `recursive` to `zzz` in test/type/wrong/div1). Any effect-dependent
+    // diagnostic here runs before divergence insertion; the principled fix
+    // (tracked in TODO_porting.md) is to defer intra-group val-totality
+    // constraints (or re-check diagnostics) until after `add-divergent-effect`
+    // -- in BOTH compilers, with regenerated expectations.
+    val (ls, tl) = seff.extract-effect-extend
+    match (ls, tl)
+      ([], tl') | tl'.is-type-total -> unused-warning(rng)
+      ([], TVar(tv)) ->
+        val occ = occurs-in-context(tv, stp.free-type-vars)
+        if !occ then unused-warning(rng)
+      _ -> ()
+  (stp, seff, coreDef)
 
+// infer a single definition
+fun infer-def(topLevel: bool, expect: expect, def: syntax/syntax/def<ktype>): _ core/core/def
+  val Def(ValueBinder(name, _, expr, nameRng, vrng), rng, vis, sort, inl, doc) = def
+  with with-def-name(name)
+  with with-scope
+  with disallow-hole
+  with scope-implicit-constraints
+  with fn(act)
+    if !sort.is-fun || name.is-nil then act() else allow-return(act)
+  val (resTp, _eff, resCore) =
+    with maybe-generalize(rng, nameRng, expect)
+    // (perf) no trace-indent handler in the hot path -- see infer-effect.kk note
+    val (resTp0, eff0, resCore0) = expr/infer(Nothing, expect, expr)
+    val _ =
+      with val ctxt = checkValue(rng)
+      infer-unify(nameRng, typeTotal, eff0)
+    (resTp0.subst, eff0.subst, resCore0.subst)
+  if sort.is-fun then
+    match resTp.split-fun-scheme
+      Just((_, _, effTp, resultTp)) ->
+        val tp = make-value-operation(effTp, resultTp) // pretty prints nicely as `-> eff res`
+        add-range-info(vrng.end-of-range, RIId("result".new-name, NIValue("expr", tp, "", False), [], True))
+      _ -> ()
+  def/substitute(get-subst(), core/core/Def(name, resTp, resCore, vis, sort, inl, nameRng, doc)) // must subst since the total unification can cause substitution (see test/type/hr1a)
 
-//////////////////////////////////////////
-// Infer Effect Handlers
-//////////////////////////////////////////
+// infer a definition group and continue with `cont` in the extended environment
+// (upstream `inferDefGroup`; the recursive case is a first pass without
+// divergence re-analysis or canonical-name fixups -- TODO)
+fun infer-def-group(topLevel: bool, defgroup: syntax/syntax/def-group<ktype>, cont: () -> _ a): _ (list<core/core/def-group>, a)
+  match defgroup
+    DefNonRec(def) ->
+      // Only the local qualifier
+      // is checked there, but upstream also infers a "wrong*"-stemmed def
+      // normally (under `ignoreErrors`) rather than skipping it outright; a
+      // type error is what triggers the skip-and-cont fallback (residue
+      // Infer.hs/InferMonad.hs). Keep the existing wrong-namespace check as an
+      // extra disjunct (the port's tests may rely on it).
+      val stem = def.binder.name.unqualify.nameStem
+      val wrong-stem = stem.starts-with("wrong").bool && stem != "wrong"
+      val wrong-pred = topLevel && (wrong-stem || def.binder.name.is-in-wrong-namespace)
+      fun normal-infer()
+        val core = infer-def(topLevel, Generalized(True), def)
+        val (x, core1) =
+          if topLevel then
+            val core0 = core(def-name = qualify(infer-env.contxt, core.def-name))
+            with extend-gamma-core(False, [core/core/DefNonRec(core0)])
+            val coreDef = fix-canonical-name(False, core0)
+            (cont(), coreDef)
+          else
+            val x = extend-inf-gamma-core(topLevel, [core/core/DefNonRec(core)], cont)
+            (x, core)
+        add-range-info-core-def(topLevel, infer-env.contxt, def, core1)
+        ([core/core/DefNonRec(core1)], x)
+      if wrong-pred then
+        ignore-errors({ val x = cont(); ([], x) }, normal-infer)
+      else
+        normal-infer()
+    DefRec(defs0) ->
+      if topLevel && defs0.all(fn(d) d.binder.name.is-in-wrong-namespace) then
+        val x = cont()
+        ([], x)
+      else
+        val sd = infer-effect/scope-depth
+        val (gamma, infgamma, defs) = create-gammas(topLevel, sd, [], [], defs0)
+        val (coreDefsX, assumed) =
+          with extend-gamma(False, gamma)
+          with extend-inf-gamma-ex(topLevel, [], infgamma)
+          val assumed = defs.map(fn(d) lookup-inf-name(d.binder.name))
+          val coreDefs0 = defs.map(fn(d) infer-def(topLevel, Instantiated, d))
+          val coreDefs1 = coreDefs0.map(fn(cd) fix-canonical-name(True, cd))
+          (coreDefs1, assumed)
+        // re-analyze the mutual recursive groups
+        val scoreDefsX = coreDefsX.map(fn(cd) def/substitute(get-subst(), cd))
+        val coreGroups0 = regroup(scoreDefsX)
+        if topLevel then coreGroups0.foreach(check-rec-val)
+        // analyze divergence
+        val analyzed = coreGroups0.map fn(cgroup)
+          match cgroup
+            core/core/DefRec(cdefs) ->
+              if analyze-divergence(cdefs) then
+                val cdefs' = cdefs.map(add-divergent-effect)
+                (core/core/DefRec(cdefs'), cdefs'.map(defTName))
+              else (cgroup, [])
+            _ -> (cgroup, [])
+        val (coreGroups1, divTNamess) = analyzed.unzip
+        val divTNames = divTNamess.concat
+        // check assumed types against inferred types
+        val coreMap = defs.zip(assumed)
+        fun lookup-orig(cdef: core/core/def): _ (syntax/syntax/def<ktype>, maybe<(name, ktype)>)
+          match coreMap.find(fn((d, _)) d.binder.name == cdef.def-name.unqualify || d.binder.name == cdef.def-name)
+            Just(r) -> r
+            Nothing -> failure/fail("type/infer/infer-def-group: cannot find original definition for " ++ cdef.def-name.show)
+        val coreGroups2 = coreGroups1.map fn(cgroup)
+          match cgroup
+            core/core/DefRec(cdefs) -> core/core/DefRec(cdefs.map(fn(cd) infer-rec-def2(topLevel, cd, divTNames.any(fn(tn) tn == cd.defTName), lookup-orig(cd))))
+            core/core/DefNonRec(cd) -> core/core/DefNonRec(infer-rec-def2(topLevel, cd, divTNames.any(fn(tn) tn == cd.defTName), lookup-orig(cd)))
+        // add range info (for documentation)
+        fun group-defs(cgroup: core/core/def-group): list<core/core/def>
+          match cgroup
+            core/core/DefRec(cdefs) -> cdefs
+            core/core/DefNonRec(cd) -> [cd]
+        coreGroups2.foreach fn(cgroup)
+          cgroup.group-defs.foreach(fn(cd) add-range-info-core-def(topLevel, infer-env.contxt, lookup-orig(cd).fst, cd))
+        // fix local info in the core
+        val sub = coreGroups2.map(group-defs).concat.map fn(cdef)
+          val tname = cdef.defTName
+          val nameInfo = create-name-infoX(Public, cdef.def-name, sd, cdef.sort, cdef.nameRange, cdef.ktype, cdef.doc)
+          (tname, core/core/Var(tname, nameInfo.core-var-info))
+        val coreGroups3 = coreGroups2.map(fn(cg) sub.dg/(|->)(cg))
+        val x = (if topLevel then extend-gamma-core(True, coreGroups3, cont) else extend-inf-gamma-core(False, coreGroups3, cont))
+        (coreGroups3, x)
 
+// split annotated toplevel definitions into gamma, others into infgamma with assumed types
+// also annotates unannotated definitions with their assumed type
 fun infer-handler(propagated: maybe<(ktype, range)>, expect: expect, handlerSort: handler-sort, 
                   handlerScoped: handler-scope, allowMask: bool, mbeff: maybe<keffect>, 
                   localPars: list<value-binder<maybe<ktype>, ()>>, 
@@ -157,8 +476,106 @@ fun infer-handler(propagated: maybe<(ktype, range)>, expect: expect, handlerSort
     Nil -> 
       // get the handled effect
       val heff = infer-handled-effect(hrng, handlerSort, mbeff, branches)
-
-      throw("Unimplemented")
+      val isInstance = handlerSort.is-handlerInstance
+      val effectName = heff.effect-name-from-label
+      val handlerConName = effectName.to-handler-con-name
+      check-coverage(rng, heff, handlerConName, branches)
+      // find the result type of the return clause (if given) to propagate the operation types
+      val res = match (propagated, ret)
+        (Nothing, Just(rexpr)) ->
+          val (rtp, _, _) = expr/infer(propagated, Instantiated, rexpr)
+          match rtp.split-fun-scheme
+            Just((_, _, _, retTp)) -> retTp
+            _ -> fresh-star()
+        (Just((retTp, _)), _) -> retTp
+        _ -> fresh-star()
+      val eff = operations/fresh-effect()
+      val resumeArgs = branches.map(fn(_) fresh-star()) // TODO: get operation result types to improve inference
+      // create expressions for each clause
+      fun lt-op(b1: handler-branch<ktype>, b2: handler-branch<ktype>): bool
+        b1.branchName.unqualify.show < b2.branchName.unqualify.show
+      fun clause((HandlerBranch(opName, pars, body, opSort, nameRng, patRng), resumeArg): (handler-branch<ktype>, ktype)): _ (maybe<(name, range)>, syntax/syntax/expr<ktype>)
+        with with-scope
+        val (clauseName, cparams) = match opSort
+          OpVal -> (name-clause("tail", pars.length), pars)
+          OpFun -> (name-clause("tail", pars.length), pars)
+          OpExcept -> (name-clause("never", pars.length), pars)
+          OpControl ->
+            val resumeTp = TFun([(nil, resumeArg)], eff, res)
+            (name-clause("control", pars.length),
+             pars ++ [ValueBinder("resume".new-name, Just(resumeTp), (), nameRng.hide, nameRng)])
+          OpControlRaw ->
+            val eff0 = effect-extend(heff, eff)
+            val resumeContextTp = type-resume-context(resumeArg, eff, eff0, res)
+            (name-clause("control-raw", pars.length),
+             pars ++ [ValueBinder("rcontext".new-name, Just(resumeContextTp), (), hrng.hide, patRng)])
+          OpControlErr ->
+            failure/fail("type/infer/infer-handler: using a bare operation is deprecated.\n  hint: start with 'val', 'fun', 'brk', or 'ctl' instead.")
+        val qopname = if opName.is-qualified then opName else qualify(effectName.qualifier, opName)
+        val (_, gtp, _) = resolve-fun-name(qopname, CtxFunArgs(False, pars.length + (if isInstance then 1 else 0), [], Nothing), patRng, nameRng)
+        val (_, tp, _) = instantiate-ex(gtp, nameRng)
+        val parTps = match tp.split-fun-type
+          Just((tpars0, _, _)) ->
+            val tpars1 = if isInstance then tpars0.drop(1) else tpars0 // drop the instance name parameter
+            tpars1.map(fn((_, t)) Just(t)) ++ cparams.map(fn(_) Nothing) // pad with Nothing
+          _ -> failure/fail("type/infer/infer-handler: bad operation type: " ++ opName.show)
+        val cparamsx = cparams.zip(parTps).map fn((b, mbtp))
+          match b
+            ValueBinder(bname, Nothing, _, bnameRng, brng) -> ValueBinder(bname, mbtp, Nothing, bnameRng, brng)
+            ValueBinder(bname, annTp, _, bnameRng, brng) -> ValueBinder(bname, annTp, Nothing, bnameRng, brng)
+        val frng = nameRng.combine(body.range)
+        val cname = match opSort
+          OpVal -> opName.from-value-operation-name
+          _ -> opName
+        val opPrefix = match opSort
+          OpVal -> "val"
+          OpFun -> "fun"
+          OpExcept -> "final ctl"
+          OpControl -> "ctl"
+          _ -> "raw ctl"
+        val capp = App(Var(clauseName, False, hrng.hide),
+                       [(Nothing, Parens(Lam(cparamsx, body, False, body.range), cname, opPrefix, nameRng))], frng)
+        (Nothing, capp)
+      val clauses = branches.sort(?(<) = lt-op).zip(resumeArgs).map(clause)
+      val grng = range/null
+      // control-flow-context of the handler: 0 = none, 1 = linear, 2 = at most once, 3 = multi
+      fun cfc-lub(x: int, y: int): int
+        if (x == 0 && y == 1) || (x == 1 && y == 0) then 2 else max(x, y)
+      fun hbranch-cfc(b: handler-branch<ktype>): int
+        match b.branchSort // todo: more refined analysis
+          OpVal -> 1
+          OpFun -> 1
+          OpExcept -> 0
+          _ -> 3 // multi/wild
+      val handlerCfc = match branches.map(hbranch-cfc)
+        Nil -> 1 // linear
+        Cons(c, cs) -> cs.foldl(c, cfc-lub)
+      val handlerCon = App(Var(handlerConName, False, hrng),
+                           Cons((Nothing, Literal(syntax/syntax/LitInt(handlerCfc, grng))), clauses), rng)
+      val actionName = "action".new-hidden-name
+      val handleName = effectName.to-handle-name
+      val handleRet = match ret // todo: optimize return by using maybe<a->b> value in case no clause was given?
+        Nothing ->
+          val argName = "res".new-hidden-name
+          Lam([ValueBinder(argName, Nothing, Nothing, rng, rng)], Var(argName, False, rng), False, hrng) // don't pass `id` as it needs to be opened
+        Just(rexpr) -> rexpr
+      fun handle-expr(action: syntax/syntax/expr<ktype>): syntax/syntax/expr<ktype>
+        App(Var(handleName, False, rng),
+            [(Nothing, handlerCon), (Nothing, handleRet), (Nothing, action)], hrng)
+      val (_, handleTp, _) = resolve-fun-name(handleName, CtxNone, rng, rng)
+      val (_, handleRho, _) = instantiate-ex(handleTp, rng)
+      val actionTp = match handleRho.split-fun-type
+        Just(([_, _, actionTp0], _, _)) -> actionTp0.snd.subst
+        _ -> failure/fail("type/infer/infer-handler: unexpected handler type")
+      val handlerExpr = Parens(Lam([ValueBinder(actionName, Just(actionTp), Nothing, rng, rng)],
+                                   handle-expr(Var(actionName, False, rng)), False, hrng), "handler".new-name, "expr", rng)
+      val hres = expr/infer(propagated, expect, handlerExpr)
+      val htp = hres.fst.subst
+      val heffect = match htp.split-fun-scheme
+        Just((_, [_], heff2, _)) -> heff2
+        _ -> failure/fail("type/infer/infer-handler: unexpected inferred handler type")
+      if heff.label-is-linear then check-linearity(effectName, heffect, branches, hrng, rng) else ()
+      hres
 
 // inferHandler :: Maybe (Type,Range) -> Expect -> HandlerSort -> HandlerScope -> Bool
 //                       -> Maybe Effect
@@ -311,111 +728,7 @@ fun infer-handler(propagated: maybe<(ktype, range)>, expect: expect, handlerSort
 
 
 
-fun check-linearity(effectName: name, heffect: ktype, branches: list<handler-branch<ktype>>, hrng: range, rng: range)
-  fun check-linear-clauses()
-    fun check(hbranch)
-      if hbranch.branchSort <= OpFun then ()
-      else context-error(rng, hbranch.branchPatRange, 
-        "operation".text |+| hbranch.branchName.pp-name |+| 
-        "needs to be linear but is handled in a non-linear way (as '".text |.| hbranch.branchSort.show.text |.| "')".text, 
-        [("hint".text, "use a 'val' or 'fun' operation clause instead".text)])
-    branches.map(check)
-  fun check-linear-effect()
-    val (effs, tl) = heffect.extract-effect-extend
-    match effs.drop-while(_.label-is-linear)
-      Cons(e) -> 
-        context-error(rng, hrng, 
-          "handler for".text |+| pp-name(effectName) |+| 
-          "needs to be linear but uses a non-linear effect:".text |+| e.pp-type, 
-          [("hint".text, "ensure only linear effects are used in a handler".text)])
-      [] -> ()
-  check-linear-clauses()
-  check-linear-effect()
-
-// Infer the handled effect from looking at the operation clauses
-fun infer-handled-effect(rng: range, handlerSort: handler-sort, mbeff: maybe<keffect>, ops: list<handler-branch<ktype>>): _ keffect
-  match mbeff
-    Just(eff) -> eff
-    Nothing -> 
-      match ops
-        Cons(HandlerBranch(name, pars, expr, opSort, nameRng, rng), _) ->
-          // TODO: handle errors if we find a non-operator
-          val isInst = handlerSort.is-handlerInstance
-          val (qname, tp, info) = resolve-fun-name(name, CtxFunArgs(isInst, pars.length + (if isInst then 1 else 0), [], Nothing), rng, nameRng)
-          val (_, rho, _) = instantiate-ex(tp, nameRng)
-          match rho.split-fun-type
-            Just((Cons((op-name, rtp)), _, _)) | isInst && op-name == new-hidden-name("hname") ->
-              match rtp
-                TApp(TCon(ev), [teff]) | ev.type-con/name == nameTpEv ->
-                  val dataInfo = find-data-info(teff.get-type-name)
-                  wrap-handled-from-data-effect(dataInfo.dEffect, teff)
-                _ -> inf-error(rng, "Type.Infer.inferHandledEffect: illegal named effect type in operation?".text)
-            Just((_, eff, _)) | handlerSort.is-handlerInstance -> 
-              match eff.extract-effect-extend
-                (ls, _) ->
-                  match ls.filter(_.is-handled-effect)
-                    Cons(l, _) -> l // TODO: can we assume the effect comes first?
-                    Nil -> inf-error(rng, "Type.Infer.inferHandledEffect: not an effect operation:".text |+| qname.pp-name |.| ".".text)
-                _ -> inf-error(rng, "Type.Infer.inferHandledEffect: cannot resolve effect operation:".text |+| qname.pp-name |.| ".".text |-| " hint: maybe wrong number of parameters?".text)
-            _ -> inf-error(rng, "Type.Infer.inferHandledEffect: unable to determine the handled effect.".text |-| " hint: use a `handler<eff>` declaration?".text)
-
-// Check coverage is not needed for type inference but gives nicer error messages
-fun check-coverage(rng: range, eff: ktype, handler-con-name: name, branches: list<handler-branch<ktype>>)
-  val mod-name = handler-con-name.qualifier
-  fun field-to-op-name(fname: name)
-    val (pre, post) = fname.nameLocalQual.list.span(_ != '-')
-    val (op-sort, op-name) = 
-      match (read-op-sort(pre.string), pre.take(1), post) 
-        (Just(op-sort), ['@'], Cons(_, op-name)) -> (op-sort, op-name.string)
-        _ -> failure/fail("Type.Infer.checkCoverage: illegal operation field name: " ++ fname.show ++ " in " ++ handler-con-name.show)
-    (mod-name.qualify(new-qualified(fname.nameModule, op-name)), op-sort)
-  fun branch-to-op-name(hbranch: handler-branch<ktype>)
-    val nm = 
-      if is-value-operation-name(hbranch.branchName) then // .val-<op>
-        from-value-operation-name(hbranch.branchName) 
-      else hbranch.branchName
-    (mod-name.qualify(nm.unqualify), hbranch.branchSort)
-  fun check-coverage-of(all-op-names: list<name>, op-names: list<(name, operation-sort)>, branch-names: list<(name, operation-sort)>)
-    match op-names 
-      [] ->
-        if branch-names.is-empty then () 
-          // should not occur if branches typechecked previously
-        else match branch-names.filter(fn((bname, _)) !all-op-names.contains(bname))
-          Cons((bname, _), _) -> term-error(rng, "operator".text |+| bname.pp-name |+| "is not part of the handled effect".text, eff, [])
-          Nil -> inf-error(rng, "some operators are handled multiple times for effect".text |+| eff.pretty)
-      Cons((op-name, op-sort),op-names') ->
-        val (matches, branch-names') = branch-names.partition(fn((bname, _)) bname == op-name)
-        match matches
-          [(bname, bsort)] -> 
-            if bsort != op-sort && op-sort == OpVal then 
-              inf-error(rng, "cannot handle a 'val' operation".text |+| op-name.pp-name |+| "with".text |+| squotes(bsort.show.text))
-            elif bsort > op-sort then 
-              inf-warning(rng, "operation".text |+| op-name.pp-name |+| "is declared as '".text |+| op-sort.show.text |+| "' but handled here using '".text |+| bsort.show.text |+| "'".text)
-            else ()
-          [] -> inf-error(rng, "operator".text |+| op-name.pp-name |+| "is not handled".text)
-          _ -> inf-error(rng, "operator".text |+| op-name.pp-name |+| "is handled multiple times".text)
-  val (_, _, _, con-info) = resolve-con-name(handler-con-name, Nothing, rng)
-  val op-names = con-info.params.drop(1).map(fn((fname, _)) field-to-op-name(fname)) // Drop (cfc) parameter
-  val branch-names = branches.map(_.branch-to-op-name)
-  check-coverage-of(op-names.map(fst), op-names, branch-names)
-
-// resolve the effect tag core expression for handled effects.
-fun effect-name-core(eff: keffect, rng: range): _ (maybe<core/core/expr>, name)
-  match eff.expand-syn
-    // handled effects (from an `effect` declaration)
-    TApp(TCon(tc), [hx])
-      | tc.name == nameTpHandled || tc.name == nameTpHandled1 || tc.name == nameTpNHandled || tc.name == nameTpNHandled1 ->
-        val eff-name = hx.effect-name-from-label
-        val (tag-qname, _, tag-info) = resolve-name(eff-name.to-effect-tag-name, Nothing, rng)
-        (Just(tag-info.core-expr(tag-qname)), eff-name)
-    // builtin effect
-    _ ->
-      (Nothing, eff.effect-name-from-label)
-
-///////////////////////////////////////////////////////////
-// Infer Applications and Resolve Overloaded Identifiers
-//////////////////////////////////////////////////////////
-fun infer-app-fun-first(prop, fexpr, fresolved, fixed0, named0, implicits0: list<((name, range), syntax/syntax/expr<ktype>, bool -> _ doc)>, rng, origFun: syntax/syntax/expr<_>, expect)
+fun infer-app-fun-first(propagated: maybe<(ktype, range)>, prop, fexpr, fresolved, fixed0, named0, implicits0: list<((name, range), syntax/syntax/expr<ktype>, bool -> _ doc)>, rng, origFun: syntax/syntax/expr<_>, expect)
   with maybe-instantiate-or-generalize(rng, origFun.range, expect)
   // infer type of function
   val fprop = match (prop, fexpr)
@@ -461,7 +774,7 @@ fun infer-app-fun-first(prop, fexpr, fresolved, fixed0, named0, implicits0: list
   // match propagated type with the function result type
   // note: we may disable this in the future?
   val (pars, fun-eff, fun-tp) = 
-    match prop
+    match propagated
       Just((pres, prng)) -> 
         val _ = 
           with val ctxt = checkAnn(prng)
@@ -482,7 +795,11 @@ fun infer-app-fun-first(prop, fexpr, fresolved, fixed0, named0, implicits0: list
         with with-local-scope
         with val ctxt = checkLocalScope(rng)
         infer-argsN(rng, par-args)
-      _ -> infer-argsN(rng, par-args)
+      _ ->
+        // upstream: `inferArgsN (Infer rng) rng parArgs` -- the app range is
+        // the error context for argument subsumption (not the ambient ctxt)
+        with val ctxt = Infer(rng)
+        infer-argsN(rng, par-args)
   
   // ensure arguments are evaluated in the declaration order
   val core = 
@@ -516,7 +833,10 @@ fun infer-app-fun-first(prop, fexpr, fresolved, fixed0, named0, implicits0: list
     infer-unifies(Cons((origFun.range, eff1), zip(iargs.map(_.snd.range), eff-args)))
   val _ = 
     with val ctxt = checkEffectSubsume(rng)
-    infer-unify(rng, fun-eff, top-eff)
+    // upstream passes `getRange fun` (the FUNCTION subexpression) as the
+    // unify range, so error output's `term:` line shows just the function
+    // (e.g. `get()`), not the whole application (`get()(i)`)
+    infer-unify(origFun.range, fun-eff, top-eff)
   
   // instantiate or generalize result type
   (fun-tp.subst, top-eff.subst, core)
@@ -526,7 +846,7 @@ fun infer-app-args-first(fresolved, funExpr, args, fixed, named0, rng, expect, p
   match args
     Nil -> // we inferred all fixed arguments
       // this always fails since we have not been able to resolve the function name
-      infer-app-fun-first(Nothing, funExpr, fresolved, fixed, named0, [], rng, funExpr, expect)
+      infer-app-fun-first(prop, Nothing, funExpr, fresolved, fixed, named0, [], rng, funExpr, expect)
     Cons((idx,fix: syntax/syntax/expr<_>), fixs) -> 
       // try to improve our guess
       val (tp-arg, eff-arg, core-arg) = 
@@ -542,7 +862,7 @@ fun infer-app-args-first(fresolved, funExpr, args, fixed, named0, rng, expect, p
               Left() -> Nothing
           _ -> Nothing
       match amb
-        Just((prop-tp, fexpr, implicits)) -> infer-app-fun-first(Just(prop-tp), fexpr, fresolved', fixed, named0, implicits, rng, funExpr, expect) 
+        Just((prop-tp, fexpr, implicits)) -> infer-app-fun-first(prop, Just(prop-tp), fexpr, fresolved', fixed, named0, implicits, rng, funExpr, expect) 
         Nothing -> infer-app-args-first(fresolved', funExpr, fixs, fixed, named0, rng, expect, prop)
   
 fun infer-app(prop: maybe<(ktype, range)>, expect: expect, funExpr: syntax/syntax/expr<ktype>, nargs: list<(maybe<(name,range)>, syntax/syntax/expr<ktype>)>, rng: range): _ (ktype, keffect, core/core/expr)
@@ -553,7 +873,7 @@ fun infer-app(prop: maybe<(ktype, range)>, expect: expect, funExpr: syntax/synta
     match fixed
       Nil -> 
         // there are no fixed arguments, use fun first anyways (and error..)
-        infer-app-fun-first(Nothing, funExpr, [], [], named0, [], rng, funExpr, expect)
+        infer-app-fun-first(prop, Nothing, funExpr, [], [], named0, [], rng, funExpr, expect)
       _ -> infer-app-args-first([], funExpr, fixed.indexed, fixed, named0, rng, expect, prop)
 
   val (fixed, named-args) = nargs.split-named-args
@@ -568,7 +888,7 @@ fun infer-app(prop: maybe<(ktype, range)>, expect: expect, funExpr: syntax/synta
           // for example in `fn(f) f()` the `f` has a type `_a` and will not match `sctx`
       _ -> Just((Nothing, funExpr, [])) // Function expression first
   match amb
-    Just((prop-tp, fexpr, implicits)) -> infer-app-fun-first(prop-tp, fexpr, [], fixed, named-args, implicits, rng, funExpr, expect)
+    Just((prop-tp, fexpr, implicits)) -> infer-app-fun-first(prop, prop-tp, fexpr, [], fixed, named-args, implicits, rng, funExpr, expect)
     _ -> infer-app-from-args(fixed, named-args)
 
 //////////////////////////////////////////
@@ -580,13 +900,15 @@ fun infer-lam(top: bool, prop: maybe<(ktype, range)>, expect: expect, bindersl: 
   with with-scope
   with disallow-hole
   fun inf-body()
-    val (bindersX, unpack-implicitss) = bindersl.map(infer-implicit-param).unzip
-    val body = unpack-implicitss.foldr(body0, fn(f, x) f(x))
-    val FunMatchResult(prop-args, prop-eff, prop-body, skolems, expect-body) = match-fun(bindersX.length, prop)
-    val binders0 = bindersX.zipwith(prop-args) fn(binder, mb-prop)
+    val FunMatchResult(prop-args, prop-eff, prop-body, skolems, expect-body) = match-fun(bindersl.length, prop)
+    // fill in propagated parameter types FIRST so implicit-parameter unpacking
+    // (`.?name : tp`) can find the struct via the parameter's type
+    val bindersP = bindersl.zipwith(prop-args) fn(binder, mb-prop)
       match binder.binderType
         Nothing -> ValueBinder(binder.name, mb-prop.map(snd), binder.expr, binder.name-range, binder.range)
-        Just(_) -> ValueBinder(binder.name, binder.binderType, binder.expr, binder.name-range, binder.range)
+        Just(_) -> binder
+    val (binders0, unpack-implicitss) = bindersP.map(infer-implicit-param).unzip
+    val body = unpack-implicitss.foldr(body0, fn(f, x) f(x))
     val binders1 = binders0.map(instantiate-binder)
     val eff = 
       match prop-eff
@@ -603,21 +925,21 @@ fun infer-lam(top: bool, prop: maybe<(ktype, range)>, expect: expect, bindersl: 
     val eta-expanded = !binders0.is-empty && binders0.all(_.name.hidden/starts-with("eta"))
     fun create-eta(name: name, n: int) 
       match "xyz".list.drop(n)
-        Cons(c, rest) -> c.char
+        Cons(c, _) -> c.char
         Nil -> pretty(n+1)
     fun nice-eta(act)
       if eta-expanded then
-        with with-nice-names(create-eta, binders0.map(name))
-        add-range-info(rng.start, RIInlayHint(False /* append before */, "fn".text |.| parens(docs.map("_".text |.| _).intersperse(comma).hcat) |.| " ".text))
+        with docs <- with-nice-names(create-eta, binders0.map(name))
+        add-range-info(make-range(rng.start, rng.start), RIInlayHint(False /* append before */, "fn".text |.| parens(docs.map("_".text |.| _).intersperse(comma).hcat) |.| " ".text))
         act()
       else act()
     val (tp, eff1, core) = 
-      with trace-indent
+      // (perf) no trace-indent handler in the hot path -- see infer-effect.kk note
       with with-scope
       with extend-inf-gamma(infgamma)
       with extend-inf-gamma([(nameReturn, create-name-infoX(Public, nameReturn, ldepth, DefVal, body.range, return-tp, ""))])
       with nice-eta
-      if is-named then infer-isolated(rng, body.rng, body, infer-expr(prop-body, expect-body, body))
+      if is-named then infer-isolated(rng, body.range, body, {expr/infer(prop-body, expect-body, body)})
       else infer(prop-body, expect-body, body)
     val _ = 
       with val ctxt = checkReturnResult(rng)
@@ -633,38 +955,41 @@ fun infer-lam(top: bool, prop: maybe<(ktype, range)>, expect: expect, bindersl: 
             with val ctxt = checkEffectSubsume(rng)
             infer-unify(r, eff, top-eff)
           top-eff.subst
-    val opt-pars = binders1.map(fn(b) (b.name, b.tp.subst))
+    val opt-pars = binders1.map(fn(b) (b.name, b.binderType.subst))
     val body-core1 = add-lambdas(opt-pars, top-eff, Lam([], top-eff, coref(core)))
     val body-core2 = body-core1.subst
     val pars = opt-pars
     val sftp0 = TFun(pars, top-eff, tp).subst
     // check skolem escape (should this be after generalize?)
     if !top then 
-      checkSkolemEscape(rng, sftp0, Nothing, skolems, tvsEmpty) // TODO: not having this check improves error messages but is it really safe?
+      check-skolem-escape(rng, sftp0, Nothing, skolems, tvs/empty) // TODO: not having this check improves error messages but is it really safe?
     
     // substitute back skolems to meta variables
-    val (sktvars, sksubs) = fresh-sub(Meta, skolems)
+    val (_sktvars, sksubs) = fresh-sub(Meta, skolems)
     val sftp1 = sksubs |-> sftp0
     val body-core3 = sksubs |-> body-core2
-    subst-implicit-constraints(sksubs)
+    subst-iconstraints(sksubs)
 
     // check for polymorphic parameters
-    val unannot-binders = binders0.zip(binders1).filter(fn((b0, b1)) b0.is-nothing).map fn((b0, b1))
-      (b.name, b.tp.subst)
-    val poly-binders = unannot-binders.filter(fn((_, tp)) !tp.is-tau)
-    if !poly-binders.is-empty then 
-      val b = poly-binders[0].unjust
-      type-error(rng, b.range, "unnannotated parameters cannot be polymorphic ".text, b.tp, [("hint".text, "annotate the parameter with a polymorphic type".text)])
+    val unannot-binders = binders0.zip(binders1).filter(fn((b0, _)) b0.binderType.is-nothing).map fn((_, b1))
+      b1(binderType = b1.binderType.subst)
+    val poly-binders = unannot-binders.filter(fn(b) !b.binderType.is-tau)
+    match poly-binders
+      Cons(b) ->
+        type-error(rng, b.range, "unannotated parameters cannot be polymorphic".text, b.binderType, [("hint".text, "annotate the parameter with a polymorphic type".text)])
+      Nil -> ()
 
     // add range info for each parameter
     if !eta-expanded then
-      opt-pars.zipwith(par-types) fn(b, tp)
+      val par-types2 = binders1.map(fn(b) b.binderType.subst)
+      val _ = binders0.zipwith(par-types2) fn(binder, tp)
         val annotated =
-          match (prop, b.tp)
-            (Just((_, rng)), Just()) | rng.is-hidden -> True // actual annotation
+          match (prop, binder.binderType)
+            (Just((_, prng)), Just(_)) | prng.hidden -> True // there was an actual annotation
             _ -> False
-        add-range-info(b.name-range, RIId(b.name, NIValue("val", tp, "", annotated)), [], True)
-    (sftp1, type-total, body-core3)
+        add-range-info(binder.name-range, RIId(binder.name, NIValue("val", tp, "", annotated), [], True))
+      ()
+    (sftp1, typeTotal, body-core3)
   val (ftp, _, fcore) = maybe-generalize(rng, body0.range, expect, inf-body)
   val eff = operations/fresh-effect()
   (ftp, eff, fcore)
@@ -735,7 +1060,7 @@ fun infer-var-name(prop: maybe<(ktype, range)>, expect, name: name, rng: range, 
                 (new-name("_"), "eta-expanded parameter")
               else (info.canonical-name(qname), info.doc)
             add-range-info(rng, RIId(rm-name, NIValue(info.sort, sitp, rm-doc, False), [], False))
-            val depth = infer-effect/scope-depth
+            val depth = local-depth
             fun inject-local(n)
               val hp = fresh-tvar(kindHeap, Meta)
               val local-tp = TApp(typeLocal, [hp])
@@ -755,7 +1080,7 @@ val compilation-constants =
   [
    // for now, use the module name to not leak info of a dev system
    (nameCoreFileFile, (typeString, fn(mod, rng) ELit(LitString(mod.show-plain ++ ".kk")))), 
-   (nameCoreFileLine, (typeString, fn(mod, rng) ELit(LitString(rng.start.line.show)))),
+   (nameCoreFileLine, (typeInt, fn(mod, rng) ELit(LitInt(rng.start.line)))),
    (nameCoreFileModule, (typeString, fn(mod, rng) ELit(LitString(mod.show-plain))))
   ]
 
@@ -763,12 +1088,9 @@ val compilation-constants =
 // infer match, branches and patterns
 //////////////////////////////////////////
 
-type pattern-kind
-  PatternOutermost(is-lazy: bool)
-  PatternNested
 
 fun infer-case(prop: maybe<(ktype, range)>, expect: expect, expr: syntax/syntax/expr<ktype>, 
-              branches: list<syntax/syntax/branch<ktype>>, is-lazy-match: bool, rng: range): _ (ktype, keffect, core/core/expr)
+              branches: list<syntax/syntax/branch<ktype>>, is-lazy-match: bool, rng: range): infer-eff-full (ktype, keffect, core/core/expr)
   with maybe-instantiate-or-generalize(rng, branches.range, expect)
   val (ctp, ceff, ccore0) =
     with no-allow-return
@@ -797,12 +1119,17 @@ fun infer-case(prop: maybe<(ktype, range)>, expect: expect, expr: syntax/syntax/
   val brngs = branches.map(range)
   fun recur(tpsx: list<(ktype, (range, range))>)
     match tpsx
-      Cons((tp, _)) -> tp.subst
+      // NOTE: the 2+-element case MUST come first -- `Cons((tp, _))` leaves the
+      // tail as a wildcard and would match ANY non-empty list, silently skipping
+      // the cross-branch unification entirely (this bug made `if c then x else y`
+      // never unify x with y!)
       Cons((tp1, r), Cons((tp2, (ctx2, rng2)), tps')) ->
         val _ =
           with val ctxt = checkMatch(ctx2)
           infer-unify(rng2, tp1, tp2)
         recur(Cons((tp1,r), tps'))
+      Cons((tp, _), Nil) -> tp.subst
+      Nil -> failure/fail("type/infer/infer-case: no branches to unify")
   val res-tp = recur(zip(tps, zip(brngs, rngs)))
   val res-eff = fresh-effect()
   val _ = 
@@ -816,14 +1143,18 @@ fun infer-case(prop: maybe<(ktype, range)>, expect: expect, expr: syntax/syntax/
   // get data info and analyze branches
   val data-info = stp.get-type-name.find-data-info
   val def-name = current-def-name()
-  val sbcores = bcores.subst 
+  val sbcores : list<core/core/branch> = bcores.subst
   // TODO: Analysis match 
   val (is-total, cbranches) = branches/analyze(def-name, rng, sbcores, [stp], [data-info], is-lazy-match)
   val cbranches' = 
     if is-total then cbranches
     else 
       val mod-name = module-name()
-      val lit-pos = Literal(syntax/syntax/LitString(mod-name.show ++ rng.show, rng))
+      // upstream: `show moduleName ++ show rng` where Haskell's derived `Show
+      // Range` is the TERSE `show p1` = "(line,col)" -- NOT the driver's full
+      // path+line+col error-message format (range/show); using the wrong show
+      // here breaks the uncaught-pattern-match-error message at runtime
+      val lit-pos = Literal(syntax/syntax/LitString(mod-name.show ++ rng.start.pos/show, rng))
       val lit-def = Literal(syntax/syntax/LitString(def-name.show, rng))
       val exn-branch = Branch(PatWild(rng), [Guard(guardTrue, App(Var(namePatternMatchError, False, rng), [(Nothing, lit-pos), (Nothing, lit-def)], rng))])
       val cexn-branch = infer-branch(pat-kind, Just((res-tp, rng)), ctp, expr.range, matched-names, exn-branch)
@@ -858,19 +1189,21 @@ fun infer-case(prop: maybe<(ktype, range)>, expect: expect, expr: syntax/syntax/
   val sres-eff = res-eff.subst
   (res-tp, sres-eff, core)  
 
-fun infer-branch(pat-kind, prop, match-type, match-range, matched-names, branch)
+fun infer-branch(pat-kind, prop, match-type, match-range, matched-names, branch): infer-eff-full (list<(ktype, keffect)>, core/core/branch)
   match branch
     syntax/syntax/Branch(pattern, guards) -> 
       infer-pattern(pat-kind, match-type, branch.range, pattern, fn(pcore, gcores: list<core/core/guard>) {
           if pattern.range != range/null then  
             // check for unused pattern bindings 
             val defined = pcore.pat/bound-vars
-            val free = gcores.free-vars.list.map(get-name).linear-set
-            match defined.filter(fn(tn) !free.member(tn.get-name)).list
+            val free = rb-set/from-list(gcores.free-vars.list.map(get-name))
+            // upstream reports only the FIRST unused name (in sorted
+            // `tnamesList` order), with singular wording
+            match defined.filter(fn(tn) !free.member(tn.get-name)).list.sort(?(<) = fn(a: tName, b: tName) a.get-name.name/cmp(b.get-name).is-lt)
               [] -> ()
-              names -> 
-                inf-warning(pattern.range, "pattern variables ".text |+| tupled(names.map(_.get-name.pp-name)) |+| "are unused (or a wrongly spelled constructor?)".text |-| 
-                  " hint: prepend an underscore to make it a wildcard pattern".text)
+              Cons(name, _) ->
+                inf-warning(pattern.range, "pattern variable".text |+| name.get-name.pp-name |+| "is unused (or a wrongly spelled constructor?)".text |-|
+                  " hint: start with an underscore to make it a wildcard pattern".text)
           core/core/Branch([pcore], gcores)
         }, 
         fn(inf-gamma) {
@@ -891,98 +1224,6 @@ fun infer-guard(prop: maybe<(ktype,range)>, branch-range: range, Guard(test, exp
   val (btp, beff, bcore) = infer(prop, Instantiated, expr)
   ((btp, beff), get-subst() |-> core/core/Guard(gcore, bcore))
 
-fun infer-pattern-nested(pat-kind: pattern-kind, match-type: ktype, branch-range: range, pattern: syntax/syntax/pattern<ktype>): _ (core/core/pattern, list<(name, assumption/name-info)>)
-  val (_, res) = infer-pattern(pat-kind, match-type, branch-range, pattern, fn(pcore, inf-gamma) (pcore, inf-gamma)) fn(inf-gamma)
-    val smatch-type = match-type.subst
-    ([(smatch-type, typeTotal)], inf-gamma)
-  res
-
-fun use-skolemized-con(con-info: con-info, gcon-tp: ktype, range, name-range: range, cont)
-  if con-info.existentials.is-empty then 
-    val (conRho, _, _) = gcon-tp.infer-effect/instantiate(name-range)
-    val (res, _) = cont(conRho, [])
-    res
-  else 
-    val con-res-tp = fresh-star()
-    val con-exists-tp = TForAll(con-info.existentials, if con-info.params.is-empty then con-res-tp else TFun(con-info.params, typeTotal, con-res-tp))
-    with-skolemized(range, con-exists-tp, Nothing) fn(conXRho0, xvars)
-      val conXRho = operations/instantiate(TForAll(con-info.foralls, conXRho0), name-range)
-      val (iconRho, _, _) = gcon-tp.infer-effect/instantiate(name-range)
-      val _ =
-        with val ctxt = checkOp(range)
-        infer-unify(name-range, conXRho, iconRho)
-      cont(iconRho.subst, xvars)
-
-fun infer-pattern(pat-kind: pattern-kind, match-type: ktype, branch-range: range, 
-    pat: syntax/syntax/pattern<ktype>, 
-    with-pattern: (core/core/pattern, a) -> _ b, 
-    infer-part: (list<(name,assumption/name-info)> -> _ (list<(ktype, keffect)>, a)), 
-    ?(|->): (sub, a) -> _ a): _ (list<(ktype, keffect)>, b)
-  match pat 
-    PatCon(name, patterns0, name-range, range) -> 
-      val (qname, gcon-tp, repr, con-info) = resolve-con-pattern-name(name, match-type, patterns0.length, range)
-      add-range-info(name-range, RIId(qname, NiCon(gcon-tp, con-info.doc), [], False))
-      use-skolemized-con(con-info, gcon-tp, branch-range, range) fn(con-rho, xvars)
-        val (con-par-tps, con-eff-tp, con-res-tp) = con-rho.split-con-tp
-        val _ =
-          with val ctxt = checkConTotal(range)
-          infer-unify(name-range, con-eff-tp, typeTotal)
-        val _ = 
-          with val ctxt = checkConMatch(range)
-          infer-unify(name-range, con-res-tp, match-type)
-        // check valid lazy constructors
-        val data-info = find-data-info(con-res-tp.get-type-name)
-        if data-info.di/is-lazy then 
-          match pat-kind
-            PatternOutermost(is-lazy-match) -> 
-              if con-info.coninfo/is-lazy && !is-lazy-match then 
-                inf-error(name-range, qname.pp-name |.| ": lazy constructors are not allowed in a (non lazy) match".text)
-            PatternNested -> 
-              inf-error(name-range, qname.pp-name |.| ": constructors of a lazy type cannot be matched in a nested pattern (but must always be matched as an outermost pattern)".text)
-        val patterns = match-patterns(range, name-range, con-rho, con-par-tps, patterns0)
-        val (cpatterns, inf-gammas) = con-par-tps.map(snd).zipwith(patterns, fn(par-tp, p) infer-pattern-nested(PatternNested, par-tp.subst, branch-range, p)).unzip
-        val inf-gamma = inf-gammas.concat
-        val (btpeffs: list<(ktype, keffect)>, core-guards0) = infer-part(inf-gamma) // infer-guards
-        val (pcore, core-guards) = 
-          if xvars.is-empty then (PatCon(TName(qname, con-rho), cpatterns, repr, con-par-tps.map(snd), [], con-res-tp, con-info, False), core-guards0)
-          else 
-            val (bind-exists, sub-exists: sub) = fresh-sub(Bound, xvars)
-            val pcore = PatCon(TName(qname, con-rho), sub-exists |-> cpatterns, repr, sub-exists |-> con-par-tps.map(snd), bind-exists, con-res-tp, con-info, False)
-            (pcore, sub-exists |-> core-guards0)
-        ((btpeffs, with-pattern(pcore, core-guards)), btpeffs.free-type-vars)
-    PatVar(binder) -> 
-      add-range-info(binder.name-range, RIId(binder.name, NIValue("val", match-type, "", binder.is-annotated), [], True))
-      match binder.binderType
-        Just(tp) -> 
-          with val ctxt = checkAnn(binder.range)
-          infer-unify(binder.name-range, match-type, tp)
-        Nothing -> ()
-      val (cpat, infgamma0) = infer-pattern-nested(pat-kind, match-type, branch-range, binder.expr)
-      val infgamma = [(binder.name, create-name-infoX(Public, binder.name, infer-effect/scope-depth, DefVal, binder.name-range, match-type, ""))] ++ infgamma0
-      val (btpeffs, x) = infer-part(infgamma)
-      (btpeffs, with-pattern(PatVar(TName(binder.name, match-type), cpat), x))
-    PatWild() ->
-      val (btpeffs, x) = infer-part([])
-      (btpeffs, with-pattern(PatWild, x))
-    PatAnn(pat, tp, rng) -> 
-      infer-pattern(pat-kind, tp, rng, pat, with-pattern) fn(infgamma)
-        val _ = 
-          with val ctxt = checkAnn(rng)
-          infer-unify(pat.pattern/range, match-type, tp) // TODO: improve error message
-        infer-part(infgamma)
-    PatParens(pat) -> infer-pattern(pat-kind, match-type, branch-range, pat, with-pattern, infer-part)
-    PatLit(lit) -> 
-      val (pat', tp) = match lit 
-        LitInt(i, _) -> (PatLit(LitInt(i)), typeInt)
-        LitChar(c, _) -> (PatLit(LitChar(c)), typeChar)
-        LitFloat(f, _) -> (PatLit(LitFloat(f)), typeFloat)
-        LitString(s, _) -> (PatLit(LitString(s)), typeString)
-      val _  = 
-        with val ctxt = checkLitMatch(lit.range)
-        infer-unify(branch-range, tp, match-type)
-      val (btpeffs,x) = infer-part([])
-      (btpeffs, with-pattern(pat', x))
-
 fun infer-binders(inf-gamma, binders: list<value-binder<_, _>>)
   match binders
     [] -> inf-gamma
@@ -992,48 +1233,6 @@ fun infer-binders(inf-gamma, binders: list<value-binder<_, _>>)
 
 // infer implicit parameter declaration:
 // check if the expression is a single identifier and possibly generate unpacking of fields
-fun infer-implicit-param(par: value-binder<t1, maybe<syntax/syntax/expr<t2>>>): _ (value-binder<t1, maybe<syntax/syntax/expr<t2>>>, syntax/syntax/expr<ktype> -> syntax/syntax/expr<ktype>)
-  if par.name.is-implicit-param-name then 
-    val unpack = 
-      match par.expr
-        Just(Parens(Var(qname, _, rng))) -> // encoded in the parser as a default expression
-          infer-implicit-unpack(par.range.hide, rng.hide, par.name, qname)
-        Nothing -> id
-        Just(expr) -> 
-          context-error(par.range, expr.range, "the value of an implicit parameter must be a single identifier".text, [])
-          id
-    // leave the binder name locally qualified as `@implicit/name` -- binderName = pname,
-    (ValueBinder(par.name, par.binderType, Nothing, par.name-range, par.range), unpack)
-  else (par, id)
-     
-    
-fun infer-implicit-unpack(rng: range, nrng: range, pname: name, qname: name): _ (syntax/syntax/expr<ktype> -> syntax/syntax/expr<ktype>)
-  match newtypes-lookup-any(qname)
-    Just(DataInfo(sort=Inductive, constrs=[conInfo], def=ddef)) | !ddef.is-open -> 
-      // struct unpack the fields
-      val pats = conInfo.params.map(fst).filter(!_.is-nil).map(fn(fname) PatVar(ValueBinder(pname.qualify-unpacked(fname), Nothing, PatWild(nrng), nrng, rng)))
-      val pat = PatCon(conInfo.name, pats.map(fn(p) (Nothing, p)), nrng, null) // no warnings for unused pattern variables by using a null range
-      fun unpack(body)
-        Case(Var(pname, False, nrng), [Branch(pat, [Guard(guardTrue, body)])], False, rng)
-      fun extract-struct-type(tp)
-        match tp.expand-syn
-          TApp(TCon(tcon), _) -> [tcon.name]
-          TCon(tcon) -> [tcon.name]
-          _ -> []
-      val bases = conInfo.params.filter(fn((fname, _)) fname.name/starts-with("base")).flatmap(fn((fname, ftp)) ftp.extract-struct-type.map((fname, _)))
-      fun compose(l, e) 
-        match l
-          Nil -> e
-          Cons(f, fs) -> f(compose(fs, e))
-      val unpackBases = bases.map fn((fname, fqname))
-        infer-implicit-unpack(rng, nrng, pname.qualify-unpacked(fname), fqname)
-      fn(e) compose(Cons(unpack, unpackBases), e)
-    _ -> id
-
-// Infer automatic unwrapping for parameters with default values, and adjust their type from optional<a> to a
-// Takes an accumulated InfGamma (initially empty), a list of parameters (as value binders) and returns
-// the new InfGamma and a substitution from optional parameter names to the local unique names (of type a)
-// and a list of core (non-recursive) bindings (where the substitution has already been applied)
 fun infer-optionals(allow-implicit-mask: bool, eff : keffect, inf-gamma: list<(name, assumption/name-info)>, params: list<value-binder<ktype, maybe<syntax/syntax/expr<ktype>>>>): _ (list<(name, assumption/name-info)>, list<(tName, core/core/expr)>, list<core/core/def>)
   match params 
     [] -> (inf-gamma, [], [])
@@ -1100,12 +1299,11 @@ fun infer-optionals(allow-implicit-mask: bool, eff : keffect, inf-gamma: list<(n
 //////////////////////////////////////////
 
 // infer the types of argument expressions, some of which may have already been inferred (`:FixedArg`).
-fun infer-argsN(rng: range, par-args: list<(ktype, arg-expr)>): _ (list<keffect>, list<core/core/expr>)
+fun infer-argsN(rng: range, par-args: list<(ktype, arg-expr)>): infer-eff-full (list<keffect>, list<core/core/expr>)
   fun infer-arg-expr(tp: ktype, arg-expr: _, hidden: bool) // TODO: Add context for better error messages for implicit parameters?
     with (if hidden then no-range-info else fn(f) f())
     with allow-return 
     val eta-arg = eta-expand-var-arg(tp, arg-expr)
-    throw("")
     infer(Just((tp, arg-expr.range)), if tp.is-rho then Instantiated else Generalized(False), eta-arg)
   fun infer-arg(acc, args)
     match args 
@@ -1129,311 +1327,79 @@ fun infer-argsN(rng: range, par-args: list<(ktype, arg-expr)>): _ (list<keffect>
             with hidden-term-doc(rng, term-info)
             subsume-arg(infer-arg-expr(tpar0, arg-expr, True))
         infer-arg(Cons((eff, core), acc), args)
-  with trace-indent
+  // (perf) no trace-indent handler in the hot path -- see infer-effect.kk note
   infer-arg([], par-args).unzip
  
 
 
-// Possibly eta-expand an (variable) argument to resolve any optional and implicit parameters
-fun eta-expand-var-arg(tp: ktype, arg-expr: syntax/syntax/expr<ktype>): _ syntax/syntax/expr<ktype>
-  fun is-named-arg(arg)
-    match arg
-      (Just(_), _) -> True
-      _ -> False
-  match (arg-expr, tp.split-fun-type) // not for polymorphic types (e.g. `type/hr1.kk`)
-    (Var(name, _, vrng), Just((par-tps, _, res-tp))) | !par-tps.has-optional-or-implicits -> 
-      // variable argument with an expected function type without optional parameters
-      eta-expand-expr(name, vrng, 0, par-tps, res-tp, fn(extra-args, rng) App(arg-expr, extra-args, rng), arg-expr)
-    (App(v as Var(name, _, vrng), args, _), Just((par-tps, _, res-tp))) | !par-tps.has-optional-or-implicits && args.all(is-named-arg) ->
-      eta-expand-expr(name, vrng, args.length, par-tps, res-tp, fn(extra-args, rng) App(v, extra-args ++ args, rng), arg-expr)
-    _ -> arg-expr
+fun infer-def-groups(topLevel: bool, dgroups: list<syntax/syntax/def-group<ktype>>): infer-eff-full list<core/core/def-group>
+  match dgroups
+    Nil -> []
+    Cons(dg, rest) ->
+      val (cgroups, crest) = infer-def-group(topLevel, dg) fn()
+        infer-def-groups(topLevel, rest)
+      // Zap the substitution after each top-level
+      // def group completes (including all groups that follow it, since
+      // `cont` already ran inside `infer-def-group`)
+      if topLevel then zap-subst()
+      cgroups ++ crest
 
-fun eta-expand-expr(name: name, nm-range: range, arg-count: int, par-tps: list<(name, ktype)>, res-tp: ktype, make-app: (list<(maybe<(name, range)>, syntax/syntax/expr<ktype>)>, range) -> syntax/syntax/expr<ktype>, arg-expr: syntax/syntax/expr<ktype>): _ syntax/syntax/expr<ktype>
-  val matches = lookup-name-ctx(is-info-val-fun-ext, name, CtxFunArgs(True /* Not partial */, par-tps.length, [], Just(res-tp)), nm-range)
-  match matches
-    [(_, info)] -> 
-      match info.scheme.split-fun-scheme
-        Just((_, vpar-tps, _, _)) | arg-count < vpar-tps.length && vpar-tps.has-optional-or-implicits 
-          && par-tps.map(snd).all(is-mono-type) -> // cannot abstract over polymorphic parameters
-            // the variable has a type with optional parameters, eta-expand it to match the expected type without optional parameters
-            val rng = arg-expr.range
-            val named-fixed = par-tps.map-indexed(fn(i, _) make-hidden-name("arg", ("x" ++ i.show).new-name))
-            val args-fixed = par-tps.map(fst).zipwith(named-fixed) fn(orig-name, new-name)
-              val named-param = 
-                    if !orig-name.is-nil && vpar-tps.any(fn((n, _)) n == orig-name) then Just((orig-name, rng))
-                    else Nothing
-              (named-param, Var(new-name, False, rng))
-            val body = make-app(args-fixed, rng) // App arg-expr args-fixed rng
-            Lam(named-fixed.map(fn(nm) ValueBinder(nm, Nothing, Nothing, rng, rng)), body, False, rng)
-        _ -> arg-expr
-    _ -> arg-expr
+// For std/core, move the key definitions (`ref`, `set`, `!`) to the front so
+// their types are assumed before use in divergence checking
+pub fun run-infer(tpl: target-platform, uniq0: int, imports: import-map, gamma0: gamma, modName: name,
+                  syns: synonyms, newtps: newtypes, action: () -> infer-eff-full a): _ (a, range-map)
+  with val current-error-kind = ErrType
+  with nice-env
+  with default-doc-env
+  with default-pp-env
+  with val pp-prec = precTopTop
+  with default-indent
+  with handler
+    val ranked = rankedDefault
+    val moduleContext = modName
+    val importsMap = imports
+  with build-range-map
+  with run-unique(uniq0)
+  with with-synonyms(syns)
+  with withNewtypes(newtps)
+  // the persistent global substitution (upstream: the `St` state)
+  var subst := sub/null
+  with handler
+    final ctl unify-error(err) failure/fail("type/infer/run-infer: unexpected unification error: " ++ err.show)
+    fun extend-sub(tv, tp) subst := subst.extend(tv, tp)
+    fun add-sub(s) subst := s.compose(subst)
+    fun get-subst() subst
+    // Substitute the accumulated
+    // range map with the current substitution, then clear it (called once per
+    // top-level def group, see infer-def-groups)
+    fun zap-subst()
+      set-range-map(subst |-> get-range-map())
+      subst := sub/null
+    fun set-subst(s) subst := s
+  with val infer-env = InferEnv(modName, [], False, False, False, Nothing, 0, False, rb-map/empty(), imports, inf-gamma/empty, gamma0, tpl)
+  with val ctxt = Infer(range/null)
+  with val scope-depth = 0
+  with val local-depth = 0
+  var holeAllowed := False
+  with handler
+    fun hole-allowed() holeAllowed
+    fun use-hole() holeAllowed := False
+  with handle-infer-eff
+  with handle-iconstraints
+  val x = action()
+  // Apply the final substitution to the range map before
+  // returning it ((sub st) |-> mbRangeMap st)
+  (x, subst |-> get-range-map())
 
-fun split-named-args(nargs: list<(maybe<(name, range)>, a)>): _ (list<a>, list<((name, range), a)>)
-  val nfixed = nargs.filter(fn((nm, _)) nm.is-nothing)
-  val nnamed = nargs.filter(fn((nm, _)) nm.is-just)
-  val fixed = nfixed.map(snd)
-  val named-args = nnamed.map(fn((Just((name, r)), arg)) ((name, r), arg))
-  // check that named arguments all come after the positional ones
-  fun check-duplicates(seen: list<name>, named-argsx)
-    match named-argsx
-      Cons(((name, r), _), rest) -> 
-        if seen.contains(name) then  
-          inf-error(r, "named argument".text |+| name.pp-name |+| "is given more than once".text) // TODO: Should this consider implicits differently?
-          check-duplicates(seen, rest)
-        else 
-          check-duplicates(Cons(name, seen), rest)
-      Nil -> ()
-  check-duplicates([], named-args)
-  (fixed, named-args)
-
-fun match-patterns(ctx-range: range, nm-range: range, con-tp: ktype, con-par-types: list<(name, ktype)>, patterns0: list<(maybe<(name,range)>, syntax/syntax/pattern<ktype>)>): _ list<syntax/syntax/pattern<ktype>>
-  fun match-fixed(pars, pats)
-    (pars.list/drop(pats.list/length), pats)
-  fun remove(nm: name, acc, l)
-    match l
-      [] -> Nothing
-      Cons(par as (i, (par-name, _)), pars) -> 
-        if par-name == nm then Just((i, acc.reverse ++ pars))
-        else remove(nm, Cons(par, acc), pars)
-  fun match-named(pars, pats)
-    match (pars, pats)
-      ([], []) -> []
-      ([], Cons) -> []
-      (pars, Cons(((name, rng), pat), named-pats)) -> 
-        match remove(name, [], pars)
-          Nothing ->
-            type-error(ctx-range, rng, "there is no constructor field with name".text |+| name.pretty, con-tp, [])
-            match-named(pars, named-pats)
-          Just((i, pars1)) ->
-            Cons((i, pat), match-named(pars1, named-pats))
-      (pars, []) -> pars.map(fn((i, _)) (i, PatWild(ctx-range)))
-  val patterns1 = 
-      if con-par-types.length < patterns0.length then 
-        type-error(ctx-range, nm-range, "constructor has too many arguments".text, con-tp, [])
-        patterns0.take(con-par-types.length)
-      else patterns0
-  val (fixed, named-args) = split-named-args(patterns1)
-  val (pars1, pats1) = match-fixed(con-par-types.indexed, fixed)
-  val ipats = match-named(pars1, named-args)
-  (pats1 ++ ipats.sort(fn((i: int, _), (j: int, _)) i < j).map(snd))
-
-// Match given fixed arguments and named arguments with a function type.
-// some fixed arguments may already have been inferred (`fresolved`).
-// also returns a list of implicit arguments that need to be resolved.
-// returns:
-// - iargs: a list of indexed argument terms, either user expressions, already resolved (from `fresolved`), or implicit names
-//          the indices indicate the required evaluation order (due to named arguments).
-// - pars: list of the full function parameters (name,type)
-// - effect of the function
-// - the result type of the function
-// - a core transformer that modifies the application appropriately (for constructor copy)
-type arg-expr
-  ArgExpr(e: syntax/syntax/expr<ktype>, hide-range-info: bool)
-  ArgCore(arg: fixed-arg)
-  ArgImplicit(name: name, app-range: range, name-range: range)
-
-fun arg-expr/range(a: arg-expr): range
-  match a
-    ArgExpr(e, _) -> e.range
-    ArgCore((rng, _, _, _)) -> rng
-    ArgImplicit(_, app-rng, _) -> app-rng
-
-fun pp-arg-expr(ae: arg-expr): _ doc
-  match ae
-    ArgExpr(e, _) -> "ArgExpr".text |+| e.pretty 
-    ArgCore((_, tp, _, _)) -> "ArgCore".text |+| tp.pp-type
-    ArgImplicit(n, _, _) -> "ArgImplicit".text |+| n.pp-name
-
-// Try to match the propagated type with a function type,
-// returning the propagated argument, effect, and result type, and the expected instantiation of the result
-type fun-match-result
-  FunMatchResult(
-    mb-args: list<maybe<(name, ktype)>>,
-    mb-eff: maybe<(ktype, range)>,
-    mb-body: maybe<(ktype, range)>,
-    mb-skolems: list<type-var>,
-    expect: expect
-  )
-type fun-match-type-args
-  FunMatchTypeArgs(
-    mb-args: list<(int, arg-expr)>,
-    mb-named: list<(name, ktype)>,
-    eff: keffect,
-    res: ktype,
-    fcore: (core/core/expr, list<core/core/expr>) -> core/core/expr
-  )
-
-fun wrap-delay(e: syntax/syntax/expr<ktype>): _ syntax/syntax/expr<ktype>
-  fun is-delayed(expr: syntax/syntax/expr<ktype>): _ bool
-    match expr
-      Lam([]) -> True
-      Var(n) -> 
-        match lookup-name-ctx(is-info-val-fun-ext, n, CtxFunArgs(False, 0, [], Nothing), expr.range)
-          [(_, info)] -> info.scheme.is-delayed-type
-          _ -> False
-      _ -> False
-  if is-delayed(e) then e
-  else Lam([], e, False, e.range)
-
-fun extract(name: name, acc: list<(int, (name, ktype))>, args: list<(int, (name, ktype))>): maybe<(int, ktype, list<(int, (name, ktype))>)>
-  match args
-    [] -> Nothing
-    Cons(par as (i, (n, tp)), rest) -> 
-      if n == name || name == n.split-implicit-param-name.fst then Just((i, tp, acc.reverse ++ rest))
-      else extract(name, Cons(par, acc), rest)
-
-fun match-fun-type-args(ctx-range: range, f: syntax/syntax/expr<ktype>, tp: ktype, fresolved: list<(int, fixed-arg)>, fixed: list<syntax/syntax/expr<ktype>>, named-args: list<((name, range), syntax/syntax/expr<ktype>)>): _ fun-match-type-args
-  val rng = f.range
-  val fixed-length = fixed.length
-  val named-length = named-args.length
-  fun report-non-callable()
-    fun shadow-hint((nm: name, name-info: assumption/name-info))
-      [("hint".text, nm.pp-name |+| "at position".text |+| name-info.range.show.text |+| "might be shadowing another function".text)]
-    val hints = 
-      match f
-        Var(name) ->
-          match lookup-local-name(is-infoVal, name)
-            Right((nm, nm-info)) -> shadow-hint((nm, nm-info))
-            Left(results) -> results.flatmap(shadow-hint) //  Multiple locals with the same name?
-        _ -> []
-    type-error(ctx-range, rng, "only functions or types with a copy constructor can be applied".text, tp, hints)
-    FunMatchTypeArgs((fixed ++ named-args.map(snd)).map-indexed(fn(i, x) (i, ArgExpr(x, True))), [], typeTotal, typeUnit, core/core/App)
-  fun arg-wrap-tp(argtp: ktype, arg)
-    if argtp.is-optional then arg.wrap-optional
-    elif argtp.is-delay then arg.wrap-delay
-    else arg
-  fun match-fixed(pars, fixedx)
-    match (pars, fixedx)
-      (pars, []) -> (pars, [])
-      (Cons((_, tp'), pars'), Cons((i: int, arg), fixed')) -> 
-        match fresolved.lookup(_ == i)
-          Just((crng, ctp, ceff, carg)) -> 
-            val (newtp, newarg) = 
-                  if tp'.is-optional then (ctp.make-optional, ctp.wrap-optional(carg))
-                  else (ctp, carg)
-            val (prest, rest) = match-fixed(pars', fixed')
-            (prest, Cons((i, ArgCore((crng, newtp, ceff, newarg))), rest))
-          Nothing -> 
-            val (prest, rest) = match-fixed(pars', fixed')
-            (prest, Cons((i, ArgExpr(arg-wrap-tp(tp', arg), False)), rest))
-      _ -> 
-        type-error(ctx-range, rng, "function is applied to too many arguments".text, tp, [])
-        ([], [])
-  // in the result, the first int is position of the parameter `j`, the second int `i` is the original position of
-  // the argument (so we can evaluate in argument order)
-  fun match-named(pars, named-argsx: list<(int, ((name, range), syntax/syntax/expr<ktype>))>)
-    match (pars, named-argsx)
-      ([], []) -> []
-      ([], Cons()) -> 
-        type-error(ctx-range, rng, "function is applied to too many arguments".text, tp, [])
-        []
-      (_, Cons((i, ((name, r), arg)), named-rest)) -> 
-        match extract(name, [], pars)
-          Just((j, tp', pars-rest)) -> 
-            Cons((j, (i, ArgExpr(arg-wrap-tp(tp', arg), r.range/is-null))), 
-              match-named(pars-rest, named-rest))
-          Nothing -> 
-            type-error(ctx-range, rng, "there is no parameter with name".text |+| name.pp-name, tp, [])
-            match-named(pars, named-rest)
-      (_, []) -> 
-        if pars.all(_.snd.is-optional-or-implicit) then 
-          val (optionals, implicits) = pars.span(_.snd.snd.is-optional)
-          val ops = zip(list(fixed-length + named-length, pars.length), optionals) // TODO Fix the list()
-            .map fn((i, (j, (_, _)))) (j, (i, ArgExpr(optionalNone, True)))
-          val imps = zip(list(fixed-length + named-length + ops.length, pars.length), implicits)
-            .map fn((i, (j, (n, _)))) (j, (i, ArgImplicit(n, rng, rng)))
-          ops ++ imps
-        else 
-          val hints = match f.root-expr
-            Var(name, _, _) | name == "resume".new-name ->
-              [("hint".text, "cannot use \"resume\" inside a val/fun/except clause".text)]
-            _ -> []
-          type-error(ctx-range, rng, "function does not have enough arguments".text, tp, hints)
-          [] 
-  fun match-parameters(pars)
-    val (pars1, args1) = match-fixed(pars, fixed.indexed) 
-    val indexed-pars = list(fixed-length, fixed-length + pars1.length)
-    val iargs2 = match-named(zip(indexed-pars, pars1), zip(indexed-pars, named-args))
-    args1 ++ iargs2.sort(fn((i1, _), (i2, _)) cmp(i1, i2).is-lt).map(snd)
-  match tp
-    TFun(pars, eff, res) -> 
-      val iargs = match-parameters(pars)
-      FunMatchTypeArgs(iargs, pars, eff, res, core/core/App)
-    TSyn(_, _, t) -> match-fun-type-args(ctx-range, f, t, fresolved, fixed, named-args)
-    TVar(tv) -> 
-      if !named-args.is-empty then // TODO: take fresolved into account
-        inf-error(rng, "cannot use named arguments on an inferred function".text |-| 
-                        " hint: annotate the parameters".text)
-      val targs = fixed.map(fn(_) (nil, fresh-star())) ++ named-args.map(fn((n, _)) (n.fst, fresh-star()))
-      val teff = fresh-effect()
-      val tres = fresh-star()
-      add-sub(sub/single(tv, TFun(targs, teff, tres)))
-      FunMatchTypeArgs((fixed ++ named-args.map(snd)).map-indexed(fn(i, x) (i, ArgExpr(x, False))), targs, teff, tres, core/core/App)
-    _ -> 
-      // apply the copy constructor if we can find it
-      val matches = lookup-name-ctx(is-info-val-fun-ext, nameCopy, CtxFunTypes(True, [tp], [], Nothing), rng)
-      match matches 
-        [(qname, info)] ->
-          val (_, contp, coreInst) = info.scheme.instantiate-ex(rng)
-          val FunMatchTypeArgs(iargs, pars, eff, res, _) = match-fun-type-args(ctx-range, f, contp, fresolved, Cons(f, fixed), named-args)
-          FunMatchTypeArgs(iargs, pars, eff, res, fn(c, cargs) core/core/App(coreInst(info.core-expr(qname)), cargs))
-        _ -> report-non-callable()
-
-fun match-fun(nargs: int, mb-type: maybe<(ktype, range)>): _ fun-match-result
-  match mb-type
-    Nothing -> FunMatchResult(Nothing.replicate(nargs), Nothing, Nothing, [], Instantiated)
-    Just((tp, rng)) -> 
-      val (skolems, rho, _) = tp.skolemize-ex(rng)
-      match rho.split-fun-type
-        Nothing -> FunMatchResult(Nothing.replicate(nargs), Nothing, Nothing, skolems, Instantiated)
-        Just((args, eff, res)) -> 
-          val m = args.length 
-          // can happen: see test/type/wrong/hm4 and hm4a
-          FunMatchResult((args.map(Just) ++ Nothing.replicate(nargs - m)).take(nargs), 
-                          Just((eff, rng)), Just((res, rng)), skolems, 
-                          if res.is-rho then Instantiated else Generalized(False))
+// Type inference for a module's definition groups
+pub fun infer-types(tpl: target-platform, uniq0: int, imports: import-map, gamma0: gamma, modName: name,
+                    syns: synonyms, newtps: newtypes, dgroups: list<syntax/syntax/def-group<ktype>>): _ (list<core/core/def-group>, range-map)
+  with run-infer(tpl, uniq0, imports, gamma0, modName, syns, newtps)
+  // upstream zaps the substitution after each top-level def group (see
+  // infer-def-groups / zap-subst) instead of applying it once here at the
+  // end; individual defs are already substituted as they are produced (see
+  // infer-def) so no final pass over cgroups is needed
+  infer-def-groups(True, arrange(dgroups))
 
 
 
-
-//////////////////////////////////////////
-// Helpers
-//////////////////////////////////////////
-fun instantiate-binder(b: value-binder<maybe<ktype>, e>): _ value-binder<ktype, e>
-  match b
-    ValueBinder(name, Just(tp), e, nrng, rng) -> ValueBinder(name, tp, e, nrng, rng)
-    ValueBinder(name, Nothing, e, nrng, rng) -> ValueBinder(name, fresh-star(), e, nrng, rng)
-
-// Maybe generalize. The effect is the current effect context and should not be generalized over.
-fun maybe-generalize(ctx-range: range, rng: range, expect: expect, f: () -> _ (ktype, keffect, core/core/expr)): _ (scheme, keffect, core/core/expr)
-  match expect
-    Instantiated -> f()
-    Generalized(close) -> generalize(ctx-range, rng, close, f) 
-
-fun maybe-instantiate(rng: range, expect: expect, tp: scheme): _ (rho, core/core/expr -> core/core/expr)
-  match expect
-    Generalized() -> (tp, id)
-    Instantiated -> 
-      val (rho, _, coref) = tp.infer-effect/instantiate(rng)
-      (rho, coref)
-
-fun maybe-instantiate-or-generalize(ctx-range: range, rng: range, expect: expect, f: () -> _ (ktype, keffect, core/core/expr)): _ (ktype, keffect, core/core/expr)
-  match expect
-    Generalized(close) -> generalize(ctx-range, rng, close, f)
-    Instantiated -> 
-      val (tp, eff, core) = f()
-      val (itp, _, icore) = tp.infer-effect/instantiate(rng)
-      (itp, eff, icore(core))
-
-fun core-vector(cs: list<core/core/expr>, tp: ktype): _ core/core/expr
-  val (vecName, _, vecInfo) = resolve-fun-name(nameVector, CtxFunArgs(False, 0, ["xs".new-name], Nothing), null, null) // TODO: lookup vector less fragile?
-  val vecx = TypeApp(vecInfo.core-expr(vecName), [tp])
-  core/core/App(vecx, [cs.core-list(tp)])
-
-fun core-list(cs: list<core/core/expr>, tp: ktype): _ core/core/expr 
-  val (consName, consTp, consRepr, _) = resolve-con-name(nameCons, Nothing, null)
-  val (nilName, nilTp, nilRepr, _) = resolve-con-name(nameListNil, Nothing, null)
-  val consx = TypeApp(core/core/Con(TName(consName, consTp), consRepr), [tp])
-  val nil = TypeApp(core/core/Con(TName(nilName, nilTp), nilRepr), [tp])
-  cs.foldr(nil) fn(c, acc)
-    core/core/App(consx, [c, acc])

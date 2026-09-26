@@ -5,7 +5,9 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
-// Updated as of 8/5/24: Commit 680b2b8
+// Updated as of 7/23/26: Commit 7369a3a
+
+module compiler/syntax/lexeme
 
 import std/os/path
 import std/text/regex
@@ -19,7 +21,9 @@ import compiler/common/syntax
 val type-var-regex = "^[a-z][0-9]*$".regex();
 
 pub fun is-type-var(n: name): bool
-  !type-var-regex.exec(n.nameLocalQual).is-empty
+  // a type variable is an unqualified lowercase letter optionally followed by
+  // digits: in particular a MODULE-qualified name can still be a type variable
+  n.nameLocalQual == "" && !type-var-regex.exec(n.nameStem).is-empty
 
 // Lexer tokens
 // A lexical token with an associated range.
@@ -216,9 +220,10 @@ pub struct lex-import
   imp-alias: name
   vis: visibility
   is-open: bool
+  name-range: range
 
 fun lex-import/show(Lex-import(nm, al, vis, open): lex-import): string
-  if vis.is-public then "pub " else "" ++
+  (if vis.is-public then "pub " else "") ++
   (if open then "@open" else "") ++
   (if al.is-nil then "" else al.show ++ " = ") ++
   nm.show
@@ -238,7 +243,8 @@ fun lex-import-nub(l: list<lex-import>): list<lex-import>
               li.name,
               if li.imp-alias.is-nil then li'.imp-alias else li.imp-alias,
               if li.vis.is-public || li'.vis.is-public then Public else Private,
-              li.is-open || li'.is-open
+              li.is-open || li'.is-open,
+              li.name-range
             )
           Cons(li2, lis.delete(li).pretend-decreasing.lex-import-nub)
         Nothing -> Cons(li, lis.pretend-decreasing.lex-import-nub)

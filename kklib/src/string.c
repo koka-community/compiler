@@ -383,6 +383,28 @@ kk_string_t kk_string_alloc_from_utf8(const char* str, kk_context_t* ctx) {
   return kk_string_alloc_from_utf8n(kk_sstrlen(str), str, ctx);
 }
 
+// Initialize a lazily-allocated string literal ONCE, thread-safely (see
+// `kk_init_string_literal`). Literals live in C statics and are used from ANY
+// thread, so: (1) the one-time initialization must be a release-CAS publish (two
+// threads may execute a function-local literal's first use concurrently), and
+// (2) the block's refcount is made STUCK -- a plain refcount on a shared static
+// would be dup/dropped non-atomically across threads (lost counts -> premature
+// free -> heap corruption); stuck makes dup/drop no-ops and the literal lives for
+// the process, exactly like a compile-time static (KK_HEADER_STATIC).
+kk_decl_export void kk_string_literal_init(kk_string_t* p, kk_ssize_t len, const char* chars, kk_context_t* ctx) {
+  kk_string_t s = kk_string_alloc_from_utf8n(len, chars, ctx);
+  if (kk_datatype_is_ptr(s.bytes)) {
+    kk_block_make_stuck(kk_datatype_as_ptr(s.bytes, ctx));
+  }
+  if (!kk_datatype_atomic_publish(&p->bytes, s.bytes)) {
+    // another thread won the initialization: discard ours (un-stick, then drop)
+    if (kk_datatype_is_ptr(s.bytes)) {
+      kk_block_refcount_set(kk_datatype_as_ptr(s.bytes, ctx), 0);
+      kk_string_drop(s, ctx);
+    }
+  }
+}
+
 kk_string_t kk_string_convert_from_qutf8(kk_bytes_t str, kk_context_t* ctx) {
   // to avoid reallocation (to accommodate invalid sequences), we first check if
   // it is already valid utf-8 which should be very common; in that case we return the bytes/string as-is.
@@ -398,6 +420,27 @@ kk_string_t kk_string_convert_from_qutf8(kk_bytes_t str, kk_context_t* ctx) {
     // invalid sequences found: copy and translate to valid utf-8
     kk_string_t tstr = kk_qutf8_convert_from_invalid(len, s, vlen, true, ctx);
     kk_bytes_drop(str, ctx);
+    return tstr;
+  }
+}
+
+kk_string_t kk_string_convert_from_qutf8_slice(kk_bytes_t b, kk_ssize_t start, kk_ssize_t len, kk_context_t* ctx) {
+  kk_ssize_t blen;
+  const char* const s = kk_bytes_cbuf_borrow(b, &blen, ctx);
+  if (start < 0)     start = 0;
+  if (start >= blen) start = blen;
+  if (len > blen)    len = blen;
+  if (len < 0 || start > blen - len) len = blen - start;
+  if (len == 0 || start >= blen) {
+    kk_bytes_drop(b,ctx);
+    return kk_string_empty();
+  }
+  else if (start==0 && len==blen) {
+    return kk_string_convert_from_qutf8(b,ctx);
+  }  
+  else {
+    kk_string_t tstr = kk_qutf8_convert(len, s + start, true, ctx);
+    kk_bytes_drop(b,ctx);
     return tstr;
   }
 }
@@ -657,6 +700,49 @@ kk_string_t kk_string_alloc_from_codepage(const uint8_t* bstr, const uint16_t* c
   }
   kk_assert_internal(s == (kk_string_buf_borrow(str, NULL, ctx) + len) && *s == 0);
   return str;
+}
+
+
+/*--------------------------------------------------------------------------------------------------
+   Utf8 utility
+--------------------------------------------------------------------------------------------------*/
+
+// Return the number of utf-8 continuation bytes at the start (up to 3 bytes)
+kk_ssize_t kk_bytes_utf8_partial_pre_borrow(kk_bytes_t b, kk_context_t* ctx) {
+  kk_ssize_t blen;
+  const uint8_t* p = kk_bytes_buf_borrow(b,&blen,ctx);
+  kk_ssize_t i = 0;
+  while(i < 3 && i < blen && kk_utf8_is_cont(p[i])) { i++; }
+  return i;
+}
+
+// Return the number bytes at the end that make up an unfinished utf8 encoding (up to 3 bytes)
+kk_ssize_t kk_bytes_utf8_partial_post_borrow(kk_bytes_t bs, kk_context_t* ctx) {
+  kk_ssize_t blen;
+  const uint8_t* p = kk_bytes_buf_borrow(bs,&blen,ctx);
+  kk_ssize_t i = 1;
+  while(i <= 3 && i <= blen) {
+    const uint8_t b = p[blen - i];
+    if (kk_utf8_is_cont(b)) {
+      i++;
+    }
+    else {
+      // start of utf8 sequence
+      if ((b & 0xF8) == 0xF0) {  // 4 byte sequence && i <= 3
+        return i;
+      }
+      else if (i<=2 && ((b & 0xF0) == 0xE0)) {  // 3 byte sequence && i <= 2
+        return i;
+      }
+      else if (i<=1 && ((b & 0xD0) == 0xC0)) {  // 2 byte sequence && i == 1
+        return i;
+      }
+      else {
+        return 0;  // full sequence or invalid utf8
+      }
+    }
+  }
+  return 0; // all continuation bytes (caught by _pre)
 }
 
 

@@ -15,7 +15,7 @@ import compiler/kind/kind
 import compiler/common/failure
 import compiler/platform/config
 import compiler/common/color-scheme
-import compiler/lib/core
+import compiler/core/simplify
 import std/core/undiv
 
 // Box / unbox transformation
@@ -35,7 +35,26 @@ fun box-def(d: def): _ def
   val bexpr = box-expr(box-type(d.ktype), d.defExpr)
   val bdef = d(defExpr = bexpr)
   // simplify the whole def to avoid simplifying away functions to values (e.g. `fun(x){g(x)} -> val f = g`)
+  // (upstream: uniqueSimplify True /*unsafe*/ False /*ndebug*/ 3 /*runs*/ 6 /*duplicationMax*/)
   bdef.unique-simplify(True, False, 3, 6)
+
+fun unique-simplify(bdef: def, unsafe0: bool, ndebug: bool, nRuns: int, dupMax: int): _ def
+  var dgs := [DefNonRec(bdef)]
+  with handler
+    fun get-core-defs() dgs
+    fun set-core-defs(d') dgs := d'
+    fun phaseError(s) throw("backend/c/box unique-simplify: " ++ s)
+  simplify-defs(unsafe0, ndebug, nRuns, dupMax)
+  match dgs
+    [DefNonRec(d')] -> d'
+    _ -> failure/fail("backend/c/box unique-simplify: simplify changed def group structure")
+
+// upstream Box.hs "special internals" name list
+fun is-boxing-special-internal(nm: name): bool
+  nm == nameLazyMemoizeTarget || nm == nameLazyMemoize || nm == nameLazyEnter ||
+  nm == nameLazyLeave || nm == nameLazyIsWhnf || nm == nameLazyPtrIsWhnf ||
+  nm == nameDataTypePtrIsThreadShared || nm == nameDataTypePtrIsUnique ||
+  nm == nameLazyIndirectCompress
 
 // add box/unbox such that the type of `expr` matches `BoxType`
 fun box-expr(tp: ktype, ex: expr)
@@ -43,6 +62,13 @@ fun box-expr(tp: ktype, ex: expr)
     // remove type abstraction and applications
     TypeLam(_, e) -> box-expr(tp, e)
     TypeApp(e, _) -> box-expr(tp, e)
+    // special internals: the lazy primitives have
+    // polymorphic signatures but compile to concrete C intrinsics on the
+    // datatype representation -- box each argument at its OWN type (no
+    // coercion to the polymorphic signature, which would box e.g. the lazy
+    // value into a `kk_box_t` before `kk_datatype_ptr_is_unique`)
+    App(TypeApp(f as Var(nm), _), args) | is-boxing-special-internal(nm.get-name) ->
+      App(f, args.map(fn(a) box-expr(box-typeof(a), a)))
     // Regular
     App(e, args) ->
       val argTps = args.map(box-typeof)
@@ -51,8 +77,17 @@ fun box-expr(tp: ktype, ex: expr)
       val be = box-expr(eTp, e)
       App(be, bargs)
     Lam(tparams, eff, body) ->
+      // upstream: `bbody <- boxExpr (boxTypeOf body) body` -- the body is
+      // boxed against ITS OWN natural type, not `tp` (the type expected for
+      // the WHOLE lambda, i.e. a function type). The port previously reused
+      // `tp` here, so every nested Case/branch inside a lambda body was
+      // boxed as if it needed to look like a FUNCTION -- e.g. mlift_*
+      // wrappers' yielding-branch got wrongly (CFun,CFun)-coerced into an
+      // eta-expanded closure adapter instead of staying the plain concrete
+      // (e.g. int) value it actually is, corrupting the whole def's C
+      // return-type derivation (`kk_function_t` instead of `kk_integer_t`).
       val fnTp = ex.box-typeof
-      val bbody = box-expr(tp, body)
+      val bbody = box-expr(body.box-typeof, body)
       bcoerce(fnTp, tp, Lam(tparams, eff, bbody))
     Let(def-groups, body) ->
       val bdgs = def-groups.box-def-groups
@@ -161,7 +196,16 @@ fun bcoerceX(fromTp: ktype, toTp: ktype, ex: expr)
       Just(wrapped)
     // coerce between function arguments/results
     (CFun(fromPars, fromRes), CFun(toPars, toRes)) ->
-      if !fromPars.zip(toPars).all(fn((t1, t2)) t1 == t2) && fromRes == toRes then
+      // upstream: `not (all(==) && fromRes==toRes)` = wrap if EITHER params
+      // differ OR the result differs. The port previously had `!all(==) &&
+      // fromRes==toRes` (De Morgan's law transcription error): wrap only
+      // when params differ AND results match, so a call whose PARAM and
+      // RESULT representations both mismatch (e.g. std/core/hnd's
+      // @open-none1 called with a concrete-typed marker arg where its
+      // signature is `<a,b,e1,e2> (f: a->e1 b, x1: a) -> e2 b` -- x1 AND
+      // the result are both TVar-vs-concrete mismatches) silently skipped
+      // the coercion wrapper, leaking an unboxed value into a kk_box_t slot.
+      if !(fromPars.zip(toPars).all(fn((t1, t2)) t1 == t2) && fromRes == toRes) then
         match toTp.split-fun-scheme
           Just((_, toParTps, toEffTp, toResTp)) ->
             match fromTp.split-fun-scheme
@@ -172,14 +216,14 @@ fun bcoerceX(fromTp: ktype, toTp: ktype, ex: expr)
     _ -> Nothing
 
 fun box-var-at-tp(tp: ktype)
-  Var(TName(nameBox, tp), InfoExternal([(C(CDefault), "box(#1)")]))
+  Var(TName(nameBox, tp), InfoExternal("box(#1)"))
 
 fun unbox-var-at-tp(tp: ktype)
-  Var(TName(nameUnbox, tp), InfoExternal([(C(CDefault), "unbox(#1)")]))
+  Var(TName(nameUnbox, tp), InfoExternal("unbox(#1)"))
 
 fun box-coerce-fun(toParTps: list<(name, ktype)>, toEffTp: ktype, toResTp: ktype, fromParTps: list<(name, ktype)>, fromEffTp: ktype, fromResTp: ktype, ex: expr): _ expr
   val names = toParTps.map(fn(_) unique-name("b"))
-  val pars = names.zipwith(toParTps.map(snd), fn(n, t) TName(n,t))
+  val pars = names.zipwith(toParTps.map(snd), fn(n, t) TName(n, t))
   val args = pars.map(Var(_, InfoNone))
   val bargs = zip3(args, toParTps.map(snd), fromParTps.map(snd)).map(fn((arg, parToTp, parFromTp)) bcoerce(parToTp, parFromTp, arg))
   val bapp = bcoerce(fromResTp, toResTp, App(ex, bargs))
@@ -209,10 +253,8 @@ fun boxed-funtp(tp: ktype)
   match tp
     TForAll(_, t) -> t.boxed-funtp
     TSyn(_, _, t) -> t.boxed-funtp
-    TFun(pars, eff, res) ->
-      val bpars = pars.map(fn(_) boxed-tv())
-      val bres = res.boxed-funtp
-      TFun(pars.zip(bpars).map(fn(((nm, _), bp)) (nm, bp)), eff, bres)
+    TFun(pars, eff, _res) ->
+      TFun(pars.map(fn((nm, _)) (nm, boxed-tv())), eff, boxed-tv())
     _ -> failure/fail("backend/c/box boxed-funtp: " ++ tp.pretty.show)
 
 fun boxed-tv()
@@ -229,7 +271,7 @@ type cType
 fun c-type(k: ktype)
   match k
     TForAll(_, t) -> t.c-type
-    TFun(pars, res) -> CFun(pars.map(fn((_, t)) t.c-type), res.c-type)
+    TFun(pars, _eff, res) -> CFun(pars.map(fn((_, t)) t.c-type), res.c-type)
     TApp(t) -> t.c-type
     TCon -> CData
     TVar -> CBox

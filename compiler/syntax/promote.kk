@@ -6,7 +6,7 @@
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
 //
-// Peform implicit promotions:
+// Perform implicit promotions:
 //
 // * Quantify over free type variables in type signatures of definitions.
 //
@@ -27,17 +27,26 @@ import compiler/common/name-prim
 import compiler/common/name-collections
 import compiler/common/syntax
 import compiler/syntax/syntax
-import std/data/linear-set
+import std/data/rb-set
+import std/data/sort
+
+// upstream uses `S.toList` on a `Data.Set Name` everywhere free variables are
+// implicitly quantified, i.e. the binder order is Name's Ord (the port's
+// `name/cmp`, hash-based ~ alphabetical for short names) -- NOT insertion
+// order. This determines the user-visible `forall<a,b,e>` quantifier order of
+// annotated signatures (e.g. test/algeff/mask1.kk expects `forall<a,e>`).
+fun sorted-names(ns: name-set): list<name>
+  ns.list.sort(?(<) = fn(n1: name, n2: name) name/cmp(n1, n2).is-lt)
 
 pub fun promote-type(tp: user-type): _ user-type
   val free = tp.free-type-vars
   if free.is-empty then tp
   else
-    val (someVars, forallVars) = free.list.partition(is-some-var)
+    val (someVars, forallVars) = free.sorted-names.partition(is-some-var)
     quantify(QSome, someVars.map(to-type-binder), quantify(QForall, forallVars.map(to-type-binder), tp))
 
 pub fun promote-free(bound: list<user-type-binder>, tps: list<user-type>): _ list<user-type-binder>
-  (tps.free-type-vars - (names/empty + bound.map(name))).list.map(to-type-binder)
+  (tps.free-type-vars - (names/empty + bound.map(name))).sorted-names.map(to-type-binder)
 
 // Type variable promotion
 // Take annotation on parameters and result type, and transform it into
@@ -95,13 +104,13 @@ fun promote-ex(some-pars: list<user-type-binder>, forall-pars: list<user-type-bi
 
   // create full type by inserting some types if no parameter was annotated
   val (namess, argres-types2) = list(1, argres-types1.length).zip(argres-types1).map(insert-some).unzip
-  val Cons(res-type', Cons(eff-tp, rargs-tps)) = argres-types2
+  val Cons(res-type', Cons(eff-tp, rargs-tps)) = argres-types2.reverse
   val names = namess.concat
   val eff = eff-tp.snd // extend
   val fun-tp = TpFun(rargs-tps.reverse, eff, res-type'.snd, body.range) // TODO: better range?
   
   // Quantify over free type variables
-  val implicit = (fun-tp.free-type-vars - (quantified + names)).list
+  val implicit = (fun-tp.free-type-vars - (quantified + names)).sorted-names
   
   // Create fully quantified type
   val (imp-some, imp-forall) = implicit.partition(is-some-var)

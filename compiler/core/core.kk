@@ -10,7 +10,7 @@ import compiler/common/range
 import compiler/type/type
 import compiler/type/kind
 import compiler/kind/kind
-import std/data/linear-set
+import std/data/rb-set
 import compiler/common/name-collections
 
 pub fun is-unit(e: expr): bool
@@ -39,8 +39,8 @@ pub fun short-circuit(f: expr, args: list<expr>): maybe<expr>
             if open.get-name == nameEffectOpen then is-and-or(body)
             else Nothing
           Var(nm) ->
-            if nm.get-name == nameAnd then Just(make-if-expr(e1, exprTrue, e2))
-            elif nm.get-name == nameOr then Just(make-if-expr(e1, e2, exprFalse))
+            if nm.get-name == nameAnd then Just(make-if-expr(e1, e2, exprFalse))   // x && y == if x then y else False
+            elif nm.get-name == nameOr then Just(make-if-expr(e1, exprTrue, e2))   // x || y == if x then True else y
             else Nothing
           _ -> Nothing 
       is-and-or(f)
@@ -63,7 +63,7 @@ fun pat-expr-bool(n: name, tag: int): (pattern, expr)
   (pat, expr)
 
 pub fun make-if-expr(p: expr, t: expr, f: expr): expr
-  Case([p], [Branch([patTrue], [Guard(exprTrue, t)]), Branch([patFalse], [Guard(exprFalse, f)])])
+  Case([p], [Branch([patTrue], [Guard(exprTrue, t)]), Branch([PatWild], [Guard(exprTrue, f)])])
 
 pub fun make-vector(tp: ktype, exprs: list<expr>): expr
   val a = TypeVar(0, kindStar, Bound)
@@ -79,7 +79,7 @@ pub fun wrap-optional(tp: ktype, ex: expr): expr
 fun make-list(tp: ktype, exprs: list<expr>): expr
   val a = TypeVar(0, kindStar, Bound)
   val nilTp = TForAll([a], TApp(typeList, [TVar(a)]))
-  val nilCon = Con(TName(nil, nilTp), ConSingleton(nameTpList, DataAsList, zero, 0))
+  val nilCon = Con(TName(nameListNil, nilTp), ConSingleton(nameTpList, DataAsList, zero, 0))
   val nil = TypeApp(nilCon, [tp])
   val consTp = TForAll([a], TFun([(name/nil, TVar(a)), (name/nil, TApp(typeList, [TVar(a)]))], typeTotal, TApp(typeList, [TVar(a)])))
   val consCon = Con(TName(nameCons, consTp), ConAsCons(nameTpList, DataAsList, value-repr-scan(2), name/nil, CtxNone, 2))
@@ -118,7 +118,7 @@ pub fun make-defs-let(defs0: list<def>, expr0: expr)
 // If this remains in the source after Reuse Analyis an error will be thrown!
 pub fun make-drop-special(y: tName, xUnique: expr, xShared: expr, xDecRef: expr)
   val tp = TFun([y.type-of, xUnique.type-of, xShared.type-of, xDecRef.type-of].map((name/nil, _)), typeTotal, typeUnit)
-  App(Var(TName(nameDropSpecial, tp), InfoExternal([])), [Var(y, InfoNone), xUnique, xShared, xDecRef])
+  App(Var(TName(nameDropSpecial, tp), InfoExternal("")), [Var(y, InfoNone), xUnique, xShared, xDecRef])
 
 pub struct core
   coreName: name
@@ -142,11 +142,24 @@ pub fun fixd/show(f: fix-def): string
     FixDef(def-name, f') -> "FixDef(" ++ def-name.name/name/show ++ "," ++ show(f') ++ ")"
 
 pub alias kimports = list<kimport>;
+
+// `ImportProvenance`: why this import is part of the module's core
+// (ImportUser: written by the user; ImportPub: pulled in via a pub re-export;
+// ImportTypes: added for type-signature deps; ImportCompiler: added for
+// inline-definition deps). Rendered in interfaces as ``/`pub`/`type`/`inline`.
+pub type import-provenance
+  ImportUser
+  ImportPub
+  ImportTypes
+  ImportCompiler
+
 pub struct kimport
   importName: name
   package: string
   visibility: visibility
-  doc: string;
+  doc: string
+  name-range: range = range/null
+  provenance: import-provenance = ImportUser;
 
 pub fun kimport/show(i: kimport): string
   "Kimport(" ++ i.importName.name/name/show ++ "," ++ i.package.show ++ "," ++ i.visibility.show ++ "," ++ i.doc.show ++ ")"
@@ -157,35 +170,31 @@ pub type external
     externName: name
     typeScheme: ktype //scheme
     params: list<param-info>
-    format: list<(target, string)>
+    format: string // always for a specific target platform
     visibility: visibility
     fipT: fipT
     rng: range
     doc: string
   ExternalImport
-    imports: list<(target,list<(string, string)>)>
+    imports: list<(string, string)> // always for a specific target platform
     rng: range
 
 pub fun external/show(e: external): div string
   match e
     External(name, typeScheme, params, format, visibility, fipT, rng, doc) ->
       "External(" ++ name.name/name/show ++ "," ++ typeScheme.show ++ "," ++ params.show-list(show) ++ "," ++
-      format.show-list(_.show-tuple(show, show)) ++ "," ++ visibility.show ++ "," ++ fipT.show ++ "," ++ rng.show ++ "," ++ doc.show ++ ")"
+      format.show ++ "," ++ visibility.show ++ "," ++ fipT.show ++ "," ++ rng.show ++ "," ++ doc.show ++ ")"
     ExternalImport(imports, rng) ->
-      "ExternalImport(" ++ imports.show-list(fn((t, ls)) t.show ++ ":" ++ ls.show-list(fn((s1, s2)) s1.show ++ ":" ++ s2.show)) ++ "," ++ rng.show ++ ")"
+      "ExternalImport(" ++ imports.show-list(fn((s1, s2)) s1.show ++ ":" ++ s2.show) ++ "," ++ rng.show ++ ")"
 
 pub fun external/vis(e: external)
   match e
     External(visibility=v) -> v
     _ -> Private
 
-pub fun external-import-lookup(t: target, b: buildType, key: string, e: external): maybe<string>
+pub fun external-import-lookup(b: buildType, key: string, e: external): maybe<string>
   match e
-    ExternalImport(imports, _) ->
-      val keys = match imports.find(_.fst == t)
-        Just(kv) -> kv.snd
-        Nothing -> Nil
-      b.eimport-lookup(key, keys)
+    ExternalImport(imports, _) -> b.eimport-lookup(key, imports)
     _ -> Nothing
 
 pub fun eimport-lookup(b: buildType, s: string, ls: list<(string, string)>): maybe<string>
@@ -197,17 +206,6 @@ pub fun eimport-lookup(b: buildType, s: string, ls: list<(string, string)>): may
         Just(i) -> Just(i.snd)
         Nothing -> Nothing
 
-pub fun lookup-target(t: target, ims: list<(target, a)>): maybe<a>
-  val tgs = match t
-    C(WasmJs) -> [t, C(Wasm), C(CDefault) ,DefaultTarget]
-    C(WasmWeb) -> [t, C(Wasm), C(CDefault), DefaultTarget]
-    C(t1) -> [t, C(t1), DefaultTarget]
-    JS(_) -> [t, JS(JsDefault), DefaultTarget]
-    _ -> [t, DefaultTarget]
-  val r = tgs.map(fn(t1:target) ims.find(fn(t2) t2.fst == t1).map(snd)).filter(is-just)
-  match r
-    Cons(Just(x)) -> Just(x)
-    _ -> Nothing
 
 pub type typedef
   Synonym(i: syn-info) // name, synonym info, and the visibility
@@ -308,6 +306,21 @@ pub fun update-ctx-path(c: con-repr, cp: ctx-path)
     ConNormal(n, r, v, _, t) -> ConNormal(n, r, v, cp, t)
     _ -> throw("core/core: update-ctx-path: not a constructor with a path")
 
+// The constructor-context path stamped on this OCCURRENCE's repr by
+// AnalysisCCtx/CTail: Nothing for value types and
+// for constructor shapes that carry no path field.
+pub fun con-repr-ctx-path(c: con-repr): maybe<ctx-path>
+  if c.con/is-value then Nothing else
+    match c
+      ConSingle(ctxPath=cp) -> Just(cp)
+      ConAsCons(ctxPath=cp) -> Just(cp)
+      ConNormal(ctxPath=cp) -> Just(cp)
+      ConOpen(ctxPath=cp) -> Just(cp)
+      _ -> Nothing
+
+pub fun con-repr-has-ctx-path(c: con-repr): bool
+  c.con-repr-ctx-path.is-just
+
 pub fun con-repr/show(r: con-repr): string
   match r
     ConEnum(n, drepr, vrepr, tag) -> "ConEnum(" ++ n.name/name/show ++ "," ++ show(drepr) ++ "," ++ show(vrepr) ++ "," ++ tag.int/show ++ ")"
@@ -387,7 +400,9 @@ pub fun data-repr(i: data-info, is-val: (data-info) -> bool): _ (data-repr, list
   val hasExistentials = conInfos.any(_.existentials.is-cons)
   val is-value = is-val(i) && !i.is-rec
   val (dataRepr, conReprFuns) = 
-    if i.is-rec then (DataOpen, conInfos.map(fn(ci) fn(ctag) ConOpen(typeName, DataOpen, ci.valueRepr, CtxNone)))
+    if i.is-open then (DataOpen, conInfos.map(fn(ci) fn(ctag) ConOpen(typeName, DataOpen, ci.valueRepr, CtxNone)))
+    elif is-value && (i.params.is-nil || typeName == nameTpFieldAddr) && conInfos.all(fn(c) c.params.is-nil) then
+      (DataEnum, conInfos.map(fn(ci) fn(ctag) ConEnum(typeName, DataEnum, ci.valueRepr, ctag)))
     elif conInfos.length == 1 then
       val conInfo = conInfos.head.unjust
       val dataRepr = 
@@ -585,7 +600,7 @@ pub fun lit/show(l: lit): string
 pub type var-info
   InfoNone
   InfoArity(t: int, p: int) // type parameters, parameters
-  InfoExternal(b: list<(target, string)>) // inline body
+  InfoExternal(b: string) // inline body (always for a specific target platform)
   InfoReuse(p: pattern) 
   InfoConField(cName: tName, repr: con-repr, fName: tName) // constructor name, field name
 
@@ -619,7 +634,7 @@ pub fun varInfo/show(v: var-info): string
     InfoReuse -> "reuse:<pat>"
     InfoConField(n, _, fName) -> "field: " ++ n.show ++ "." ++ fName.show
     InfoArity(m, n) -> "arity:" ++ m.int/show ++ "," ++ n.int/show
-    InfoExternal(b) -> "external:" ++ b.show-list(fn((t, s)) t.show ++ ":" ++ s)
+    InfoExternal(b) -> "external:" ++ b
 
 pub fun arity(v: var-info): int
   match v
@@ -650,7 +665,7 @@ pub fun expr/is-total(e: expr): _ bool
     ELit -> True
     Let(dgs, ex) -> dgs.flatten.all(is-total) && ex.is-total
     Case(exps, brnchs) -> exps.all(is-total) && brnchs.all(is-total)
-    App(f, args) -> f.is-total && args.all(is-total)
+    App(f, args) -> f.is-total-fun && args.all(is-total)
 
 pub fun branch/is-total(b: branch): _ bool
   b.guards.all(is-total)
@@ -712,8 +727,8 @@ fun cost-local(d: def): _ int
 
 pub fun dg/cost(dg: def-group): _ int
   match dg
-    DefRec(defs) -> defs.map(cost).sum
-    DefNonRec(def) -> cost(def)
+    DefRec(defs) -> defs.map(cost-local).sum
+    DefNonRec(def) -> cost-local(def)
 
 pub fun expr/cost(e0: expr): _ int
   match e0
@@ -732,7 +747,7 @@ pub fun branch/cost(b: branch): _ int
   b.guards.map(cost).sum
 
 pub fun guard/cost(g: guard): _ int
-  g.body.cost
+  g.test.cost + g.body.cost
 
 fun expr/type-arity(e: expr): _ int
   e.type-of.type-arities.fst
@@ -775,13 +790,15 @@ fun get-effect(e: expr): keffect
 
 // Type variables
 
-val tnames/empty: linear-set<tName> = LinearSet([])
+pub val tnames/empty: rbset<tName> = rb-set/empty()
 
-fun tnames(l: list<tName>): linear-set<tName>
-  LinearSet(l)
+pub fun tnames(l: list<tName>): rbset<tName>
+  rb-set/from-list(l)
 
+// Compares the NAMES only
 pub fun cmp(t1: tName, t2: tName): order
   name/name/cmp(t1.get-name, t2.get-name)
+
 
 pub fun make-let(defs: list<def-group>, expr: expr): expr
   match defs
@@ -862,21 +879,21 @@ pub fun open-effect(effFrom: keffect, effTo: keffect, tpFrom: ktype, tpTo: ktype
     val e1 = TypeVar(-3, kindEffect, Bound)
     val e2 = TypeVar(-4, kindEffect, Bound)
     val tpOpen = TForAll([e1, e2, a, b], TFun([(new-name("x"), tpFrom)], typeTotal, tpTo))
-    val varOpen = Var(TName(nameEffectOpen, tpOpen), InfoExternal([(DefaultTarget, "#1")]))
+    val varOpen = Var(TName(nameEffectOpen, tpOpen), InfoExternal("#1"))
     App(TypeApp(varOpen, [effFrom, effTo, tpFrom, tpTo]), [expr])
 
 pub fun make-int32(i: int): expr
-  val int32 = Var(TName(nameInt32, TFun([(nil, typeInt)], typeTotal, typeInt32)), InfoArity(1, 0))
+  val int32 = Var(TName(nameInternalInt32, TFun([(nil, typeInt)], typeTotal, typeInt32)), InfoArity(1, 0))
   App(int32, [ELit(LitInt(i))])
 
 pub fun make-ev-index(i: int)
   if i < 0 then throw("core/core make-ev-index: size_t < 0 " ++ i.int/show)
-  val sizet = Var(TName(nameSSizeT, TFun([(nil, typeInt)], typeTotal, typeEvIndex)), InfoArity(1, 0))
+  val sizet = Var(TName(nameInternalSSizeT, TFun([(nil, typeInt)], typeTotal, typeEvIndex)), InfoArity(1, 0))
   App(sizet, [ELit(LitInt(i))])
 
 pub fun make-sizet(i: int)
   if i < 0 then throw("core/core make-sizet: size_t < 0 " ++ i.int/show)
-  val sizet = Var(TName(nameSSizeT, TFun([(nil, typeInt)], typeTotal, typeSSizeT)), InfoArity(1, 0))
+  val sizet = Var(TName(nameInternalSSizeT, TFun([(nil, typeInt)], typeTotal, typeSSizeT)), InfoArity(1, 0))
   App(sizet, [ELit(LitInt(i))])
 
 pub fun def/type-of(d: def): ktype
@@ -898,9 +915,9 @@ pub fun expr/type-of(expr: expr): _ ktype
       _ -> throw("core/core type-of(App..) Expected function TODO: Show real type")
     TypeLam(xs, e) -> TForAll(xs, e.type-of)
     TypeApp(e, []) -> e.type-of
-    // TypeApp(expr, tps) ->
-    //   val (tvs, tp1) = expr.type-of.split-tforall
-    //   tvs.zip(tps).subNew(tp1)
+    TypeApp(e, tps) ->
+      val (tvs, tp1) = e.type-of.split-tforall
+      tsubst(tvs.take(tps.length).zip(tps), tp1)
     ELit(l) -> l.type-of
     Let(_, e) -> e.type-of
     Case(_, branches) -> branches.head.unjust.type-of
@@ -937,18 +954,31 @@ fun split-fun(tp: ktype): _ (list<(name, ktype)>, ktype)
     TFun(args, _, res) -> (args, res)
     _ -> throw("core/core split-fun: expected function type")
 
+// minimal type-variable substitution (cannot use type/typevar here: it imports core/core)
+fun tsubst(sub: list<(type-var, ktype)>, tp: ktype): _ ktype
+  if sub.is-empty then tp else
+    match tp
+      TVar(tv) -> match sub.find(fn((v, _)) v == tv)
+        Just((_, t)) -> t
+        Nothing -> tp
+      TFun(args, eff, res) -> TFun(args.map(fn((n, t)) (n, tsubst(sub, t))), tsubst(sub, eff), tsubst(sub, res))
+      TApp(t, ts) -> TApp(tsubst(sub, t), ts.map(fn(t') tsubst(sub, t')))
+      TForAll(vars, t) -> TForAll(vars, tsubst(sub.filter(fn((v, _)) !vars.any(fn(w) w == v)), t))
+      TSyn(syn, args, t) -> TSyn(syn, args.map(fn(t') tsubst(sub, t')), tsubst(sub, t))
+      TCon -> tp
+
 fun split-tforall(tp: ktype): _ (list<type-var>, ktype)
   match tp.expand-syn
     TForAll(tvs, t) -> (tvs, t)
     _ -> throw("core/core split-tforall: expected forall type")
 
-alias deps = linear-set<name>
+pub alias deps = name-set
 pub fun deps/unions(l: list<deps>): deps
-  l.foldl(LinearSet([]), fn(s: deps, a: deps) s + a)
+  l.foldl(rb-set/empty(), fn(s: deps, a: deps) s + a)
 pub fun tname/dep(t: tName): deps
   dep(t.get-name)
 pub fun name/dep(n: name): deps
-  if n.is-qualified then LinearSet([n.qualifier]) else LinearSet([])
+  if n.is-qualified then rb-set/empty() + n.qualifier else rb-set/empty()
 
 pub fun idefscore/deps(l: list<inline-def>, c: core): _ deps
   deps/unions(l.map(_.expr.dep)) + c.deps
@@ -958,7 +988,7 @@ pub fun idefs/deps(l: list<inline-def>): _ deps
 
 pub fun core/deps(c: core): _ deps
   val x0 : deps = deps/unions(c.defs.flatten.map(dep)) + deps/unions(c.typedefs.flatten.map(dep))
-  val x1 : deps = LinearSet(c.imports.filter(_.visibility.is-public).map(importName))
+  val x1 : deps = rb-set/from-list(c.imports.filter(_.visibility.is-public).map(importName))
   x0 + x1 - c.coreName
 
 pub fun td/dep(td: typedef): _ deps
@@ -971,7 +1001,7 @@ pub fun ktype/dep(t: ktype): _ deps
     TForAll(_, rho) -> rho.dep
     TFun(args, eff, res) -> deps/unions(Cons(eff.dep, args.map(fn((_, t')) t'.dep))) + res.dep
     TCon(tc) -> tc.name.dep
-    TVar -> LinearSet([])
+    TVar -> rb-set/empty()
     TApp(tp, tps) -> tp.dep + deps/unions(tps.map(dep))
     TSyn(_, args, tp) -> tp.dep + deps/unions(args.map(dep))
 
@@ -986,7 +1016,7 @@ pub fun expr/dep(e: expr): _ deps
     TypeLam(_, body) -> body.dep
     TypeApp(e, tps) -> e.dep + deps/unions(tps.map(dep))
     Con(tn) -> tn.dep
-    ELit(_) -> LinearSet([])
+    ELit(_) -> rb-set/empty()
     Let(defs, body) -> deps/unions(Cons(body.dep, defs.flatten.map(dep)))
     Case(exprs, branches) -> deps/unions(exprs.map(dep) ++ branches.map(dep))
 
@@ -1000,4 +1030,4 @@ pub fun pattern/dep(p: pattern): _ deps
   match p
     PatCon(tn, pats) -> tn.dep + deps/unions(pats.map(dep))
     PatVar(_, p) -> p.dep
-    _ -> LinearSet([])
+    _ -> rb-set/empty()

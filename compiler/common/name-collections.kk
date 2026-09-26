@@ -7,22 +7,42 @@
 //----------------------------------------------------------------------------
 // Updated as of 3/15/25: Commits 69fe3ab (NameMap) b8074c2 (NameSet) 3229cca QNameMap
 
-import std/data/linear-map
-import std/data/linear-set
+module compiler/common/name-collections
+
+import std/data/rb-map
+import std/data/rb-set
+import std/data/rbtree
+import std/data/rbtree-bu
 import compiler/common/name
 import compiler/common/failure
 import compiler/platform/config
 import std/test
 
-alias name-map<a> = linear-map<name, a>;
+// name-map is a BOTTOM-UP red-black tree
+//
+// Upstream's gamma is `Data.Map.Strict Name [(Name,NameInfo)]` -- a balanced
+// tree ordered by `Ord Name`. 
+//
+// Bottom-up (not top-down) because that is where the PLDI'24 artifact's
+// `fbip(1)` coverage is: `bu/set`, `bu/add`, `bu/insert` and the balance
+// helpers are all verified fully-in-place, so they reuse nodes rather than
+// reallocating the spine. Top-down has one such function.
+//
+// Iteration order becomes key order.
+pub alias name-map<a> = rbmap<name, a>;
 
-alias name-set = linear-set<name>;
-val names/empty: name-set = LinearSet([])
+// Every map operation (`update`, `union-with`, `unions-with`, ...) lives in
+// `std/data/rb-map` itself, with `linear-map`'s names and semantics.
 
-alias qname-map<a> = linear-map<name,list<(name,a)>>;
+// Key-ordered, as rb-set iterates
+pub alias name-set = rbset<name>;
+pub val names/empty: name-set = rb-set/empty()
+
+// qname-map is name-keyed too, so it rides the same tree
+pub alias qname-map<a> = name-map<list<(name,a)>>;
 
 pub fun name-map/find(m: name-map<a>, n: name): _ a
-  match m.lookup(n)
+  match rb-map/lookup(m, n)
     Just(x) -> x
     _ -> throw("common/name-map/find: could not find: " ++ n.show)
 
@@ -45,50 +65,60 @@ pub fun lookup/show(a: lookup<a>, ?show: (a) -> e string): e string
     NotFound -> "NotFound"
 
 pub fun qname-map/single(n: name, a: a): qname-map<a>
-  LinearMap([(n.unqualify, [(n, a)])])
+  rb-map/from-list([(n.unqualify, [(n, a)])])
 
 pub fun qname-map/from-list(l: list<(name,a)>): _ qname-map<a>
-  l.foldl(LinearMap([])) fn(qm, (name, x))
-    qm.insert(name, x)
+  l.foldl(rb-map/empty()) fn(qm, (name, x))
+    qm.qname-map/insert(name, x)
 
 // Lookup a fully qualified name
 pub fun qname-map/lookup-qualified(m: qname-map<a>, n: name): maybe<a>
-  match m.lookup(n.unqualify)
+  match rb-map/lookup(m, n.unqualify)
     Just(xs) -> xs.lookup(_ == n)
     _ -> Nothing
 
 // Lookup a potentially unqualified name within a module context. 
 // (The module context is ignored if a qualified name is looked up)
 pub fun qname-map/lookup(m: qname-map<a>, c: name, name: name): lookup<a>
-  match m.lookup(name.unqualify)
-    Just(Cons((qname,x), _)) | !name.is-qualified -> Found((qname, x))
+  match rb-map/lookup(m, name.unqualify)
+    // fast path ONLY for a singleton entry: with
+    // several entries we must fall through to the context-qualified filter so
+    // the current module's definition takes precedence over imported ones
+    Just([(qname, x)]) | !name.is-qualified -> Found((qname, x))
     Just(xs) ->
       val qname = if name.is-qualified then name else c.qualify(name)
+      // upstream takes the context-qualified filter to be a SINGLETON:
+      //   case filter (\p -> fst p == qname) xs of
+      //     [(realname,x)] -> Found realname x
+      //     _              -> Ambiguous (map fst xs)
+      // matching `Cons(_, _)` here would accept the first of several equally
+      // qualified candidates where upstream reports them as ambiguous
       match xs.filter(fn((n, _)) -> n == qname)
-        Cons((realname, x), _) -> Found((realname, x))
+        Cons((realname, x), Nil) -> Found((realname, x))
         _ -> Ambiguous(xs.map(fst))
     _ -> NotFound
 
 pub fun qname-map/insert-with(m: qname-map<a>, c: name, a: list<(name,a)>, combine: (list<(name,a)>, list<(name,a)>) -> e list<(name,a)>): e qname-map<a>
-  m.map/update(c, a, combine)
+  rb-map/update(m, c, a, combine)
 
 pub fun qname-map/filter-names(m: qname-map<a>, p: (name) -> e bool): e qname-map<a>
-  m.map fn(k, xs)
+  rb-map/kvalue/map(m) fn(k, xs)
     xs.filter(fn((n, _)) p(n))
 
 pub fun qname-map/insert(m: qname-map<a>, n: name, a: a): _ qname-map<a>
-  m.update(n.unqualify, Cons((n, a), Nil)) fn(xs, ys)
-    safe-combine("insert", xs, ys)
+  // calls safeCombine(new, old) — flip so the new entry comes first
+  rb-map/update(m, n.unqualify, Cons((n, a), Nil)) fn(xs, ys)
+    safe-combine("insert", ys, xs)
 
 pub fun qname-map/union(m1: qname-map<a>, m2: qname-map<a>): _ qname-map<a>
-  m1.union-with(m2) fn(xs, ys)
+  rb-map/union-with(m1, m2) fn(xs, ys)
     safe-combine("union", xs, ys)
 
 pub fun qname-map/union-left-bias(m1: qname-map<a>, m2: qname-map<a>): _ qname-map<a>
-  m1.union-with(m2, list/(++))
+  rb-map/union-with(m1, m2, list/(++))
 
 pub fun qname-map/unions(ms: list<qname-map<a>>): _ qname-map<a>
-  ms.foldl(LinearMap([])) fn(m1, m2)
+  ms.foldl(rb-map/empty()) fn(m1, m2)
     m1.qname-map/union(m2)
 
 pub fun qname-map/safe-combine(s: string, xs: list<(name,a)>, ys: list<(name,a)>): _ list<(name,a)>

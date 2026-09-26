@@ -15,10 +15,10 @@ import compiler/type/typevar
 import compiler/type/pretty
 import compiler/type/unify
 import compiler/core/core
+import compiler/core/pretty
 import compiler/platform/config
-import compiler/lib/core
 // Analyze partiality of core match statements
-// Commit #f4e4050
+// Updated as of 7/23/26: Commit 752748d (the port already followed the rewritten match analysis)
 
 pub fun branches/analyze(def-name: name, rng: range, branches: list<branch>, tps: list<ktype>, infos: list<data-info>, is-lazy-match: bool): _ (bool, list<branch>)
   match-branches(def-name, rng, branches, tps, infos, is-lazy-match)
@@ -77,7 +77,7 @@ fun analyze-guards(rng: range, guards: list<guard>): _ ()
 fun match-pattern(def-name: name, rng: range, top: bool, (m, t, pat): (kmatch, ktype, pattern)): _ (kmatch, pattern)
   match m
     MatchComplete() -> // already fully matched
-      if top then add-warning(rng, "Some branches in the match will never be reached:".text |+| pat.show.text)
+      if top then add-warning(rng, "Some branches in the match will never be reached:".text |+| pat.show-default.text)
       (m, pat)
     Match(cinfos, cmatches) -> 
       match pat
@@ -163,9 +163,9 @@ fun lookup-con-infos(tp: ktype): _ list<con-info>
     TCon(tc) -> 
       match newtypes-lookup-any(tc.name)
         Just(di) -> di.get-con-infos(False) // [] for open or literals
-        Nothing -> throw("core/analysis-match/lookup-con-infos: not found: " ++ tc.name.show)
+        Nothing -> [] // trace: not found
     TApp(t) -> lookup-con-infos(t) // list<a>
-    _ -> throw("core/analysis-match/lookup-con-infos: not a type constructor")
+    _ -> [] // not a type constructor (e.g. a type variable)
 
 fun final-branch-is-catch-all(b: list<branch>): bool
   match b.reverse

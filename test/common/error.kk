@@ -92,7 +92,7 @@ fun suite()
       expect(True)
         val msg = error-message-kind(text("test"), rng)
         val errs = [msg]
-        errs.range == rng
+        errs.compiler/common/error/range == rng
 
 fun main()
   run-tests(suite)

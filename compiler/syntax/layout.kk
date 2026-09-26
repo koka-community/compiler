@@ -20,7 +20,6 @@ import std/os/file
 import std/os/path
 import std/core/undiv
 import std/core/unsafe
-import std/core-extras
 
 // Lex a source
 pub fun lex-source(source: source, line: int, allow-at: bool, semi-insert: bool, preprocess: list<lexeme> -> _ list<lexeme>): _ list<lexeme>

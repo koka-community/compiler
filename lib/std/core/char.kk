@@ -22,12 +22,12 @@ import std/core/int
 
 // Are two characters equal?
 pub inline fip extern (==) : (char,char) -> bool
-  inline "(#1 == #2)"
+  c inline "(#1 == #2)"
   js inline "(#1 === #2)"
-
+  
 // Are two characters not equal?
 pub inline fip extern (!=) : (char,char) -> bool
-  inline "(#1 != #2)"
+  c inline "(#1 != #2)"
   js inline "(#1 !== #2)"
 
 // Is a character code point lower or equal to that of another?
@@ -58,14 +58,14 @@ pub fip fun order2( x : char, y : char ) : order2<char>
 
 // Convert a character to its unicode code point
 pub inline fip extern int : (char) -> int
-  inline "#1"
   c "kk_integer_from_int"
+  js inline "#1"  
   cs inline "new BigInteger(#1)"
 
 // Convert a unicode code point to a character
 pub inline fip extern int/char( i : int) : char
-  inline "(#1)"
   c "kk_integer_clamp32"
+  js inline "(#1)"  
   cs inline "Primitive.IntToInt32(#1)"
 
 // Add two character code points
@@ -111,3 +111,17 @@ pub fip fun is-control( c : char )   : bool
 // Tests if a character is an element of `" \t\n\r"`
 pub fip fun is-white( c : char )     : bool
   c == ' ' || c == '\t' || c == '\n' || c == '\r'
+
+// Tests if a character is an element of `" \t"` -- horizontal white space only,
+// so a line terminator is not "space".
+pub fip fun is-space( c : char )     : bool
+  c == ' ' || c == '\t'
+
+// Convert an ASCII character to upper case; any other character is unchanged.
+// ASCII only, like `string/to-upper` (kklib's `kk_string_to_upper`).
+pub fip fun to-upper( c : char ) : char
+  if c.is-lower then (c.int - 32).char else c
+
+// Convert an ASCII character to lower case; any other character is unchanged.
+pub fip fun to-lower( c : char ) : char
+  if c.is-upper then (c.int + 32).char else c

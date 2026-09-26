@@ -12,7 +12,7 @@ import compiler/common/name
 import compiler/common/syntax
 import compiler/common/failure
 import std/core/unsafe
-// Updated as of 11/19/25: Commit #b6fdf12
+// Updated as of 7/23/26: Commit #6fe38b8
 
 //---------------------------------
 // Special
@@ -39,12 +39,13 @@ val nameCase        = "case".new-name
 // Core
 //---------------------------------
 pub val nameTpIO = "io".prelude-name
+pub val nameTpIOC = "ioc".prelude-name
+pub val nameTpIOCTotal = "ioc-total".prelude-name
 pub val nameTpNamed     = "nmd".prelude-name
 pub val nameTpScope     = "scope".prelude-name
 pub val nameTpPure      = "pure".prelude-name
 
-val nameTpAsync     = "std/async".new-qualified("async")
-val nameTpAsyncX    = "std/async".new-qualified("asyncx")
+pub val nameTpAsync     = "std/async/async".new-qualified("async")
 val nameTpBuilder   = "std/text/string".new-qualified("builder")
 val nameTpArray     = "std/data/array".new-qualified("array")
 val nameTpMDict     = nameDict.qualify("mdict".new-name)
@@ -79,7 +80,7 @@ pub val nameCoreFileModule = nameCoreDebug.qualify(new-locally-qualified("", "fi
 //---------------------------------
 
 pub val nameLazyMemoizeTarget = "memoize-target".core-lazy-name
-val nameLazyMemoize = "whnf-memoize".core-lazy-name
+pub val nameLazyMemoize = "memoize".core-lazy-name
 pub val nameLazyEnter  = "atomic-enter".core-lazy-name
 pub val nameLazyLeave  = "atomic-leave".core-lazy-name
 pub val nameLazyIsWhnf = "datatype-is-whnf".core-lazy-name
@@ -256,7 +257,7 @@ pub val nameAnd         = "&&".core-types-name
 pub val nameOr          = "||".core-types-name
 
 pub fun make-tp-handled(namedh: bool, linear: bool): name
-  core-types-name(if namedh then "nhandled" else "handled" ++ (if linear then "1" else ""))
+  core-types-name((if namedh then "nhandled" else "handled") ++ (if linear then "1" else ""))
 
 pub val nameTpHandled   = make-tp-handled(False, False)
 pub val nameTpHandled1  = make-tp-handled(False, True)
@@ -273,8 +274,8 @@ pub val nameJust        = "Just".core-types-name
 pub val nameNothing     = "Nothing".core-types-name
 pub val nameTpMaybe     = "maybe".core-types-name
 
-val nameOptional    = "@Optional".core-types-name
-val nameOptionalNone= "@None".core-types-name
+pub val nameOptional    = "@OptArg".core-types-name
+pub val nameOptionalNone= "@NoOptArg".core-types-name
 pub val nameTpOptional  = "@optional".core-types-name
 
 pub val nameTpVoid      = "void".core-types-name
@@ -282,7 +283,8 @@ pub val nameTpUnit      = "unit".core-types-name
 pub val nameTpBool      = "bool".core-types-name
 pub val nameTpInt       = "int".core-types-name
 
-// val nameTpByte      = "uint8".core-types-name
+pub val nameTpByte      = "uint8".core-types-name
+pub val nameTpBytes     = "bytes".core-types-name
 pub val nameTpInt8      = "int8".core-types-name
 pub val nameTpInt16     = "int16".core-types-name
 pub val nameTpInt32     = "int32".core-types-name

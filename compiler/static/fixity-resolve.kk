@@ -2,6 +2,7 @@
 module compiler/static/fixity-resolve
 
 import compiler/common/name
+import std/data/rb-map
 import compiler/common/name-prim
 import compiler/common/name-collections
 import compiler/common/failure
@@ -10,7 +11,6 @@ import compiler/common/range
 import compiler/syntax/syntax
 import compiler/common/syntax
 import compiler/common/color-scheme
-import std/data/linear-map
 import compiler/lib/pprint
 // Updated to 7eb71dc on 2/10/25
 
@@ -122,7 +122,7 @@ fun handlerbranch/resolve(hb: handler-branch<user-type>)
 
 // Fixity map for all operators
 pub alias fixities = name-map<fixity>
-val fixitiesEmpty: fixities = LinearMap([])
+val fixitiesEmpty: fixities = rb-map/empty()
 
 fun find-fixity(fixities: fixities, name: name): fixity
   fixities.lookup(name).default(FixInfix(50, AssocNone))
@@ -130,8 +130,8 @@ fun find-fixity(fixities: fixities, name: name): fixity
 pub fun fixities-compose(fix1: fixities, fix2: fixities): fixities
   fix2.list.foldl(fix1) fn(acc, (name, fixity))
     match fix1.lookup(name)
-      Just(x as FixInfix) -> acc.add(name, x)
-      _ -> acc.add(name, fixity)
+      Just(x as FixInfix) -> rb-map/set(acc, name, x)
+      _ -> rb-map/set(acc, name, fixity) // upstream compose: fix2's infix wins when fix1's entry is not infix
 
 pub fun fixities-new(fs: list<(name, fixity)>): fixities
   fixitiesEmpty + fs.filter(_.snd.is-fixInfix)
@@ -226,7 +226,7 @@ fun ambiguous(fixCtx: fixity, fix: fixity, op: user-expr)
     match op
       Var(nm) -> nm.pretty |.| space
       _ -> empty
-  val msg = "Ambiguous ".text |+| fix.pp-fixity |+| "operator".text |+| opText |.| "in a".text |+| fixCtx.pp-fixity |+| "context".text |-| " hint: add parenthesis around the sub-expression to disambiguate".text
+  val msg = "Ambiguous".text |+| fix.pp-fixity |+| "operator".text |+| opText |.| "in a".text |+| fixCtx.pp-fixity |+| "context".text |-| " hint: add parenthesis around the sub-expression to disambiguate".text
   add-fix-error(msg, op.range)
 
 fun pp-fixity(f: fixity): doc
@@ -265,7 +265,7 @@ fun apply-unary-op(op: expr<t>, ts: list<expr<t>>): _ list<expr<t>>
 
 fun apply-infix-op(op: expr<t>, ts: list<expr<t>>): _ list<expr<t>>
   match ts
-    Cons(t1, Cons(t2, ts)) -> Cons(App(op, [(Nothing, t1), (Nothing, t2)], t1.range.combine(t2.range)), ts)
+    Cons(t1, Cons(t2, ts)) -> Cons(App(op, [(Nothing, t2), (Nothing, t1)], t1.range.combine(t2.range)), ts)
     _ -> 
       add-fix-error("Infix operator has not enough arguments".text, op.range)
       ts

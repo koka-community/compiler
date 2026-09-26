@@ -73,13 +73,13 @@ pub fun is-kind-any-label(k: kind): bool
   k == kindHandled || k == kindHandled1 || k == kindLabel
 
 // Standard kind constant with their kind
-val buildinKinds = [
-  (nameKindStar, kindStar),
-  (nameKindFun, kindArrow),
-  (nameKindEffect, kindEffect),
-  (nameKindLabel, kindLabel),
-  (nameKindHeap, kindHeap),
-  (nameKindScope, kindScope),
-  // (nameKindHandled, kindHandled),
-  // (nameKindHandled1, kindHandled1),
-]
+// val builtinKinds = [
+//   (nameKindStar, kindStar),
+//   (nameKindFun, kindArrow),
+//   (nameKindEffect, kindEffect),
+//   (nameKindLabel, kindLabel),
+//   (nameKindHeap, kindHeap),
+//   (nameKindScope, kindScope),
+//   // (nameKindHandled, kindHandled),
+//   // (nameKindHandled1, kindHandled1),
+// ]

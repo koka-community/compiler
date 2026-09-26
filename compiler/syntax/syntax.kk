@@ -5,7 +5,9 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //---------------------------------------------------------------------------
-// Updated as of 07/12/25: Commit 752748d
+// Updated as of 7/23/26: Commit 2467116
+
+module compiler/syntax/syntax
 
 import std/num/float64
 import compiler/common/range
@@ -15,8 +17,7 @@ import compiler/common/name-collections
 import compiler/common/syntax
 import compiler/common/failure
 import compiler/platform/config
-import std/data/linear-set
-import std/core-extras
+import std/data/rb-set
 import std/core/undiv
 
 pub effect val current-program : program<user-type, user-kind>
@@ -63,20 +64,20 @@ pub type external
     params: list<param-info>,
     name-range: range,
     range: range,
-    inlineCall: list<(target, external-call)>, 
+    inlineCall: external-call, // external (already resolved for the target platform)
     vis: visibility,
     fipAnnot: fipT,
     doc: string)
   ExternalImport(
-    eImport: list<(target,list<(string, string)>)>, 
+    eImport: list<(string, string)>, // key/value pairs (already resolved for the target platform)
     range: range)
 
 pub fun external/show(e: external): _ string
   match e
     External(name, t, params, name-range, range, inlineCall, vis, fipAnnot, doc) ->
       "External " ++ name.name/name/show ++ " " ++ t.show ++ " " ++ params.list/show ++ " " ++ name-range.show ++ " " ++ range.show ++ " " ++
-      inlineCall.list/show ++ " " ++ vis.show ++ " " ++ fipAnnot.show ++ " " ++ doc.show
-    ExternalImport(eImport, range) -> "ExternalImport " ++ eImport.list/show(?show=fn((t:target, l:list<(string,string)>)) t.show ++ " " ++ l.list/show) ++ " " ++ range.show
+      inlineCall.show ++ " " ++ vis.show ++ " " ++ fipAnnot.show ++ " " ++ doc.show
+    ExternalImport(eImport, range) -> "ExternalImport " ++ eImport.list/show(?show=fn((k:string, v:string)) k.show ++ " " ++ v.show) ++ " " ++ range.show
 
 pub value type external-call
   ExternalInline(content: string)
@@ -89,7 +90,7 @@ fun externcall/show(e: external-call): string
 
 pub alias fix-defs = list<fix-def>;
 
-type fix-def
+pub value type fix-def
   FixDef(
     name: name,
     fixity: fixity,
@@ -504,19 +505,19 @@ pub fun uhb/range(uhb: user-handler-branch): range
 // free type variables
 pub fun maybe/free-type-vars(m: maybe<a>, ?free-type-vars: (a) -> _ name-set): _ name-set
   match m
-    Nothing -> LinearSet([])
+    Nothing -> rb-set/empty()
     Just(x) -> ?free-type-vars(x)
 
 pub fun list/free-type-vars(l: list<a>, ?free-type-vars: (a) -> _ name-set): _ name-set
-  l.foldl(LinearSet([]), fn(s:name-set, x) s + ?free-type-vars(x))
+  l.foldl(rb-set/empty(), fn(s:name-set, x) s + ?free-type-vars(x))
 
 pub fun kut/free-type-vars(tp: kuser-type<k>): _ name-set
   match tp
     TpQuan(_, TypeBinder(name), tp, _) -> tp.free-type-vars - name
     TpFun(args, eff, tp) -> free-type-vars(Cons(tp,Cons(eff,args.map(snd))))
     TpApp(tp, args) -> tp.free-type-vars + args.free-type-vars
-    TpVar(name) -> LinearSet([name])
-    TpCon -> LinearSet([])
+    TpVar(name) -> rb-set/empty() + name
+    TpCon -> rb-set/empty()
     TpParens(tp) -> tp.free-type-vars
     TpAnn(tp) -> tp.free-type-vars
 
