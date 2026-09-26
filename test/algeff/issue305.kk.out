@@ -1,0 +1,4 @@
+success
+ 
+algeff/issuexxx/main: () -> console ()
+algeff/issuexxx/test: () -> std/text/parse/parse char

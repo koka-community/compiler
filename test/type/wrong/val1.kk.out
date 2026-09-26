@@ -1,0 +1,6 @@
+test/type/wrong/val1@kk(2, 7): type error: effects do not match
+ context : r
+ term : r
+ inferred effect: <alloc<global>|_e>
+ expected effect: total
+ because : Polymorphic values cannot have an effect

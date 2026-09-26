@@ -1,0 +1,8 @@
+type/masklocal1/bio: forall<a,e> (action : () -> <bio|e> a) -> e (a, string)
+type/masklocal1/bio2: forall<a,e> (action : () -> <bio|e> a) -> e (a, string)
+type/masklocal1/bio3: forall<a,e> (action : () -> <bio|e> a) -> e (a, string)
+type/masklocal1/bio4: forall<a,e> (action : () -> <bio|e> a) -> e (a, string)
+type/masklocal1/bio5: forall<a,e> (action : () -> <bio|e> a) -> e (a, string)
+type/masklocal1/echo: (s : string) -> bio ()
+type/masklocal1/stdout: int
+type/masklocal1/write: (fd : filedesc, s : string) -> bio ()

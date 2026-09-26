@@ -1,0 +1,5 @@
+100
+ 
+algeff/mask1/ask: forall<a> () -> (reader<a>) a
+algeff/mask1/main: () -> console ()
+algeff/mask1/test: forall<a,e> (p : () -> <reader<int>,reader<int>|e> a) -> e a

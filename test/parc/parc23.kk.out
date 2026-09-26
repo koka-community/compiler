@@ -1,0 +1,144 @@
+module parc/parc23
+import std/core/types = std/core/types pub = "";
+import std/core/hnd = std/core/hnd pub = "";
+import std/core/exn = std/core/exn pub = "";
+import std/core/bool = std/core/bool pub = "";
+import std/core/order = std/core/order pub = "";
+import std/core/char = std/core/char pub = "";
+import std/core/int = std/core/int pub = "";
+import std/core/vector = std/core/vector pub = "";
+import std/core/bytes = std/core/bytes pub = "";
+import std/core/bslice = std/core/bslice pub = "";
+import std/core/string = std/core/string pub = "";
+import std/core/sslice = std/core/sslice pub = "";
+import std/core/list = std/core/list pub = "";
+import std/core/maybe = std/core/maybe pub = "";
+import std/core/maybe2 = std/core/maybe2 pub = "";
+import std/core/either = std/core/either pub = "";
+import std/core/result = std/core/result pub = "";
+import std/core/tuple = std/core/tuple pub = "";
+import std/core/lazy = std/core/lazy pub = "";
+import std/core/show = std/core/show pub = "";
+import std/core/debug = std/core/debug pub = "";
+import std/core/delayed = std/core/delayed pub = "";
+import std/core/console = std/core/console pub = "";
+import std/core = std/core = "";
+// struct pair2<a,b>(a : list<a>, b : b) // this reuses
+pub type parc/parc23/pair2[4,1,4,31] <a,b> :: (V, V) -> V {
+ // struct pair2<a,b>(a : list<a>, b : b) // this reuses
+ pub con parc/parc23/Pair2[4,8,4,12](a: a, b: b){0,2,8} : forall<a,b> (a : a, b : b) -> (parc/parc23/pair2 :: (V, V) -> V)<a,b> = 1;
+};
+// Automatically generated@ Retrieves the `a` constructor field of the `:pair2` type@
+pub fun pair2/a : forall<a,b> (^ pair2 : parc/parc23/pair2<a,b>) -> a
+ = fn(pair2: parc/parc23/pair2<37,38>){
+ match (pair2) {
+ (@skip parc/parc23/Pair2((@x: 37), (@pat@xxx: 38)) : parc/parc23/pair2<a,b> )
+ -> std/core/types/@dup(@x);
+ };
+ };
+// Automatically generated@ Retrieves the `b` constructor field of the `:pair2` type@
+pub fun pair2/b : forall<a,b> (^ pair2 : parc/parc23/pair2<a,b>) -> b
+ = fn(pair2: parc/parc23/pair2<67,68>){
+ match (pair2) {
+ (@skip parc/parc23/Pair2((@pat@xxx: 67), (@x: 68)) : parc/parc23/pair2<a,b> )
+ -> std/core/types/@dup(@x);
+ };
+ };
+pub fun pair2/@copy : forall<a,b> (@this : parc/parc23/pair2<a,b>, a : ? a, b : ? b) -> parc/parc23/pair2<a,b>
+ = fn(@this: parc/parc23/pair2<128,129>, a: ? 128, b: ? 129){
+ parc/parc23/Pair2((match (a) {
+ (std/core/types/@OptArg((@uniq-a@xxx: 128)) : ? a )
+ -> @uniq-a@xxx;
+ (@skip std/core/types/@NoOptArg() : ? a )
+ -> (match (@this) {
+ (@skip parc/parc23/Pair2((@x: 128), (@pat@xxx: 129)) : parc/parc23/pair2<a,b> )
+ -> val _ : a
+ = std/core/types/@dup(@x);
+ @x;
+ });
+ }), (match (b) {
+ (std/core/types/@OptArg((@uniq-b@xxx: 129)) : ? a )
+ -> val _ : ()
+ = std/core/types/@drop(@this, (std/core/types/@make-int32(2)));
+ @uniq-b@xxx;
+ (@skip std/core/types/@NoOptArg() : ? a )
+ -> (match (@this) {
+ (@skip parc/parc23/Pair2((@pat@xxx: 128), (@x@xxx: 129)) : parc/parc23/pair2<a,b> )
+ -> val _ : ()
+ = (match ((std/core/types/@is-unique(@this))) {
+ (std/core/types/True() : bool )
+ -> val _ : ()
+ = val _ : ()
+ = std/core/types/@drop(@pat@xxx);
+ std/core/types/Unit;
+ std/core/types/@free(@this);
+ _
+ -> val _ : ()
+ = val _ : a
+ = std/core/types/@dup(@x@xxx);
+ std/core/types/Unit;
+ val _ : ()
+ = std/core/types/@dec-ref(@this);
+ std/core/types/Unit;
+ });
+ @x@xxx;
+ });
+ }));
+ };
+pub fun rotate : forall<a> (ysacc : parc/parc23/pair2<list<a>,list<a>>) -> parc/parc23/pair2<list<a>,list<a>>
+ = fn(ysacc: parc/parc23/pair2<list<0>,list<0>>){
+ match (ysacc) {
+ (@skip parc/parc23/Pair2(((@skip std/core/types/@Box(((std/core/types/Cons((y: 188), (ys: list<0>)) : list<a> ) as @pat@xxx: list<0>)) : @box ) as @box-xxx: @box), ((@skip std/core/types/@Box((acc: list<0>)) : @box ) as @box-xxx: @box)) : parc/parc23/pair2<list<a>,list<a>> )
+ -> val @ru-x13 : @reuse
+ = std/core/types/@no-reuse();
+ val @ru-x12 : @reuse
+ = std/core/types/@no-reuse();
+ val _ : ()
+ = (match ((std/core/types/@is-unique(ysacc))) {
+ (std/core/types/True() : bool )
+ -> val _ : ()
+ = val _ : ()
+ = (match ((std/core/types/@is-unique(@pat@xxx))) {
+ (std/core/types/True() : bool )
+ -> val _ : ()
+ = std/core/types/Unit;
+ std/core/types/@assign-reuse(@ru-x12, (std/core/types/@reuse(@pat@xxx)));
+ _
+ -> val _ : ()
+ = val _ : a
+ = std/core/types/@dup(y);
+ val _ : list<a>
+ = std/core/types/@dup(ys);
+ std/core/types/Unit;
+ val _ : ()
+ = std/core/types/@dec-ref(@pat@xxx);
+ std/core/types/Unit;
+ });
+ std/core/types/Unit;
+ std/core/types/@assign-reuse(@ru-x13, (std/core/types/@reuse(ysacc)));
+ _
+ -> val _ : ()
+ = val _ : list<a>
+ = std/core/types/@dup(acc);
+ val _ : a
+ = std/core/types/@dup(y);
+ val _ : list<a>
+ = std/core/types/@dup(ys);
+ std/core/types/Unit;
+ val _ : ()
+ = std/core/types/@dec-ref(ysacc);
+ std/core/types/Unit;
+ });
+ std/core/types/@alloc-at(@ru-x12, (parc/parc23/Pair2((std/core/types/@box((std/core/types/@alloc-at(@ru-x13, (std/core/types/Cons(y, acc)))))), (std/core/types/@box(ys)))));
+ _
+ -> val @ru-x14 : @reuse
+ = std/core/types/@no-reuse();
+ val _ : ()
+ = std/core/types/@assign-reuse(@ru-x14, (std/core/types/@drop-reuse(ysacc, (std/core/types/@make-int32(2)))));
+ std/core/types/@alloc-at(@ru-x14, (parc/parc23/Pair2((std/core/types/@box(std/core/types/Nil)), (std/core/types/@box(std/core/types/Nil)))));
+ };
+ };
+pub fun main : () -> ()
+ = fn(){
+ std/core/types/Unit;
+ };

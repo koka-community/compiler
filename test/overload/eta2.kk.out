@@ -1,0 +1,5 @@
+9
+ 
+overload/eta2/foo: forall<a> (xs : list<a>, zero : a, ?plus : (a, a) -> a) -> a
+overload/eta2/main: () -> int
+overload/eta2/plus: (x : int, y : int, z : ? int) -> int

@@ -1,0 +1,11 @@
+(3,True)
+ 
+overload/num1/bool/num: num<bool>
+overload/num1/int/num: num<int>
+overload/num1/(+): forall<a> (xs : list<a>, ys : list<a>, ?num : num<a>) -> a
+overload/num1/add: forall<a> (xs : list<a>, ys : list<a>, ?num : num<a>) -> a
+overload/num1/num/(+): forall<a> (x : a, y : a, ?num : num<a>) -> a
+overload/num1/num/plus: forall<a> (num : num<a>) -> ((a, a) -> a)
+overload/num1/num/zero: forall<a> (num : num<a>) -> a
+overload/num1/Num: forall<a> (plus : (a, a) -> a, zero : a) -> num<a>
+overload/num1/main: () -> console ()

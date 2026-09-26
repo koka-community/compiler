@@ -1,0 +1,3 @@
+type/eff-rec1/cow: forall<a,e> (() -> <console,cow|e> a) -> <console|e> a
+type/eff-rec1/main: () -> <console,div> ()
+type/eff-rec1/moo: () -> <cow,div> (() -> <cow,div> ())
