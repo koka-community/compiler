@@ -1,0 +1,52 @@
+module interface
+ 
+//----------------------
+//#kki: import declarations
+ 
+ 
+//----------------------
+//#kki: external imports
+ 
+ 
+//----------------------
+//#kki: fixity declarations
+ 
+ 
+//----------------------
+//#kki: local imported aliases
+ 
+ 
+//----------------------
+//#kki: type declarations
+ 
+pub recursive effect type yield[1,1,2,26]<e2,b>{
+  pub con @Hnd-yield[1,1,1,13](@cfc: std/core/types/int, @ctl-yield: std/core/hnd/clause1<std/core/types/int,std/core/types/bool,yield,e2,b>) {0, 0, 0} : forall<e3,c> (std/core/types/int, std/core/hnd/clause1<std/core/types/int,std/core/types/bool,yield,e3,c>) -> yield<e3,c> = 1;
+};
+ 
+//----------------------
+//#kki: declarations
+ 
+// Automatically generated. Retrieves the `@cfc` constructor field of the `:` type.
+fun yield/@cfc : forall<(e7 :: E),b1> (yield : (yield :: (E, V) -> V)<(e7 :: E),b1>) -> std/core/types/int
+// runtime tag for the effect `:yield`
+val yield/@tag : (std/core/hnd/htag :: (E, V) -> V V)<(yield :: (E, V) -> V)>
+// handler for the effect `:yield`
+fun yield/@handle : forall<b2,(e12 :: E),c2> (hnd : (yield :: (E, V) -> V)<(e12 :: E),c2>, ret : (res : b2) -> (e12 :: E) c2, action : () -> <(yield :: (E, V) -> V)|(e12 :: E)> b2) -> (e12 :: E) c2
+// Automatically generated. Retrieves the `@ctl-yield` constructor field of the `:` type.
+fun yield/@ctl-yield : forall<(e16 :: E),b3> (yield : (yield :: (E, V) -> V)<(e16 :: E),b3>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<std/core/types/int,std/core/types/bool,(yield :: (E, V) -> V),(e16 :: E),b3>
+// select `yield` operation out of the effect `:yield`
+ handler
+fun yield/@select : forall<(e20 :: E),a4> (hnd : (yield :: (E, V) -> V)<(e20 :: E),a4>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<std/core/types/int,std/core/types/bool,(yield :: (E, V) -> V),(e20 :: E),a4>
+fun yield : (i : std/core/types/int) -> <(yield :: (E, V) -> V)> std/core/types/bool
+// monadic lift
+fun @mlift-traverse@52 : forall<(_e26 :: E),(_e27 :: E)> (xx : (std/core/types/list :: V V)<std/core/types/int>, @y.38 : std/core/types/bool) -> <(yield :: (E, V) -> V)|(_e27 :: E)> ()
+fun traverse : (xs : (std/core/types/list :: V V)<std/core/types/int>) -> <(yield :: (E, V) -> V)> ()
+fun main : () -> ()
+ 
+//----------------------
+//#kki: external declarations
+ 
+ 
+//----------------------
+//#kki: inline definitions
+ 

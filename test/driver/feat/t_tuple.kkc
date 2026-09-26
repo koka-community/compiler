@@ -1,0 +1,35 @@
+module interface
+ 
+//----------------------
+//#kki: import declarations
+ 
+ 
+//----------------------
+//#kki: external imports
+ 
+ 
+//----------------------
+//#kki: fixity declarations
+ 
+ 
+//----------------------
+//#kki: local imported aliases
+ 
+ 
+//----------------------
+//#kki: type declarations
+ 
+ 
+//----------------------
+//#kki: declarations
+ 
+fun swap : (p : (std/core/types/tuple2 :: (V, V) -> V)<std/core/types/int,std/core/types/string>) -> (std/core/types/tuple2 :: (V, V) -> V)<std/core/types/string,std/core/types/int>
+fun main : () -> <(std/core/console/console :: X)> ()
+ 
+//----------------------
+//#kki: external declarations
+ 
+ 
+//----------------------
+//#kki: inline definitions
+ 

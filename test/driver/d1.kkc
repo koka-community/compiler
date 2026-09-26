@@ -1,0 +1,42 @@
+module interface
+ 
+//----------------------
+//#kki: import declarations
+ 
+ 
+//----------------------
+//#kki: external imports
+ 
+ 
+//----------------------
+//#kki: fixity declarations
+ 
+ 
+//----------------------
+//#kki: local imported aliases
+ 
+ 
+//----------------------
+//#kki: type declarations
+ 
+pub recursive type nat[1,1,3,18]{
+  pub con Zero[2,3,2,7] {0, 0, 0} : nat = 1;
+  pub con Succ[3,3,3,7](pred: nat) {0, 0, 0} : (pred : nat) -> nat = 2;
+};
+ 
+//----------------------
+//#kki: declarations
+ 
+// Automatically generated. Tests for the `` constructor of the `:` type.
+fip fun is-zero : (nat : nat) -> std/core/types/bool
+// Automatically generated. Tests for the `` constructor of the `:` type.
+fip fun is-succ : (nat : nat) -> std/core/types/bool
+fun walk : (n : nat) -> <(std/core/types/div :: X)> std/core/types/int
+ 
+//----------------------
+//#kki: external declarations
+ 
+ 
+//----------------------
+//#kki: inline definitions
+ 

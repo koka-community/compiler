@@ -1,0 +1,48 @@
+module interface
+ 
+//----------------------
+//#kki: import declarations
+ 
+ 
+//----------------------
+//#kki: external imports
+ 
+ 
+//----------------------
+//#kki: fixity declarations
+ 
+ 
+//----------------------
+//#kki: local imported aliases
+ 
+ 
+//----------------------
+//#kki: type declarations
+ 
+ 
+//----------------------
+//#kki: declarations
+ 
+// monadic lift
+fun @mlift-main@15 : forall<(__h9 :: H),(_e8 :: E),(h10 :: H)> (sum : (std/core/types/local-var :: (H, V) -> V)<(h10 :: H),std/core/types/int>, wild@0 : ()) -> <(std/core/types/div :: X),(std/core/types/local :: H X)<(h10 :: H)>,(std/core/console/console :: X)|(_e8 :: E)> ()
+// monadic lift
+fun @mlift-main@14 : forall<(__h20 :: H),(_e16 :: E),(h21 :: H)> (i : (std/core/types/local-var :: (H, V) -> V)<(h21 :: H),std/core/types/int>, sum : (std/core/types/local-var :: (H, V) -> V)<(h21 :: H),std/core/types/int>, @y.2 : std/core/types/int) -> <(std/core/types/local :: H X)<(h21 :: H)>,(std/core/types/div :: X),(std/core/console/console :: X)|(_e16 :: E)> ()
+// monadic lift
+fun @mlift-main@13 : forall<(__h30 :: H),(_e23 :: E),(h31 :: H)> (@y.2 : std/core/types/int, sum : (std/core/types/local-var :: (H, V) -> V)<(h31 :: H),std/core/types/int>, i : (std/core/types/local-var :: (H, V) -> V)<(h31 :: H),std/core/types/int>, @y.3 : std/core/types/int) -> <(std/core/types/local :: H X)<(h31 :: H)>,(std/core/types/div :: X),(std/core/console/console :: X)|(_e23 :: E)> ()
+// monadic lift
+fun @mlift-main@12 : forall<(__h40 :: H),(_e31 :: E),(h41 :: H)> (i : (std/core/types/local-var :: (H, V) -> V)<(h41 :: H),std/core/types/int>, wild : ()) -> <(std/core/types/local :: H X)<(h41 :: H)>,(std/core/types/div :: X),(std/core/console/console :: X)|(_e31 :: E)> ()
+// monadic lift
+fun @mlift-main@11 : forall<(_e35 :: E),(h45 :: H)> (i : (std/core/types/local-var :: (H, V) -> V)<(h45 :: H),std/core/types/int>, @y.5 : std/core/types/int) -> <(std/core/types/local :: H X)<(h45 :: H)>,(std/core/types/div :: X),(std/core/console/console :: X)|(_e35 :: E)> ()
+// monadic lift
+fun @mlift-main@10 : forall<(_e38 :: E),(h48 :: H)> (@y.1 : std/core/types/int) -> <(std/core/types/local :: H X)<(h48 :: H)>,(std/core/types/div :: X),(std/core/console/console :: X)|(_e38 :: E)> std/core/types/bool
+// monadic lift
+fun @mlift-main@9 : forall<(_e41 :: E),(h51 :: H)> (@y.8 : std/core/types/int) -> <(std/core/types/local :: H X)<(h51 :: H)>,(std/core/console/console :: X),(std/core/types/div :: X)|(_e41 :: E)> ()
+fun main : () -> ()
+ 
+//----------------------
+//#kki: external declarations
+ 
+ 
+//----------------------
+//#kki: inline definitions
+ 

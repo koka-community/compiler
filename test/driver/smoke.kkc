@@ -1,0 +1,39 @@
+module interface
+ 
+//----------------------
+//#kki: import declarations
+ 
+ 
+//----------------------
+//#kki: external imports
+ 
+ 
+//----------------------
+//#kki: fixity declarations
+ 
+ 
+//----------------------
+//#kki: local imported aliases
+ 
+ 
+//----------------------
+//#kki: type declarations
+ 
+ 
+//----------------------
+//#kki: declarations
+ 
+val one : std/core/types/int
+fun ident : forall<b> (x : b) -> b
+fun twice : forall<a1,(e4 :: E)> (f : (a1) -> (e4 :: E) a1, x : a1) -> (e4 :: E) a1
+fun compose : forall<b2,c2,d2,(e8 :: E)> (f : (b2) -> (e8 :: E) c2, g : (d2) -> (e8 :: E) b2) -> (x : d2) -> (e8 :: E) c2
+val hello : std/core/types/string
+fun apply-ident : () -> std/core/types/int
+ 
+//----------------------
+//#kki: external declarations
+ 
+ 
+//----------------------
+//#kki: inline definitions
+ 

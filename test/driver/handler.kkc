@@ -1,0 +1,56 @@
+module interface
+ 
+//----------------------
+//#kki: import declarations
+ 
+ 
+//----------------------
+//#kki: external imports
+ 
+ 
+//----------------------
+//#kki: fixity declarations
+ 
+ 
+//----------------------
+//#kki: local imported aliases
+ 
+ 
+//----------------------
+//#kki: type declarations
+ 
+pub recursive effect type ask[1,1,2,17]<e2,b>{
+  pub con @Hnd-ask[1,1,1,11](@cfc: std/core/types/int, @fun-ask: std/core/hnd/clause0<std/core/types/int,ask,e2,b>) {0, 0, 0} : forall<e3,c> (std/core/types/int, std/core/hnd/clause0<std/core/types/int,ask,e3,c>) -> ask<e3,c> = 1;
+};
+ 
+//----------------------
+//#kki: declarations
+ 
+// Automatically generated. Retrieves the `@cfc` constructor field of the `:` type.
+fun ask/@cfc : forall<(e7 :: E),b1> (ask : (ask :: (E, V) -> V)<(e7 :: E),b1>) -> std/core/types/int
+// runtime tag for the effect `:ask`
+val ask/@tag : (std/core/hnd/htag :: (E, V) -> V V)<(ask :: (E, V) -> V)>
+// handler for the effect `:ask`
+fun ask/@handle : forall<b2,(e12 :: E),c2> (hnd : (ask :: (E, V) -> V)<(e12 :: E),c2>, ret : (res : b2) -> (e12 :: E) c2, action : () -> <(ask :: (E, V) -> V)|(e12 :: E)> b2) -> (e12 :: E) c2
+// Automatically generated. Retrieves the `@fun-ask` constructor field of the `:` type.
+fun ask/@fun-ask : forall<(e16 :: E),b3> (ask : (ask :: (E, V) -> V)<(e16 :: E),b3>) -> (std/core/hnd/clause0 :: (V, (E, V) -> V, E, V) -> V)<std/core/types/int,(ask :: (E, V) -> V),(e16 :: E),b3>
+// select `ask` operation out of the effect `:ask`
+ handler
+fun ask/@select : forall<(e20 :: E),a4> (hnd : (ask :: (E, V) -> V)<(e20 :: E),a4>) -> (std/core/hnd/clause0 :: (V, (E, V) -> V, E, V) -> V)<std/core/types/int,(ask :: (E, V) -> V),(e20 :: E),a4>
+fun ask : () -> <(ask :: (E, V) -> V)> std/core/types/int
+// monadic lift
+fun @mlift-add-twice@49 : (@y.35 : std/core/types/int) -> <(ask :: (E, V) -> V)> std/core/types/int
+// monadic lift
+fun @mlift-add-twice@48 : (@y.35 : std/core/types/int, @y.36 : std/core/types/int) -> <(ask :: (E, V) -> V)> std/core/types/int
+fun add-twice : () -> <(ask :: (E, V) -> V)> std/core/types/int
+// monadic lift
+fun @mlift-main@50 : forall<(_e25 :: E)> (@y.37 : std/core/types/int) -> <(ask :: (E, V) -> V),(std/core/console/console :: X)|(_e25 :: E)> ()
+fun main : () -> ()
+ 
+//----------------------
+//#kki: external declarations
+ 
+ 
+//----------------------
+//#kki: inline definitions
+ 
