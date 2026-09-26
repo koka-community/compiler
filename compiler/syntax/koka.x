@@ -8,7 +8,7 @@ import std/core/undiv
 import std/data/word-set
 // Updated to be roughly equivalent to commit 9e8299f on 2/10/25
 
-effect koka-lex
+pub effect koka-lex
   fun do-start-chunked(s: string, start: alex-pos): ()
   fun end-chunked(): (string, alex-pos)
   fun add-chunk(s: bslice): ()
@@ -219,7 +219,7 @@ program :-
   val st = pop-state()
   // TODO? end-chunked()
   if st == comment then extend-slice(id)
-  else 
+  else
     end-chunk(fn(s) LexComment(s.list.filter(fn(c) c != '\r').string))
     pop-state()
     ()

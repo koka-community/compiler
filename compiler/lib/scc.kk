@@ -15,7 +15,7 @@ import std/core/unsafe
 
 alias graph<v> = linear-map<v, list<v>>;
 alias edge<v> = (v,v)
-alias node<v> = (v,list<v>)
+pub alias node<v> = (v,list<v>)
 
 fun nodes(g: graph<v>): list<node<v>>
   g.list

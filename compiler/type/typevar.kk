@@ -93,12 +93,12 @@ pub fun sub/single(tvar: type-var, tau: tau)
 
 pub fun sub/lookup(Sub(s): sub, tvar: type-var): _ maybe<tau>
   match s.lookup-index(tvar) 
-    Nothing -> Nothing 
+    Nothing -> Nothing
     Just(i) ->
       val (ktvar, tau) = s.elem-at(i).unjust
-      if !(ktvar.flavour == tvar.flavour) then 
+      if !(ktvar.flavour == tvar.flavour) then
         throw("type/typevar: subLookup: flavour mismatch " ++ ktvar.show ++ " " ++ tvar.show)
-      if !(ktvar.kind == tvar.kind) then 
+      if !(ktvar.kind == tvar.kind) then
         throw("type/typevar: subLookup: kind mismatch " ++ ktvar.show ++ " " ++ tvar.show)
       Just(tau)
 

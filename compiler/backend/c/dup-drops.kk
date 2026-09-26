@@ -1,3 +1,6 @@
+// Ported as of 2026-01-29; approx upstream baseline commit d3b244c of Backend/C/FromCore.hs (backfilled 2026-07-23)
+module compiler/backend/c/dup-drops
+
 import compiler/core/core
 import compiler/lib/pprint
 import compiler/type/type
@@ -13,7 +16,7 @@ fun gen-box-unbox(nm: name, info: dataInfo, drepr: dataRepr)
   tname.gen-box(info, drepr)
   tname.gen-unbox(info, drepr)
 
-fun gen-box-call(tp: ktype, arg: doc)
+pub fun gen-box-call(tp: ktype, arg: doc)
   val prim = "box"
   match tp.c-type
     CFun -> prim-name-type(prim, "function_t") |.| tupled([arg, contextDoc])
@@ -21,10 +24,10 @@ fun gen-box-call(tp: ktype, arg: doc)
     CData(nm) -> prim-name(prim, nm.cpp-name) |.| tupled([arg, contextDoc])
     _ -> prim-name-type(prim, tp.cpp-type.show) |.| tupled([arg, contextDoc])
 
-fun gen-unbox-call-owned(tp: ktype, arg: doc)
+pub fun gen-unbox-call-owned(tp: ktype, arg: doc)
   gen-unbox-call(tp, arg, "KK_OWNED".text)
 
-fun gen-unbox-call-borrowed(tp: ktype, arg: doc)
+pub fun gen-unbox-call-borrowed(tp: ktype, arg: doc)
   gen-unbox-call(tp, arg, "KK_BORROWED".text)
 
 fun gen-unbox-call(tp: ktype, arg: doc, argBorrow: doc)
@@ -99,7 +102,7 @@ fun gen-dup-dropX(isDup: bool, nm: name, info: dataInfo, drepr: dataRepr, conInf
       conInfos.map(gen-dup-drop-tests(isDup, drepr, _)).gen-dup-drop-match ++ ret
     else
       if isDup then ["return".text |+| (
-        if drepr.data-repr-may-have-singletons then "kk_datatype_dup".text |.| arguments(["_x".text]) 
+        if drepr.data-repr-may-have-singletons then "kk_datatype_dup".text |.| arguments(["_x".text])
         else "kk_datatype_ptr_dup".text |.| arguments(["_x".text])) |.| semi]
       else [
         (if drepr.data-repr-may-have-singletons then "kk_datatype_drop" else "kk_datatype_ptr_drop").text |.| 
@@ -157,37 +160,37 @@ fun gen-dup-drop-callx(prim: string, tp: ktype, args: doc)
     CPrim -> [text("kk_skip_" ++ prim) |.| args] // [] // text "value" |.| args
     CData(nm) -> [prim-name(prim, nm.cpp-name) |.| args]
 
-fun gen-dup-call(tp: ktype, arg: doc)
+pub fun gen-dup-call(tp: ktype, arg: doc)
   gen-dup-drop-call(True, tp, arg).hcat
 
 fun gen-drop-call(tp: ktype, arg: doc)
   gen-dup-drop-call(False, tp, arg).hcat
 
-fun gen-dup-drop-call(isDup: bool, tp: ktype, arg: doc)
+pub fun gen-dup-drop-call(isDup: bool, tp: ktype, arg: doc)
   if isDup then gen-dup-drop-callx("dup", tp, arguments([arg]))
   else gen-dup-drop-callx("drop", tp, arguments([arg]))
 
 // The following functions are generated during "drop specialization" and "reuse specialization", 
 // and only generated for heap allocated constructors so we can always use the `datatype_ptr` calls at runtime.
-fun gen-unique-call(tp: ktype, arg: doc)
+pub fun gen-unique-call(tp: ktype, arg: doc)
   ["kk_likely".text |.| parens("kk_datatype_ptr_is_unique".text |.| arguments([arg]))]
 
-fun gen-free-call(tp: ktype, arg: doc)
+pub fun gen-free-call(tp: ktype, arg: doc)
   ["kk_datatype_ptr_free".text |.| arguments([arg])]
 
-fun gen-decref-call(tp: ktype, arg: doc)
+pub fun gen-decref-call(tp: ktype, arg: doc)
   ["kk_datatype_ptr_decref".text |.| arguments([arg])]
 
-fun gen-drop-reuse-call(tp: ktype, arg: list<doc>)
+pub fun gen-drop-reuse-call(tp: ktype, arg: list<doc>)
   ["kk_datatype_ptr_dropn_reuse".text |.| arguments(arg)]
 
-fun gen-reuse-call(tp: ktype, arg: doc)
+pub fun gen-reuse-call(tp: ktype, arg: doc)
   ["kk_datatype_ptr_reuse".text |.| arguments([arg])]
 
-fun gen-dropn-call(tp: ktype, args: list<doc>)
+pub fun gen-dropn-call(tp: ktype, args: list<doc>)
   ["kk_datatype_ptr_dropn".text |.| arguments(args)]
 
-fun gen-hole-call(tp: ktype)
+pub fun gen-hole-call(tp: ktype)
   match tp.c-type
     CPrim("kk_integer_t") -> "kk_integer_zero".text
     CPrim("kk_string_t") -> "kk_string_empty()".text

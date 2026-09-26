@@ -1,3 +1,5 @@
+module compiler/syntax/pretty
+
 import compiler/syntax/syntax
 import compiler/lib/pprint
 import compiler/common/name
@@ -95,7 +97,7 @@ fun dbinder/pretty(vb: value-binder<(), expr<t>>, sort: def-sort, ?t/pretty: t -
     DefVal -> vb.name.pretty |+| "=".text |+| vb.expr.pretty
     DefVar -> vb.name.pretty |+| ":=".text |+| vb.expr.pretty
 
-fun def/pretty(d: def<t>, ?t/pretty: t -> <div|e> doc): <div|e> doc
+pub fun def/pretty(d: def<t>, ?t/pretty: t -> <div|e> doc): <div|e> doc
   val prf = d.doc.text |-| d.visibility.pretty |.| d.defInline.pretty |.| d.sort.pretty
   prf |+| d.binder.pretty(d.sort)
 
@@ -104,7 +106,7 @@ fun arg/pretty(a: (maybe<(name,range)>, expr<t>), ?t/pretty: t -> <div|e> doc): 
     (Just((n, _)), expr) -> n.pretty |+| "=".text |+| expr.pretty
     (Nothing, expr) -> expr.pretty
 
-fun expr/pretty(expr: expr<t>, ?t/pretty: t -> <div|e> doc): <div|e> doc
+pub fun expr/pretty(expr: expr<t>, ?t/pretty: t -> <div|e> doc): <div|e> doc
   match expr
     Lam(binder, e) -> "fn".text |.| binder.map(lamvb/pretty).tupled |--| e.pretty.indent(2)
     Let(d, e) -> d.dg/pretty |--| e.expr/pretty 
@@ -191,12 +193,12 @@ fun uquant/pretty(u: user-quantifier): doc
     QForall -> "forall".text
     QExists -> "exists".text
 
-fun ut/pretty(u: user-type): div doc
+pub fun ut/pretty(u: user-type): div doc
   match u
     TpQuan(q, b, kind) -> q.pretty |+| b.pretty |+| kind.pretty 
     TpFun(a, b, c) -> a.map(fn((n, ut)) n.pretty |.| ":".text |.| ut.pretty).tupled |+| b.pretty |+| c.pretty 
     TpApp(a, b) -> a.pretty |.| tupled(b.map(pretty))
-    TpVar(n) -> n.pretty 
+    TpVar(n) -> n.pretty
     TpCon(n) -> n.pretty
     TpParens(t) -> tupled([t.pretty])
     TpAnn(t, k) -> t.pretty |+| "::".text |+| k.pretty
@@ -207,6 +209,5 @@ fun uk/pretty(u: user-kind): doc
     KindArrow(from, to) -> from.pretty |+| "->".text |+| to.pretty
     KindParens(kind) -> kind.pretty
     KindNone -> empty
-
 fun main()
   "pprint"

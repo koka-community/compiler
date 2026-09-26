@@ -1,3 +1,6 @@
+// Ported as of 2026-01-18; approx upstream baseline commit b8074c2 of Kind/Unify.hs (backfilled 2026-07-23)
+module compiler/kind/unify
+
 import compiler/lib/pprint
 import compiler/common/name
 import compiler/common/range
@@ -11,14 +14,14 @@ import compiler/kind/infer-effect
 import std/data/linear-set
 
 // Unify
-type unify-ctx
+pub type unify-ctx
   Check(s: string, r: range)
   Infer(r: range)
 
-effect unify-context
+pub effect unify-context
   val uctx: unify-ctx
 
-fun unify(rng: range, k1: inf-kind, k2: inf-kind)
+pub fun unify(rng: range, k1: inf-kind, k2: inf-kind)
   val sk1 = subst(k1)
   val sk2 = subst(k2)
   match mgu(sk1, sk2)
@@ -81,7 +84,7 @@ fun mgu(k1': inf-kind, k2': inf-kind)
 fun unify-var(id: int, k: inf-kind)
   if k.fkv.member(id) then InfiniteKind else UnifyKindOk(ksub-single(id, k))
 
-fun match-kind(k1': kind, k2': kind)
+pub fun match-kind(k1': kind, k2': kind)
   match (k1', k2')
     (KCon(c1), KCon(c2)) -> c1 == c2
     (KApp(k1, k2), KApp(l1, l2)) -> match-kind(k1, l1) && match-kind(k2, l2)

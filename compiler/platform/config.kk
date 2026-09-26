@@ -1,8 +1,11 @@
+// Ported as of 2026-01-17; approx upstream baseline commit edc29e7 of Platform/cpp/Platform/Config.hs (backfilled 2026-07-23)
+module compiler/platform/config
+
 import std/os/env
 
 pub effect val comp-flags: compiler-flags;
 
-fun @default-comp-flags(f)
+pub fun @default-comp-flags(f)
   with handler val comp-flags = CompilerFlags(
     programName = "koka",
     version = "3.2.3",
@@ -11,7 +14,7 @@ fun @default-comp-flags(f)
   )
   f()
 
-type compiler-flags
+pub type compiler-flags
   CompilerFlags(
     programName: string,
     version: string,
@@ -19,7 +22,7 @@ type compiler-flags
     buildVariant: string
   )
 
-type file-config
+pub type file-config
   FileConfig(
     exeExt: string,
     dllExt: string,
@@ -28,13 +31,13 @@ type file-config
     libPrefix: string
   )
 
-fun os-config(): _ file-config
+pub fun os-config(): _ file-config
   match get-os-name()
     "linux" -> FileConfig(".so", ".o", ".a", "lib", "")
     "windows" -> FileConfig(".exe", ".dll", ".obj", ".lib", "")
     "macos" -> FileConfig(".dylib", ".o", ".a", "lib", "")
 
-val source-ext = ".kk"
+pub val source-ext = ".kk"
 
-fun is-path-sep(c: char): bool
+pub fun is-path-sep(c: char): bool
   c == '/' || c == '\\'

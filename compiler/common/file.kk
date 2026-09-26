@@ -7,6 +7,8 @@
 //---------------------------------------------------------------------------
 // Updated as of 7/23/24, though parts are incomplete (Commit: 336bf9b)
 
+module compiler/common/file
+
 import std/os/path
 import std/os/file
 import compiler/platform/config
@@ -22,7 +24,7 @@ fun is-literal-doc(fname: path)
 // -------------------------
 // File names
 // -------------------------
-alias fileName = path
+pub alias fileName = path
 
 // Remove the extension and directory part
 fun basename(p: fileName): fileName
@@ -52,11 +54,11 @@ fun on-windows(): bool
 // normalize - Normalize path separators (.path on string already does this)
 
 // normalize-with 
-fun normalize-with(p: fileName, sep: char): string
+pub fun normalize-with(p: fileName, sep: char): string
   p.dirparts.join(sep.string)
 
 // is-path-sep - Is this a file separator? - regardless of host OS 
-fun is-path-sep(c: char): bool
+pub fun is-path-sep(c: char): bool
   c == '/' || c == '\\'
 
 // is-path-delimiter - Is this a path delimiter? - regardless of host OS

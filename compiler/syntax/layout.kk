@@ -9,6 +9,8 @@
 
 // Add braces and semicolons based on layout.
 
+module compiler/syntax/layout
+
 import compiler/syntax/lexeme
 import compiler/syntax/lexer
 import compiler/syntax/syntax
@@ -21,12 +23,12 @@ import std/core/unsafe
 import std/core-extras
 
 // Lex a source
-fun lex-source(source: source, line: int, allow-at: bool, semi-insert: bool, preprocess: list<lexeme> -> _ list<lexeme>): _ list<lexeme>
+pub fun lex-source(source: source, line: int, allow-at: bool, semi-insert: bool, preprocess: list<lexeme> -> _ list<lexeme>): _ list<lexeme>
   // val input = if source.name.is-literal-doc then rawinput.extract-literate else rawinput
   val rawinput = source.contents
   lexing(source, line, rawinput).layout(allow-at, semi-insert).preprocess
 
-fun layout(lexemes: list<lexeme>, allow-at: bool, semi-insert: bool): list<lexeme>
+pub fun layout(lexemes: list<lexeme>, allow-at: bool, semi-insert: bool): list<lexeme>
   fun semi(v: list<lexeme>, f: (list<lexeme>) -> list<lexeme>) if semi-insert then f(v) else v
   val (comments, lexemes') = lexemes.semi(check-comments)
       .combine-line-comments.remove-whitespace.associate-comments(ctx hole, ctx hole)
@@ -39,7 +41,7 @@ fun is-lex-error(x)
     LexError(_) -> True
     _ -> False
 
-fun remove-white(lexemes: list<lexeme>): list<lexeme>
+pub fun remove-white(lexemes: list<lexeme>): list<lexeme>
   lexemes.filter(!is-white(_))
 
 fun remove-whitespace(lexemes: list<lexeme>): list<lexeme>
@@ -70,13 +72,13 @@ val doc-keywords = ["fun","val","ctl","final","raw"
                     ,"cotype","rectype"
                     ,"external","function"]
 
-fun is-doc-keyword(lex: string)
+pub fun is-doc-keyword(lex: string)
   doc-keywords.find(_ == lex).bool
 
 fun comment-line(r: range, comment: string)
   if comment.ends-with("\n").bool then r.end.line else r.end.line + 1
 
-fun is-valid-prefix(l: lex): bool
+pub fun is-valid-prefix(l: lex): bool
   match l
     LexKeyword -> True // pub
     LexId -> True // inline
@@ -129,7 +131,7 @@ fun associate-comments(lexs: list<lexeme>, unassociated: ctx<list<lexeme>>, acc:
     Nil -> (unassociated ++. Nil, acc ++. Nil)
 
 // Combine adjacent line comments into one block comment (for html output)
-fun combine-line-comments(lexs: list<lexeme>): list<lexeme>
+pub fun combine-line-comments(lexs: list<lexeme>): list<lexeme>
   match lexs
     // combine newline comments into one big comment. This is for html output.
     Cons(Lexeme(r1, LexComment(c1)), Cons(Lexeme(r2, LexComment(c2)), ls)) | (c1.starts-with("//").bool && c2.starts-with("//").bool) ->
@@ -272,13 +274,13 @@ fun is-end-continuation-token(lex)
     LexOp(op) -> op.local != ">"
     _ -> False
 
-inline fun is-close-brace(lex)
+pub inline fun is-close-brace(lex)
   match lex
     LexSpecial("}") -> True
     LexInsRCurly -> True
     _ -> False
 
-inline fun is-open-brace(lex)
+pub inline fun is-open-brace(lex)
   match lex
     LexSpecial("{") -> True
     LexInsLCurly -> True

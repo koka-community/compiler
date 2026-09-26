@@ -1,3 +1,6 @@
+// Ported as of 2026-01-17; approx upstream baseline commit d3b244c of Backend/C/FromCore.hs (backfilled 2026-07-23)
+module compiler/backend/c/constructors
+
 import compiler/core/core
 import compiler/common/name
 import compiler/common/syntax
@@ -11,7 +14,7 @@ import std/data/sort
 
 // Generate value constructors for each defined type
 
-fun gen-typedefs(tds: typedef-groups): _ ()
+pub fun gen-typedefs(tds: typedef-groups): _ ()
   tds.map(gen-typedef-group)
   ()
 
@@ -138,24 +141,24 @@ fun gen-constructor-test((ci, crepr, _, _): (conInfo, conRepr, list<(name, ktype
     "static inline bool".text |+| ci.conTestName |.| parameters([info.name.typeClassName.cpp-name |+| "x".text])
     |+| block(
       match crepr
-        ConEnum -> "x ==".text |+| ctag
-        ConIso -> "true".text
+    ConEnum -> "x ==".text |+| ctag
+    ConIso -> "true".text
         ConSingleton | drepr.isValue -> valueTagEq
-        ConSingleton -> "kk_datatype_has_singleton_tag".text |.| ["x".text, ctag].tupled
-        ConSingle -> "true".text
-        ConStruct -> valueTagEq
+    ConSingleton -> "kk_datatype_has_singleton_tag".text |.| ["x".text, ctag].tupled
+    ConSingle -> "true".text
+    ConStruct -> valueTagEq
         ConAsJust(asNothing=non) -> "!".text |.| conTestNameX(non) |.| arguments(["x".text])
-        ConAsCons(asNil=non) -> // TODO kk_datatype_is_ptr may be faster on arm64?
+    ConAsCons(asNil=non) -> // TODO kk_datatype_is_ptr may be faster on arm64?
           "!".text |.| non.conTestNameX |.| arguments(["x".text])
-        ConNormal ->
+    ConNormal ->
           text(if drepr.dataReprMayHaveSingletons then "kk_datatype_has_ptr_tag" else "kk_datatype_ptr_has_tag") |.| arguments(["x".text, ctag])
-        ConOpen ->
-          "kk_string_ptr_eq_borrow".text |.| tupled([
-            parens("kk_datatype_as".text |.| arguments([
+    ConOpen ->
+      "kk_string_ptr_eq_borrow".text |.| tupled([
+        parens("kk_datatype_as".text |.| arguments([
               "struct".text |+| info.name.typeClassName.cpp-name |.| "_s*".text
-            ])) |.| "->_tag".text
-            ,ctag
-          ])
+        ])) |.| "->_tag".text
+        ,ctag
+      ])
     ) |.|
     ");".text
   )
@@ -209,8 +212,8 @@ fun gen-constructor-create(ci: conInfo, crepr: conRepr, allFields: list<(name, k
               ) ++
               ["return".text |+| tmp |.| semi]
             )
-          else 
-            val arg = ci.params.head.unjust.fst.cpp-name
+          else
+                val arg = ci.params.head.unjust.fst.cpp-name
             vcat(
               (if !crepr.is-conAsJust then [] else ["if kk_likely(!kk_box_is_maybe".text |.| arguments([arg]) |.| ") { return kk_datatype_as_Just(".text |.| arg |.| "); }".text])
               ++ ["struct".text |+| nameDoc |.| "*".text |+| "=".text |+| "kk_block_alloc_at_as".text |.| 

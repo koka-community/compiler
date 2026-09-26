@@ -147,7 +147,7 @@ pub fun read-color-flags(scheme: colorScheme, s: string)
   s.list.split.foldl(scheme, fn(sc, s') sc.read-color-flag(s'))
 
 // Read a name=color flag.
-fun read-color-flag(scheme: colorScheme, s: string)
+pub fun read-color-flag(scheme: colorScheme, s: string)
   val (name, xs) = s.list.span(fn(c) c != '=' && c != ':')
   match xs
     Cons(c, clr) | c == '=' || c == ':' -> scheme.update(name.string, clr.string)

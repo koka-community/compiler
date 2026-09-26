@@ -1,3 +1,5 @@
+module compiler/syntax/format
+
 import compiler/common/range
 
 import compiler/common/name

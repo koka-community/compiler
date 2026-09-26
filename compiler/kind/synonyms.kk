@@ -1,3 +1,6 @@
+// Ported as of 2026-01-29; approx upstream baseline commit b8074c2 of Kind/Synonym.hs (backfilled 2026-07-23)
+module compiler/kind/synonyms
+
 import compiler/common/name
 import compiler/common/name-collections
 import compiler/core/core
@@ -7,8 +10,8 @@ import compiler/common/failure
 import compiler/platform/config
 import std/data/linear-map
 
-alias synonyms = name-map<syn-info>
-effect synonyms-eff
+pub alias synonyms = name-map<syn-info>
+pub effect synonyms-eff
   fun synonyms-extend(newtp: syn-info): ()
   fun synonyms-lookup(name: name): maybe<syn-info>
   fun synonyms-find(name: name): syn-info
@@ -17,7 +20,7 @@ effect synonyms-eff
   fun get-synonyms(): synonyms
   fun set-synonyms(syns: synonyms): ()
 
-fun with-synonyms(synonyms0: synonyms, f: () -> _ a): _ a
+pub fun with-synonyms(synonyms0: synonyms, f: () -> _ a): _ a
   var synonyms := synonyms0
   with handler
     fun get-synonyms() synonyms
@@ -35,9 +38,9 @@ fun with-synonyms(synonyms0: synonyms, f: () -> _ a): _ a
       // TODO: Should this modify the synonyms?
   f()
 
-fun new(ls: list<syn-info>)
+pub fun new(ls: list<syn-info>)
   LinearMap(ls.map(fn(si) (si.name, si)))
-fun extend(synonyms: synonyms, k: syn-info)
+pub fun extend(synonyms: synonyms, k: syn-info)
   synonyms.set(k.name, k)
 // fun lookup(synonyms: synonyms, name: name)
 //   synonyms.map/lookup(name)
@@ -50,14 +53,14 @@ fun diff(synonyms: synonyms, syns1: synonyms, syns2: synonyms)
 fun synonyms/filter(synonyms: synonyms, modName: name)
   synonyms.filter(fn(k, v) (k.qualifier) == modName)
 
-fun compose(syns1: synonyms, syns2: synonyms)
+pub fun compose(syns1: synonyms, syns2: synonyms)
   unions([syns2, syns1])
 
 fun single(name: name, s: syn-info): synonyms
   LinearMap([(name, s)])
 val empty:synonyms = LinearMap([])
 
-fun core/extract-synonyms(c: core): _ synonyms
+pub fun core/extract-synonyms(c: core): _ synonyms
   c.typedefs.map(extract-synonyms).unions
 
 fun tdg/extract-synonyms(g: typedef-group): _ synonyms

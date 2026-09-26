@@ -23,11 +23,11 @@ import std/data/sort
 
 pub infixr 5 (|->)
 
-effect range-map-eff
+pub effect range-map-eff
   fun add-range-info(rng: range, ri: range-info): ()
   fun get-range-map(): range-map
 
-fun build-range-map(f)
+pub fun build-range-map(f)
   var rm := new/range-map
   with handler
     fun add-range-info(rng: range, ri: range-info)
@@ -35,7 +35,7 @@ fun build-range-map(f)
     fun get-range-map() rm
   f()
 
-alias range-map = list<(range, range-info)>
+pub alias range-map = list<(range, range-info)>
 
 fun rm-find-first(rm: range-map, p: (range-info) -> _ bool): _ maybe<(range, range-info)>
   match rm.filter(fn((_,ri)) p(ri))
@@ -45,16 +45,16 @@ fun rm-find-first(rm: range-map, p: (range-info) -> _ bool): _ maybe<(range, ran
 fun rm-find-all(rm: range-map, p: (range-info) -> _ bool): _ list<(range, range-info)>
   rm.filter(fn((_,ri)) p(ri))
 
-fun mangle-con-name(nm: name)
+pub fun mangle-con-name(nm: name)
   prepend("con", nm)
 
-fun mangle-type-name(nm: name)
+pub fun mangle-type-name(nm: name)
   prepend("type", nm)
 
-fun mangle(nm: name, tp: ktype)
+pub fun mangle(nm: name, tp: ktype)
   nm
 
-type range-info
+pub type range-info
   RIDecl(kind: string, name: name, name2: name, tp: maybe<ktype>) // alias, type, cotype, rectype, fun, val
   RIBlock(str: string) // type, kind, pattern
   RIError(d: doc)
@@ -63,7 +63,7 @@ type range-info
   RIImplicits(shorten: (bool) -> pretty-eff doc) // inferred implicit arguments and (implicit) resume arguments
   RIInlayHint(append: bool, doc: doc) // Inlay hint in the editor, append after the range (or before it)
 
-type name-info
+pub type name-info
   NIValue(sort: string, tp: ktype, comment: string, isAnnotated: bool) // sort is fun, val, etc.
   NICon(tp: ktype, comment: string)
   NITypeCon(k: kind, comment: string)
@@ -126,9 +126,9 @@ fun is-hidden(ri: range-info)
     RIId(nm) -> nm.is-hidden-name
     _ -> False
 
-val new/range-map:range-map = []
+pub val new/range-map:range-map = []
 
-fun cut(r: range)
+pub fun cut(r: range)
   Range(r.start, r.start, r.hidden)
 
 fun insert(rm: range-map, r: range, ri: range-info)
@@ -141,7 +141,7 @@ fun insert(rm: range-map, r: range, ri: range-info)
     if begin-end-token then Cons((r, ri), Cons((Range(r.end,r.end,r.hidden), ri), rm))
     else Cons((r, ri), rm)
 
-fun append(rm1: range-map, rm2: range-map)
+pub fun append(rm1: range-map, rm2: range-map)
   rm1 ++ rm2
 
 fun sort(rm: range-map)
@@ -186,14 +186,14 @@ fun merge-implicits(rm: range-map, for-inlay: bool)
           _ -> Cons((rng, rinfo), merge(rinfos))
   merge(rm)
 
-fun lookup(rm: range-map, r: range)  
+pub fun lookup(rm: range-map, r: range)  
   val pos = r.start
   fun is-before((rng, _)) rng.range/start < pos
   fun starts-at((rng, _)) rng.range/start == pos
   val (rinfos, rm') = rm.drop-while(is-before).span(starts-at)
   (rinfos.prioritize, rm')
 
-fun find-in(rm: range-map, r: range, for-inlay: bool): _ list<(range, range-info)>
+pub fun find-in(rm: range-map, r: range, for-inlay: bool): _ list<(range, range-info)>
   val s = r.start
   val e = r.end
   val res = rm.filter fn((ri, _))
@@ -201,7 +201,7 @@ fun find-in(rm: range-map, r: range, for-inlay: bool): _ list<(range, range-info
   res.merge-implicits(for-inlay)
 
 // Gets all lexemes less than the given position and then reverses their order
-fun previous-lexemes-reversed(lexes: list<lexeme>, p: pos)
+pub fun previous-lexemes-reversed(lexes: list<lexeme>, p: pos)
   lexes.take-while(_.range.start < p).reverse
 
 // Drops everything inside and including matched parentheses, assumes the ending paren is already dropped
@@ -211,7 +211,7 @@ fun drop-matched-parens-reverse(lexes: list<lexeme>)
 // Assumes in the middle of the function parameters
 // (drops to nearest open paren that didn't have a close paren before it)
 // This takes care of finding signature info when a cursor is in an argument list
-fun get-function-incomplete-reverse(lexes: list<lexeme>)
+pub fun get-function-incomplete-reverse(lexes: list<lexeme>)
   lexes.drop-auto-gen-closing.drop-matched-parens-reverse.get-function-name-reverse
 
 // Assumes it is given reverse ordered lexemes ending at an end of a function invocation
@@ -227,7 +227,7 @@ fun get-function-incomplete-reverse(lexes: list<lexeme>)
 //   => FnNormal "a"
 // and finally
 //   (abc).abc => NotFound
-fun get-function-name-reverse(xs0: list<lexeme>)
+pub fun get-function-name-reverse(xs0: list<lexeme>)
   fun go(xs: list<lexeme>)
     match xs
       [] -> EmptyStatement
@@ -257,7 +257,7 @@ fun get-function-name-reverse(xs0: list<lexeme>)
   xs0.drop-auto-gen-closing.get-current-statement-reverse.go
 
 // Add a function to a chain of discovered functions
-fun chain(fn0: lexeme, chain: fn-syntax)
+pub fun chain(fn0: lexeme, chain: fn-syntax)
   match chain
     FnChained -> FnChained(fn0, chain)
     FnValue -> FnChained(fn0, chain)
@@ -265,7 +265,7 @@ fun chain(fn0: lexeme, chain: fn-syntax)
     EmptyStatement -> FnValue(fn0)
     FnNotFound -> FnValue(fn0)
 
-type fn-syntax
+pub type fn-syntax
   FnChained(name: lexeme, chain: fn-syntax) // a.b.c -- The chain's return type is the function's first argument type
   FnIncomplete(chain: fn-syntax) // a.b. -- imcomplete . 
   FnValue(value: lexeme) // a / ] / 10 / "abc" / etc. -- The object of a function call (a literal or identifier)
@@ -325,7 +325,7 @@ fun n/drop-to-lex-matching(xs: list<lexeme>, is-start: (lex) -> bool, is-end: (l
     Cons(Lexeme, xs') -> n/drop-to-lex-matching(xs', is-start, is-end, n)
 
 // Assumes reverse ordered lexemes dropping till we get to actual written code
-fun drop-auto-gen-closing(lexes: list<lexeme>)
+pub fun drop-auto-gen-closing(lexes: list<lexeme>)
   match lexes
     [] -> []
     Cons(Lexeme(_, LexInsSemi), xs) -> drop-auto-gen-closing(xs)
@@ -333,7 +333,7 @@ fun drop-auto-gen-closing(lexes: list<lexeme>)
     _ -> lexes
 
 // We should use the lexemes to find the right start token
-fun find-at(rm: range-map, p: pos, lexemes: list<lexeme>): _ maybe<(range, range-info)>
+pub fun find-at(rm: range-map, p: pos, lexemes: list<lexeme>): _ maybe<(range, range-info)>
   val lexstart = 
         match lexemes.drop-while(!_.range.contains(p))
           Cons(l) -> l.range.start
@@ -341,7 +341,7 @@ fun find-at(rm: range-map, p: pos, lexemes: list<lexeme>): _ maybe<(range, range
   val rinfos = rm.drop-while(fn((r,_)) r.start < lexstart).take-while(fn((r, _)) r.start == lexstart)
   rinfos.prioritize.maybe-head  
 
-fun lexemes-from-pos(lexes: list<lexeme>, p: pos)
+pub fun lexemes-from-pos(lexes: list<lexeme>, p: pos)
   lexes.drop-while(!_.range.contains(p))
 
 fun maybe-head(xs: list<a>): maybe<a>
@@ -366,7 +366,7 @@ fun minimum-by-list(xs: list<a>, ?cmp: (a, a) -> order): list<a>
     )
   xs.foldl(Nothing, minlist).default([])
 
-fun ri-type(ri: range-info): maybe<ktype>
+pub fun ri-type(ri: range-info): maybe<ktype>
   match ri
     RIId(_, i) ->
       match i
@@ -383,7 +383,7 @@ fun ri-doc(ri: range-info)
         NICon(_, d) -> Just(d)
     _ -> Nothing
 
-fun rm/(|->)(s: sub, rm: range-map): _ range-map
+pub fun rm/(|->)(s: sub, rm: range-map): _ range-map
   rm.map(fn((r, ri)) (r, s |-> ri))
 
 fun rm/free-type-vars(rm: range-map): _ tvs

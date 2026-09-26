@@ -21,7 +21,7 @@ val names/empty: name-set = LinearSet([])
 
 alias qname-map<a> = linear-map<name,list<(name,a)>>;
 
-fun name-map/find(m: name-map<a>, n: name): _ a
+pub fun name-map/find(m: name-map<a>, n: name): _ a
   match m.lookup(n)
     Just(x) -> x
     _ -> throw("common/name-map/find: could not find: " ++ n.show)
@@ -31,35 +31,35 @@ pub type lookup<a>
   Ambiguous(names: list<name>)
   NotFound
 
-fun lookup/(==)(a: lookup<a>, b: lookup<a>, ?(==): (a,a) -> e bool): e bool
+pub fun lookup/(==)(a: lookup<a>, b: lookup<a>, ?(==): (a,a) -> e bool): e bool
   match (a, b)
     (Found(x), Found(y)) -> x.fst == y.fst && x.snd == y.snd
     (Ambiguous(xs), Ambiguous(ys)) -> list/(==)(xs, ys)
     (NotFound, NotFound) -> True
     _ -> False
 
-fun lookup/show(a: lookup<a>, ?show: (a) -> e string): e string
+pub fun lookup/show(a: lookup<a>, ?show: (a) -> e string): e string
   match a
     Found((name, _)) -> "Found(" ++ name.show ++ ")"
     Ambiguous(names) -> "Ambiguous(" ++ names.map(show).list/show ++ ")"
     NotFound -> "NotFound"
 
-fun qname-map/single(n: name, a: a): qname-map<a>
+pub fun qname-map/single(n: name, a: a): qname-map<a>
   LinearMap([(n.unqualify, [(n, a)])])
 
-fun qname-map/from-list(l: list<(name,a)>): _ qname-map<a>
+pub fun qname-map/from-list(l: list<(name,a)>): _ qname-map<a>
   l.foldl(LinearMap([])) fn(qm, (name, x))
     qm.insert(name, x)
 
 // Lookup a fully qualified name
-fun qname-map/lookup-qualified(m: qname-map<a>, n: name): maybe<a>
+pub fun qname-map/lookup-qualified(m: qname-map<a>, n: name): maybe<a>
   match m.lookup(n.unqualify)
     Just(xs) -> xs.lookup(_ == n)
     _ -> Nothing
 
 // Lookup a potentially unqualified name within a module context. 
 // (The module context is ignored if a qualified name is looked up)
-fun qname-map/lookup(m: qname-map<a>, c: name, name: name): lookup<a>
+pub fun qname-map/lookup(m: qname-map<a>, c: name, name: name): lookup<a>
   match m.lookup(name.unqualify)
     Just(Cons((qname,x), _)) | !name.is-qualified -> Found((qname, x))
     Just(xs) ->
@@ -69,29 +69,29 @@ fun qname-map/lookup(m: qname-map<a>, c: name, name: name): lookup<a>
         _ -> Ambiguous(xs.map(fst))
     _ -> NotFound
 
-fun qname-map/insert-with(m: qname-map<a>, c: name, a: list<(name,a)>, combine: (list<(name,a)>, list<(name,a)>) -> e list<(name,a)>): e qname-map<a>
+pub fun qname-map/insert-with(m: qname-map<a>, c: name, a: list<(name,a)>, combine: (list<(name,a)>, list<(name,a)>) -> e list<(name,a)>): e qname-map<a>
   m.map/update(c, a, combine)
 
-fun qname-map/filter-names(m: qname-map<a>, p: (name) -> e bool): e qname-map<a>
+pub fun qname-map/filter-names(m: qname-map<a>, p: (name) -> e bool): e qname-map<a>
   m.map fn(k, xs)
     xs.filter(fn((n, _)) p(n))
 
-fun qname-map/insert(m: qname-map<a>, n: name, a: a): _ qname-map<a>
+pub fun qname-map/insert(m: qname-map<a>, n: name, a: a): _ qname-map<a>
   m.update(n.unqualify, Cons((n, a), Nil)) fn(xs, ys)
     safe-combine("insert", xs, ys)
 
-fun qname-map/union(m1: qname-map<a>, m2: qname-map<a>): _ qname-map<a>
+pub fun qname-map/union(m1: qname-map<a>, m2: qname-map<a>): _ qname-map<a>
   m1.union-with(m2) fn(xs, ys)
     safe-combine("union", xs, ys)
 
-fun qname-map/union-left-bias(m1: qname-map<a>, m2: qname-map<a>): _ qname-map<a>
+pub fun qname-map/union-left-bias(m1: qname-map<a>, m2: qname-map<a>): _ qname-map<a>
   m1.union-with(m2, list/(++))
 
-fun qname-map/unions(ms: list<qname-map<a>>): _ qname-map<a>
+pub fun qname-map/unions(ms: list<qname-map<a>>): _ qname-map<a>
   ms.foldl(LinearMap([])) fn(m1, m2)
     m1.qname-map/union(m2)
 
-fun qname-map/safe-combine(s: string, xs: list<(name,a)>, ys: list<(name,a)>): _ list<(name,a)>
+pub fun qname-map/safe-combine(s: string, xs: list<(name,a)>, ys: list<(name,a)>): _ list<(name,a)>
   if xs.any(fn(x) ys.any(fn(y) y.fst == x.fst)) then
     failure/fail("common/name-collections " ++ s ++ ": overlapping names: " ++ xs.map(fn((x, _)) x).list/show ++ ys.map(fn((y,_)) y).list/show)
   xs ++ ys

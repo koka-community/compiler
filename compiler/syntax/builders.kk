@@ -500,7 +500,7 @@ pub fun eta-expand(e: user-expr): user-expr
 
 fun eta-transform(ue : user-expr): (user-expr, list<value-binder<maybe<user-type>, maybe<user-expr>>>)
   match ue
-    Var(name, isOp, rng) | name.is-eta-hole -> 
+    Var(name, isOp, rng) | name.is-eta-hole ->
       val name' = "eta".unique-range-hidden-name(rng)
       (Var(name', isOp, rng), [ValueBinder(name', Nothing, Nothing, range/null, range/null)])
     Ann(e, tp, r) ->

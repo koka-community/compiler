@@ -1,3 +1,6 @@
+// Ported as of 2026-01-29; approx upstream baseline commit c2ff6bf of Kind/Constructors.hs (backfilled 2026-07-23)
+module compiler/kind/constructors
+
 import compiler/common/name
 import compiler/common/name-collections
 import compiler/core/core
@@ -7,7 +10,7 @@ import compiler/common/failure
 import compiler/platform/config
 import std/data/linear-map
 
-alias constructors = name-map<con-info>
+pub alias constructors = name-map<con-info>
 
 effect constructors-eff
   fun constrs-extend(name: name, c: con-info): ()
@@ -37,7 +40,7 @@ fun with-constructors(cnstrs0: constructors, f: () -> _ a): _ a
       cnstrs
   f()
 
-fun constructors-from-list(lst: list<con-info>): constructors
+pub fun constructors-from-list(lst: list<con-info>): constructors
   LinearMap([]) + lst.map(fn(ci) (ci.con-info/name, ci))
 
 val contructors/empty: constructors = LinearMap([])

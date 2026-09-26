@@ -1,3 +1,6 @@
+// Ported as of 2026-01-18; approx upstream baseline commit 94c4762 of Core/CoreVar.hs (backfilled 2026-07-23)
+module compiler/core/corevar
+
 import compiler/type/type
 import compiler/common/syntax
 import compiler/common/range
@@ -9,15 +12,15 @@ import compiler/type/typevar
 
 pub infixr 5 (|->)
 
-fun is-top-level(d: def)
+pub fun is-top-level(d: def)
   val freeVar = d.defExpr.free-vars.list.map(fn(TName(nm)) nm).filter(fn(nm) !nm.is-qualified && d.def-name.unqualify != nm)
   val freeTv = d.defExpr.free-type-vars
   freeVar.is-nil && freeTv.is-empty
 
-fun expr/free-locals(e: expr)
+pub fun expr/free-locals(e: expr)
   e.free-vars.filter(fn(TName(nm)) !nm.is-qualified)
 
-fun branch/free-locals(b: branch)
+pub fun branch/free-locals(b: branch)
   b.free-vars.filter(fn(TName(nm)) !nm.is-qualified)
 
 fun list/free-vars(l: list<a>, ?free-vars: (a) -> _ linear-set<tName>): _ linear-set<tName>
@@ -68,20 +71,20 @@ fun def/free-vars(Def(_, _, e): def): _ linear-set<tName>
   e.free-vars
 
 // Term substitutions
-noinline fun list/(|->)(sub: list<(tName, expr)>, l: list<a>, ?(|->): (list<(tName, expr)>, a) -> _ a): _ list<a>
+pub noinline fun list/(|->)(sub: list<(tName, expr)>, l: list<a>, ?(|->): (list<(tName, expr)>, a) -> _ a): _ list<a>
   l.map(sub |-> _)
 
-fun dg/(|->)(sub: list<(tName, expr)>, dg: def-group): _ def-group
+pub fun dg/(|->)(sub: list<(tName, expr)>, dg: def-group): _ def-group
   match dg
     DefRec(defs) -> DefRec(sub |-> defs)
     DefNonRec(def) -> DefNonRec(sub |-> def)
 
-fun def/(|->)(sub: list<(tName, expr)>, d: def): _ def
+pub fun def/(|->)(sub: list<(tName, expr)>, d: def): _ def
   val dname = d.def-name
   val sub' = sub.filter(fn((nm, _)) nm.get-name != dname)
   d(defExpr = sub' |-> d.defExpr)
 
-fun expr/(|->)(sub: list<(tName, expr)>, ex: expr): _ expr
+pub fun expr/(|->)(sub: list<(tName, expr)>, ex: expr): _ expr
   match ex
     Lam(tnames, eff, expr) ->
       val sub' = sub.filter(fn((nm, _)) !tnames.any(_ == nm))
@@ -98,10 +101,10 @@ fun expr/(|->)(sub: list<(tName, expr)>, ex: expr): _ expr
       Let(sub' |-> dgs, sub' |-> e)
     Case(exprs, bs) -> Case(sub |-> exprs, sub |-> bs)
 
-noinline fun branch/(|->)(sub: list<(tName, expr)>, Branch(patts, guards): branch): _ branch
+pub noinline fun branch/(|->)(sub: list<(tName, expr)>, Branch(patts, guards): branch): _ branch
   val bvpat = patts.map(bound-vars).unions
   val sub' = sub.filter(fn((nm, _)) !bvpat.member(nm))
   Branch(patts, sub' |-> guards)
 
-noinline fun guard/(|->)(sub: list<(tName, expr)>, Guard(test, expr): guard): _ guard
+pub noinline fun guard/(|->)(sub: list<(tName, expr)>, Guard(test, expr): guard): _ guard
   Guard(sub |-> test, sub |-> expr)

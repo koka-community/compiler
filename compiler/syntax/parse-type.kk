@@ -262,5 +262,5 @@ fun parse-kind-atom(): _ user-kind
    { make-kind-handled(parse-special-con-id("HX")) }
   ])
 
-fun make-kind-handled(rng: range)
+pub fun make-kind-handled(rng: range)
   KindArrow(KindCon(nameKindEffect, rng), KindArrow(KindCon(nameKindStar, rng), KindCon(nameKindStar, rng)))

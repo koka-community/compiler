@@ -12,7 +12,7 @@ import compiler/type/pretty
 // constraints and platform sizes.
 
 // value types
-fun create-data-def(
+pub fun create-data-def(
     emit-error: (doc) -> _ (), 
     emit-warning: (doc) -> _ (), 
     lookup-datainfo: (name) -> _ maybe<data-info>, 
@@ -137,34 +137,34 @@ fun create-data-def(
 //  order constructor fields of constructors with raw field so the regular fields come first to be scanned.
 // return the ordered fields, and a ValueRepr (raw size part, the scan count (including tags), align, and full size)
 // The size is used for reuse and should include all needed fields including the tag field for "open" datatypes 
-fun order-con-fields(emit-error: (doc) -> _ (), nameDoc: doc, get-datainfo: (name) -> _ maybe<data-info>, platform: platform, extraPreScan: int, fields: list<(name, ktype)>): _ (list<(name, ktype)>, value-repr)
+pub fun order-con-fields(emit-error: (doc) -> _ (), nameDoc: doc, get-datainfo: (name) -> _ maybe<data-info>, platform: platform, extraPreScan: int, fields: list<(name, ktype)>): _ (list<(name, ktype)>, value-repr)
   fun visit(rraw: list<((name, ktype), value-repr)>, rmixed: list<((name, ktype), value-repr)>, rscan: list<(name, ktype)>, scan-count0: int, alignment0: int, l: list<(name, ktype)>)
-    if rmixed.length > 1 then
-      emit-error(nameDoc |+| " has multiple value type fields that each contain both raw types and regular types".text |-|
-        "hint: use 'box' on either field to make it a non-value type.".text)
-    // size before any mixed and raw fields
-    val preSize = platform.headerSize + scan-count0 * platform.fieldSize
-    // if there is a mixed value member (with scan fields) we may need to add padding scan fields (!)
-    // (or otherwise the C compiler may insert uninitialized padding)
-    val (padding, mixedScan) =
-      match rmixed
-        Cons((_, ValueRepr(_, scan, ralign))) ->
-          val padSize = preSize % ralign
-          val padCount = padSize / platform.fieldSize
-          if (padSize % platform.fieldSize) != 0 then
-            trace("kind/info order-con-fields: illegal alignment " ++ ralign.show)
+        if rmixed.length > 1 then
+          emit-error(nameDoc |+| " has multiple value type fields that each contain both raw types and regular types".text |-|
+            "hint: use 'box' on either field to make it a non-value type.".text)
+        // size before any mixed and raw fields
+        val preSize = platform.headerSize + scan-count0 * platform.fieldSize
+        // if there is a mixed value member (with scan fields) we may need to add padding scan fields (!)
+        // (or otherwise the C compiler may insert uninitialized padding)
+        val (padding, mixedScan) =
+          match rmixed
+            Cons((_, ValueRepr(_, scan, ralign))) ->
+              val padSize = preSize % ralign
+              val padCount = padSize / platform.fieldSize
+              if (padSize % platform.fieldSize) != 0 then
+                trace("kind/info order-con-fields: illegal alignment " ++ ralign.show)
           (list(1, padCount - 1).map(fn(i) ((new-padding-name(scan-count0 + i), typeAny), value-repr-scan(1))), scan + padCount)
-        _ -> (Nil, 0)
-    // calculate the rest now
-    val scan-count = scan-count0 + mixedScan
-    val alignment = if scan-count > 0 then alignment0.max(platform.fieldSize) else alignment0
-    val rest = padding ++ rmixed ++ rraw.reverse
-    val restSizes = rest.map(fn((_, vr)) platform.size(vr))
-    val restFields = rest.map(fst)
-    val size = aligned/sum(preSize, restSizes)
-    val rawSize = size - platform.headerSize - (scan-count * platform.fieldSize)
-    val vrepr = ValueRepr(rawSize, scan-count, alignment)
-    (rscan.reverse ++ restFields, vrepr)
+            _ -> (Nil, 0)
+        // calculate the rest now
+        val scan-count = scan-count0 + mixedScan
+        val alignment = if scan-count > 0 then alignment0.max(platform.fieldSize) else alignment0
+        val rest = padding ++ rmixed ++ rraw.reverse
+        val restSizes = rest.map(fn((_, vr)) platform.size(vr))
+        val restFields = rest.map(fst)
+        val size = aligned/sum(preSize, restSizes)
+        val rawSize = size - platform.headerSize - (scan-count * platform.fieldSize)
+        val vrepr = ValueRepr(rawSize, scan-count, alignment)
+        (rscan.reverse ++ restFields, vrepr)
   visit([], [], [], extraPreScan, 0, fields)
 
 fun extract-datadef-type(tp: ktype): maybe<name>

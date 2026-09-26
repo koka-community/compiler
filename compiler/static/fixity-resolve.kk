@@ -1,3 +1,6 @@
+// Ported as of 2026-01-29; approx upstream baseline commit a6fd2f2 of Static/FixityResolve.hs (backfilled 2026-07-23)
+module compiler/static/fixity-resolve
+
 import compiler/common/name
 import compiler/common/name-prim
 import compiler/common/name-collections
@@ -11,7 +14,7 @@ import std/data/linear-map
 import compiler/lib/pprint
 // Updated to 7eb71dc on 2/10/25
 
-fun fixity-resolve(fixMap: fixities, program: user-program)
+pub fun fixity-resolve(fixMap: fixities, program: user-program)
   val fixMap1 = fixities-compose(fixMap, program.fix-defs.extract-fix-map)
   with handleFixities(fixMap1)
   val defs1 = program.defs.resolve
@@ -118,19 +121,19 @@ fun handlerbranch/resolve(hb: handler-branch<user-type>)
     HandlerBranch(branchExpr=e) -> hb(branchExpr=e.resolve)
 
 // Fixity map for all operators
-alias fixities = name-map<fixity>
+pub alias fixities = name-map<fixity>
 val fixitiesEmpty: fixities = LinearMap([])
 
 fun find-fixity(fixities: fixities, name: name): fixity
   fixities.lookup(name).default(FixInfix(50, AssocNone))
 
-fun fixities-compose(fix1: fixities, fix2: fixities): fixities
+pub fun fixities-compose(fix1: fixities, fix2: fixities): fixities
   fix2.list.foldl(fix1) fn(acc, (name, fixity))
     match fix1.lookup(name)
       Just(x as FixInfix) -> acc.add(name, x)
       _ -> acc.add(name, fixity)
 
-fun fixities-new(fs: list<(name, fixity)>): fixities
+pub fun fixities-new(fs: list<(name, fixity)>): fixities
   fixitiesEmpty + fs.filter(_.snd.is-fixInfix)
 
 effect fixityEff

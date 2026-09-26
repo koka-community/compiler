@@ -19,6 +19,8 @@
 //   label constants./)
 // Updated as of 07/12/25: Commit 752748d not including extend / makeEffectExtends / extract which are not used nor exported
 
+module compiler/syntax/promote
+
 import compiler/common/name
 import compiler/common/range
 import compiler/common/name-prim
@@ -27,14 +29,14 @@ import compiler/common/syntax
 import compiler/syntax/syntax
 import std/data/linear-set
 
-fun promote-type(tp: user-type): _ user-type
+pub fun promote-type(tp: user-type): _ user-type
   val free = tp.free-type-vars
   if free.is-empty then tp
   else
     val (someVars, forallVars) = free.list.partition(is-some-var)
     quantify(QSome, someVars.map(to-type-binder), quantify(QForall, forallVars.map(to-type-binder), tp))
 
-fun promote-free(bound: list<user-type-binder>, tps: list<user-type>): _ list<user-type-binder>
+pub fun promote-free(bound: list<user-type-binder>, tps: list<user-type>): _ list<user-type-binder>
   (tps.free-type-vars - (names/empty + bound.map(name))).list.map(to-type-binder)
 
 // Type variable promotion
@@ -44,7 +46,7 @@ fun promote-free(bound: list<user-type-binder>, tps: list<user-type>): _ list<us
 // function some(a) forall(b) foo( x : a, y : b, z) : c { .. }
 // ~>
 // foo : some(a,a1) forall(b,c) (a,b,a1) -> total c = fun(x,y,z) { .. }
-fun promote(some-pars: list<user-type-binder>, forall-pars: list<user-type-binder>, preds: list<user-type>, mb-res-tp: maybe<(maybe<user-type>, user-type)>, uexpr: user-expr): _ user-expr
+pub fun promote(some-pars: list<user-type-binder>, forall-pars: list<user-type-binder>, preds: list<user-type>, mb-res-tp: maybe<(maybe<user-type>, user-type)>, uexpr: user-expr): _ user-expr
   val (argres-tps, expr') = argres-types(uexpr, mb-res-tp)
   if argres-tps.all(_.snd.is-right) then uexpr // no annotation, no promotion
   else
@@ -119,7 +121,7 @@ fun insert-some((i, (name, either-tp)): (int, (name, either<user-type, range>)))
 fun is-some-var(n: name)
   n.is-wildcard
 
-fun quantify(q: user-quantifier, tbinders: list<user-type-binder>, tp: user-type): user-type
+pub fun quantify(q: user-quantifier, tbinders: list<user-type-binder>, tp: user-type): user-type
   tbinders.foldr(tp, fn(tb, t) TpQuan(q, tb, t, combine(tb.range, t.range)))
 
 fun to-type-binder(n: name): user-type-binder

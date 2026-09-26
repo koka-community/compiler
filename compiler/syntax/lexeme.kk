@@ -128,46 +128,46 @@ pub fun lex/show(l: lex): string
     LexCons(n) -> "constructor \"" ++ n.show ++ "\""
     LexTypedId(n, tp) -> "typedid " ++ n.show ++ ":" ++ tp
 
-fun is-lcurly(l: lex): bool
+pub fun is-lcurly(l: lex): bool
   match l
     LexInsLCurly -> True
     LexSpecial("{") -> True
     _ -> False
 
-fun is-rcurly(l: lex): bool
+pub fun is-rcurly(l: lex): bool
   match l
     LexInsRCurly -> True
     LexSpecial("}") -> True
     _ -> False
 
-fun is-rparen(l: lex): bool
+pub fun is-rparen(l: lex): bool
   match l
     LexSpecial(")") -> True
     _ -> False
 
-fun is-lparen(l: lex): bool
+pub fun is-lparen(l: lex): bool
   match l
     LexSpecial("(") -> True
     _ -> False
 
-fun is-rangle(l: lex): bool
+pub fun is-rangle(l: lex): bool
   match l
     LexSpecial(">") -> True
     LexOp(nm) | nm.show-plain == ">" -> True
     _ -> False
 
-fun is-langle(l: lex): bool
+pub fun is-langle(l: lex): bool
   match l
     LexSpecial("<") -> True
     LexOp(nm) | nm.show-plain == "<" -> True
     _ -> False
 
-fun is-rbracket(l: lex): bool
+pub fun is-rbracket(l: lex): bool
   match l
     LexSpecial("]") -> True
     _ -> False
 
-fun is-lbracket(l: lex): bool
+pub fun is-lbracket(l: lex): bool
   match l
     LexSpecial("[") -> True
     _ -> False
@@ -211,7 +211,7 @@ pub fun is-semicolon(l: lexeme): bool
     _ -> False
 
 // Lexical Imports
-struct lex-import
+pub struct lex-import
   name: name
   imp-alias: name
   vis: visibility
@@ -233,9 +233,9 @@ fun lex-import-nub(l: list<lex-import>): list<lex-import>
     Cons(li, lis) ->
       match lis.find(fn(i2) li == i2)
         Just(li') -> 
-          val li2 = 
+          val li2 =
             Lex-import(
-              li.name, 
+              li.name,
               if li.imp-alias.is-nil then li'.imp-alias else li.imp-alias,
               if li.vis.is-public || li'.vis.is-public then Public else Private,
               li.is-open || li'.is-open

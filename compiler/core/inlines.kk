@@ -1,34 +1,37 @@
+// Ported as of 2026-01-18; approx upstream baseline commit 909c268 of Core/Inlines.hs (backfilled 2026-07-23)
+module compiler/core/inlines
+
 import compiler/core/core
 import compiler/common/name
 import compiler/common/name-prim
 import compiler/common/name-collections
 import std/data/linear-map
 
-alias inlines = name-map<inline-def>
+pub alias inlines = name-map<inline-def>
 
 val empty:inlines = LinearMap([])
 
-fun inlines(xs: list<inline-def>)
+pub fun inlines(xs: list<inline-def>)
   empty.extends(xs)
 
-fun extends(inls: inlines, xs: list<inline-def>)
+pub fun extends(inls: inlines, xs: list<inline-def>)
   xs.foldl(inls, extend)
 
-fun extend(inls: inlines, inl: inline-def)
+pub fun extend(inls: inlines, inl: inline-def)
   inls.add(inl.def-name, inl)
 
-fun merge(inls1: inlines, inls2: inlines)
+pub fun merge(inls1: inlines, inls2: inlines)
   inls1.union(inls2)
 
-fun defs/extract-inlines(dgs: def-groups, costMax: int)
+pub fun defs/extract-inlines(dgs: def-groups, costMax: int)
   dgs.map(_.extract-inlines(costMax)).concat
 
-fun dg/extract-inlines(dg: def-group, costMax: int)
+pub fun dg/extract-inlines(dg: def-group, costMax: int)
   match dg
     DefRec() -> []
     DefNonRec(d) -> d.extract-inlines(costMax, False).map(fn(d') [d']).default([])
 
-fun def/extract-inlines(d: def, costMax: int, isRec: bool)
+pub fun def/extract-inlines(d: def, costMax: int, isRec: bool)
   val inlineable = d.is-inlineable(costMax)
   if !inlineable then Nothing
   else

@@ -109,10 +109,10 @@ pub fun nicefy-effect(eff: keffect): _ keffect
           if ls2.is-nil || !tl2.is-effect-empty then ([], ls)
           else
             val (sls, insts) = find-insts(syn.syn-info/params, ls2, ls)
-            match is-subset([], sls, ls)
-              Just(rest) ->
-                ([TSyn(TypeSyn(nm, syn.syn-info/kind, syn.syn-info/rank, Just(syn)), insts, effect-fixed(sls))], rest)
-              _ -> ([], ls)
+              match is-subset([], sls, ls)
+                Just(rest) ->
+                  ([TSyn(TypeSyn(nm, syn.syn-info/kind, syn.syn-info/rank, Just(syn)), insts, effect-fixed(sls))], rest)
+                _ -> ([], ls)
   fun match-aliases(names: list<name>, ls: list<tau>): _ list<tau>
     match names
       Nil -> ls
@@ -151,7 +151,7 @@ fun is-subset(acc: list<tau>, ls1: list<tau>, ls2: list<tau>): pure maybe<list<t
       if l1.label-name < l2.label-name then Nothing
       else if l1.label-name > l2.label-name then is-subset(Cons(l2, acc), ls1, ll2)
       else if eq-type(l1, l2) then is-subset(acc, ll1, ll2)
-      else Nothing
+          else Nothing
 
 pub fun split-effect(eff: keffect): _ (list<tau>, keffect)
   nofail-unify(fn() eff.extract-normalize-effect)
@@ -206,9 +206,9 @@ pub fun generalize(contextRng: range, rng: range, close: bool, f: () -> _ (rho,k
     val (tp, eff, core) = f()
     generalizeX(tp, eff, core)
   else
-    with scope-implicit-constraints
-    val (tp, eff, core) = f()
-    generalizeX(tp, eff, core)
+  with scope-implicit-constraints
+  val (tp, eff, core) = f()
+  generalizeX(tp, eff, core)
 
 
 // TODO: improve / isolate
@@ -413,7 +413,7 @@ fun resolve-implicit-arg-ex(allow-disambiguate: bool, allow-unit-fun-val: bool, 
   fun sort-candidates(unsorted: list<typed-arg>)
     // find for each candidate which further implicits need to be resolved
     val icandidates = unsorted.map(implicits-to-resolve(ctx-name, _))
-    // now we can sort them according to their cost 
+    // now we can sort them according to their cost
     fun cost(((name, info, _), iargs))
       (0 - (iarg-scope-depth(name, info)), // inner scopes first
         iargs.list/length) // least further implicits arguments first
@@ -423,7 +423,7 @@ fun resolve-implicit-arg-ex(allow-disambiguate: bool, allow-unit-fun-val: bool, 
 
 // Resolve the best candidate for an implicit parameter
 fun resolve-uniquely(allow-disambiguate: bool, chain: list<typed-arg>, ctx-name: name-context, rng: range, current: implicit-select, others: list<(typed-arg, list<(name, ktype)>)>): _ implicit-select
-  match (current, others) 
+  match (current, others)
     (_, []) -> current // nothing further to explore
     (Amb(ambs as Cons(_, Cons(_, _))), _) -> //once we are ambiguous with 2 or more (possible) solutions, we don't need to explore further options
       val extra = others.map(_.fst.to-implicit-arg([])) // include all remaining potential candidates in the error message?
@@ -436,7 +436,7 @@ fun resolve-uniquely(allow-disambiguate: bool, chain: list<typed-arg>, ctx-name:
         val iarg = next.fst.to-implicit-arg(ipars.map(fn((pname, _)) (pname, empty-implicit-arg)))
         val sel = Infty(iarg)
         resolve-uniquely(allow-disambiguate, chain, ctx-name, rng, current.merge(sel), candidates)
-      elif chain.length > resolve-max-chain-depth then 
+      elif chain.length > resolve-max-chain-depth then
         // TODO: Trace
         val sels = candidates.map(fn(c) Infty(c.fst.to-implicit-arg([])))
         sels.foldr(None, merge)
@@ -450,9 +450,9 @@ fun resolve-implicit-parameters(allow-disambiguate: bool, chain: list<typed-arg>
   fun resolve(acc: list<(name, implicit-arg)>, pars: list<(name, ktype)>): _ implicit-select
     match pars
       [] -> Found(ImplicitArg(name, info, rho, acc.reverse))
-      Cons(par, pars') -> 
+      Cons(par, pars') ->
         val sel = resolve-implicit-parameter(allow-disambiguate, new-chain, rng, par)
-        match sel 
+        match sel
           Found(iarg) -> // keep resolving
             resolve(Cons((par.fst, iarg), acc), pars')
           _ -> // give up early if we cannot resolve a parameter
@@ -547,7 +547,7 @@ fun lookup-implicit-arg(allow-unit-fun-val: bool, info-filter: (assumption/name-
         _ -> candidates0
   // add implicit constraints
   val iargs = match ctx-name
-    CtxType(expect) -> 
+    CtxType(expect) ->
       val mbiarg = check-implicit-constraint(name, expect, rng, rng)
       match mbiarg
         Just(iarg) -> [iarg]
@@ -577,9 +577,9 @@ pub fun lookup-name-ctx(info-filter: (assumption/name-info -> bool), name: name,
     fun filter(x, acc, xs)
       match xs
         [] -> Cons(x, filter-inner-scopes(acc.reverse.pretend-decreasing))
-        Cons(y, ys) -> 
+        Cons(y, ys) ->
           match cmp-scope-depth(x, y)
-            Lt -> filter(y, [], ys) // continue with y, drop x and acc 
+            Lt -> filter(y, [], ys) // continue with y, drop x and acc
             Eq -> filter(x, acc, ys) // drop y
             Gt -> filter(x, Cons(y, acc), ys)
     match cands
@@ -601,8 +601,8 @@ pub fun lookup-name-ctx(info-filter: (assumption/name-info -> bool), name: name,
 // implicit arguments (in case it is a function itself)
 type implicit-arg
   ImplicitArg(
-    name: name, 
-    info: assumption/name-info, 
+    name: name,
+    info: assumption/name-info,
     typ: rho, // instantiated type
     implicit-args: list<(name, implicit-arg)>
     )
@@ -610,7 +610,7 @@ type implicit-arg
 alias typed-arg = (name, assumption/name-info, rho)
 
 // special empty implicit arg for display purposes (as "...")
-pub val empty-implicit-arg = 
+pub val empty-implicit-arg =
   ImplicitArg(nil, InfoVal(Private, nil, typeUnit, 0, null, True, False, ""), typeUnit, [])
 
 pub fun pp-implicit-arg(iarg: implicit-arg): _ doc
@@ -1004,7 +1004,7 @@ fun qualify-name(nm: name)
   qualify(module-name(), nm)
 pub fun find-data-info(nm: name): _ data-info
   newtypes-lookup-any(nm).expect("type/infer-effect/find-data-info: unknown type: " ++ nm.show ++ "\nin: " ++ newtypes-list().show)
-fun lookup-inf-name(nm: name)
+pub fun lookup-inf-name(nm: name)
   match infer-env.inf-gamma.inf-gamma/lookup(nm.unqualify) 
     Right((qname, info)) -> Just((qname, info.scheme))
     Left([]) -> Nothing
@@ -1013,7 +1013,7 @@ fun lookup-inf-name(nm: name)
 fun create-canonical-name(nm-ctx: name, gamma: gamma, qname: name)
   qname
 
-fun get-local-vars(): _ list<(name, ktype)>
+pub fun get-local-vars(): _ list<(name, ktype)>
   infer-env.inf-gamma.inf-gamma/list.filter(fn((_, info)) info.is-type-local-var)
 
 pub effect val scope-depth: int
@@ -1082,7 +1082,7 @@ pub fun infer-eff(action)
   action()
 
 pub fun no-range-info(f)
-  with override 
+  with override
     fun get-range-map() get-range-map()
     fun add-range-info(rng: range, ri: range-info) ()
   f()
@@ -1110,7 +1110,7 @@ fun nofail-unify(action: () -> _ a, ?kk-file-line: string): _ a
       add-sub(sub)
       failure/fail("should never fail!: " ++ err.show ++ " " ++ kk-file-line)
 
-fun do-unify(action)
+pub fun do-unify(action)
   match run-unify(action)
     (Right(x), sub) -> 
       add-sub(sub)
@@ -1311,7 +1311,7 @@ pub div effect def-infer-effect
   fun get-iconstraints-gamma(): inf-gamma
   // add a new implicit constraint with a fresh name (to be solved at generalization time)
   fun add-iconstraint(ic: ic-params, 
-       can-solve: (tvs, implicit-constraint) -> <pretty-eff, ctxt, infer-state, infer-eff, range-map-eff, local-depth, scope-depth, def-infer-effect, infer-env, synonyms-eff, newtypes-eff, unify, unique> bool, 
+       can-solve: (tvs, implicit-constraint) -> <pretty-eff, ctxt, infer-state, infer-eff, range-map-eff, local-depth, scope-depth, def-infer-effect, infer-env, synonyms-eff, newtypes-eff, unify, unique> bool,
        resolve: (tvs, implicit-constraint) -> <pretty-eff, ctxt, infer-state, infer-eff, range-map-eff, local-depth, scope-depth, def-infer-effect, infer-env, synonyms-eff, newtypes-eff, unify, unique> (core/core/expr, ktype)): (name, assumption/name-info, ktype)
   fun solve-iconstraint(nm : name, tp : ktype): ()
 
@@ -1364,7 +1364,7 @@ val implicit-constraints : list<(name, check-constraint)> = [(nameHeapDiv, check
 fun check-implicit-constraint(name: name, tp: ktype, ctx-range: range, rng: range): _ maybe<typed-arg>
   match implicit-constraints.lookup(name)
     Just(check) -> match check(name, tp)
-      Just((can-resolve, resolve)) -> 
+      Just((can-resolve, resolve)) ->
         val iarg = add-iconstraint(ICParams(name, tp, ctx-range, rng), can-resolve, resolve)
         Just(iarg)
       Nothing -> Nothing
@@ -1377,7 +1377,7 @@ fun scope-implicit-constraints(action: () -> _ a): _ a
   var iconstraints-gamma := inf-gamma/empty
   with override
     return(x) if iconstraints.is-empty then x else throw("unresolved implicit constraints: " ++ pp-constraints(iconstraints).show)
-    fun get-iconstraints() iconstraints.subst(list/substitute) 
+    fun get-iconstraints() iconstraints.subst(list/substitute)
     fun get-iconstraints-gamma() iconstraints-gamma.subst // apply skolem substitution to unresolved implicit constraints
     fun add-iconstraint(ic: ic-params, canSolve, solve) 
       val ICParams(nm, tp, rngCtx, rng) = ic
@@ -1395,7 +1395,7 @@ fun scope-implicit-constraints(action: () -> _ a): _ a
 fun show(ic: implicit-constraint): string
   ic.name.show
 
-fun ic/substitute(sub: sub, ic: implicit-constraint): _ implicit-constraint
+pub fun ic/substitute(sub: sub, ic: implicit-constraint): _ implicit-constraint
   ic(typ = ktype/substitute(sub, ic.typ))
 fun ic/free-type-vars(ic: implicit-constraint): div tvs
   ic.typ.free-type-vars
@@ -1427,7 +1427,7 @@ fun try-resolve-implicit-constraints(close: bool, free: tvs): _ (core/core/expr 
   val ics = get-iconstraints()
   fun try-resolve-loop(ics': list<implicit-constraint>, defs: list<core/core/def>): _ (core/core/expr -> core/core/expr)
     match ics'
-      Nil -> 
+      Nil ->
         if defs.is-nil then id 
         else fn(core) make-defs-let(defs.reverse, core)
       Cons(ic, ics-next) ->
@@ -1513,7 +1513,7 @@ fun split-hdiv(htv: type-var, ics: list<implicit-constraint>): _ (list<implicit-
 // Helpers for gamma
 /////////////////////////////////////
 
-fun extend-gamma-core(is-already-canonical: bool, defs: list<core/core/def-group>, act: () -> _ a): _ a
+pub fun extend-gamma-core(is-already-canonical: bool, defs: list<core/core/def-group>, act: () -> _ a): _ a
   match defs
     Nil -> act()
     Cons(dg, rest) -> 
@@ -1548,7 +1548,7 @@ pub fun extend-gamma(is-already-canonical: bool, defs: list<(name, assumption/na
   val gamma' = extend(e.contxt, defs, e.gamma)
   with-env(infer-env(gamma=gamma'), act)
             
-fun extend-inf-gamma-core(top-level: bool, defs: list<core/core/def-group>, act: () -> _ a): _ a
+pub fun extend-inf-gamma-core(top-level: bool, defs: list<core/core/def-group>, act: () -> _ a): _ a
   match defs
     Nil -> act()
     Cons(dg, rest) -> 

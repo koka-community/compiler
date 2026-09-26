@@ -1,3 +1,6 @@
+// Updated as of 7/23/26: Commit 6dbe4e6
+module compiler/kind/infer-effect
+
 import compiler/common/range
 import compiler/common/syntax
 import compiler/common/color-scheme
@@ -20,7 +23,7 @@ import compiler/core/core
 import compiler/common/error
 import std/data/linear-map
 
-type infer-kind-env
+pub type infer-kind-env
   InferKindEnv(
     imports: import-map,
     kGamma: kGamma,
@@ -31,9 +34,9 @@ type infer-kind-env
     dataEffects: name-map<data-effect>
   )
 
-effect val inf-kind-env: infer-kind-env
+pub effect val inf-kind-env: infer-kind-env
 
-effect infer-kind-effect
+pub effect infer-kind-effect
   fun get-ksub(): ksub
   fun extend-ksub(s: ksub): ()
   fun get-local-syns(): synonyms
@@ -43,7 +46,7 @@ effect infer-kind-effect
   fun lookup-external(name: name): maybe<range>
   val platform: platform
 
-fun allnewtypes(env: infer-kind-env)
+pub fun allnewtypes(env: infer-kind-env)
   env.newtypesImported.compose(env.newtypesExtended)
 
 fun run-kind-infer(platform: platform, moduleName: name, imports: import-map, kgamma: kGamma, syns: synonyms, datas: newtypes, f: () -> _ a): _ a
@@ -67,17 +70,17 @@ fun run-kind-infer(platform: platform, moduleName: name, imports: import-map, kg
     val platform = platform
   f()
 
-fun fresh-kind()
+pub fun fresh-kind()
   KIVar(unique-id("k"))
 
-fun fresh-typevar(TypeBinder(name, kind): type-binder<kind>, fl: flavour)
+pub fun fresh-typevar(TypeBinder(name, kind): type-binder<kind>, fl: flavour)
   TypeVar(unique-id(name.show), kind, fl)
 
-fun subst(x: inf-kind)
+pub fun subst(x: inf-kind)
   get-ksub() |-> x
 
 // Extend the inference kind assumption; checks for 'shadow' definitions
-fun extend-infgamma(tbinders: list<type-binder<inf-kind>>, f)
+pub fun extend-infgamma(tbinders: list<type-binder<inf-kind>>, f)
   fun check(TypeBinder(nm, infkind, nmrng, _): type-binder<inf-kind>, infgamma: inf-kgamma)
     match infgamma.lookup(nm)
       Nothing -> infgamma.add(nm, infkind)
@@ -90,7 +93,7 @@ fun extend-infgamma(tbinders: list<type-binder<inf-kind>>, f)
   f()
 
 // Extend the kind assumption; checks for duplicate definitions
-fun extend-kgamma(rngs: list<range>, dg: compiler/core/core/typedef-group, f)
+pub fun extend-kgamma(rngs: list<range>, dg: compiler/core/core/typedef-group, f)
   fun nameKind(tdef: compiler/core/core/typedef)
     match tdef
       core/Synonym(syn-info) -> (syn-info.name, syn-info.kind, syn-info.doc)
@@ -129,7 +132,7 @@ fun member-doc(doc: string, header: string, members: list<string>): string
   val mdoc = "// " ++ header ++ ":\n// ```koka\n" ++ members.map("//" ++ _).join("\n") ++ "// ```\n"
   if doc == "" then mdoc else doc ++ "\n// * * *\n" ++ mdoc
 
-fun check-external(name: name, range: range)
+pub fun check-external(name: name, range: range)
   val mbres = lookup-external(name)
   match mbres
     Just(rng0) ->
@@ -157,7 +160,7 @@ fun inf-qualified-name(nm: name, rng: range)
 fun pp-module(nm: name)
   nm.nameModule.text.color(colors.colorModule)
 
-fun find-infkind(nm0: name, rng: range)
+pub fun find-infkind(nm0: name, rng: range)
   val (nm, mbAlias) = match expand(inf-kind-env.imports, nm0)
     Right((name', alias0)) -> (name', Just(alias0))
     _ -> (nm0, Nothing)
@@ -205,7 +208,7 @@ fun ambiguous(lst: list<name>)
 fun pp-type(nm: name)
   nm.pretty.color(colors.colorType)
 
-fun qualify-def(nm: name)
+pub fun qualify-def(nm: name)
   qualify(current-modname(), nm)
 
 fun find-kind(nm: name)
@@ -213,17 +216,17 @@ fun find-kind(nm: name)
     Found((qname, (kind, doc))) -> (qname, kind, doc)
     _ -> failure/fail("kind/infer find-kind: unknown type constructor: " ++ nm.show)
 
-fun lookup-datainfo(nm: name)
+pub fun lookup-datainfo(nm: name)
   match inf-kind-env.newtypesExtended.lookup-any(nm)
     Nothing -> inf-kind-env.newtypesImported.lookup-any(nm)
     just -> just
 
-fun with-data-effects(effs: name-map<data-effect>, f)
+pub fun with-data-effects(effs: name-map<data-effect>, f)
   with override
     val inf-kind-env = inf-kind-env(dataEffects = effs)
   f()
 
-fun lookup-data-effect(nm: name)
+pub fun lookup-data-effect(nm: name)
   match inf-kind-env.dataEffects.lookup(nm)
     Just(eff) -> eff
     Nothing -> 

@@ -1,3 +1,6 @@
+// Ported as of 2026-01-29; approx upstream baseline commit d3b244c of Backend/C/FromCore.hs (backfilled 2026-07-23)
+module compiler/backend/c/expr
+
 import compiler/core/core
 import compiler/core/corevar
 import compiler/lib/pprint
@@ -43,7 +46,7 @@ fun gen-local-def(d: def): _ doc
 
 // Generate C declaration for top level definitions
 
-fun gen-top-groups(d: list<def-group>): _ ()
+pub fun gen-top-groups(d: list<def-group>): _ ()
   with localUnique
   d.map(gen-top-group)
   ()
@@ -200,9 +203,9 @@ fun gen-lambda(body: expr, params: list<tName>, eff: ktype)
       )))
   emit-to-current-def(vcat([linebreak, "// lift anonymous function".text, tpDecl, newDef]) |.| linebreak)
   val bodyDoc = gen-statement(ResultReturn(Nothing, params), body)
-  if fields.is-nil then 
+  if fields.is-nil then
     emit-to-c(funSig |+| block("kk_unused(_fself);".text) |-| bodyDoc)
-  else 
+  else
     val dups = braces(fields.map(fn((nm, tp)) gen-dup-call(tp, nm.cpp-name) |.| semi).hcat)
     emit-to-c(funSig |+| block(
       vcat(
@@ -276,7 +279,7 @@ fun try-tailcall(r: result, ex: expr)
           val stmts = gen-override(params, args)
           Just(tailblock(stmts |-| tailcall))
         _ -> Nothing
-  
+
 
 // Generates a statement from an expression by applying a return context (deeply) inside
 fun gen-statement(res: result, ex: expr): _ doc

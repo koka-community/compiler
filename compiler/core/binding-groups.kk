@@ -1,3 +1,6 @@
+// Ported as of 2026-01-29; approx upstream baseline commit b8074c2 of Core/BindingGroups.hs (backfilled 2026-07-23)
+module compiler/core/binding-groups
+
 import compiler/lib/scc
 import compiler/core/core
 import compiler/core/corevar
@@ -17,7 +20,7 @@ alias freeVar = linear-set<tName>
 // definition groups. After type checking it is possible that definitions
 // that seemed recursive are actually not mutually recursive.
 
-fun regroup(dfs: list<def>): _ list<def-group>
+pub fun regroup(dfs: list<def>): _ list<def-group>
   match dfs
     Cons(d, Nil) ->
       val fvdef = d.free-vars

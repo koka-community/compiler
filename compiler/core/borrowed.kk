@@ -1,3 +1,6 @@
+// Ported as of 2026-01-18; approx upstream baseline commit 486ef0d of Core/Borrowed.hs (backfilled 2026-07-23)
+module compiler/core/borrowed
+
 import compiler/common/name
 import compiler/core/core
 import compiler/common/failure
@@ -9,7 +12,7 @@ import std/data/linear-map
 
 // Map names to their borrowing info. If a name does not use borrowing
 // it may not be in here.
-alias borrowed = name-map<list<param-info>>
+pub alias borrowed = name-map<list<param-info>>
 
 alias borrowDef = (name, list<param-info>)
 
@@ -22,10 +25,10 @@ fun new(xs: list<borrowDef>): borrowed
 fun list/extend(b: borrowed, xs: list<borrowDef>): borrowed
   xs.foldl(b, extend)
 
-fun extend(b: borrowed, b1: borrowDef): borrowed
+pub fun extend(b: borrowed, b1: borrowDef): borrowed
   b.add(b1.fst, b1.snd)
 
-fun core/extend(c: core, b0: borrowed): borrowed
+pub fun core/extend(c: core, b0: borrowed): borrowed
   b0.extend(c.defs.extract-borrow).extend(c.externals.extract-borrow)
 
 // Get borrow information from core

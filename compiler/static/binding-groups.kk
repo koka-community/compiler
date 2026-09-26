@@ -8,18 +8,18 @@ import std/data/linear-set
 import std/data/linear-map
 // Updated 7/12/25; Commit #752748d
 
-effect val modname: name
+pub effect val modname: name
 // Program
-fun program/group-bindings(program: user-program)
+pub fun program/group-bindings(program: user-program)
   with val modname = program.name
   program(typedefs=program.typedefs.group-bindings, defs=program.defs.group-bindings)
 
 // Binding groups in type definitions
-fun typedefs/group-bindings(tdGroups: list<user-typedef-group>)
+pub fun typedefs/group-bindings(tdGroups: list<user-typedef-group>)
   val (ds, extends) = tdGroups.flatten.partition(is-definition)
   ds.group(emptyDeps + ds.map(dependencies)) ++ extends.map(TypeDefNonRec)
 
-fun flatten(grps: list<user-typedef-group>)
+pub fun flatten(grps: list<user-typedef-group>)
   val xs = grps.map fn(g)
     match g
       TypeDefRec(tds) -> tds
@@ -60,7 +60,7 @@ fun uc/free-types(c: user-con<t,u,k>, ?free-types: (t) -> pure name-set): pure n
   c.params.map(snd).free-types + c.result.map(free-types).default(empty)
 
 // Binding groups in definitions
-fun defgroups/group-bindings(dgs: list<def-group<t>>): _ list<def-group<t>>
+pub fun defgroups/group-bindings(dgs: list<def-group<t>>): _ list<def-group<t>>
   val (defs0, deps0) = dgs.map(group-bindings).unzip
   val defs = defs0.concat
   val deps1 = deps0.unions
@@ -89,7 +89,7 @@ fun def/ee(d: def<t>): extraDeps
   if nm.is-locally-qualified then LinearMap([(nm.unqualify-full, [nm])])
   else LinearMap([])
 
-fun defgroup/group-bindings(g: def-group<t>): _ (list<def<t>>, deps)
+pub fun defgroup/group-bindings(g: def-group<t>): _ (list<def<t>>, deps)
   match g
     DefNonRec(d) ->
       val (d', deps) = d.def/dependencies
@@ -270,7 +270,7 @@ val emptyDeps: linear-map<name, name-set> = LinearMap([])
 
 // Topological sort
 
-fun dfs/group-bindings(defs: list<def<t>>, deps: deps): pure list<def-group<t>>
+pub fun dfs/group-bindings(defs: list<def<t>>, deps: deps): pure list<def-group<t>>
   // get definition id's
   val defVars = names/empty + deps.list.map(fst)
   // constrain to the current group of id's
@@ -324,14 +324,14 @@ fun dfs/group-bindings(defs: list<def<t>>, deps: deps): pure list<def-group<t>>
   
   // create a definition group from a list of mutual recursive identifiers
   fun make-group(ids:list<name>)
-    match ids
-      [id] -> 
-        if defDeps.find(id).member(id) then
+      match ids
+        [id] ->
+          if defDeps.find(id).member(id) then
           [DefRec(defMap.get(id))]
-        else
-          defMap.get(id).map(DefNonRec)
-      _ -> [DefRec(ids.map(defMap.get(_)).concat)]
-  
+          else
+            defMap.get(id).map(DefNonRec)
+        _ -> [DefRec(ids.map(defMap.get(_)).concat)]
+
   defOrder.map(make-group).concat
 
 fun typedefs/group(tdefs: list<user-typedef>, deps: deps)

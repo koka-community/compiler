@@ -1,3 +1,6 @@
+// Ported as of 2026-01-29; approx upstream baseline commit b8074c2 of Core/AnalysisResume.hs (backfilled 2026-07-23)
+module compiler/core/analysis-resume
+
 import compiler/common/name
 import compiler/common/name-prim
 import compiler/common/resume-kind

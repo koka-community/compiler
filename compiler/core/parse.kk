@@ -414,11 +414,11 @@ fun parse-var()
 
 fun parse-lit()
   parse-choices("literal", [
-    {LitInt(parse-integer().fst)},
-    {LitFloat(parse-float().fst)},
-    {LitString(parse-string-literal().fst)},
-    {LitChar(parse-char-literal().fst.string)},
-  ])
+           {LitInt(parse-integer().fst)},
+           {LitFloat(parse-float().fst)},
+           {LitString(parse-string-literal().fst)},
+           {LitChar(parse-char-literal().fst.string)},
+         ])
 
 fun parse-def-groups()
   val dg = parse-def-group()

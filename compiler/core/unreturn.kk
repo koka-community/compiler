@@ -1,3 +1,6 @@
+// Ported as of 2026-01-29; approx upstream baseline commit d114919 of Core/UnReturn.hs (backfilled 2026-07-23)
+module compiler/core/unreturn
+
 import compiler/core/core
 import compiler/common/name
 import compiler/common/name-prim
@@ -14,20 +17,20 @@ value type kexpr
   R(e: expr) // returned
   F(e: ((expr -> ur-eff expr) -> ur-eff expr)) // CPS Transformed, needs continuation
 
-fun unreturn()
+pub fun unreturn()
   with handler
     val current-eff = Nothing
   set-core-defs(tdgs/unreturn(get-core-defs()))
 
-fun tdgs/unreturn(def-groups: list<def-group>): _ list<def-group>
+pub fun tdgs/unreturn(def-groups: list<def-group>): _ list<def-group>
   def-groups.map(unreturn)
 
-fun tdg/unreturn(dg: def-group)
+pub fun tdg/unreturn(dg: def-group)
   match dg
     DefRec(defs) -> DefRec(defs.map(unreturn))
     DefNonRec(d) -> DefNonRec(d.unreturn)
 
-fun topdef/unreturn(d: def): _ def
+pub fun topdef/unreturn(d: def): _ def
   val (make-def, kexpr) = d.unreturn
   match kexpr
     U(e) -> make-def(e)
@@ -84,7 +87,7 @@ fun to-expr(k: kexpr)
 alias alter<x> = (x -> ur-eff def-group)
 alias maybechanged = either<(alter<list<expr>>, list<kexpr>), (alter<expr>, kexpr)>
 
-fun let/unreturn(org: expr, defgroups: list<def-group>, kbody: kexpr): ur-eff kexpr
+pub fun let/unreturn(org: expr, defgroups: list<def-group>, kbody: kexpr): ur-eff kexpr
   fun dg/unreturn(dg: def-group)
     match dg
       DefRec(dfs) ->
@@ -144,11 +147,11 @@ fun case/unreturn(org: expr, scruts: list<expr>, branches: list<branch>): _ kexp
       Case(scruts, kexprss.zipwith(mkBranches, fn(kexprs, mk) mk(kexprs.map(fn(k) applyK(app, k)))))
     F(f)
 
-fun branch/unreturn(b: branch)
+pub fun branch/unreturn(b: branch)
   val (mkGuards, kexprs) = b.guards.map(unreturn).unzip
   (fn(es) Branch(b.patterns, mkGuards.zipwith(es, fn(make, e) make(e))), kexprs)
 
-fun guard/unreturn(g: guard)
+pub fun guard/unreturn(g: guard)
   val kexpr = g.body.unreturn
   (fn(e) Guard(g.test, e), kexpr)
 

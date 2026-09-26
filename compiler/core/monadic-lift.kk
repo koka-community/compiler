@@ -1,3 +1,6 @@
+// Updated as of 7/23/26: Commit dd91082
+module compiler/core/monadic-lift
+
 import compiler/common/failure
 import compiler/common/name
 import compiler/common/name-prim
@@ -12,7 +15,7 @@ import std/data/linear-set
 import compiler/platform/config
 import compiler/common/unique
 
-fun monadic-lift()
+pub fun monadic-lift()
   with run-lifted()
   set-core-defs(get-core-defs().lift-defgroups(True))
 

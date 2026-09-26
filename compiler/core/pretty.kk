@@ -46,7 +46,7 @@ fun no-vis(f)
 fun no-vis-show-def(f)
   set-env(pp-env(coreShowVis=False, coreShowDef=True),f)
 
-fun pretty-core(target: target, inlineDefs: list<inline-def>, c as Core(name, imports, fix-defs, typedef-groups, def-groups, externals, doc): core)
+pub fun pretty-core(target: target, inlineDefs: list<inline-def>, c as Core(name, imports, fix-defs, typedef-groups, def-groups, externals, doc): core)
   val importedSyns = c.extract-imported-synonyms()
   val extraImports = extract-imports-from-synonyms(imports, importedSyns)
   val allDefs = def-groups.flatten
@@ -100,12 +100,12 @@ fun pretty-external-import(e: external, t: target)
       match lookup-target(t, imports)
         Nothing -> pprint/empty
         Just(kvals0) ->
-          fun prettyKeyval((k, v))
-            LitString(k).pretty-lit |.| "=".text |.| LitString(v).pretty-lit |.| semi
+      fun prettyKeyval((k, v))
+        LitString(k).pretty-lit |.| "=".text |.| LitString(v).pretty-lit |.| semi
           match kvals0.filter(fn((key, _)) key != "include-inline" && key != "header-include-inline")
-            [] -> pprint/empty
-            keyvals ->
-              "extern import".keyword |+| "{".text |-|
+        [] -> pprint/empty
+        keyvals ->
+          "extern import".keyword |+| "{".text |-|
                 tab(t.pp-target |+| "{".text |-| tab(keyvals.map(prettyKeyval).vcat) |-| "};".text) |-| "};".text
   
 fun pretty-fix-def(FixDef(nm, fixity): fix-def)
@@ -236,7 +236,7 @@ fun pretty-expr(ex: expr)
       vcat([
         "val".keyword |+| ((if x.is-nil then "_".text else x.pretty-def-name) |+| tp.pretty-type |-| "=".text |+| exprDoc).hang(2),
         e'.pretty-expr
-      ]) 
+      ])
     Let(defgs, e) ->
       vcat([defgs.map(pretty-defgroup).vcat.align, e.pretty-expr])
     // Case expressions

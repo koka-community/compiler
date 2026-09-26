@@ -19,9 +19,9 @@ import std/data/linear-set
 import std/core-extras
 import std/core/undiv
 
-effect val current-program : program<user-type, user-kind>
+pub effect val current-program : program<user-type, user-kind>
 
-fun current-modname(): current-program name
+pub fun current-modname(): current-program name
   current-program.name
 
 pub struct program<t, k>
@@ -40,45 +40,45 @@ fun program/show(Program(_, n, _, typedefs, defs, imports, externals, fix-defs, 
   "imports " ++ imports.list/show ++ "\n" ++ "externals " ++ externals.list/show ++ "\n" ++ 
   "fix-defs " ++ fix-defs.list/show ++ "\n"
   
-alias user-program = program<user-type, user-kind>;
-alias user-expr = expr<user-type>;
-alias user-def = def<user-type>;
-alias user-def-group = def-group<user-type>;
-alias user-typedef = typedef<user-type, user-type, user-kind>;
-alias user-typedef-group = typedef-group<user-type, user-kind>;
-alias user-user-con = user-con<user-type, user-type, user-kind>;
-alias user-pattern = pattern<user-type>
-alias user-branch = branch<user-type>
-alias user-guard = guard<user-type>
-alias user-handler-branch = handler-branch<user-type>
-alias user-value-binder = value-binder<()>
-alias user-type-binder = type-binder<user-kind>
+pub alias user-program = program<user-type, user-kind>;
+pub alias user-expr = expr<user-type>;
+pub alias user-def = def<user-type>;
+pub alias user-def-group = def-group<user-type>;
+pub alias user-typedef = typedef<user-type, user-type, user-kind>;
+pub alias user-typedef-group = typedef-group<user-type, user-kind>;
+pub alias user-user-con = user-con<user-type, user-type, user-kind>;
+pub alias user-pattern = pattern<user-type>
+pub alias user-branch = branch<user-type>
+pub alias user-guard = guard<user-type>
+pub alias user-handler-branch = handler-branch<user-type>
+pub alias user-value-binder = value-binder<()>
+pub alias user-type-binder = type-binder<user-kind>
 
-alias externals = list<external>;
+pub alias externals = list<external>;
 
-type external
+pub type external
   External(
-    name: name, 
-    t: user-type, 
-    params: list<param-info>, 
-    name-range: range, 
-    range: range, 
+    name: name,
+    t: user-type,
+    params: list<param-info>,
+    name-range: range,
+    range: range,
     inlineCall: list<(target, external-call)>, 
-    vis: visibility, 
-    fipAnnot: fipT, 
+    vis: visibility,
+    fipAnnot: fipT,
     doc: string)
   ExternalImport(
     eImport: list<(target,list<(string, string)>)>, 
     range: range)
 
-fun external/show(e: external): _ string
+pub fun external/show(e: external): _ string
   match e
-    External(name, t, params, name-range, range, inlineCall, vis, fipAnnot, doc) -> 
-      "External " ++ name.name/name/show ++ " " ++ t.show ++ " " ++ params.list/show ++ " " ++ name-range.show ++ " " ++ range.show ++ " " ++ 
+    External(name, t, params, name-range, range, inlineCall, vis, fipAnnot, doc) ->
+      "External " ++ name.name/name/show ++ " " ++ t.show ++ " " ++ params.list/show ++ " " ++ name-range.show ++ " " ++ range.show ++ " " ++
       inlineCall.list/show ++ " " ++ vis.show ++ " " ++ fipAnnot.show ++ " " ++ doc.show
     ExternalImport(eImport, range) -> "ExternalImport " ++ eImport.list/show(?show=fn((t:target, l:list<(string,string)>)) t.show ++ " " ++ l.list/show) ++ " " ++ range.show
 
-value type external-call
+pub value type external-call
   ExternalInline(content: string)
   ExternalCall(call: string)
 
@@ -87,7 +87,7 @@ fun externcall/show(e: external-call): string
     ExternalInline(content) -> "ExternalInline " ++ content
     ExternalCall(call) -> "ExternalCall " ++ call
 
-alias fix-defs = list<fix-def>;
+pub alias fix-defs = list<fix-def>;
 
 type fix-def
   FixDef(
@@ -100,9 +100,9 @@ type fix-def
 fun fixdef/show(f: fix-def): string
   f.name.name/name/show ++ " " ++ f.fixity.show ++ " " ++ f.range.show ++ " " ++ f.vis.show
 
-alias imports = list<kimport>;
+pub alias imports = list<kimport>;
 
-struct kimport
+pub struct kimport
   name: name // module name
   fullName: name // fully qualified module name
   nameRange: range
@@ -114,9 +114,9 @@ struct kimport
 fun kimport/show(i: kimport): string
   i.name.name/name/show ++ " " ++ i.fullName.name/name/show ++ " " ++ i.range.show ++ " " ++ i.vis.show
 
-alias typedef-groups<t,k> = list<typedef-group<t,k>>;
+pub alias typedef-groups<t,k> = list<typedef-group<t,k>>;
 
-value type typedef-group<t,k>
+pub value type typedef-group<t,k>
   TypeDefRec(defs: list<typedef<t,t,k>>)
   TypeDefNonRec(tdef: typedef<t,t,k>)
 
@@ -125,7 +125,7 @@ fun typedefgroup/show(t: typedef-group<t,k>, ?t/show: (t) -> _ string, ?k/show: 
     TypeDefRec(defs) -> "TypeDefRec " ++ defs.list/show
     TypeDefNonRec(d) -> "TypeDefNonRec " ++ d.show
 
-type typedef<t,u,k>
+pub type typedef<t,u,k>
   Synonym(
     binder: type-binder<k>, 
     params: list<type-binder<k>>, 
@@ -144,14 +144,14 @@ type typedef<t,u,k>
     deffect: data-effect, 
     doc: string)
 
-fun typedef/show(td: typedef<t,u,k>, ?t/show: (t) -> _ string, ?u/show: (u) -> _ string, ?k/show: (k) -> _ string): _ string
+pub fun typedef/show(td: typedef<t,u,k>, ?t/show: (t) -> _ string, ?u/show: (u) -> _ string, ?k/show: (k) -> _ string): _ string
   match td
     Synonym(binder, params, synonym, range, vis, doc) -> "Synonym " ++ binder.show ++ " " ++ params.list/show ++ " " ++ synonym.t/show ++ " " ++ range.show ++ " " ++ vis.show ++ " " ++ doc.show
     DataType(binder, params, constrs, range, vis, sort, ddef, deffect, doc) -> 
       "DataType " ++ binder.show ++ " " ++ params.list/show ++ " " ++ constrs.list/show ++ " " ++ 
       range.show ++ " " ++ vis.show ++ " " ++ sort.show ++ " " ++ ddef.show ++ " " ++ deffect.show ++ " " ++ doc.show
 
-type type-binder<k>
+pub type type-binder<k>
   TypeBinder(
     name: name,
     kind: k,
@@ -162,7 +162,7 @@ type type-binder<k>
 fun tb/show(t: type-binder<k>, ?show: (k) -> _ string): _ string
   t.name.show ++ " " ++ t.kind.show ++ " " ++ t.name-range.show ++ " " ++ t.range.show
 
-type user-con<t, u, k>
+pub type user-con<t, u, k>
   UserCon(
     name: name, 
     existentials: list<type-binder<k>>,
@@ -178,9 +178,9 @@ type user-con<t, u, k>
 fun con/show(u: user-con<t,u,k>, ?t/show: (t) -> _ string, ?u/show: (u) -> _ string, ?k/show: (k) -> _ string): _ string
   u.name.show ++ " " ++ u.existentials.list/show ++ " " ++ u.params.list/show ++ " " ++ u.result.show ++ " " ++ u.name-range.show ++ " " ++ u.range.show ++ " " ++ u.vis.show ++ " " ++ u.doc.show
 
-alias def-groups<t> = list<def-group<t>>;
+pub alias def-groups<t> = list<def-group<t>>;
   
-type def-group<t>
+pub type def-group<t>
   DefRec(defs: list<def<t>>)
   DefNonRec(d: def<t>)
 
@@ -189,9 +189,9 @@ fun dg/show(d: def-group<t>, ?show: (t) -> _ string): _ string
     DefRec(defs) -> "DefRec " ++ defs.list/show
     DefNonRec(d) -> "DefNonRec " ++ d.show
 
-alias defs<t> = list<def<t>>;
+pub alias defs<t> = list<def<t>>;
 
-type value-binder<t,e>
+pub type value-binder<t,e>
   ValueBinder(
     name: name,
     binderType: t, // Always present for constructors
@@ -205,7 +205,7 @@ type value-binder<t,e>
 fun vb/show(v: value-binder<t,v>, ?t/show: (t) -> _ string, ?e/show: (v) -> _ string): _ string
   v.name.show ++ " " ++ v.binderType.t/show ++ " " ++ v.expr.e/show ++ " " ++ v.name-range.show ++ " " ++ v.range.show
 
-struct def<t>
+pub struct def<t>
   binder: value-binder<(), expr<t>>
   range: range
   visibility: visibility
@@ -213,15 +213,15 @@ struct def<t>
   defInline: def-inline
   doc: string;
 
-fun def/show(d: def<t>, ?show: (t) -> _ string): _ string
+pub fun def/show(d: def<t>, ?show: (t) -> _ string): _ string
   d.binder.show ++ " " ++ d.range.show ++ " " ++ d.visibility.show ++ " " ++ d.sort.show ++ " " ++ d.defInline.show ++ " " ++ d.doc
 
-fun defIsVal(d: def<t>): bool
+pub fun defIsVal(d: def<t>): bool
   !d.sort.is-fun
 
-val guardTrue = Var(nameTrue, False, range/null)
+pub val guardTrue = Var(nameTrue, False, range/null)
 
-type expr<t>
+pub type expr<t>
   Lam(binder: list<value-binder<maybe<t>,maybe<expr<t>>>>, e: expr<t>, top-level: bool, range: range)
   Let(d: def-group<t>, e: expr<t>, range: range)
   Bind(d: def<t>, e: expr<t>, range: range)
@@ -269,7 +269,7 @@ fun expr/show(expr: expr<t>, ?show: (t) -> _ string): _ string
       // branches.list/show ++ " " ++ declRange.show ++ " " ++ rng.show
 
 // FROM Infer.hs
-fun is-annot(e: expr<t>): bool
+pub fun is-annot(e: expr<t>): bool
   match e 
     Parens(e') -> e'.is-annot
     Ann() -> True
@@ -277,17 +277,17 @@ fun is-annot(e: expr<t>): bool
     Bind(_, e') -> e'.is-annot
     _ -> False
 
-fun root-expr(e: expr<t>): expr<t>
+pub fun root-expr(e: expr<t>): expr<t>
   match e
     Parens(e') -> e'.root-expr
     _ -> e
 
-fun wrap-optional(expr: expr<t>): expr<t>
+pub fun wrap-optional(expr: expr<t>): expr<t>
   App(Var(nameOptional, False, null), [(Nothing, expr)], expr.range)
 
-val optionalNone = Var(nameOptionalNone, False, null)
+pub val optionalNone = Var(nameOptionalNone, False, null)
 
-fun expr/uses-locals(expr: expr<t>, lvars : name-set): _ bool
+pub fun expr/uses-locals(expr: expr<t>, lvars : name-set): _ bool
   match expr
     App(Var(newLocal, False), [_, (_, Parens(Lam([ValueBinder(name)], body)))]) | newLocal == nameLocalVar -> body.uses-locals(lvars.remove(name)) // Fragile, expects this form from the parser
     Lam(_, e) -> e.uses-locals(lvars)
@@ -324,7 +324,7 @@ fun branch/uses-locals(b: branch<t>, lvars: name-set): _ bool
 fun op/uses-locals(o: handler-branch<t>, lvars: name-set): _ bool
   o.branchExpr.uses-locals(lvars)
 
-fun extract-matched-names(e: expr<t>)
+pub fun extract-matched-names(e: expr<t>)
   fun extract-matched-namesx(expr: expr<t>)
     match expr
       Var(name, _, _) -> [name]
@@ -334,16 +334,16 @@ fun extract-matched-names(e: expr<t>)
     App(Var(name), args) | name.is-name-tuple -> args.map(_.snd.extract-matched-namesx).concat
     _ -> e.extract-matched-namesx
 
-fun eta-expand(n: int, rng: range, fbody: (expr<t> -> expr<t>) -> expr<t>): expr<t>
+pub fun eta-expand(n: int, rng: range, fbody: (expr<t> -> expr<t>) -> expr<t>): expr<t>
   val nameFixed = list(1, n).map(fn(i) make-hidden-name("arg", ("x" ++ i.show).new-name))
   val argsFixed = nameFixed.map((Nothing, Var(_, False, rng)))
   val body = fbody(fn(f') App(f', argsFixed, rng))
   Lam(nameFixed.map(ValueBinder(_, Nothing, Nothing, rng, rng)), body, False, rng)
 
-fun is-annotated(vb: value-binder<maybe<t>,e>): bool
+pub fun is-annotated(vb: value-binder<maybe<t>,e>): bool
   vb.binderType.is-just
 
-type handler-override
+pub type handler-override
   HandlerOverride
   HandlerNoOverride
 
@@ -352,7 +352,7 @@ fun hov/show(h: handler-override): string
     HandlerOverride -> "HandlerOverride"
     HandlerNoOverride -> "HandlerNoOverride"
 
-type handler-scope
+pub type handler-scope
   HandlerScoped
   HandlerNoScope
 
@@ -361,7 +361,7 @@ fun hs/show(h: handler-scope): string
     HandlerScoped -> "HandlerScoped"
     HandlerNoScope -> "HandlerNoScope"
 
-type handler-branch<t>
+pub type handler-branch<t>
   HandlerBranch(
     branchName: name,
     branchPars: list<value-binder<maybe<t>, ()>>,
@@ -375,27 +375,27 @@ fun hb/show(h: handler-branch<t>, ?show: (t) -> _ string): _ string
   h.branchName.show ++ " " ++ h.branchPars.list/show ++ " " ++ h.branchExpr.show ++ " " ++
   h.branchSort.show ++ " " ++ h.branchNameRange.show ++ " " ++ h.branchPatRange.show
   
-struct branch<t>
+pub struct branch<t>
   branchPattern: pattern<t>
   branchGuard: list<guard<t>>
 
-fun branch/range(b: branch<t>) 
+pub fun branch/range(b: branch<t>) 
   range/combine(b.branchPattern.range, b.branchGuard.range)
 
 fun branch/show(b: branch<t>, ?show: (t) -> _ string): _ string
   b.branchPattern.show ++ " " ++ b.branchGuard.list/show
   
-struct guard<t>
+pub struct guard<t>
   guardTest: expr<t>
   guardExpr: expr<t>
 
-fun guard/range(g: guard<t>)
+pub fun guard/range(g: guard<t>)
   range/combine(g.guardTest.range, g.guardExpr.range)
 
 fun guard/show(g: guard<t>, ?show: (t) -> _ string): _ string
   g.guardTest.show ++ " " ++ g.guardExpr.show
 
-type pattern<t>
+pub type pattern<t>
   PatWild(range: range)
   PatVar(patvar: value-binder<maybe<t>, pattern<t>>, range: range= patvar.range)
   PatAnn(p: pattern<t>, t: t, range: range)
@@ -415,7 +415,7 @@ fun pat/show(p: pattern<t>, ?show: (t) -> _ string): _ string
     // PatLit(value) -> "PatLit " ++ value.show
     _ -> ""
 
-type lit
+pub type lit
   LitInt(value: int, range: range)
   LitFloat(value: float64, range: range)
   LitChar(value: string, range: range)
@@ -429,9 +429,9 @@ fun lit/show(l: lit): string
     LitString(v, r) -> v ++ " " ++ r.show
 
 // Types and kinds
-alias user-types<k> = list<kuser-type<k>>
+pub alias user-types<k> = list<kuser-type<k>>
 
-type user-quantifier
+pub type user-quantifier
   QSome
   QForall
   QExists
@@ -443,7 +443,7 @@ fun uquant/show(u: user-quantifier): string
     QExists -> "QExists"
 
 // Higher ranked types
-type kuser-type<k>
+pub type kuser-type<k>
   TpQuan(q: user-quantifier, b: type-binder<k>, kind: kuser-type<k>, range: range)
   TpFun(a: list<(name, kuser-type<k>)>, b: kuser-type<k>, c: kuser-type<k>, range: range)
   TpApp(a: kuser-type<k>, b: list<kuser-type<k>>, range: range)
@@ -452,9 +452,9 @@ type kuser-type<k>
   TpParens(t: kuser-type<k>, range: range)
   TpAnn(t: kuser-type<k>, kind: k)
 
-alias user-type = kuser-type<user-kind>
+pub alias user-type = kuser-type<user-kind>
 
-fun ut/show(u: user-type): _ string
+pub fun ut/show(u: user-type): _ string
   match u
     TpQuan(q, b, kind, range) -> "TpQuan " ++ q.show ++ " " ++ b.show ++ " " ++ kind.show ++ " " ++ range.show
     TpFun(a, b, c, range) -> "TpFun " ++ a.list/show(?show=fn((n, ut)) n.name/name/show ++ ":" ++ ut.show) ++ " " ++ b.show ++ " " ++ c.show ++ " " ++ range.show
@@ -464,13 +464,13 @@ fun ut/show(u: user-type): _ string
     TpParens(t, range) -> "TpParens " ++ t.show ++ " " ++ range.show
     TpAnn(t, kind) -> "TpAnn " ++ t.show ++ " " ++ kind.show
 
-type user-kind
+pub type user-kind
   KindCon(name: name, range: range)
   KindArrow(from: user-kind, to: user-kind)
   KindParens(kind: user-kind, range: range)
   KindNone // Flags no explicit kind annotation
 
-fun uk/show(u: user-kind): string
+pub fun uk/show(u: user-kind): string
   match u
     KindCon(name, range) -> "KindCon " ++ name.name/name/show ++ " " ++ range.show
     KindArrow(from, to) -> "KindArrow " ++ from.show ++ " " ++ to.show
@@ -481,7 +481,7 @@ fun uk/show(u: user-kind): string
 
 // Range
 
-fun kut/range(tp: kuser-type<k>, ?range: (k) -> range): range
+pub fun kut/range(tp: kuser-type<k>, ?range: (k) -> range): range
   match tp
     TpQuan(range=r) -> r
     TpFun(range=r) -> r
@@ -491,26 +491,26 @@ fun kut/range(tp: kuser-type<k>, ?range: (k) -> range): range
     TpParens(range=r) -> r
     TpAnn(userTp, kind) -> Range(userTp.range.start, kind.range.end, False)
 
-fun uk/range(uk: user-kind): range
+pub fun uk/range(uk: user-kind): range
   match uk
     KindCon(range=range) -> range
     KindArrow(k1, k2) -> Range(k1.range.start, k2.range.end, k1.range.hidden || k2.range.hidden)
     KindParens(range=range) -> range
     KindNone -> range/null
 
-fun uhb/range(uhb: user-handler-branch): range
+pub fun uhb/range(uhb: user-handler-branch): range
   uhb.branchPatRange.combine(uhb.branchExpr.range)
 
 // free type variables
-fun maybe/free-type-vars(m: maybe<a>, ?free-type-vars: (a) -> _ name-set): _ name-set
+pub fun maybe/free-type-vars(m: maybe<a>, ?free-type-vars: (a) -> _ name-set): _ name-set
   match m
     Nothing -> LinearSet([])
     Just(x) -> ?free-type-vars(x)
 
-fun list/free-type-vars(l: list<a>, ?free-type-vars: (a) -> _ name-set): _ name-set
+pub fun list/free-type-vars(l: list<a>, ?free-type-vars: (a) -> _ name-set): _ name-set
   l.foldl(LinearSet([]), fn(s:name-set, x) s + ?free-type-vars(x))
 
-fun kut/free-type-vars(tp: kuser-type<k>): _ name-set
+pub fun kut/free-type-vars(tp: kuser-type<k>): _ name-set
   match tp
     TpQuan(_, TypeBinder(name), tp, _) -> tp.free-type-vars - name
     TpFun(args, eff, tp) -> free-type-vars(Cons(tp,Cons(eff,args.map(snd))))
@@ -521,21 +521,21 @@ fun kut/free-type-vars(tp: kuser-type<k>): _ name-set
     TpAnn(tp) -> tp.free-type-vars
 
 // access definitions
-fun def/body(d: def<t>): expr<t>
+pub fun def/body(d: def<t>): expr<t>
   d.binder.expr
 
-fun def/name(d: def<t>): name
+pub fun def/name(d: def<t>): name
   d.binder.name
 
-fun def/type(d: def<t>): maybe<t>
+pub fun def/type(d: def<t>): maybe<t>
   match d.binder.expr
     Ann(_, tp) -> Just(tp)
     _ -> Nothing
 
-fun typedef/name(d: typedef<t,u,k>): name
+pub fun typedef/name(d: typedef<t,u,k>): name
   d.binder.name
 
-fun typdef/name-range(d: typedef<t,u,k>): range
+pub fun typdef/name-range(d: typedef<t,u,k>): range
   d.binder.name-range
 
 fun program/null(n: name)

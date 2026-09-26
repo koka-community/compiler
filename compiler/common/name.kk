@@ -31,7 +31,7 @@ import std/core-extras
 //   user identifiers to contain `@` though after the first character.)
 // - Plain module names have an empty local qualifier and stem
 // - If there is a local qualifier, the stem cannot be empty
-struct name
+pub struct name
   pub nameModule: string // module name (`std/core`)
   pub hashModule: int
   pub nameLocalQual: string // local qualifier (`int`)
@@ -40,7 +40,7 @@ struct name
   pub hashStem: int
 
 // names
-alias names = list<name>
+pub alias names = list<name>
 
 fun join(m: string, n: string): string
   if m == "" then n
@@ -50,25 +50,25 @@ fun join(m: string, n: string): string
 fun joins(ms : list<string>): string
   ms.foldr("", join)
 
-fun name/local(n: name): string
+pub fun name/local(n: name): string
   join(n.nameLocalQual, n.nameStem)
 
-fun name-case-equal(n1: name, n2: name): bool
+pub fun name-case-equal(n1: name, n2: name): bool
   n1.local == n2.local && 
     n1.split-module-name.reverse.zipwith(n2.split-module-name.reverse, (==)).and
 
-fun name-case-equal-prefix-of(n1: name, n2: name): bool
+pub fun name-case-equal-prefix-of(n1: name, n2: name): bool
   n1.local.is-prefix-of(n2.local) &&
     n1.split-module-name.reverse.zipwith(n2.split-module-name.reverse, (==)).and
 
-fun name-case-overlap(n1: name, n2: name): bool
+pub fun name-case-overlap(n1: name, n2: name): bool
   !n1.name-case-equal(n2) && n1.is-same-namespace(n2)
 
 fun name-case-overlap-prefix-of(n1: name, n2: name): bool
   !n1.name-case-equal-prefix-of(n2) && n1.is-same-namespace(n2)
 
 // Checks whether both names are in the same namespace, ie. constructors or not
-fun is-same-namespace(n1: name, n2: name): bool
+pub fun is-same-namespace(n1: name, n2: name): bool
   n1.is-constructor-name == n2.is-constructor-name
 
 fun lower/cmp(Name(m1, _, l1, _, n1, _): name, Name(m2, _, l2, _, n2, _): name): order
@@ -159,16 +159,16 @@ fun show-fully-explicit(Name(m, _, l, _, n, _): name): string
   elif ln == "" then m
   else m ++ "/#" ++ ln
 
-fun show-explicit(n: name): string
+pub fun show-explicit(n: name): string
   n.show-name(True)
 
-fun show-plain(n: name): string 
+pub fun show-plain(n: name): string 
   join(n.nameModule, join(n.nameLocalQual, n.nameStem))
 
-fun name/show(n: name): string
+pub fun name/show(n: name): string
   n.show-explicit()
 
-fun pretty(n: name): doc
+pub fun pretty(n: name): doc
   n.show.text
 
 fun pretty-name-ex(Name(m, _, l, _, n, _): name, lsep: string, cs: colorScheme): doc // explicit /# if needed
@@ -178,11 +178,11 @@ fun pretty-name-ex(Name(m, _, l, _, n, _): name, lsep: string, cs: colorScheme):
    (m.text |.| (if ln.is-empty then pretty/pprint/empty elif l.is-empty then "/".text else lsep.text)).color(cs.colorModule)
            |.| ln.text
 
-fun pretty-name(nm: name, cs: colorScheme): _ doc // not explicit /#
+pub fun pretty-name(nm: name, cs: colorScheme): _ doc // not explicit /#
   if nm.is-implicit-param-name then "?".text |.| nm.from-implicit-param-name.requalify-locally.pretty-name-ex("/", cs)
   else nm.pretty-name-ex("/", cs)
 
-fun pretty-core-name(nm: name, cs: colorScheme): doc // explicit /# if needed
+pub fun pretty-core-name(nm: name, cs: colorScheme): doc // explicit /# if needed
   nm.pretty-name-ex("/#", cs)
 
 fun pretty-local-name(Name(_, _, l, _, n, _): name): doc
@@ -199,20 +199,20 @@ fun tupled/read(s: string): exn name
   val Cons(m, Cons(l, Cons(n, Nil))) = s'.split(",")
   new-locally-qualified(m, l, n)
 
-fun qualified/read(s: string): _ name
+pub fun qualified/read(s: string): _ name
   if s.starts-with("(").bool then tupled/read(s)
   else s.read-qualified-name
 
-fun new-name(s: string): name
+pub fun new-name(s: string): name
   new-qualified("", s)
 
-fun new-module-name(s: string): name
+pub fun new-module-name(s: string): name
   new-qualified(s, "")
 
-fun new-qualified(mod: string, name: string): name
+pub fun new-qualified(mod: string, name: string): name
   new-locally-qualified(mod, "", name)
 
-fun new-locally-qualified(m: string, l: string, n: string): name
+pub fun new-locally-qualified(m: string, l: string, n: string): name
   Name(m, m.hash, l, l.hash, n, n.hash)
 
 // The hash function:
@@ -231,7 +231,7 @@ fun name-map-stem(Name(m, hm, l, hl, n, _): name, f: (string) -> e string): e na
   val n' = f(n)
   Name(m, hm, l, hl, n', n'.hash)
 
-fun read-qualified-name(s0: string): _ name
+pub fun read-qualified-name(s0: string): _ name
   if s0.starts-with("?").bool then s0.slice.drop(1).string.read-qualified-name.requalify-locally.to-implicit-param-name
   else
     fun split-qual-id-rev(rs: list<char>): (string, string)
@@ -262,19 +262,19 @@ fun read-qualified-name(s0: string): _ name
     val (q, lq, id) = s0.split-name
     new-locally-qualified(q,lq,id)
 
-fun is-module-name(n: name): bool
+pub fun is-module-name(n: name): bool
   n.nameStem == ""
 
-fun is-qualified(n: name): bool
+pub fun is-qualified(n: name): bool
   n.nameModule != ""
 
-fun is-locally-qualified(n): bool
+pub fun is-locally-qualified(n): bool
   n.nameLocalQual != ""
 
-fun is-symbol-name(n: name): bool
+pub fun is-symbol-name(n: name): bool
   n.nameStem.is-symbol-id
 
-fun is-constructor-name(n: name): bool
+pub fun is-constructor-name(n: name): bool
   match n.nameStem.slice.next
     Just((c, _)) | c.is-upper -> True
     Just(('@', r)) -> 
@@ -289,19 +289,19 @@ fun un-wildcard(n: name, post: string): name
     Cons('@',Cons('_')) -> n.name-map-stem("@" ++ _.list.drop(2).string ++ post)
     _           -> n
 
-fun is-wildcard(n: name): bool
+pub fun is-wildcard(n: name): bool
   match n.nameStem.slice.next
     Just(('_', _)) -> True
     Just(('@', r)) -> r.next.map(fn((c, _)) c == '_').default(False)
     _ -> False
 
-fun name/is-eta-hole(n: name): bool
+pub fun name/is-eta-hole(n: name): bool
   is-wildcard(n)
 
-fun is-hidden-name(n: name): bool
+pub fun is-hidden-name(n: name): bool
   n.nameStem.starts-with("@").bool
 
-fun missing-qualifier(current-mod: name, n: name, qname: name): string
+pub fun missing-qualifier(current-mod: name, n: name, qname: name): string
   val missing0 = qname.show-plain.list.reverse.drop(n.show-plain.count).reverse.string
   val standard = [current-mod.show, "std/core/types", "std/core/hnd", "std/core"]
   val missing = 
@@ -311,12 +311,12 @@ fun missing-qualifier(current-mod: name, n: name, qname: name): string
   if missing.starts-with(implicit-namespace ++ "/").bool then "?" ++ missing.list.drop(implicit-namespace.count + 1).string
   else missing
 
-val name/nil = "".new-name
+pub val name/nil = "".new-name
 
 fun is-nil(Name(m, _, _, _, n, _)): bool
   n == "" && m == ""
 
-fun qualify(a: name, b: name): name
+pub fun qualify(a: name, b: name): name
   match (a, b)
     (Name(m, hm, _, 0, _, 0), Name(_, 0, l, hl, n, hn)) -> Name(m, hm, l, hl, n, hn)
     (Name(m1, _, _, 0, _, 0), name as Name(m2)) | m1 == m2 -> name
@@ -327,48 +327,48 @@ fun qualify(a: name, b: name): name
 fun unqualify(Name(_, _,l, hl, n, hn)): name
   Name("", 0, l, hl, n, hn)
 
-fun qualifier(Name(m, hm)): name
+pub fun qualifier(Name(m, hm)): name
   Name(m, hm, "", 0, "", 0)
 
-fun name-as-module-name(n: name): name
+pub fun name-as-module-name(n: name): name
   new-module-name(join(n.nameModule, join(n.nameLocalQual, n.nameStem)))
 
-fun qualify-locally(nl: name, n: name): exn name
+pub fun qualify-locally(nl: name, n: name): exn name
   match nl
     Name(l, _, _, 0, _, 0) ->
       new-locally-qualified(n.nameModule, join(l, n.nameLocalQual), n.nameStem)
     _ -> failure/fail("common/name/qualify-locally: illegal qualification: " ++ nl.show-explicit ++ ", " ++ n.show-explicit)
 
 // Move the module qualifier to the local qualifier
-fun requalify-locally(n: name): name
+pub fun requalify-locally(n: name): name
   if n.nameModule == "" then n else new-locally-qualified("", join(n.nameModule, n.nameLocalQual), n.nameStem)
 
-fun qualify-unpacked(pname: name, fname: name)
+pub fun qualify-unpacked(pname: name, fname: name)
   qualify-locally(pname.from-implicit-param-name.name-as-module-name, fname)
 
 // Only keep the stem
-fun unqualify-full(n: name): name
+pub fun unqualify-full(n: name): name
   Name("", 0, "", 0, n.nameStem, n.hashStem)
 
 // Full qualifier: module + local qualifier
-fun full-qualifier(n: name): string
+pub fun full-qualifier(n: name): string
   n.unqualify-locally.nameModule
 
 // Add the local qualifier to the module qualifier
-fun unqualify-locally(n: name): name
+pub fun unqualify-locally(n: name): name
   if n.nameLocalQual == "" then n else new-qualified(join(n.nameModule, n.nameLocalQual), n.nameStem)
 
-fun unqualify-as-module-name(n: name): name
+pub fun unqualify-as-module-name(n: name): name
   new-module-name(join(n.nameModule, n.nameLocalQual))
 
 // Module paths
-fun split-module-name(n: name): list<string>
+pub fun split-module-name(n: name): list<string>
   n.nameModule.split("/")
 
-fun unsplit-module-name(l: list<string>): name
+pub fun unsplit-module-name(l: list<string>): name
   l.join("/").new-module-name
 
-fun merge-common-path(n1: name, n2: name): name
+pub fun merge-common-path(n1: name, n2: name): name
   fun merge(l1: list<string>, l2: list<string>): list<string>
     match (l1, l2)
       (Cons(m, ms), Cons(n, ns)) -> 
@@ -383,17 +383,17 @@ fun merge-common-path(n1: name, n2: name): name
   val new = ms.merge(ns).unsplit-module-name
   new
 
-fun split-local-qual-name(n: name): list<string>
+pub fun split-local-qual-name(n: name): list<string>
   n.nameLocalQual.split("/")
 
-fun to-constructor-name(n: name): name
+pub fun to-constructor-name(n: name): name
   n.name-map-stem fn(stem)
     match stem.list
       Cons('@', Cons(c, cs)) -> Cons('@', Cons(c.to-upper, cs)).string // keep hidden names hidden
       Cons(c, cs) -> Cons(c.to-upper, cs).string
       _ -> stem
 
-fun to-var-name(n: name): name 
+pub fun to-var-name(n: name): name 
   fun to-lowers(l: list<char>): list<char>
     match l
       Cons(c, cs) | c.is-upper -> Cons(c.to-lower, to-lowers(cs))
@@ -403,16 +403,16 @@ fun to-var-name(n: name): name
       Cons('@', cs) -> Cons('@', cs.to-lowers).string // keep hidden names hidden
       cs -> cs.to-lowers.string
 
-fun to-handler-con-name(n: name): name
+pub fun to-handler-con-name(n: name): name
   make-hidden-name("Hnd", n)
 
-fun is-handler-con-name(n: name): bool
+pub fun is-handler-con-name(n: name): bool
   n.hidden/starts-with("Hnd")
 
-fun name/starts-with(n: name, s: string): bool
+pub fun name/starts-with(n: name, s: string): bool
   n.nameStem.starts-with(s).bool
 
-fun prepend(s: string, n: name): name
+pub fun prepend(s: string, n: name): name
   val sl = s.list
   val new = match n.nameStem.list
     Cons('@', t) -> match sl
@@ -421,7 +421,7 @@ fun prepend(s: string, n: name): name
     t -> sl ++ t
   new-qualified(n.nameModule, new.string)
 
-fun postpend(n: name, post: string): name
+pub fun postpend(n: name, post: string): name
   if n.is-symbol-name then // we must always end in symbols for operators so postpend inserts before the symbols
     n.name-map-stem fn(stem)
       val (rsyms, rid) = stem.list.reverse.span(!_.is-id-char)
@@ -431,10 +431,10 @@ fun postpend(n: name, post: string): name
     val (xs, ys) = stem.list.reverse.span(fn(c) c == '?' || c == '\'')
     ys.reverse.string ++ post ++ xs.reverse.string
 
-fun type-qualified-name(typeName : name, stem : string): exn name
+pub fun type-qualified-name(typeName : name, stem : string): exn name
   typeName.qualifier.qualify(typeName.unqualify.name-as-module-name.qualify-locally(stem.new-name))
 
-fun type-qualified-name-of(typeName : name, stem: name): exn name
+pub fun type-qualified-name-of(typeName : name, stem: name): exn name
   typeName.type-qualified-name(stem.nameStem)
 
 fun type-qualified-get-type-name(nm : name)
@@ -446,7 +446,7 @@ fun type-qualified-get-type-name(nm : name)
 fun make-hidden(n: name): name
   prepend("@", n)
 
-fun make-hidden-name(s: string, n: name): name
+pub fun make-hidden-name(s: string, n: name): name
   prepend("@" ++ s ++ "-", n)
 
 fun unmake-hidden(n: name, pre: string): exn name
@@ -456,56 +456,56 @@ fun unmake-hidden(n: name, pre: string): exn name
     else failure/fail("common/name/unmake-hidden: expecting hidden name prefixed with @" 
               ++ pre ++ "-, but found: " ++ n.show)
 
-fun new-hidden-name-ex(base: string, s: string): name
+pub fun new-hidden-name-ex(base: string, s: string): name
   make-hidden-name(base, s.new-name)
 
-fun new-hidden-name(base: string): name
+pub fun new-hidden-name(base: string): name
   make-hidden(base.new-name)
 
-fun to-unique-name(i: int, n: name): name
+pub fun to-unique-name(i: int, n: name): name
   n.postpend("@" ++ i.show)
 
-fun to-hidden-unique-name(i: int, pre: string, n: name): name
+pub fun to-hidden-unique-name(i: int, pre: string, n: name): name
   make-hidden-name(pre, to-unique-name(i, n))
 
-fun make-fresh-hidden-name(s: string, n: name, r: range)
+pub fun make-fresh-hidden-name(s: string, n: name, r: range)
   val idFromPos = fn(p) -> "-l" ++ p.line.show ++ "-c" ++ p.col.show
   make-hidden-name(s, n.postpend(r.start.idFromPos))
 
-fun hidden/starts-with(n: name, pre: string): bool
+pub fun hidden/starts-with(n: name, pre: string): bool
   n.nameStem.starts-with("@" ++ pre).bool ||
     n.name/starts-with("@" ++ pre ++ "-")
 
 // Various special names
 
-fun new-padding-name(i: int): name
+pub fun new-padding-name(i: int): name
   new-hidden-name-ex("padding", i.show)
 
-fun is-padding-name(n: name): bool
+pub fun is-padding-name(n: name): bool
   n.hidden/starts-with("padding")
 
-fun new-cctx-name(s: string): name
+pub fun new-cctx-name(s: string): name
   new-hidden-name-ex("cctx", s)
 
-fun is-cctx-name(n: name): bool
+pub fun is-cctx-name(n: name): bool
   n.hidden/starts-with("cctx")
 
-fun new-field-name(i: int): name
+pub fun new-field-name(i: int): name
   new-hidden-name-ex("field", i.show)
 
-fun is-field-name(n: name): bool
+pub fun is-field-name(n: name): bool
   n.hidden/starts-with("field")
 
-fun new-implicit-typevar-name(i: int): name
+pub fun new-implicit-typevar-name(i: int): name
   new-hidden-name-ex("tv", i.show)
 
-fun is-implicit-typevar-name(n: name): bool
+pub fun is-implicit-typevar-name(n: name): bool
   n.hidden/starts-with("tv")
 
-fun new-hidden-external-name(n: name): name
+pub fun new-hidden-external-name(n: name): name
   make-hidden-name("extern", n)
 
-fun is-hidden-external-name(n: name): bool
+pub fun is-hidden-external-name(n: name): bool
   n.hidden/starts-with("extern")
 
 // Create a constructor creator name from the constructor name.
@@ -513,132 +513,132 @@ fun is-hidden-external-name(n: name): bool
 // in particular for the case of optional arguments.
 // Note: we cannot use `typeQualifiedName` as we need to use it in expressions for
 // depedency analysis before we know its type.
-fun new-creator-name(n: name): name
+pub fun new-creator-name(n: name): name
   make-hidden-name("create", n)
 
-fun is-creator-name(n: name): bool
+pub fun is-creator-name(n: name): bool
   n.hidden/starts-with("create")
 
-val hndName = "hnd".new-hidden-name
-val handleName = "handle".new-hidden-name
-val effectTagName = "tag".new-hidden-name
-val effectOpsName = "ops".new-hidden-name
-val opsSelectName = "select".new-hidden-name
+pub val hndName = "hnd".new-hidden-name
+pub val handleName = "handle".new-hidden-name
+pub val effectTagName = "tag".new-hidden-name
+pub val effectOpsName = "ops".new-hidden-name
+pub val opsSelectName = "select".new-hidden-name
 
-fun is-early-bind-name(n: name): bool
+pub fun is-early-bind-name(n: name): bool
   n.is-handle-name || n.is-creator-name
 
 // Create a handler type name from an effect type name.
-fun to-handler-name(typeName: name): exn name
+pub fun to-handler-name(typeName: name): exn name
   typeName.type-qualified-name-of(hndName)
 
-fun is-handler-name(n: name): bool
+pub fun is-handler-name(n: name): bool
   n.stem-is-equal(hndName)
 
 // Create an effect type name from an operations type name.
-fun from-handler-name(n: name): exn name
+pub fun from-handler-name(n: name): exn name
   n.type-qualified-get-type-name
 
 // Create a handle function name from an effect type name.
-fun to-handle-name(typeName: name): exn name
+pub fun to-handle-name(typeName: name): exn name
   typeName.type-qualified-name-of(handleName)
 
-fun is-handle-name(n: name): bool
+pub fun is-handle-name(n: name): bool
   n.stem-is-equal(handleName)
 
 // Create an operations type name from an effect type name.
-fun to-operations-name(typeName: name): exn name
+pub fun to-operations-name(typeName: name): exn name
   typeName.type-qualified-name-of(effectOpsName)
 
 // Is this an operations name?
-fun is-operations-name(n: name): bool
+pub fun is-operations-name(n: name): bool
   n.stem-is-equal(effectOpsName)
 
 // Create an effect type name from an operations type name.
-fun from-operations-name(n: name): exn name
+pub fun from-operations-name(n: name): exn name
   n.type-qualified-get-type-name
 
-fun to-op-selector-name(typeName: name): exn name
+pub fun to-op-selector-name(typeName: name): exn name
   typeName.type-qualified-name-of(opsSelectName)
 
 // Is this an operations name?
-fun is-op-selector-name(n: name): bool
+pub fun is-op-selector-name(n: name): bool
   n.stem-is-equal(opsSelectName)
 
 //  Create an effect type name from an operations type name.
-fun from-op-selector-name(n: name): exn name
+pub fun from-op-selector-name(n: name): exn name
   n.type-qualified-get-type-name
 
 // Create an effect tag name from an effect type name.
-fun to-effect-tag-name(typeName: name): exn name
+pub fun to-effect-tag-name(typeName: name): exn name
   typeName.type-qualified-name-of(effectTagName)
 
 // Create an operation type name from an operation name.
-fun to-op-type-name(n: name): name
+pub fun to-op-type-name(n: name): name
   make-hidden-name("op", n)
 
 // Create an operation constructor name from an operation name.
-fun to-op-con-name(n: name): name
+pub fun to-op-con-name(n: name): name
   make-hidden-name("Op", n)
 
-val indirectName = "Indirect".new-name
+pub val indirectName = "Indirect".new-name
 
 // Create a lazy indirect constructor name from a type name.
-fun to-lazy-indirect-con-name(typeName: name): exn name
+pub fun to-lazy-indirect-con-name(typeName: name): exn name
   typeName.type-qualified-name-of(indirectName)
 
-fun is-lazy-indirect-con-name(n: name): bool
+pub fun is-lazy-indirect-con-name(n: name): bool
   n.stem-is-equal(indirectName)
 
 // Create an open tag name from a constructor name in an open type
-fun to-open-tag-name(n: name): name
+pub fun to-open-tag-name(n: name): name
   make-hidden-name("tag", n)
 
-fun is-open-tag-name(n: name): bool
+pub fun is-open-tag-name(n: name): bool
   n.hidden/starts-with("tag")
 
 // Create a name for a value operation
-fun to-value-operation-name(n: name): name
+pub fun to-value-operation-name(n: name): name
   make-hidden-name("val", n)
 
 // Is this an name of a value operation?
-fun is-value-operation-name(n: name): bool
+pub fun is-value-operation-name(n: name): bool
   n.hidden/starts-with("val")
 
 // Create an operation name from a value operation name
-fun from-value-operation-name(n: name): exn name
+pub fun from-value-operation-name(n: name): exn name
   n.unmake-hidden("val")
 
 // Create an operation name from either a value operation name or regular operations name
-fun to-basic-operation-name(n: name): exn name
+pub fun to-basic-operation-name(n: name): exn name
   if n.is-value-operation-name then n.from-value-operation-name else n
 
 // Implicits
 
-val implicit-namespace = "@implicit"
-val implicit-namespace-name = implicit-namespace.new-module-name
+pub val implicit-namespace = "@implicit"
+pub val implicit-namespace-name = implicit-namespace.new-module-name
 
-fun is-implicit-param-name(n: name): bool
+pub fun is-implicit-param-name(n: name): bool
   match n.split-local-qual-name
     Cons(m, _) -> m == implicit-namespace
     _ -> False
 
-fun to-implicit-param-name(n: name): exn name
+pub fun to-implicit-param-name(n: name): exn name
   qualify-locally(implicit-namespace-name, n)
 
-fun from-implicit-param-name(n: name): exn name
+pub fun from-implicit-param-name(n: name): exn name
   match n.split-local-qual-name
     Cons(m, ms) | m == implicit-namespace -> qualify-locally(ms.unsplit-module-name, n.unqualify-full)
     _ -> n
 
-fun split-implicit-param-name(n: name): (name, name)
+pub fun split-implicit-param-name(n: name): (name, name)
   (n, n.unqualify-full)
 
 // name to file path
-fun module-name-to-path(n: name): string
+pub fun module-name-to-path(n: name): string
   n.show.ascii-encode(True)
 
-fun path-to-module-name(p: string): name
+pub fun path-to-module-name(p: string): name
   fun decode(sl: list<char>): list<char> // TODO: Performance / do proper decoding
     val s = sl.string
     match sl
@@ -654,7 +654,7 @@ fun path-to-module-name(p: string): name
 // Ascii encode a name
 // - on module names '/' becomes '_'
 // - on normal names '-' becomes '_'
-fun ascii-encode(n: string, is-module: bool): string
+pub fun ascii-encode(n: string, is-module: bool): string
   fun encode-char(pre: char, c: char, post: char): string
     match c
       _ | c.is-alpha-num -> c.string

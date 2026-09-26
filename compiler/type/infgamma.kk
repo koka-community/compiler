@@ -1,5 +1,7 @@
 
 
+module compiler/type/infgamma
+
 import compiler/common/range
 import compiler/common/name
 import compiler/common/name-collections
@@ -19,14 +21,14 @@ pub infixr 5 (|->)
 // inf gamma
 // Environment mapping names to type schemes. Due to overloading
 // there may be multiple entries for the same name
-alias inf-gamma = name-map<list<name-info>>
+pub alias inf-gamma = name-map<list<name-info>>
 
 fun ni/combine(nis: list<name-info>, nis2: list<name-info>): _ list<name-info>
   match nis
     [] -> nis2
     Cons(ni, nis) -> combine(nis, Cons(ni, nis2.filter(fn(ni2) ni.cname != ni2.cname)))
 
-fun inf-gamma/delete(ig: inf-gamma, n : name): inf-gamma
+pub fun inf-gamma/delete(ig: inf-gamma, n : name): inf-gamma
   ig.remove(n)
 
 // TODO: Update
@@ -34,7 +36,7 @@ fun inf-gamma/delete(ig: inf-gamma, n : name): inf-gamma
 // during inference by inserting fully qualified expressions (in resolveApp-name)
 // (if isQualified name then trace ("gamma-extend: insert qualified: " ++ show name) else id) $
 // overwrite previous names
-fun inf-gamma/extend(ig: inf-gamma, name: name, ni: name-info): _ inf-gamma
+pub fun inf-gamma/extend(ig: inf-gamma, name: name, ni: name-info): _ inf-gamma
   ig.update(name.unqualify-full, [ni], ni/combine)
 
 fun inf-gamma/extends(ig: inf-gamma, tnames: list<(name,ktype,int,string)>)
@@ -49,13 +51,13 @@ fun inf-gamma/extend-x(ig: inf-gamma, name: name, cname: name, tp: ktype, scope-
 // lookup any exact match in the local scope
 // note that recursive definitions add the fully qualified name to the infgamma,
 // in that case we also consider it an exact match with just the stem.
-fun inf-gamma/lookup(ig: inf-gamma, name: name): _ either<list<(name, name-info)>, (name, name-info)>
+pub fun inf-gamma/lookup(ig: inf-gamma, name: name): _ either<list<(name, name-info)>, (name, name-info)>
   match ig.lookup-ex(fn(_) True, name)
     Left([(name', info)]) -> Right((name', info))
     other -> other
 
 // lookup a local name: return either a list of possibly matching (locally qualified) names, or an exact match
-fun inf-gamma/lookup-ex(ig: inf-gamma, guard: (name-info) -> bool, name: name): _ either<list<(name, name-info)>, (name, name-info)>
+pub fun inf-gamma/lookup-ex(ig: inf-gamma, guard: (name-info) -> bool, name: name): _ either<list<(name, name-info)>, (name, name-info)>
   val mbinfos = ig.map/lookup(name.unqualify-full)
   match mbinfos
     Nothing -> Left([])
@@ -85,7 +87,7 @@ fun inf-gamma/single(name: name, tp: ktype, scope-depth: int, doc: string): _ in
 fun inf-gamma/new(tnames: list<(name,ktype,int,string)>): _ inf-gamma
   inf-gamma/empty.extends(tnames)
 
-fun inf-gamma/list(ig: inf-gamma): _ list<(name, ktype)>
+pub fun inf-gamma/list(ig: inf-gamma): _ list<(name, ktype)>
   ig.linear-map/list.flatmap(fn((_, infos)) infos.map(fn(info) (info.cname, info.typ)))
 
 val inf-gamma/empty: inf-gamma = LinearMap([])
@@ -108,5 +110,5 @@ fun infgamma/bound-type-vars(ig: inf-gamma): _ tvs
 fun infgamma/free-type-constructors(ig: inf-gamma): _ type-cons
   ig.inf-gamma/list().map(snd).free-type-constructors
 
-fun infgamma/substitute(s: sub, ig: inf-gamma): _ inf-gamma
+pub fun infgamma/substitute(s: sub, ig: inf-gamma): _ inf-gamma
   ig.inf-gamma/map(fn(tp) s.substitute(tp))

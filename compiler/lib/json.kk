@@ -32,7 +32,7 @@ fun test()
 //   JsObject(o: jsObject<jsValue>)
 
 // alias jsObject<a> = linear-map<string, a>
-
+    
 // fun toString(v: jsValue)
 //   match v
 //     JsString(s) -> s

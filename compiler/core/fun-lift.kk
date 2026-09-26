@@ -1,3 +1,6 @@
+// Updated as of 7/23/26: Commit dd91082
+module compiler/core/fun-lift
+
 import compiler/lib/pprint
 import compiler/common/failure
 import compiler/common/name
@@ -15,7 +18,7 @@ import compiler/core/corevar
 import compiler/platform/config
 import std/data/linear-set
 
-fun lift-functions()
+pub fun lift-functions()
   with handle-fun-lift()
   set-core-defs(lift-def-groups(get-core-defs(), True))
 

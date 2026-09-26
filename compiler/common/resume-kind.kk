@@ -7,7 +7,9 @@
 //----------------------------------------------------------------------------
 // Updated as of 7/23/24: Commit b8074c2
 
-type resume-kind
+module compiler/common/resume-kind
+
+pub type resume-kind
   ResumeNever
   ResumeTail
   ResumeScopedOnce
@@ -28,7 +30,7 @@ fun show(rk: resume-kind)
     ResumeOnceRaw -> "once (no finalization)"
     ResumeNormalRaw -> "normal (no finalization)"
 
-fun index(rk: resume-kind)
+pub fun index(rk: resume-kind)
   match rk
     ResumeNever -> 0
     ResumeTail -> 1

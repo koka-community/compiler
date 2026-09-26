@@ -1,3 +1,6 @@
+// Updated as of 7/23/26: Commit 0ed6ce0
+module compiler/core/monadic
+
 import compiler/core/core
 import compiler/type/assumption
 import compiler/core/corevar
@@ -25,15 +28,15 @@ fun runMon(f)
     val currentDef = Nil
     val isInBind = False
 
-fun top/mon-transform()
+pub fun top/mon-transform()
   with runMon()
   set-core-defs(mon-transform(get-core-defs()))
 
 // transform definition groups
-fun def-group/mon-transform(dgs: def-groups)
+pub fun def-group/mon-transform(dgs: def-groups)
   dgs.map(mon-transform)
 
-fun dg/mon-transform(dg): monadic-eff def-group
+pub fun dg/mon-transform(dg): monadic-eff def-group
   match dg
     DefRec(defs) -> DefRec(defs.map(fn(d) d.monDef(True)))
     DefNonRec(d) -> DefNonRec(d.monDef(False))

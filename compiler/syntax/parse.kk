@@ -171,7 +171,7 @@ fun parse-import-declaration(): _ kimport
     val rng0 = parse-keyword("import")
     (vis, vrng, rng0, isOpen)
   val (asname, name, asrng, namerng) = parse-import-alias()
-  Kimport(asname, name, asrng, namerng, combine([vrng, rng0, namerng]), vis, open)
+    Kimport(asname, name, asrng, namerng, combine([vrng, rng0, namerng]), vis, open)
 
 fun parse-visibility(vis: visibility = Private): _ (visibility, range)
   parse-choices("visibility", [{
@@ -191,8 +191,8 @@ fun parse-extern-decl(dvis: visibility): _ list<top-def>
     val _ = parse-choices("import", [
       { parse-keyword("import"); () },
       {
-        parse-special-id("include"); 
-        warn-deprecated("include", "import", krng); 
+        parse-special-id("include");
+        warn-deprecated("include", "import", krng);
       }])
     [DefExtern(parse-external-import(krng))]
   }, {
@@ -242,17 +242,17 @@ fun parse-external-import-key(): _ string
   id.show
 
 fun parse-external-includes(target: target, rng: range, (key, fname): (string, string)): _ list<(string, string)>
-  val currentFile = rng.source.name
-  val fpath = currentFile.path.dirname / fname
-  if target.is-c && fpath.extname == "" && key == "file" then
-    [("header-include-inline", pread-file(fpath.change-ext("h"))), ("include-inline", pread-file(fpath.change-ext("c")))]
-  elif target.is-c && key == "header-file" then
-    [("header-include-inline", pread-file(fpath))]
-  elif target.is-c && key == "header-end-file" then
-    [("header-end-include-inline", pread-file(fpath))]
-  elif key == "file" then
-    [("include-inline", pread-file(fpath))]
-  else [(key, fpath.show)]
+    val currentFile = rng.source.name
+    val fpath = currentFile.path.dirname / fname
+    if target.is-c && fpath.extname == "" && key == "file" then
+      [("header-include-inline", pread-file(fpath.change-ext("h"))), ("include-inline", pread-file(fpath.change-ext("c")))]
+    elif target.is-c && key == "header-file" then
+      [("header-include-inline", pread-file(fpath))]
+    elif target.is-c && key == "header-end-file" then
+      [("header-end-include-inline", pread-file(fpath))]
+    elif key == "file" then
+      [("include-inline", pread-file(fpath))]
+    else [(key, fpath.show)]
 
 fun pread-file(fpath: path): _ string
   with catch fn(e)
@@ -263,8 +263,8 @@ fun pread-file(fpath: path): _ string
 fun parse-external-import-entry() : _ (target, list<(string, string)>)
   val target = parse-external-target()
   val (key-vals, rng) = parse-choices("", [
-    { val key = parse-external-import-key(); 
-      val (v, rng) = parse-string-literal(); 
+    { val key = parse-external-import-key();
+      val (v, rng) = parse-string-literal();
       ([(key, v)], rng)
     },
     { parse-semi-braces-ranged("", parse-external-import-key-val) }
@@ -282,7 +282,7 @@ fun parse-external-import(r: range): _ external
       ExternalImport(entries, r.combine(rng2))
     }
   ])
- 
+
 fun parse-external-body(): _ (list<(target, external-call)>, range) 
   parse-semi-braces-ranged("external entries", parse-external-entry)
 
@@ -442,7 +442,7 @@ fun parse-constructor(dvis: visibility, foralls: list<user-type-binder>, resTp: 
 
 fun parse-con-parameters(dvis: visibility)
   parse-choices("", [
-    { parse-semi-braces-ranged("", {parse-con-binder(dvis)}) }, 
+    { parse-semi-braces-ranged("", {parse-con-binder(dvis)}) },
     { parse-parens-commas-ranged({parse-con-binder(dvis)}) },  // Deprecated
     { ([], null) }
   ])
@@ -469,7 +469,7 @@ fun parse-effect-decl(dvis: visibility): _ list<top-def>
     val (effectId, irng) = parse-type-ident()
     val (tpars, kind, prng) = parse-type-kind-params()
     val effectsExtra = 
-      if !isInstance then EffectExtra(extra) 
+      if !isInstance then EffectExtra(extra)
       else parse-choices("", [
         { parse-keyword("in");
           EffectReplace(Cons(parse-type(), Cons(TpCon(nameTpPartial, irng), extra)))}, 
@@ -556,29 +556,29 @@ fun parse-decl-params(allowBorrow: bool, allowDefaults: bool)
 
 // Value definitions
 fun parse-pure-decl(toplevel: bool, dvis: visibility): _ user-def
-  with parse-try
-  val (vis, vrng) = parse-visibility(dvis)
-  val inl = parse-inline()
-  parse-choices("", [
-    { 
-      val (rng, doc) = parse-doc-keyword("val"); 
+    with parse-try
+    val (vis, vrng) = parse-visibility(dvis)
+    val inl = parse-inline()
+    parse-choices("", [
+      {
+        val (rng, doc) = parse-doc-keyword("val");
       parse-val-decl(vrng.combine(rng), doc, vis, inl)
-    },
-    { 
-      val (f,frng) = parse-tail-fip(); 
-      val (rng, doc) = parse-doc-keyword-fun(); 
+      },
+      {
+        val (f,frng) = parse-tail-fip();
+        val (rng, doc) = parse-doc-keyword-fun();
       parse-fun-decl(toplevel, vrng.combine(rng).combine(frng), doc, vis, inl, f)
-    },
-    {
-      parse-keyword("fn"); 
-      parse-error("hint: use 'fun' to start a named function definition (and 'fn' for anonymous functions)", peek().range)}
-  ])
+      },
+      {
+        parse-keyword("fn");
+        parse-error("hint: use 'fun' to start a named function definition (and 'fn' for anonymous functions)", peek().range)}
+    ])
 
 fun parse-function-decl(toplevel: bool, vrng: range, vis: visibility): _ user-def
-  with parse-try
-  val inl = parse-inline()
-  val (f,frng) = parse-tail-fip()
-  val (rng, doc) = parse-doc-keyword-fun()
+    with parse-try
+    val inl = parse-inline()
+    val (f,frng) = parse-tail-fip()
+    val (rng, doc) = parse-doc-keyword-fun()
   parse-fun-decl(toplevel, vrng.combine(rng).combine(frng), doc, vis, inl, f)
 
 fun parse-variable-declaration(): _ user-def
@@ -1169,9 +1169,9 @@ fun parse-annotated-expr(): _ user-expr
   val e = parse-expression()
   parse-choices("", [
     {
-      parse-keyword(":"); 
+      parse-keyword(":");
       val tp = parse-type-scheme();
-      Ann(e, tp, e.range.combine(tp.range))}, 
+      Ann(e, tp, e.range.combine(tp.range))},
     { e }])
 
 fun parse-tuple-expression(): _ user-expr

@@ -7,6 +7,8 @@
 //----------------------------------------------------------------------------
 // Updated as of 7/23/24: Commit b8074c2
 
+module compiler/common/nice
+
 import compiler/common/id
 import compiler/type/type
 import compiler/lib/pprint
@@ -15,14 +17,14 @@ import compiler/common/syntax
 import std/data/linear-map
 
 // Map identifiers to /nice/ strings.
-alias nice = id-map<string>
+pub alias nice = id-map<string>
 
-effect nice-eff<k>
+pub effect nice-eff<k>
   fun extend-nice(tv: k): ()
-  fun get-nice(tv: k): string 
-  fun get-nice-doc(tv: k): doc 
+  fun get-nice(tv: k): string
+  fun get-nice-doc(tv: k): doc
 
-fun nice-env(f)
+pub fun nice-env(f)
   var nice := LinearMap([])
   var effectIndex := 0
   var heapIndex := 0
@@ -31,17 +33,17 @@ fun nice-env(f)
   var scopeIndex := 0
   with handler
     fun extend-nice(tv: type-var)
-      val x = 
-        if tv.kind == kindEffect then
+        val x =
+          if tv.kind == kindEffect then
           effectIndex := effectIndex + 1
           "e" ++ (if effectIndex == 0 then "" else effectIndex.show)
-        elif tv.kind == kindHeap then
+          elif tv.kind == kindHeap then
           heapIndex := heapIndex + 1
           "h" ++ (if heapIndex == 0 then "" else heapIndex.show)
-        elif tv.kind == kindScope then
+          elif tv.kind == kindScope then
           scopeIndex := scopeIndex + 1
           "s" ++ (if scopeIndex == 0 then "" else scopeIndex.show)
-        else
+          else
           val s = (typeLetterIndex + 'a'.int).char.string ++ (if typeIndex == 0 then "" else typeIndex.show)
           match typeLetterIndex
             4 -> 
@@ -50,8 +52,8 @@ fun nice-env(f)
             _ ->
               typeLetterIndex := typeLetterIndex + 1
           s
-      nice := nice.extend(tv.tid, x)
-      ()
+        nice := nice.extend(tv.tid, x)
+        ()
     fun get-nice(tv: type-var)
       nice.show(tv.tid)
     fun get-nice-doc(tv: type-var)
@@ -59,15 +61,15 @@ fun nice-env(f)
   f()
 
 // Add fresh identifier substitutions give an (infinite) list of nice names.
-fun extend(n: nice, id: int, name: string): nice
+pub fun extend(n: nice, id: int, name: string): nice
   n.set(id, name)
 
 // Show the nice version of an identifier
-fun show(n: nice, id: id): string
+pub fun show(n: nice, id: id): string
   match n.lookup(id)
     Just(name) -> name
     Nothing -> id.show-id
 
 // Pretty print an identifier nicely.
-fun pretty(n: nice, id: id): doc
+pub fun pretty(n: nice, id: id): doc
   n.show(id).text

@@ -1,3 +1,6 @@
+// Ported as of 2026-01-18; approx upstream baseline commit bc34c8e of Kind/InferKind.hs (backfilled 2026-07-23)
+module compiler/kind/infer-kind
+
 import compiler/lib/pprint
 import compiler/common/failure
 import compiler/common/id
@@ -14,12 +17,12 @@ import std/data/linear-set
 
 pub infixr 5 (|->)
 // Inference Kind: These kinds contain meta kind variables
-type inf-kind
+pub type inf-kind
   KIVar(kid: id)
   KICon(k: kind)
   KIApp(k1: inf-kind, k2: inf-kind)
 
-fun (==)(k1: inf-kind, k2: inf-kind): _ bool
+pub fun (==)(k1: inf-kind, k2: inf-kind): _ bool
   match (k1, k2)
     (KIVar(kid1), KIVar(kid2)) -> kid1 == kid2
     (KICon(k1), KICon(k2)) -> k1 == k2
@@ -28,27 +31,27 @@ fun (==)(k1: inf-kind, k2: inf-kind): _ bool
 
 alias inf-kgamma = linear-map<name, inf-kind>
 
-val infKindStar = KICon(kindStar)
-val infKindHandled = KICon(kindHandled)
-val infKindLabel = KICon(kindLabel)
-fun inf-kind-fun(k1: inf-kind, k2: inf-kind)
+pub val infKindStar = KICon(kindStar)
+pub val infKindHandled = KICon(kindHandled)
+pub val infKindLabel = KICon(kindLabel)
+pub fun inf-kind-fun(k1: inf-kind, k2: inf-kind)
   KIApp(KIApp(KICon(kindArrow), k1), k2)
 
-fun inf-kind-funN(kinds: list<inf-kind>, k: inf-kind)
+pub fun inf-kind-funN(kinds: list<inf-kind>, k: inf-kind)
   kinds.foldr(k, inf-kind-fun)
 
-fun is-infkind-scope(infk: inf-kind)
+pub fun is-infkind-scope(infk: inf-kind)
   match infk
     KICon(k) -> k == kindScope
     _ -> False
 
-fun is-infkind-label(infk: inf-kind)
+pub fun is-infkind-label(infk: inf-kind)
   match infk
     KICon(k) -> k == kindLabel
     _ -> False
 
 // Lift KApp nodes to KIApp
-fun lift-kapp(infkind: inf-kind)
+pub fun lift-kapp(infkind: inf-kind)
   match infkind
     KIVar -> infkind
     KIApp(k1, k2) -> KIApp(k1.lift-kapp, k2.lift-kapp)
@@ -56,16 +59,16 @@ fun lift-kapp(infkind: inf-kind)
     KICon(KApp(k1, k2)) -> KIApp(KICon(k1).lift-kapp, KICon(k2).lift-kapp)
 
 // extract arguments
-fun inf-extract-kind-fun(infkind: inf-kind)
+pub fun inf-extract-kind-fun(infkind: inf-kind)
   fun inj(k1, (ks, _))
     (Cons(k1, ks), k1)
   match infkind
     KIApp(KIApp(KICon(ka), k1), k2) | ka == kindArrow -> k1.inj(k2.inf-extract-kind-fun)
     KIApp(KICon(KApp(ka, k1)), k2) | ka == kindArrow -> KICon(k1).inj(k2.inf-extract-kind-fun)
-    KICon(KApp(KApp(ka, k1), k2)) | ka == kindArrow -> KICon(k1).inj(KICon(k2).inf-extract-kind-fun) 
+    KICon(KApp(KApp(ka, k1), k2)) | ka == kindArrow -> KICon(k1).inj(KICon(k2).inf-extract-kind-fun)
     _ -> ([], infkind)
 
-fun is-infkind-handled(ikind: inf-kind): _ bool
+pub fun is-infkind-handled(ikind: inf-kind): _ bool
   match ikind.inf-extract-kind-fun
     ([KICon(k1), KICon(k2)], KICon(k3)) -> is-kind-handled(kind-fun(k1, kind-fun(k2, k3)))
     _ -> False
@@ -73,27 +76,27 @@ fun is-infkind-handled(ikind: inf-kind): _ bool
 // Substitution
 alias ksub = id-map<inf-kind>
 val ksubEmpty = LinearMap([])
-alias kvs = id-set
+pub alias kvs = id-set
 
-fun ksub-single(id: id, infkind: inf-kind): ksub
+pub fun ksub-single(id: id, infkind: inf-kind): ksub
   LinearMap([(id, infkind)])
 
-fun compose(sub1: ksub, sub2: ksub): ksub
+pub fun compose(sub1: ksub, sub2: ksub): ksub
   sub1.union(sub1 |-> sub2)
 
-fun inf/(|->)(sub: ksub, k: inf-kind): inf-kind
+pub fun inf/(|->)(sub: ksub, k: inf-kind): inf-kind
   match k
     KIVar(kid) -> sub.lookup(kid).default(k)
     KIApp(k1, k2) -> KIApp(sub |-> k1, sub |-> k2)
     KICon(k) -> KICon(k)
  
-fun sub/(|->)(sub1: ksub, sub2: ksub): ksub
+pub fun sub/(|->)(sub1: ksub, sub2: ksub): ksub
   sub2.map(fn(k, v) inf/(|->)(sub1, v))
 
-fun sub/fkv(sub: ksub): _ kvs
+pub fun sub/fkv(sub: ksub): _ kvs
   sub.list.map(fn((_, s)) s.fkv).unions
 
-fun inf/fkv(k: inf-kind): kvs
+pub fun inf/fkv(k: inf-kind): kvs
   match k
     KIVar(kid) -> LinearSet([]) + kid
     KIApp(k1, k2) -> k1.fkv.union(k2.fkv)
@@ -105,7 +108,7 @@ fun infkind/show(infkind: inf-kind): _ string
   infkind.fkv.list.foreach(extend-nice)
   infkind.pp-infkind(precInfKindTop).pprint/show
 
-fun nice-infkinds(kinds: list<inf-kind>): _ list<doc>
+pub fun nice-infkinds(kinds: list<inf-kind>): _ list<doc>
   with nice-kind-env()
   kinds.map(fkv).unions.list.map(extend-nice)
   kinds.map(_.lift-kapp.pp-infkind(precInfKindTop))

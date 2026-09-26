@@ -1,3 +1,6 @@
+// Ported as of 2026-01-18; approx upstream baseline commit d3b244c of Backend/C/FromCore.hs (backfilled 2026-07-23)
+module compiler/backend/c/from-core
+
 import compiler/core/core
 import compiler/common/syntax
 import compiler/common/failure
@@ -26,10 +29,10 @@ import std/data/linear-set
 val externalNames = [(exprTrue.conName, "true"), (exprFalse.conName, "false")]
 
 // Generate C code from System-F core language
-fun cFromCore(cTarget: cTarget, b: buildType, sourceDir: path, 
+pub fun cFromCore(cTarget: cTarget, b: buildType, sourceDir: path,
               platform: platform, borrowed: borrowed, enableReuse: bool, 
-              enableSpecialize: bool, enableReuseSpecialize: bool, enableBorrowInference: bool, 
-              eagerPatBind: bool, stackSize: int, mbMain: maybe<(name, bool)>, 
+              enableSpecialize: bool, enableReuseSpecialize: bool, enableBorrowInference: bool,
+              eagerPatBind: bool, stackSize: int, mbMain: maybe<(name, bool)>,
               core: core): _ (doc, doc, core)
   with handler
     val cdefToHeader = False

@@ -21,7 +21,7 @@ import std/core-extras
 
 // TODO: FmtAttr
 
-effect fmt
+pub effect fmt
   fun fmt(t: token<lexeme>, l: lexeme, s: string): token<lexeme>
   val source-file: string
 
@@ -61,7 +61,7 @@ fun highlight-print(source-name: path, line-no: int, input: string): _ ()
   ()
 
 
-fun highlight/show(Lexeme(_, lex): lexeme): _ string
+pub fun highlight/show(Lexeme(_, lex): lexeme): _ string
   match lex
     LexInt() -> lex.show
     LexFloat() -> lex.show
@@ -90,7 +90,7 @@ fun normalize(s: string)
       val x = rst.string.split(".")
       c.string ++ x.head.unjust
 
-fun is-keyword-op(s: string)
+pub fun is-keyword-op(s: string)
   match s
     "=" -> False
     _ -> 
@@ -98,7 +98,7 @@ fun is-keyword-op(s: string)
         Just((c, _)) -> c.is-alpha
         Nothing -> False
 
-type highlight-ctx
+pub type highlight-ctx
   CtxType(nesting: list<nesting>, str: string)
   CtxNormal
 
@@ -114,7 +114,7 @@ fun nesting/(==)(n1: nesting, n2: nesting)
     (NestAngle, NestAngle) -> True
     _ -> False
 
-type token<a>
+pub type token<a>
   TokId(id: name, str: string)
   TokOp(id: name, str: string)
   TokSpecial
@@ -134,7 +134,7 @@ type token<a>
   TokWhite
   TokError
 
-type token-comment<a>
+pub type token-comment<a>
   ComText(str: string)
   ComEmph(str: string)
   ComPre(str: string)
@@ -167,11 +167,11 @@ fun nesting(n: highlight-ctx): int
     CtxType(n) -> n.length
     _ -> 0
 
-fun fmt/highlight(transform: list<lexeme> -> _ list<lexeme>, c: highlight-ctx, lineNo: int, str: string): _ list<token<lexeme>>
+pub fun fmt/highlight(transform: list<lexeme> -> _ list<lexeme>, c: highlight-ctx, lineNo: int, str: string): _ list<token<lexeme>>
   val xs = lexer(source-file, lineNo, str)
   highlight-lexemes(transform, c, xs.combine-line-comments.transform)
 
-fun highlight-lexemes(transform: list<lexeme> -> _ list<lexeme>, c: highlight-ctx, lexes: list<lexeme>): _ list<token<lexeme>>
+pub fun highlight-lexemes(transform: list<lexeme> -> _ list<lexeme>, c: highlight-ctx, lexes: list<lexeme>): _ list<token<lexeme>>
   fun highlight-acc(ctx', acc, lexemes)
     match lexemes
       Nil -> acc.list/reverse
@@ -460,7 +460,7 @@ fun scan(lineno: int, lacc: ctx<list<token-comment<lexeme>>>, acc: list<char>, c
     Nil -> lacc ++. Cons(ComText(acc.reverse.string), Nil)
 
 // Parse comment formatters
-fun lex-comment(lineno: int, content: string): _ list<token-comment<lexeme>>
+pub fun lex-comment(lineno: int, content: string): _ list<token-comment<lexeme>>
   scan(lineno, ctx hole, [], content.list.filter(_ != '\r'))
 
 fun on-line(pre: list<char>, post: list<char>): bool

@@ -1,3 +1,6 @@
+// Ported as of 2026-01-17; approx upstream baseline commit 752748d of Type/Kind.hs (backfilled 2026-07-23)
+module compiler/type/kind
+
 import compiler/type/type
 import compiler/kind/kind
 import compiler/common/name
@@ -5,11 +8,11 @@ import compiler/common/name-prim
 import std/core/undiv
 // Updated to #752748d on 7/13/25
 
-fun effect-is-affine(eff: keffect)
+pub fun effect-is-affine(eff: keffect)
   val (labs, tl) = eff.extract-ordered-effect
   tl.is-effect-empty && labs.all(label-is-affine)
 
-fun label-is-linear(eff: keffect)
+pub fun label-is-linear(eff: keffect)
   match eff.expand-syn
     TApp(TCon(tc), [_]) | tc.name == nameTpHandled1 || tc.name == nameTpNHandled1 -> True
     TApp(TCon(tc), [_]) | !(tc.name == nameTpHandled) && !(tc.name == nameTpNHandled) ->
@@ -32,18 +35,18 @@ fun label-is-affine(eff: keffect): _ bool
     _ -> False
 
 // has effects that are reflected in the evidence vector
-fun contains-handled-effect(exclude: list<name>, eff: keffect): _ bool
+pub fun contains-handled-effect(exclude: list<name>, eff: keffect): _ bool
   // val (ls,_) = eff.extract-effect-extend
   // ls.any(_.get-handled-effect(exclude).is-just)
   !eff.extract-handled-effect.fst.is-empty
 
 // Get the effects that are reflected in the evidence vector
-fun extract-handled-effect(eff: ktype): _ (list<ktype>, tau)
+pub fun extract-handled-effect(eff: ktype): _ (list<ktype>, tau)
   val (ls, tl) = eff.extract-ordered-effect
   (ls.filter(is-handled-effect), tl)
 
 // Is an effect reflected in the evidence vector?
-fun is-handled-effect(tp: ktype)
+pub fun is-handled-effect(tp: ktype)
   match tp.expand-syn
     // not named effects since these are not int he evidence vector
     TApp(TCon(TypeCon(name)), [_]) -> name == nameTpHandled || name == nameTpHandled1
@@ -52,16 +55,16 @@ fun is-handled-effect(tp: ktype)
 fun handled-to-label(e: ktype): _ ktype
   if e.kind == kindHandled1 then TApp(tconHandled1, [e]) else TApp(tconHandled, [e])
 
-type handled-sort
+pub type handled-sort
   ResumeOnce
   ResumeMany
 
 // What effect does an operatoin have? Used for monadic translation.
 // Note: this includes named effects even though these are not in the evidence vector.
-fun get-operation-effect(tp: ktype): _ maybe<(handled-sort, name)>
+pub fun get-operation-effect(tp: ktype): _ maybe<(handled-sort, name)>
   get-operation-effectx(tp, [])
 
-fun get-operation-effectx(tp: ktype, exclude: list<name>): _ maybe<(handled-sort, name)>
+pub fun get-operation-effectx(tp: ktype, exclude: list<name>): _ maybe<(handled-sort, name)>
   match tp.expand-syn
     TApp(TCon(TypeCon(name)), [t])
       | name == nameTpHandled || name == nameTpNHandled -> get-operation-effect-of(ResumeMany, exclude, t)

@@ -1,3 +1,6 @@
+// Updated as of 7/23/26: Commit 0b3296d
+module compiler/core/open-resolve
+
 import compiler/common/name
 import compiler/common/range
 import compiler/common/name-prim
@@ -14,10 +17,10 @@ import compiler/type/kind
 import compiler/kind/kind
 import compiler/lib/pprint
 
-effect open-eff
+pub effect open-eff
   fun get-gamma(): gamma
 
-fun open-resolve()
+pub fun open-resolve()
   set-core-defs(resolve(get-core-defs()))
 
 // transform definition groups
@@ -87,7 +90,7 @@ fun resolve-open(eopen: expr, effFrom: ktype, effTo: ktype, tpFrom: ktype, tpTo:
             App(TypeApp(openExpr, targs.map(snd) ++ [tres, effFrom, effTo]), 
               evExprs ++ [exprVar] ++ params.map(Var(_, InfoNone)))))
         fun ev-index-of(l: ktype)
-          val (htagTp, hndTp) = 
+          val (htagTp, hndTp) =
             val (name, _, tpArgs) = l.label-name-ex
             val hndCon = TCon(TypeCon(name.to-handler-name, kind-fun-n(tpArgs.map(kind) ++ [kindEffect, kindStar], kindStar)))
             (make-type-app(resolve(name.to-effect-tag-name), tpArgs), TApp(hndCon, tpArgs))
@@ -99,9 +102,9 @@ fun resolve-open(eopen: expr, effFrom: ktype, effTo: ktype, tpFrom: ktype, tpTo:
               _ -> 
                 if expr.is-handler-free then expr // fully total with using any operations that need evidence; just leave it as is
                 elif n <= 4 then wrapper(resolve(n.name-open-none), []) // fails in perf1c with exceeded stack size if --optmaxdup < 500 (since it prevents a tailcall)
-                else 
+                else
                   // expr -- fails in nim as it's evidence is not cleared
-                  wrapper-thunk(resolve(0.name-open-none), []) 
+                  wrapper-thunk(resolve(0.name-open-none), [])
           [l] -> // just one: use open-atN for efficiency
             if n <= 4 then wrapper(resolve(name-open-at(n)), [l.ev-index-of])
             else wrapper-thunk(resolve(name-open-at(0)), [l.ev-index-of])

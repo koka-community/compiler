@@ -1,3 +1,5 @@
+module compiler/type/operations
+
 import compiler/common/range
 import compiler/common/name
 import compiler/common/unique
@@ -14,46 +16,46 @@ import std/core/undiv
 
 pub infixr 5 (|->)
 
-fun requires-implicits(tp: ktype)
+pub fun requires-implicits(tp: ktype)
   match tp.split-fun-scheme
     Just((_, pars, _, _)) -> pars.filter(_.fst.is-implicit-param-name)
     _ -> []
 
-fun is-optional-or-implicit(p: (name, ktype))
+pub fun is-optional-or-implicit(p: (name, ktype))
   p.fst.is-implicit-param-name || p.snd.is-optional
 
-fun split-optional-implicit(pars: list<(name, ktype)>): (list<(name, ktype)>, list<(name, ktype)>, list<(name, ktype)>)
+pub fun split-optional-implicit(pars: list<(name, ktype)>): (list<(name, ktype)>, list<(name, ktype)>, list<(name, ktype)>)
   val (fixed, rst) = pars.span(!_.is-optional-or-implicit)
   val (opts, nameds) = rst.span(_.snd.is-optional)
   (fixed, opts, nameds)
 
-fun has-optional-or-implicits(pars: list<(name, ktype)>)
+pub fun has-optional-or-implicits(pars: list<(name, ktype)>)
   pars.any(is-optional-or-implicit)
 
 // Instantiation
 
 // instantiate a type
-fun instantiate(tp: ktype, r: range)
+pub fun instantiate(tp: ktype, r: range)
   val (_, rho, _) = tp.instantiate-noex(r)
   rho
 
 // Instantiate a type and return the instantiated quantifiers, name/predicate pairs for evidence,
 // the instantiated type, and a core transformer function (which applies type arguments and evidence)
-fun instantiate-ex(tp: ktype, r: range)
+pub fun instantiate-ex(tp: ktype, r: range)
   val (ids, rho, coref) = tp.instantiate-exfl(Meta, r)
   val (erho, coreg) = rho.extend
   (ids, erho, fn(e) coreg(coref(e)))
 
 // Instantiate a type and return the instantiated quantifiers, name/predicate pairs for evidence,
 // the instantiated type, and a core transformer function (which applies type arguments and evidence)
-fun instantiate-noex(tp: ktype, r: range)
+pub fun instantiate-noex(tp: ktype, r: range)
   tp.instantiate-exfl(Meta, r)
 
 //  Ensure the result of function always gets an extensible effect type
 // This is necessary to do on instantiation since we simplify such effect variables
 // away during generalization. Effectively, the set of accepted programs does not
 // change but the types look simpler to the user.
-fun extend(tp: ktype)
+pub fun extend(tp: ktype)
   match tp.expand-syn
     TFun(args, eff, res) ->
       val (ls, tl) = eff.extract-ordered-effect
@@ -73,7 +75,7 @@ fun skolemize(tp: ktype, r: range)
 
 // Skolemize a type and return the instantiated quantifiers, name/predicate pairs for evidence,
 // the instantiated type, and a core transformer function (which applies type arguments and evidence)
-fun skolemize-ex(tp: ktype, r: range)
+pub fun skolemize-ex(tp: ktype, r: range)
   tp.instantiate-exfl(Skolem, r)
 
 // General instantiation for skolemize and instantiate
@@ -84,7 +86,7 @@ fun instantiate-exfl(tp: ktype, fl: flavour, r: range): _ (list<type-var>, ktype
       val (tvars, sub) = fresh-subx(TVar, fl, vars, rho.all-tv())
       (tvars, sub |-> rho, fn(e) add-type-apps(tvars,e))
 
-fun fresh-sub(fl: flavour, vars: list<type-var>)
+pub fun fresh-sub(fl: flavour, vars: list<type-var>)
   val tvars = vars.map(fn(tv) fresh-typevar(tv.kind, fl))
   val sub = vars.zip(tvars.map(TVar)).sub
   (tvars, sub)
@@ -108,19 +110,19 @@ fun fresh-skolems(k: kind, n: int)
 fun fresh-tvars(k: kind, fl: flavour, n: int): _ list<ktype>
   list(1, n).map(fn(_) fresh-tvar(k, fl))
 
-fun fresh-tvar(k: kind, fl: flavour): _ ktype
+pub fun fresh-tvar(k: kind, fl: flavour): _ ktype
   TVar(fresh-typevar(k, fl))
 
-fun fresh-effect()
+pub fun fresh-effect()
   fresh-tvar(kindEffect, Meta)
 
-fun fresh-star()
+pub fun fresh-star()
   fresh-tvar(kindStar, Meta)
 
 
 
 // Heap divergence constraints
-fun heap-never-contained-in(free : tvs, hp0: ktype, tp0: ktype) : bool
+pub fun heap-never-contained-in(free : tvs, hp0: ktype, tp0: ktype) : bool
   val hp = hp0.expand-syn
   fun never-contained-in(tp: ktype)
     match tp
@@ -141,7 +143,7 @@ fun heap-never-contained-in(free : tvs, hp0: ktype, tp0: ktype) : bool
   never-contained-in(tp0)
 
 
-fun heap-always-contained-in(free : tvs, hp0: ktype, tp0: ktype) : bool
+pub fun heap-always-contained-in(free : tvs, hp0: ktype, tp0: ktype) : bool
   val hp = hp0.expand-syn
   fun always-contained-in(tp: ktype)
     match tp

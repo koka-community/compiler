@@ -1,3 +1,6 @@
+// Ported as of 2026-01-18; approx upstream baseline commit 3b07c76 of Core/Uniquefy.hs (backfilled 2026-07-23)
+module compiler/core/uniquefy
+
 import compiler/common/name
 import compiler/common/name-collections
 import compiler/common/unique
@@ -44,7 +47,7 @@ fun fun/run-unique(f: () -> _ a): _ a
     fun get-renaming() renaming
   f()
 
-fun expr/uniquefy(e: expr): _ expr
+pub fun expr/uniquefy(e: expr): _ expr
   uniquefy(e, tnames/empty)
 
 fun free/uniquefy(e: expr, free: linear-set<tName>): _ expr
@@ -53,15 +56,15 @@ fun free/uniquefy(e: expr, free: linear-set<tName>): _ expr
   set-locals(locals)
   e.uniquefyx
 
-fun uniquefyExprU(e: expr)
+pub fun uniquefyExprU(e: expr)
   with run-unique()
   val e' = e.uniquefyx
   (e', get-unique())
 
-fun core/uniquefy(c: core): _ core
+pub fun core/uniquefy(c: core): _ core
   c(defs=uniquefy(c.defs))
 
-fun dgs/uniquefy(dgs: def-groups): _ def-groups
+pub fun dgs/uniquefy(dgs: def-groups): _ def-groups
   with start/run-unique(0)
   val locals = get-locals()
   val topLevelDefs = dgs.flatten.map(def-name).filter(fn(n:name) !n.is-nil)
@@ -73,7 +76,7 @@ fun dg/uniquefyDG(dg: def-group)
     DefNonRec(d) -> DefNonRec(d(defExpr=d.defExpr.uniquefyx))
     DefRec(ds) -> DefRec(ds.map(fn(d) d(defExpr=d.defExpr.uniquefyx)))
 
-fun dg/uniquefy(dg: def-group): _ def-group
+pub fun dg/uniquefy(dg: def-group): _ def-group
   with start/run-unique(0)
   match dg
     DefNonRec(d) -> DefNonRec(d.uniquefy)

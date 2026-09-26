@@ -1,3 +1,6 @@
+// Ported as of 2026-01-29; approx upstream baseline commit 7083c02 of Backend/C/Box.hs (backfilled 2026-07-23)
+module compiler/backend/c/box
+
 import compiler/core/core
 import compiler/common/range
 import compiler/common/name
@@ -17,7 +20,7 @@ import std/core/undiv
 
 // Box / unbox transformation
 
-fun box-core(c: core): _ core
+pub fun box-core(c: core): _ core
   c(defs=box-def-groups(c.defs))
 
 fun box-def-groups(dgs: def-groups)

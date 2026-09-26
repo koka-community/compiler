@@ -1,3 +1,6 @@
+// Ported as of 2026-01-29; approx upstream baseline commit ef41bb5 of Core/Divergent.hs (backfilled 2026-07-23)
+module compiler/core/divergent
+
 import compiler/core/core
 import compiler/type/type
 import compiler/common/syntax
@@ -10,7 +13,7 @@ import compiler/core/uniquefy
 import std/data/linear-set
 
 // Fix a group of recursive definitions to potentially include the divergence effect in their type
-fun analyze-divergence(defs0: list<def>)
+pub fun analyze-divergence(defs0: list<def>)
   match defs0
     [] -> False
     Cons(_, Cons) -> True // For mutual recursion, we assume divergence for now
@@ -47,7 +50,7 @@ fun transpose(xss:list<list<a>>): _ list<list<a>>
   match xss
     Nil -> Nil
     Cons(Nil, xss') -> transpose(xss')
-    Cons(Cons(x, xs), xss') -> 
+    Cons(Cons(x, xs), xss') ->
       val (hds, tls) = xss'.map(fn(Cons(hd, tl)) (hd, tl)).unzip
       combine(x, hds, xs, tls)
 
@@ -86,7 +89,7 @@ fun (==)(s1: size, s2: size): bool
     (Unknown, Unknown) -> True
     _ -> False
 
-effect divergent
+pub effect divergent
   val rel: rel
   fun add-call(n: name, c: call): ()
 

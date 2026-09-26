@@ -1,3 +1,5 @@
+module compiler/type/unify
+
 import compiler/lib/pprint
 import compiler/common/range
 import compiler/common/failure
@@ -40,7 +42,7 @@ fun overlaps(rng: range, free: tvs, tp1: ktype, tp2: ktype): _ ()
 
 
 /// Does a type have the given named arguments? Return the instantiated type if successful
-fun match-named(match-some: bool, rng: range, free: tvs, tp: ktype, n: int, namedArgs : list<name>, mb-res-tp: maybe<ktype>): _ rho
+pub fun match-named(match-some: bool, rng: range, free: tvs, tp: ktype, n: int, namedArgs : list<name>, mb-res-tp: maybe<ktype>): _ rho
   val rho1 = instantiate(tp, rng)
   match rho1.split-fun-type
     Nothing -> unify-error(NoMatchType)
@@ -63,7 +65,7 @@ fun match-named(match-some: bool, rng: range, free: tvs, tp: ktype, n: int, name
 
 /// Does a function type match the given arguments? if the first argument `matchSome` is `True`,
 /// it is considered a match even if not all arguments to the function are supplied
-fun match-arguments(matchSome: bool, rng: range, free: tvs, tp: ktype, fixed: list<ktype>, namedArgs: list<(name,ktype)>, mb-res-tp: maybe<ktype>): _ rho
+pub fun match-arguments(matchSome: bool, rng: range, free: tvs, tp: ktype, fixed: list<ktype>, namedArgs: list<(name,ktype)>, mb-res-tp: maybe<ktype>): _ rho
   val rho1 = instantiate(tp, rng)
   match rho1.split-fun-type
     Nothing -> 
@@ -80,7 +82,7 @@ fun match-arguments(matchSome: bool, rng: range, free: tvs, tp: ktype, fixed: li
         // subsume fixed parameters
         val pars-not-named = pars.filter(fn((nm, _)) !(namedArgs.map(fst).any(_ == nm)))
         val (fpars, rest) = pars-not-named.split(fixed.length)
-        fpars.map(snd).zipwith(fixed) fn(tpar, targ) 
+        fpars.map(snd).zipwith(fixed) fn(tpar, targ)
           subsume(rng, free, tpar.un-optional, targ)
         // subsume named parameters
         namedArgs.map fn((name, targ))
@@ -90,7 +92,7 @@ fun match-arguments(matchSome: bool, rng: range, free: tvs, tp: ktype, fixed: li
         // check if the result type matches
         match mb-res-tp
           Nothing -> ()
-          Just(exp-tp) -> 
+          Just(exp-tp) ->
             subsume(rng, free, exp-tp, res-tp)
             ()
         // check the rest is optional or implicit
@@ -115,7 +117,7 @@ fun match-shape(tp1: ktype, tp2: ktype): _ ()
   if dom.length == codom.length then ()
   else unify-error(NoMatchType)
 
-fun pure-match-shape(tp1: ktype, tp2: ktype): _ bool
+pub fun pure-match-shape(tp1: ktype, tp2: ktype): _ bool
   match run-unify({match-shape(tp1, tp2)})
     (Right(_), _) -> True
     _ -> False
@@ -126,7 +128,7 @@ fun pure-match-shape(tp1: ktype, tp2: ktype): _ bool
 // Returns a core transformer that needs to be
 // applied to the expression of type `t2`. Also returns a new type for the expected type `tp1` where 'some'
 // types have been properly substituted (and may be quantified).
-fun subsume(rng: range, free: tvs, tp1: ktype, tp2: ktype): _ (ktype, rho, expr -> _ expr)
+pub fun subsume(rng: range, free: tvs, tp1: ktype, tp2: ktype): _ (ktype, rho, expr -> _ expr)
   // skolemize, instantiate and unify
   val (sks, rho1, _) = skolemize-ex(tp1, rng)
   val (tvs, rho2, _) = skolemize-ex(tp2, rng)
@@ -153,7 +155,7 @@ fun subsume(rng: range, free: tvs, tp1: ktype, tp2: ktype): _ (ktype, rho, expr 
 /////////////////
 
 // Unify two types
-fun unify(t1: ktype, t2: ktype): _ ()
+pub fun unify(t1: ktype, t2: ktype): _ ()
   match (t1, t2)
     // effects
     (TApp(TCon(tc1)), TApp(TCon(tc2))) | tc2 == tconEffectExtend && tc1 == tconEffectExtend ->
@@ -273,7 +275,7 @@ fun unify-effect(tp1: ktype, tp2: ktype): _ ()
       tp2.subst
       ()
 
-fun extract-normalize-effect(tp: ktype): _ (list<ktype>, ktype)
+pub fun extract-normalize-effect(tp: ktype): _ (list<ktype>, ktype)
   tp.subst.extract-ordered-effect
 
 fun unify-effect-var(tv1: type-var, tp2: ktype): _ ()
@@ -330,7 +332,7 @@ fun match-kinds(kinds1: list<kind>, kinds2: list<kind>): _ ()
         unify-error(NoMatchKind)
     _ -> unify-error(NoMatchKind)
 
-effect unify
+pub effect unify
   final ctl unify-error(e: unify-error): a
   fun extend-sub(tv: type-var, t: ktype): ()
   fun add-sub(sub: sub): ()
@@ -341,25 +343,25 @@ fun with-err(e: unify-error -> unify-error, f: () -> _ a): _ a
     final ctl unify-error(er) unify-error(e(er))
     fun extend-sub(tv, t) extend-sub(tv, t)
     fun add-sub(sub) add-sub(sub)
-    fun get-subst() get-subst() 
+    fun get-subst() get-subst()
   f()
 
-fun run-unify(action: () -> _ a): _ (either<unify-error, a>, sub)
+pub fun run-unify(action: () -> _ a): _ (either<unify-error, a>, sub)
   var subst := sub/null
   with handler
     return(x) (Right(x), subst)
     final ctl unify-error(e) (Left(e), subst)
-    fun extend-sub(tv, t) 
+    fun extend-sub(tv, t)
       subst := subst.extend(tv, t)
-    fun add-sub(sub) 
+    fun add-sub(sub)
       subst := subst.compose(sub)
     fun get-subst() subst
   action()
 
-fun substitute/subst(x: a, ?substitute: (sub, a) -> _ a): _ a
+pub fun substitute/subst(x: a, ?substitute: (sub, a) -> _ a): _ a
   substitute(get-subst(), x)
 
-type unify-error
+pub type unify-error
   NoMatchType
   NoMatchKind
   NoMatchSkolem(k: kind)

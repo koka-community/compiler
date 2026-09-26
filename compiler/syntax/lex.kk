@@ -8,7 +8,7 @@ import std/core/undiv
 import std/data/word-set
 // Updated to be roughly equivalent to commit 9e8299f on 2/10/25
 
-effect koka-lex
+pub effect koka-lex
   fun do-start-chunked(s: string, start: alex-pos): ()
   fun end-chunked(): (string, alex-pos)
   fun add-chunk(s: bslice): ()
@@ -121,7 +121,7 @@ val alex_action_37: action = fn() {
   val st = pop-state()
   // TODO? end-chunked()
   if st == comment then extend-slice(id)
-  else 
+  else
     end-chunk(fn(s) LexComment(s.list.filter(fn(c) c != '\r').string))
     pop-state()
     ()
@@ -284,7 +284,7 @@ fun recognize(a: alex-scan-state, restart: bool)
         AlexAccResNone ->  
           match seek.next() // Check if we are at the end of the input
             Nothing -> 
-              // EOF
+            // EOF
               AlexScanState(states, seek, current, acc, prev, curr, start, end, last-accept, action-info)
             Just ->
               if restart then // Try skipping the first character, and start again
@@ -298,7 +298,7 @@ fun recognize(a: alex-scan-state, restart: bool)
         AlexAccResSkip(resnext) ->
           AlexScanState(states, resnext, resnext, resnext.truncate(), 0, 0, end, end, AlexAccResNone, action-info)
 
-fun alex-scan(input: bslice, sc: int, restart:bool=False): _ ()
+pub fun alex-scan(input: bslice, sc: int, restart:bool=False): _ ()
   var state := AlexScanState([sc], input, input, input.truncate, 0, 0 , AlexPos(0,1,1), AlexPos(0,1,1), AlexAccResNone, ActionInfo(input.truncate, AlexPos(0,1,1), AlexPos(0,1,1)))
   with handler
     fun get-state()

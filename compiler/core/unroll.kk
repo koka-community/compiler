@@ -1,3 +1,6 @@
+// Ported as of 2026-01-18; approx upstream baseline commit 372ffa3 of Core/Unroll.hs (backfilled 2026-07-23)
+module compiler/core/unroll
+
 import compiler/core/core
 import compiler/type/type
 import compiler/common/name
@@ -7,25 +10,25 @@ import compiler/core/corevar
 import std/core/undiv
 import std/data/linear-set
 
-fun defs/unroll(unrollMax: int)
+pub fun defs/unroll(unrollMax: int)
   set-core-defs(unroll(get-core-defs()))
 
-fun dgs/unroll(def-groups: list<def-group>)
+pub fun dgs/unroll(def-groups: list<def-group>)
   def-groups.map(unroll).concat
 
-fun dg/unroll(def-group: def-group)
+pub fun dg/unroll(def-group: def-group)
   match def-group
     DefRec([d]) -> d.unroll
     _ -> [def-group]
 
-fun recdef/unroll(d: def)
+pub fun recdef/unroll(d: def)
   val dgs = match d.defExpr
     Lam(pars, eff, body) -> unroll(d, [], pars, eff, body)
     TypeLam(tpars, Lam(pars, eff, body)) -> unroll(d, tpars, pars, eff, body)
     _ -> []
   if dgs.is-nil then [DefRec([d])] else dgs
 
-fun body/unroll(d: def, tpars: list<type-var>, pars: list<tName>, eff: keffect, body: expr)
+pub fun body/unroll(d: def, tpars: list<type-var>, pars: list<tName>, eff: keffect, body: expr)
   match body
     Case(exprs, brnchs as Cons(Branch(pats))) | pretend-no-div{exprs.all(fn(x:expr) x.cost == 0)} ->
       match extract-nonrec-branches(d.defTname, [], brnchs)

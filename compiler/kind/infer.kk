@@ -6,6 +6,8 @@
 // - Translate type definition groups and externals to Core.
 
 // Updated to 486ef0d on 11/18/25
+module compiler/kind/infer
+
 import compiler/lib/pprint
 import compiler/common/failure
 import compiler/common/color-scheme
@@ -44,7 +46,7 @@ import std/data/sort
 
 // Kindcheck a program and calculate types
 // Also group recursive type and expressing bindings in order
-fun infer-kinds(
+pub fun infer-kinds(
       isValue: (data-info) -> pure bool, // is this a value type
       target: platform, // target platform (x32, x64)
       imports: import-map, // import aliases

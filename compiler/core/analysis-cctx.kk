@@ -1,3 +1,6 @@
+// Updated as of 7/23/26: Commit 9bc234e
+module compiler/core/analysis-cctx
+
 import compiler/lib/pprint
 import compiler/common/name
 import compiler/common/name-prim
@@ -26,7 +29,7 @@ effect cctx-eff
   final ctl emit-ctx-errs(d: list<doc>): a
 
 fun tryC(f: () -> _ a): _ either<list<doc>,a>
-  with override 
+  with override
     return(x) Right(x)
     final ctl emit-ctx-err(e) Left([e])
     final ctl emit-ctx-errs(e) Left(e)
@@ -121,12 +124,12 @@ fun make-create(tp: ktype, holetp: ktype, top: expr, holeaddr: expr)
   val funType = TForAll([a, b], 
     TFun([(nil, TVar(a)), (nil, TApp(typeFieldAddr, [TVar(a)]))], 
       typeTotal, TApp(typeCCtxx, [TVar(a), TVar(b)])))
-  App(TypeApp(Var(TName(nameCCtxCreate, funType), 
+  App(TypeApp(Var(TName(nameCCtxCreate, funType),
     InfoExternal([(C(CDefault), "kk_cctx_create(#1,#2,kk_context())"), (JS(JsDefault), "$std_core_types._cctx_create(#1,#2)")])), 
     [tp, holetp]), [top, holeaddr])
 
 // The address of a field in a constructor (for context holes)
-fun make-field-addr-of(obj: expr, cName: tName, fieldName: name, fieldTp: ktype)
+pub fun make-field-addr-of(obj: expr, cName: tName, fieldName: name, fieldTp: ktype)
   val a = TypeVar(0, kindStar, Bound)
   val funType = TForAll([a], TFun([(nil, TVar(a)), (nil, typeString), (nil, typeString)], typeTotal, TApp(typeFieldAddr, [TVar(a)])))
   App(TypeApp(Var(TName(nameFieldAddrOf, funType), InfoExternal([])), [fieldTp]), [obj, ELit(LitString(show-tupled(cName.get-name))), ELit(LitString(show-tupled(fieldName)))])
@@ -172,7 +175,7 @@ fun data-type-name(cName: tName)
     Just((_, _, _, tres)) -> tres.data-type-name-res
     _ -> failure/fail("core/ctail get-data-type-name: illegal constructor type: " ++ cName.show)
 
-fun lookup(cName: tName, fieldIdx: int)
+pub fun lookup(cName: tName, fieldIdx: int)
   match newtypes-lookup-any(cName.data-type-name)
     Just(dinfo) ->
       val (drepr, _) = dinfo.data-repr(is-value)

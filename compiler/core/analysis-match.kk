@@ -1,3 +1,5 @@
+module compiler/core/analysis-match
+
 import compiler/lib/pprint
 import compiler/common/name
 import compiler/common/name-prim
@@ -18,7 +20,7 @@ import compiler/lib/core
 // Analyze partiality of core match statements
 // Commit #f4e4050
 
-fun branches/analyze(def-name: name, rng: range, branches: list<branch>, tps: list<ktype>, infos: list<data-info>, is-lazy-match: bool): _ (bool, list<branch>)
+pub fun branches/analyze(def-name: name, rng: range, branches: list<branch>, tps: list<ktype>, infos: list<data-info>, is-lazy-match: bool): _ (bool, list<branch>)
   match-branches(def-name, rng, branches, tps, infos, is-lazy-match)
 
 type kmatch
