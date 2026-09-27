@@ -745,9 +745,8 @@ fun mods-synonyms(mods: bmodules): _ synonyms
 // `mapConcurrentModules`, "we can concurrently load (and lex) modules" -- and
 // on a warm build that is the whole of the work.
 //
-// `deps` must already hold everything this module imports: `mods-synonyms`
-// expands synonyms while parsing, and `force-inlines` needs the accumulated
-// gamma to resolve the inline bodies. A wave/readiness scheduler satisfies
+// `deps` must already hold everything this module imports: `force-inlines`
+// needs the accumulated gamma to resolve the inline bodies. A wave/readiness scheduler satisfies
 // exactly that precondition, which is why loads can be dispatched at all.
 //
 // `Nothing` means "unreadable, recompile it" -- never a build error. The cache
@@ -759,20 +758,15 @@ pub fun load-iface(kki: path, deps: bmodules, at: int, cFile: maybe<path>,
                    // leave the inline section unresolved (see `pending-inlines`);
                    // `deps` is then not consulted at all
                    defer-inlines: bool = False): _ maybe<bmodule>
-  // NO seeded synonyms: an interface now carries everything needed to read it
-  // back: the reader builds its synonym environment from the file's own
-  // `local alias` section and type declarations. Two emitter gaps made seeding necessary
-  // before, both fixed: a `TSyn` with no `syn-info` was declared nowhere AND
-  // printed without its expansion (`std/core/types/ctx`, 104 interfaces -- see
-  // `pp-synonym`), and synonyms used only in the INLINE SECTION were never
-  // scanned (see `extract-imported-synonyms`).
-  //
-  // Seeding cost an O(closure) `mods-synonyms` fold per module; dropping it is
-  // ~9% of a warm build on compiler/main/driver.kk. KOKA_SEED_IFACE_SYNONYMS=1
-  // restores it for an A/B.
-  val syns = if get-env-value("KOKA_SEED_IFACE_SYNONYMS").is-just
-               then mods-synonyms(deps) else synonyms/empty
-  match parse-core-cached(kki, syns)
+  // No synonyms are seeded from `deps`: an interface carries everything needed
+  // to read it back, and the reader builds its synonym environment from the
+  // file's own `local alias` section and type declarations. That holds only
+  // while the emitter declares every synonym it prints -- including a `TSyn`
+  // with no `syn-info` (`pp-synonym`) and synonyms used only in the inline
+  // section (`extract-imported-synonyms`). Seeding would cost an O(closure)
+  // `mods-synonyms` fold per module, measured at ~9% of a warm build of
+  // compiler/main/driver.kk.
+  match parse-core-cached(kki, synonyms/empty)
     Nothing -> Nothing
     Just((c, mkInlines)) ->
       val own = extract-gamma(data/is-value, False, c)

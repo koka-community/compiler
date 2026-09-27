@@ -65,10 +65,9 @@ fun fingerprint-of(m: bmodule): _ string
 fun hash-of(m: bmodule): _ int
   match m
     ModIface(c, idefs) ->
-      // TYPES as well as names: `parse-core-cached` is handed
-      // `mods-synonyms(deps)`, so which synonyms are in scope shapes the types it
-      // parses. A names-only fingerprint cannot see that, which is exactly the
-      // blind spot that made wave and readiness look identical.
+      // TYPES as well as names: a definition whose type parsed differently
+      // keeps its name, so a names-only fingerprint cannot see it -- exactly
+      // the blind spot that made wave and readiness look identical.
       val dnames = c.defs.flatmap fn(g)
         match g
           DefRec(ds)   -> ds.map(fn(d) d.def-name.show-plain ++ "::" ++ d.ktype.ktype/show)
