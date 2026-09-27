@@ -1,0 +1,2 @@
+type/eff-rec1a/main: () -> <console,div> ()
+type/eff-rec1a/moo: () -> <div,moo> (() -> <div,moo> ())

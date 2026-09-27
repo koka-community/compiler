@@ -1,0 +1,37 @@
+module interface
+ 
+//----------------------
+//#kki: import declarations
+ 
+ 
+//----------------------
+//#kki: external imports
+ 
+ 
+//----------------------
+//#kki: fixity declarations
+ 
+ 
+//----------------------
+//#kki: local imported aliases
+ 
+ 
+//----------------------
+//#kki: type declarations
+ 
+ 
+//----------------------
+//#kki: declarations
+ 
+fun lookup-it : (x : std/core/types/int) -> (std/core/types/maybe :: V V)<std/core/types/int>
+// monadic lift
+fun @mlift-main@6 : (v@0@0 : std/core/types/int, @c.4 : ()) -> ()
+fun main : () -> <(std/core/console/console :: X)> ()
+ 
+//----------------------
+//#kki: external declarations
+ 
+ 
+//----------------------
+//#kki: inline definitions
+ 

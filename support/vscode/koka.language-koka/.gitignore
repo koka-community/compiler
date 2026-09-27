@@ -1,0 +1,11 @@
+# Build output and test scaffolding for the VS Code extension.
+#
+# `dist` is the webpack bundle (`npm run compile`), `out` is the tsc output the
+# integration test runs from (`npm run test-compile`), and `.vscode-test` is the
+# ~300MB VS Code build that `@vscode/test-electron` downloads to launch a real
+# editor. None of it belongs in the repository.
+node_modules/
+dist/
+out/
+.vscode-test/
+*.vsix

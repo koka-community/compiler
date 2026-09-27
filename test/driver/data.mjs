@@ -1,0 +1,143 @@
+// Koka generated module: data, koka version: 3.2.7
+"use strict";
+ 
+// imports
+import * as $std_core from './std_core.mjs';
+import * as $std_core_types from './std_core_types.mjs';
+import * as $std_core_undiv from './std_core_undiv.mjs';
+import * as $std_core_unsafe from './std_core_unsafe.mjs';
+import * as $std_core_hnd from './std_core_hnd.mjs';
+import * as $std_core_exn from './std_core_exn.mjs';
+import * as $std_core_bool from './std_core_bool.mjs';
+import * as $std_core_order from './std_core_order.mjs';
+import * as $std_core_int from './std_core_int.mjs';
+import * as $std_core_char from './std_core_char.mjs';
+import * as $std_core_vector from './std_core_vector.mjs';
+import * as $std_core_bytes from './std_core_bytes.mjs';
+import * as $std_core_show from './std_core_show.mjs';
+import * as $std_core_string from './std_core_string.mjs';
+import * as $std_core_sslice from './std_core_sslice.mjs';
+import * as $std_core_list from './std_core_list.mjs';
+import * as $std_core_bslice from './std_core_bslice.mjs';
+import * as $std_core_debug from './std_core_debug.mjs';
+import * as $std_core_console from './std_core_console.mjs';
+import * as $std_core_maybe from './std_core_maybe.mjs';
+import * as $std_core_maybe2 from './std_core_maybe2.mjs';
+import * as $std_core_either from './std_core_either.mjs';
+import * as $std_core_result from './std_core_result.mjs';
+import * as $std_core_tuple from './std_core_tuple.mjs';
+import * as $std_core_lazy from './std_core_lazy.mjs';
+import * as $std_core_delayed from './std_core_delayed.mjs';
+ 
+// externals
+ 
+// type declarations
+// type color 
+export const Red = 1; // data/color
+export const Green = 2; // data/color
+export const Blue = 3; // data/color
+// type nat 
+export const Zero = null; // data/nat
+export function Succ(pred) /* (pred : data/nat) -> data/nat */  {
+  return { pred: pred };
+}
+// type pair 
+export function Pair(fst_val, snd_val) /* (fst-val : data/color, snd-val : data/nat) -> data/pair */  {
+  return { fst_val: fst_val, snd_val: snd_val };
+}
+ 
+// declarations
+ 
+ 
+// // Automatically generated. Tests for the `` constructor of the `:` type.
+export function is_red(color) /* (color : data/color) -> bool */  {
+  return (color === 1);
+}
+ 
+ 
+// // Automatically generated. Tests for the `` constructor of the `:` type.
+export function is_green(color) /* (color : data/color) -> bool */  {
+  return (color === 2);
+}
+ 
+ 
+// // Automatically generated. Tests for the `` constructor of the `:` type.
+export function is_blue(color) /* (color : data/color) -> bool */  {
+  return (color === 3);
+}
+ 
+ 
+// // Automatically generated. Tests for the `` constructor of the `:` type.
+export function is_zero(nat) /* (nat : data/nat) -> bool */  {
+  return (nat === null);
+}
+ 
+ 
+// // Automatically generated. Tests for the `` constructor of the `:` type.
+export function is_succ(nat) /* (nat : data/nat) -> bool */  {
+  return (nat !== null);
+}
+ 
+ 
+// // Automatically generated. Retrieves the `fst-val` constructor field of the `:` type.
+export function pair_fs_fst_val(pair) /* (pair : data/pair) -> data/color */  {
+  return pair.fst_val;
+}
+ 
+ 
+// // Automatically generated. Retrieves the `snd-val` constructor field of the `:` type.
+export function pair_fs_snd_val(pair) /* (pair : data/pair) -> data/nat */  {
+  return pair.snd_val;
+}
+ 
+export function pair_fs__at_copy(_this, fst_val, snd_val) /* (data/pair, fst-val : ?data/color, snd-val : ?data/nat) -> data/pair */  {
+   
+  if (fst_val !== undefined) {
+    var fst_val_10071 = fst_val;
+  }
+  else {
+    var fst_val_10071 = pair_fs_fst_val(_this);
+  }
+   
+  if (snd_val !== undefined) {
+    var snd_val_10078 = snd_val;
+  }
+  else {
+    var snd_val_10078 = pair_fs_snd_val(_this);
+  }
+  return Pair(fst_val_10071, snd_val_10078);
+}
+ 
+export function pick(c, x, y) /* forall<a,b> (c : data/color, x : a, y : b) -> a */  {
+  if (c === 1) {
+    return x;
+  }
+  else if (c === 2) {
+    return y;
+  }
+  else {
+    return x;
+  }
+}
+ 
+export function walk(n) /* (n : data/nat) -> div int */  { tailcall: while(1)
+{
+  if (n === null) {
+    return 0;
+  }
+  else {
+    {
+      // tail call
+      n = n.pred;
+      continue tailcall;
+    }
+  }
+}}
+ 
+export function swap(p) /* (p : data/pair) -> data/pair */  {
+  return Pair(p.fst_val, p.snd_val);
+}
+ 
+export function second(p) /* (p : data/pair) -> data/nat */  {
+  return p.snd_val;
+}

@@ -1,0 +1,275 @@
+/*---------------------------------------------------------------------------
+Copyright 2023, Tim Whiting
+
+This is free software; you can redistribute it and/or modify it under the
+terms of the Apache License, Version 2.0. A copy of the License can be
+found in the LICENSE file at the root of this distribution.
+---------------------------------------------------------------------------*/
+import * as child_process from 'child_process'
+import * as fs from "fs"
+import * as vscode from 'vscode'
+
+import {
+	Logger, logger,
+	LoggingDebugSession,
+	InitializedEvent, TerminatedEvent, OutputEvent,
+	Thread,
+} from '@vscode/debugadapter'
+import { DebugProtocol } from '@vscode/debugprotocol'
+import { EventEmitter } from 'events'
+import { KokaConfig } from './workspace-config'
+import * as path from 'path'
+import {
+	LanguageClient,
+	ExecuteCommandRequest,
+	ExecuteCommandParams,
+} from 'vscode-languageclient/node'
+
+/*
+ * This interface describes the mock-debug specific launch attributes
+ * (which are not part of the Debug Adapter Protocol).
+ * The schema for these attributes lives in the package.json of the mock-debug extension.
+ * The interface should always match this schema.
+ */
+interface LaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
+	/** An absolute path to the "program" to debug. */
+	program: string
+	/** Additional arguments */
+	compilerArgs?: string
+	/** Additional arguments */
+	programArgs?: string[]
+	/** enable logging the Debug Adapter Protocol */
+	trace?: boolean
+	/** A single function to run (must have no effects and return a type that is showable)*/
+	functionName?: string
+}
+
+export class KokaDebugSession extends LoggingDebugSession {
+
+	// we don't support multiple threads, so we can use a hardcoded ID for the default thread
+	private static THREAD_ID = 1
+
+	private _configurationDone = new EventEmitter()
+
+	private _runtime: KokaRuntime
+	/**
+	 * Creates a new debug adapter that is used for one debug session.
+	 * We configure the default implementation of a debug adapter here.
+	 */
+
+
+	public constructor(private readonly config: KokaConfig, private readonly client: LanguageClient) {
+		super("koka-debug.txt")
+
+		// this debugger uses zero-based lines and columns
+		this.setDebuggerLinesStartAt1(false)
+		this.setDebuggerColumnsStartAt1(false)
+
+		this._runtime = new KokaRuntime(config, client)
+
+		// setup event handlers
+		this._runtime.on('output', (text, category) => {
+			const e: DebugProtocol.OutputEvent = new OutputEvent(`${text}\n`)
+			e.body.category = category
+
+			this.sendEvent(e)
+		})
+		this._runtime.on('end', () => {
+			this.sendEvent(new TerminatedEvent())
+		})
+	}
+
+	/**
+	 * The 'initialize' request is the first request called by the frontend
+	 * to interrogate the features the debug adapter provides.
+	 */
+	protected initializeRequest(response: DebugProtocol.InitializeResponse, args: DebugProtocol.InitializeRequestArguments): void {
+
+		// build and return the capabilities of this debug adapter:
+		response.body = response.body || {}
+
+		// the adapter implements the configurationDoneRequest.
+		response.body.supportsConfigurationDoneRequest = true
+
+		// make VS Code not use 'evaluate' when hovering over source
+		response.body.supportsEvaluateForHovers = false
+
+		// make VS Code not show a 'step back' button
+		response.body.supportsStepBack = false
+
+		// make VS Code not support data breakpoints
+		response.body.supportsDataBreakpoints = false
+
+		// make VS Code not support completion in REPL
+		response.body.supportsCompletionsRequest = false
+		response.body.completionTriggerCharacters = []
+
+		// make VS Code send cancelRequests
+		response.body.supportsCancelRequest = true
+		response.body.supportsTerminateRequest = true
+
+		// make VS Code not send the breakpointLocations request
+		response.body.supportsBreakpointLocationsRequest = false
+
+		this.sendResponse(response)
+
+		// we request configurations early by sending an 'initializeRequest' to the frontend.
+		// The frontend will end the configuration sequence by calling 'configurationDone' request.
+		this.sendEvent(new InitializedEvent())
+	}
+
+	/**
+	 * Called at the end of the configuration sequence.
+	 * Indicates that all breakpoints etc. have been sent to the DA and that the 'launch' can start.
+	 */
+	protected configurationDoneRequest(response: DebugProtocol.ConfigurationDoneResponse, args: DebugProtocol.ConfigurationDoneArguments): void {
+		super.configurationDoneRequest(response, args)
+
+		// notify the launchRequest that configuration has finished
+		this._configurationDone.emit("done")
+	}
+
+	protected async launchRequest(response: DebugProtocol.LaunchResponse, args: LaunchRequestArguments) {
+
+		// make sure to 'Stop' the buffered logging if 'trace' is not set
+		logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false)
+
+		// wait until configuration has finished (and configurationDoneRequest has been called)
+		// No configuration of breakpoints etc is currently supported so set a low timeout
+		await new Promise((resolve, reject) => {
+			setTimeout(() => this._configurationDone.emit("done"), 1000)
+			this._configurationDone.once("done", resolve)
+	  })
+
+		// start the program in the runtime
+		this._runtime.start(args)
+
+		this.sendResponse(response)
+	}
+
+	protected threadsRequest(response: DebugProtocol.ThreadsResponse): void {
+
+		// debug runtime supports no threads so just return a default thread.
+		response.body = {
+			threads: [
+				new Thread(KokaDebugSession.THREAD_ID, "main thread")
+			]
+		}
+		this.sendResponse(response)
+	}
+
+	protected async terminateRequest(response: DebugProtocol.TerminateResponse, args: DebugProtocol.TerminateArguments, request?: DebugProtocol.Request) {
+		await this._runtime.cancel()
+		response.success = true
+		response.message = "terminated"
+		this.sendResponse(response)
+	}
+
+	protected async cancelRequest(response: DebugProtocol.CancelResponse, args: DebugProtocol.CancelArguments) {
+		await this._runtime.cancel()
+		response.success = true
+		response.message = "cancelled"
+		this.sendResponse(response)
+	}
+}
+
+
+class KokaRuntime extends EventEmitter {
+
+	constructor(private readonly config: KokaConfig, private readonly client: LanguageClient) {
+		super()
+	}
+	ps?: child_process.ChildProcess | null
+
+  private runcmd(program : string, args : string[] | undefined) {
+    console.log(`Run: ${program} ${args ?? []}`)
+    this.ps = child_process.spawn(program, args ?? [], { cwd: this.config.cwd, env: process.env })
+    this.ps.stdout?.on('data', (data) => {
+      this.emit('output', data.toString(), 'stdout')
+    })
+    this.ps.stderr?.on('data', (data) => {
+      this.emit('output', data.toString(), 'stderr')
+    })
+    this.ps.on('close', (code) => {
+      this.emit('end', code)
+      this.ps = null
+    })
+  }
+
+
+	public async start(args: LaunchRequestArguments) {
+		const target = this.config.target
+		// Args that are parsed by the compiler are in the args field. This leaves the rest of the object open for
+		let additionalArgs = "" // already set at language server start: --buildtag=vscode --target=" + target
+		if (args.compilerArgs) {
+			additionalArgs = additionalArgs + " " + args.compilerArgs
+		}
+		try {
+			let resp = null
+			if (args.functionName) {
+				resp = await this.client.sendRequest(ExecuteCommandRequest.type, { command: 'koka/compileFunction', arguments: [args.program, args.functionName, additionalArgs] })
+			} else {
+				resp = await this.client.sendRequest(ExecuteCommandRequest.type, { command: 'koka/compile', arguments: [args.program, additionalArgs] })
+			}
+			console.log(`Generated code at ${resp}`)
+			if (!resp) {
+				this.emit('output', `Compilation error: see the problems- or output tab for specifics`, 'stderr')
+				this.emit('end', -1)
+				return;
+			}
+      const fullpath = path.join(this.config.cwd, resp)
+			if (!fs.existsSync(fullpath)) {
+				console.log(`Cannot find generated executable at: ${resp}`)
+				this.emit('end', -1)
+				return;
+			}
+			if (target == 'c' || target == 'c32' || target == 'c64c') {				
+        this.runcmd(resp,args.programArgs)				
+			} 
+      else if (target == 'jsnode') {
+        this.runcmd("node", [resp, ...(args.programArgs ?? [])] )				
+			}
+      else if (target == 'wasm') {
+        this.runcmd("wasmtime", [resp, ...(args.programArgs ?? [])] )				
+			}
+      else if (target == 'jsweb' || target == 'wasmweb' ) {
+        if (vscode.extensions.getExtension("ms-vscode.live-server")) {
+          this.emit('output', `Opening live preview for ${resp}`)
+          vscode.commands.executeCommand("livePreview.start.preview.atFileString", resp);        
+          this.emit('end', 0)
+        }
+        else {
+          this.emit('output', `Opening integrated browser for ${resp}.\nNote: consider the "Live Preview" vscode extension for better integration.`)
+          const fileUri = vscode.Uri.file(fullpath);
+          vscode.commands.executeCommand("simpleBrowser.api.open", fileUri, {
+            viewColumn: vscode.ViewColumn.Beside, preserveFocus: false
+          });        
+          this.emit('end', 0)
+        }
+      } 
+      else {
+				this.emit('output', `Running code for target ${target} is not yet supported.\nOutput can be found at ${resp}`)
+				this.emit('end', -1)
+			}
+
+		} catch (e) {
+			this.emit('output', `Exception during compilation: ${e}`, 'stderr')
+			this.emit('end', -1)
+		}
+	}
+
+	public async cancel() {
+		if (this.ps) {
+			const result = await this.ps.kill()
+			if (!result) {
+				console.log("Escalating process kill to SIGKILL")
+				await this.ps.kill(9)
+			}
+			this.ps = null
+			this.emit('output', `Compile was cancelled`, 'stdout')
+			this.emit('end', 1)
+		} else {
+			console.log("No process to cancel?")
+		}
+	}
+}

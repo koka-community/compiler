@@ -1,0 +1,2 @@
+type/opt1/main: () -> int
+type/opt1/plus: (x : int, y : int, z : ? int) -> int

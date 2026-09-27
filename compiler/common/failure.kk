@@ -1,6 +1,5 @@
 // ---------------------------------------------------------------------------
 // Copyright 2024, Microsoft Research, Daan Leijen. Tim Whiting.
-// 
 // This is free software; you can redistribute it and/or modify it under the
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
@@ -14,23 +13,23 @@ pub import compiler/platform/config
 // Internal errors and assertions
 // ------------------------------------------
 
-pub fun fail(s: string): exn a
+pub fun failure/fail(s: string): exn a
   raise(s)
 
 pub fun assert(msg: string, test: bool, x: a): exn a
-  if test then x else fail(msg)
+  if test then x else failure/fail(msg)
 
 pub fun todo(msg: string): exn a
-  fail("todo: " ++ msg)
+  failure/fail("todo: " ++ msg)
 
 pub fun match-failure(msg: string, ?kk-file-line: string): exn a
-  fail("unmatched pattern: " ++ msg ++ " at " ++ kk-file-line)
+  failure/fail("unmatched pattern: " ++ msg ++ " at " ++ kk-file-line)
 
 pub fun raise(s: string): exn a
   // Figure out stack traces
   throw(s)
 
-pub fun catch(hndl: string -> e a, f: () -> <exn|e> a): e a
+pub fun catch(hndl: string -> _ a, f: () -> _ a): _ a
   fun adjust(s: string): string
     s // TODO: Adjust any errors if needed
   with handler final ctl throw-exn(e)

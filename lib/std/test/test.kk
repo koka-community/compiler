@@ -1,0 +1,254 @@
+/*----------------------------------------------------------------------------
+   Copyright 2024, Koka-Community Authors
+
+   Licensed under the MIT License ("The License"). You may not
+   use this file except in compliance with the License. A copy of the License
+   can be found in the LICENSE file at the root of this distribution.
+----------------------------------------------------------------------------*/
+module std/test/test
+import std/time/timer
+import std/time/duration
+import std/num/random
+import std/num/ddouble
+import std/num/float64
+import std/num/int64
+
+pub alias test-reporter<e> = (action: () -> <test-report|e> ()) -> e ()
+
+pub effect test-report
+  fun report-skipped<a>(test: test-identity): ()
+  fun report-start<a>(test: test-identity): ()
+  fun report-hint<a>(test: test-identity, hint: string): ()
+  fun report-iteration(test: test-identity): ()
+  fun report-failure<a>(test: test-identity, expectation: expectation): ()
+  fun report-end<a>(test: test-identity, failures: int): ()
+  fun report-summary<a>(summary: suite-summary): ()
+
+// The toplevel `test` effect for defining test groups and cases
+pub effect test<e>
+  val current-scope: maybe<test-scope>
+  fun register-test(test-identity: test-identity, body: () -> <expect,random|e> ()): ()
+  val default-sample-count: int // used for property tests
+  fun gen-test-id(): int
+
+// The effect available within a test, for making expectations / assertions
+pub effect expect
+  ctl test-expect(v: expectation): ()
+  fun test-hint(hint: string): ()
+
+  // utilities for property tests
+  fun next-seed(): int
+  fun test-iteration(): () // declare a new iteration
+
+abstract value struct location
+  mod: string
+  line: int
+
+pub fun location/show(l: location): string
+  l.mod ++ ":" ++ l.line.show
+
+pub struct test-scope
+  scope-id: int
+  parent: maybe<test-scope>
+  scope-name: string
+  location: location
+
+fun scope/show(s: test-scope): div string
+  "Scope("++s.scope-id.show ++", "++s.parent.show ++ ", " ++ s.scope-name++")"
+
+// A test, possibly within group / scopes
+pub struct test-identity
+  test-id: int
+  scope: maybe<test-scope>
+  name: string
+  location: location
+  
+pub fun test-identity/show(t: test-identity): div string
+  "Test-identity("++t.test-id.show ++", "++t.scope.show ++ ", " ++ t.name ++ ")"
+
+pub value struct suite-summary
+  failures: int
+  successes: int
+  skipped: int
+
+pub fun suite-summary(): suite-summary
+  Suite-summary(0, 0, 0)
+
+pub fun summary/any-failures(summary: suite-summary): bool
+  summary.failures > 0
+
+pub fun indentation(scope: maybe<test-scope>): div string
+  scope.map(_.parent.indentation ++ "  ").default("")
+
+pub fun scope/full-name(scope: test-scope): div string
+  scope.parent.map(_.full-name ++ " ").default("") ++ scope.scope-name
+
+pub fun test/full-name(test: test-identity): div string
+  test.scope.map(_.full-name ++ " ").default("") ++ test.name
+
+// An expectation in a test
+abstract struct expectation
+  result: either<string,()> // The expectation error message (or unit for success)
+  location: string // The line where the expectation was made
+
+pub fun show(expectation: expectation): div string
+  val location = expectation.location
+  match expectation.result
+    Left(msg) -> "Expectation failed ("++ location ++ ")\n" ++ msg
+    Right(()) -> "Expectation succeeded ( " ++ location ++ ")"
+
+pub fun fail(assertion: string = "", ?kk-line: int, ?kk-module: string)
+  test-expect(Expectation(
+    Left("Assertion failed" ++ (if assertion == "" then "" else ": " ++ assertion)),
+    ?kk-module ++ ":" ++ ?kk-line.show
+  ))
+
+// base expectation API
+pub fun api/test-expect(result: either<string,()>, ?kk-line: int, ?kk-module: string)
+  test-expect(Expectation(result, ?kk-module ++ ":" ++ ?kk-line.show))
+
+fun but-raised(e: exception): string
+  "but raised: " ++ e.show
+
+// Expects a computation to return a value
+//
+// The expected type must have an `(==)` function as well as a `show` function defined for it
+pub fun expect(expected: a, run: () -> <exn,expect,div|e> a, details: string = "", ?(==): (a,a) -> div bool, ?show: (a) -> div string, ?kk-line: int, ?kk-module: string): <expect,div|e> ()
+  val actual = try({run()})
+  val expected-str = "expected:" ++ expected.show
+  val result = match actual
+    Ok(a) ->
+      if a == expected then
+        Right(())
+      else
+        Left(expected-str ++ "\n     got: " ++ a.show)
+    Error(e) -> Left(expected-str ++ "\n" ++ but-raised(e))
+  api/test-expect(result, ?kk-line=?kk-line, ?kk-module=?kk-module)
+
+// Expect a predicate over some value to return true.
+// Assertion is an optional string to describe the predicate.
+// On error, the value is printed.
+pub fun expect-that(predicate: (a) -> <exn,div|e> bool, run: () -> <exn,div,expect|e> a, assertion: string = "", ?show: (a) -> div string, ?kk-line: int, ?kk-module: string): <expect,div|e> ()
+  val value = try({run()})
+  val expected-str = "expected: " ++ (if assertion == "" then "predicate to pass" else assertion)
+  val result = match value
+    Ok(res) ->
+      val success = try({mask<expect>{predicate(res)}})
+      val base = expected-str ++ "\nfor value: " ++ res.show
+      match success
+        Ok(True) -> Right(())
+        Ok(False) -> Left(base ++ "\nbut predicate returned False")
+        Error(e) -> Left(base ++ "\nbut predicate raised: " ++ e.show)
+    Error(e) ->
+      Left(expected-str ++ "\n" ++ but-raised(e))
+  api/test-expect(result, ?kk-line=?kk-line, ?kk-module=?kk-module)
+
+// group of tests, requires (and overrides) test-scope
+pub fun group(name: string, f: () -> <test<e>|e> (), ?kk-module: string, ?kk-line: int): <test<e>|e> ()
+  val scope = Test-scope(
+    scope-id = gen-test-id(),
+    parent = current-scope,
+    scope-name = name,
+    location = Location(?kk-module, ?kk-line)
+  )
+  with override handler<some<e> test<e>>
+    val default-sample-count = default-sample-count
+    val current-scope = Just(scope)
+    fun gen-test-id() gen-test-id()
+    fun register-test(test-identity, body)
+      register-test(test-identity, body)
+  f()
+
+pub fun hint(value: string): expect ()
+  test-hint(value)
+
+// `effectful-test` is experimental, it allows the test body to rely on effects provided externally to test.
+// To avoid confusion, you should ensure the same handler for extra effects is used for both test definition
+// (the call to `effectful-test`) and test execution (the call to `run-tests`).
+//
+// Use `test` function where possible, as it ensures that the test body doesn't accidentally make use of an inherited effect.
+pub fun effectful-test<e>(name: string, f: () -> <expect,random,io|e> (), ?kk-module: string, ?kk-line: int): <test<<io|e>>|e> ()
+  register-test(Test-identity(gen-test-id(), current-scope, name, Location(?kk-module, ?kk-line)), f)
+
+pub fun test(name: string, f: () -> <expect,io,random> (), ?kk-module: string, ?kk-line: int): test<io> ()
+  effectful-test(name, f)
+
+// Property test:
+// creates a test case that runs the body many times on random inputs,
+// ensuring it passes each time.
+// When a case fails, the seed is printed (this can be passed as the `--seed` commandline argument to reproduce).
+pub fun prop-test(
+  name,
+  action: () -> <random,expect,io> (),
+  count: int = default-sample-count,
+  ?kk-module: string,
+  ?kk-line: int
+): <test<<io>>,io> ()
+  fun run()
+    val seed-value = next-seed()
+    with pseudo-random(seed-value)
+    for(0, count) fn(i)
+      test-iteration()
+      hint("Property test iteration " ++ i.show ++ ", --seed=" ++ seed-value.show)
+      action()
+  test(name, run)
+
+// Provide the `random` effect within a test, useful for generating arbitrary data.
+// See also `prop-test` which runs a test multiple times for many different inputs.
+pub fun arbitrary(action: () -> <random|e> a): e a
+  pseudo-random(0, action)
+
+pub value struct test-case<e>
+  identity: test-identity
+  body: () -> <expect,random|e> ()
+
+// TODO lazy stream instead of an eager list
+pub fun collect-tests(default-sample-count: int, f: () -> <test<<io|e>>,io|e> ()): <io|e> list<test-case<<io|e>>>
+  var tests-rev := []
+  handle<test<_>>(f) {
+    val current-scope = Nothing
+    val default-sample-count = default-sample-count
+
+    fun gen-test-id() unique()
+    fun register-test(test, body) {
+      tests-rev := Cons(Test-case(test, body), tests-rev)
+    }
+  }
+  tests-rev.reverse
+
+// Executes a single test. Returns an updated suite summary
+pub fun execute(summary: suite-summary, test: test-case<<io|e>>, seed: maybe<int>): <test-report,ioc|e> suite-summary
+  val tid = test.identity
+  report-start(tid)
+  val fail-count = ref(0)
+  fun test-result(): _ suite-summary
+    if !fail-count == 0 then
+      summary(successes = summary.successes + 1)
+    else
+      summary(failures = summary.failures + !fail-count)
+
+  with pseudo-random(timer/ticks().fraction.float64-to-bits.int)
+  with finally { report-end(tid, !fail-count) }
+  with handler<expect> {
+    fun next-seed()
+      seed.default(random-int())
+
+    fun test-hint(v)
+      report-hint(tid, v)
+
+    fun test-iteration()
+      report-iteration(tid)
+
+    ctl test-expect(v: expectation)
+      match v.result
+        Left(_) ->
+          fail-count := !fail-count + 1
+          report-failure(tid, v)
+          return test-result()
+        Right(()) ->
+          resume(())
+  }
+  with mask<test-report>
+  expect((), ?kk-line=tid.location.line, ?kk-module=tid.location.mod)
+    (test.body)()
+  test-result()

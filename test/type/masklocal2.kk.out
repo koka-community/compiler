@@ -1,0 +1,4 @@
+type/masklocal2/emit: (s : string) -> emit ()
+type/masklocal2/pretty-emit1: forall<a,e> (action : () -> <console,emit,exn|e> a) -> <console|e> error<a>
+type/masklocal2/pretty-emit2: forall<a,e> (action : () -> <emit|e> a) -> e (a, string)
+type/masklocal2/pretty-emit3: forall<a,e> (action : () -> <emit|e> a) -> e string

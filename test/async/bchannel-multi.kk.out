@@ -1,0 +1,2 @@
+async/bchannel-multi/main: () -> <ioc,std/async/async/async> ()
+async/bchannel-multi/producer: (c : std/async/bchannel/bconnect<(int, int)>, id : int, n : int) -> <ioc,std/async/async/async> ()

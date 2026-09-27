@@ -1,0 +1,6 @@
+fun swap(p: (int, string)): (string, int)
+  (p.snd, p.fst)
+fun main()
+  val p = (42, "hi")
+  val q = swap(p)
+  println(q.fst ++ " " ++ q.snd.show)

@@ -1,0 +1,6 @@
+cleanup
+mid
+top
+ 
+finally/finally4/main: () -> console ()
+finally/finally4/myeffect: () -> myeffect ()

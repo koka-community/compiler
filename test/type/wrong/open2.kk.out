@@ -1,0 +1,6 @@
+test/type/wrong/open2@kk(5, 1): kind error: Invalid type
+ type context : extend type test
+ type : extend type test
+ inferred kind: V -> V
+ expected kind: V
+ because : extended type must have the same kind as the open type

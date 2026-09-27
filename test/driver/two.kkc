@@ -1,0 +1,34 @@
+module interface
+ 
+//----------------------
+//#kki: import declarations
+ 
+ 
+//----------------------
+//#kki: external imports
+ 
+ 
+//----------------------
+//#kki: fixity declarations
+ 
+ 
+//----------------------
+//#kki: local imported aliases
+ 
+ 
+//----------------------
+//#kki: type declarations
+ 
+ 
+//----------------------
+//#kki: declarations
+ 
+fun main : () -> <(std/core/console/console :: X)> ()
+ 
+//----------------------
+//#kki: external declarations
+ 
+ 
+//----------------------
+//#kki: inline definitions
+ 

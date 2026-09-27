@@ -1,0 +1,3 @@
+type/opt2/main: () -> int
+type/opt2/plus: (x : int, y : int, z : ? int) -> int
+type/opt2/psum: forall<a> (xs : list<int>, ?plus : a) -> int

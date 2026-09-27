@@ -1,2 +1,6 @@
 .koka
+.koka-runtime
 scratch/
+scripts/__pycache__/
+test/lib/dir
+docs/superpowers

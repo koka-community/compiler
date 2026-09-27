@@ -1,0 +1,9 @@
+type/matchcon1/bar/Foo: bar
+type/matchcon1/bar2/Foo2: forall<a> (a : a) -> bar2<a>
+type/matchcon1/bar2/a: forall<a> (bar2 : bar2<a>) -> a
+type/matchcon1/foo/Foo: foo
+type/matchcon1/foo/to-int: (x : foo) -> int
+type/matchcon1/foo2/Foo2: forall<a> (a : a) -> foo2<a>
+type/matchcon1/foo2/a: forall<a> (foo2 : foo2<a>) -> a
+type/matchcon1/foo2/to-int: (x : foo2<int>) -> int
+type/matchcon1/main: () -> console ()

@@ -1,0 +1,3 @@
+bar : V
+ 
+pub alias bar = modA/aint = 2

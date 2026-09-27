@@ -1,0 +1,19 @@
+#!/bin/zsh
+# Invoke the REFERENCE (Haskell) koka on this repository -- the fallback for
+# when the port cannot build itself. Usage: ./koka [koka options] <file.kk>
+# Override the compiler checkout with KOKA_DEV_DIR.
+#
+# `--sharedir` is what makes this work: this repository holds its own standard
+# library (`lib`) and C runtime (`kklib`), and the compiler sources need the
+# library additions that live there. Without it the reference compiler would
+# search ITS OWN `lib` first and miss them.
+KOKA_DEV_DIR="${KOKA_DEV_DIR:-$HOME/koka/.worktrees/dev-compiler}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+KOKA_BIN=$(cd "$KOKA_DEV_DIR" && stack exec which koka 2>/dev/null)
+if [[ -z "$KOKA_BIN" || ! -x "$KOKA_BIN" ]]; then
+  echo "error: could not find the koka executable in $KOKA_DEV_DIR (build it with 'stack build')" >&2
+  exit 1
+fi
+
+exec "$KOKA_BIN" --sharedir="$SCRIPT_DIR" -i"$SCRIPT_DIR" "$@"

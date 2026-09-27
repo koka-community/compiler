@@ -1,0 +1,64 @@
+module interface
+ 
+//----------------------
+//#kki: import declarations
+ 
+ 
+//----------------------
+//#kki: external imports
+ 
+ 
+//----------------------
+//#kki: fixity declarations
+ 
+ 
+//----------------------
+//#kki: local imported aliases
+ 
+ 
+//----------------------
+//#kki: type declarations
+ 
+pub value{1, 0, 1} type color[1,1,4,7]{
+  pub con Red[2,3,2,6] {0, 0, 0} : color = 1;
+  pub con Green[3,3,3,8] {0, 0, 0} : color = 2;
+  pub con Blue[4,3,4,7] {0, 0, 0} : color = 3;
+};
+pub recursive type nat[6,1,8,18]{
+  pub con Zero[7,3,7,7] {0, 0, 0} : nat = 1;
+  pub con Succ[8,3,8,7](pred: nat) {0, 0, 0} : (pred : nat) -> nat = 2;
+};
+pub type pair[10,1,11,37]{
+  pub con Pair[11,3,11,7](fst-val: color, snd-val: nat) {0, 0, 0} : (fst-val : color, snd-val : nat) -> pair = 1;
+};
+ 
+//----------------------
+//#kki: declarations
+ 
+// Automatically generated. Tests for the `` constructor of the `:` type.
+fip fun is-red : (color : color) -> std/core/types/bool
+// Automatically generated. Tests for the `` constructor of the `:` type.
+fip fun is-green : (color : color) -> std/core/types/bool
+// Automatically generated. Tests for the `` constructor of the `:` type.
+fip fun is-blue : (color : color) -> std/core/types/bool
+// Automatically generated. Tests for the `` constructor of the `:` type.
+fip fun is-zero : (nat : nat) -> std/core/types/bool
+// Automatically generated. Tests for the `` constructor of the `:` type.
+fip fun is-succ : (nat : nat) -> std/core/types/bool
+// Automatically generated. Retrieves the `fst-val` constructor field of the `:` type.
+fun pair/fst-val : (pair : pair) -> color
+// Automatically generated. Retrieves the `snd-val` constructor field of the `:` type.
+fun pair/snd-val : (pair : pair) -> nat
+fun pair/@copy : (@this : pair, fst-val : (std/core/types/@optional :: V V)<color>, snd-val : (std/core/types/@optional :: V V)<nat>) -> pair
+fun pick : forall<c,d> (c : color, x : c, y : d) -> c
+fun walk : (n : nat) -> <(std/core/types/div :: X)> std/core/types/int
+fun swap : (p : pair) -> pair
+fun second : (p : pair) -> nat
+ 
+//----------------------
+//#kki: external declarations
+ 
+ 
+//----------------------
+//#kki: inline definitions
+ 

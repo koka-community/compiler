@@ -5,7 +5,9 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
-// Updated as of 8/5/24: Commit 680b2b8
+// Updated as of 7/23/26: Commit 7369a3a
+
+module compiler/syntax/lexeme
 
 import std/os/path
 import std/text/regex
@@ -19,7 +21,9 @@ import compiler/common/syntax
 val type-var-regex = "^[a-z][0-9]*$".regex();
 
 pub fun is-type-var(n: name): bool
-  !type-var-regex.exec(n.nameStem).is-empty
+  // a type variable is an unqualified lowercase letter optionally followed by
+  // digits: in particular a MODULE-qualified name can still be a type variable
+  n.nameLocalQual == "" && !type-var-regex.exec(n.nameStem).is-empty
 
 // Lexer tokens
 // A lexical token with an associated range.
@@ -52,34 +56,34 @@ pub type lex
   LexError(s: string) // layout errors
 
 // 'True' when the lexeme is whitespace
-pub fun lexeme/is-white(l: lexeme): <> bool
+pub fun lexeme/is-white(l: lexeme): bool
   l.lex.is-white
 
 // 'True' when the lexical token is whitespace
-pub fun lex/is-white(l: lex): <> bool
+pub fun lex/is-white(l: lex): bool
   match l
     LexWhite -> True
     LexComment -> True
     _ -> False
 
 // 'True' when the lexical token is exactly LexWhite
-pub fun lexeme/is-whitespace(l: lexeme): <> bool
+pub fun lexeme/is-whitespace(l: lexeme): bool
   l.lex.is-whitespace
 
 // 'True' when the lexical token is exactly LexWhite
-pub fun lex/is-whitespace(l: lex): <> bool
+pub fun lex/is-whitespace(l: lex): bool
   match l
     LexWhite(_) -> True
     _ -> False
 
 // Returns 'True' if the lexical tokens of the lexeme are of the same kind. (i.e. Constructor)
-pub fun same-lexeme(Lexeme(_, lex1): lexeme, Lexeme(_, lex2): lexeme): <> bool
+pub fun same-lexeme(Lexeme(_, lex1): lexeme, Lexeme(_, lex2): lexeme): bool
   match (lex1, lex2)
     (LexKeyword(n1, _), LexKeyword(n2, _)) -> n1 == n2 
     (LexSpecial(n1), LexSpecial(n2)) -> n1 == n2
     _ -> lex1.from-enum == lex2.from-enum
 
-pub fun from-enum(l: lex): <> int
+pub fun from-enum(l: lex): int
   match l
     LexInt -> 0
     LexFloat -> 1
@@ -102,15 +106,15 @@ pub fun from-enum(l: lex): <> int
     LexCons -> 17
     LexTypedId -> 18
 
-pub fun lexeme/show(Lexeme(rng, lex): lexeme): <> string
+pub fun lexeme/show(Lexeme(rng, lex): lexeme): string
   rng.show-full-range("".path) ++ ": " ++ lex.show
 
-pub fun lex/show(l: lex): <> string
+pub fun lex/show(l: lex): string
   match l
     LexInt(_, s) -> s
     LexFloat(_, s) -> s
     LexChar(c) -> c.show
-    LexString(s) -> s.show
+    LexString(s) -> s
     LexId(n) -> "identifier \"" ++ n.show ++ "\""
     LexOp(n) -> "operator \"" ++ n.show ++ "\""
     LexPrefix(n) -> "prefix operator \"" ++ n.show ++ "\""
@@ -128,46 +132,46 @@ pub fun lex/show(l: lex): <> string
     LexCons(n) -> "constructor \"" ++ n.show ++ "\""
     LexTypedId(n, tp) -> "typedid " ++ n.show ++ ":" ++ tp
 
-fun is-lcurly(l: lex): bool
+pub fun is-lcurly(l: lex): bool
   match l
     LexInsLCurly -> True
     LexSpecial("{") -> True
     _ -> False
 
-fun is-rcurly(l: lex): bool
+pub fun is-rcurly(l: lex): bool
   match l
     LexInsRCurly -> True
     LexSpecial("}") -> True
     _ -> False
 
-fun is-rparen(l: lex): bool
+pub fun is-rparen(l: lex): bool
   match l
     LexSpecial(")") -> True
     _ -> False
 
-fun is-lparen(l: lex): bool
+pub fun is-lparen(l: lex): bool
   match l
     LexSpecial("(") -> True
     _ -> False
 
-fun is-rangle(l: lex): bool
+pub fun is-rangle(l: lex): bool
   match l
     LexSpecial(">") -> True
     LexOp(nm) | nm.show-plain == ">" -> True
     _ -> False
 
-fun is-langle(l: lex): bool
+pub fun is-langle(l: lex): bool
   match l
     LexSpecial("<") -> True
     LexOp(nm) | nm.show-plain == "<" -> True
     _ -> False
 
-fun is-rbracket(l: lex): bool
+pub fun is-rbracket(l: lex): bool
   match l
     LexSpecial("]") -> True
     _ -> False
 
-fun is-lbracket(l: lex): bool
+pub fun is-lbracket(l: lex): bool
   match l
     LexSpecial("[") -> True
     _ -> False
@@ -211,14 +215,15 @@ pub fun is-semicolon(l: lexeme): bool
     _ -> False
 
 // Lexical Imports
-struct lex-import
+pub struct lex-import
   name: name
   imp-alias: name
   vis: visibility
   is-open: bool
+  name-range: range
 
 fun lex-import/show(Lex-import(nm, al, vis, open): lex-import): string
-  if vis.is-public then "pub " else "" ++
+  (if vis.is-public then "pub " else "") ++
   (if open then "@open" else "") ++
   (if al.is-nil then "" else al.show ++ " = ") ++
   nm.show
@@ -233,12 +238,13 @@ fun lex-import-nub(l: list<lex-import>): list<lex-import>
     Cons(li, lis) ->
       match lis.find(fn(i2) li == i2)
         Just(li') -> 
-          val li2 = 
+          val li2 =
             Lex-import(
-              li.name, 
+              li.name,
               if li.imp-alias.is-nil then li'.imp-alias else li.imp-alias,
               if li.vis.is-public || li'.vis.is-public then Public else Private,
-              li.is-open || li'.is-open
+              li.is-open || li'.is-open,
+              li.name-range
             )
           Cons(li2, lis.delete(li).pretend-decreasing.lex-import-nub)
         Nothing -> Cons(li, lis.pretend-decreasing.lex-import-nub)

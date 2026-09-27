@@ -1,0 +1,7 @@
+test/algeff/wrong/mask1@kk(13,29): type error: types do not match (due to an infinite type)
+ context : mask<reader<int>>(ask()
+ term : ask()
+ inferred effect: <reader<() -> _e int>|_e1>
+ expected effect: _e
+ because : inject expects a parameter-less function argument
+ hint : give a type to the function definition?

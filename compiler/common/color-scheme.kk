@@ -5,9 +5,9 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //---------------------------------------------------------------------------
-// Updated as of 7/23/24: Commit b603946
-
-import compiler/lib/printer
+// Updated as of 7/12/25: Commit 0c7d513
+module compiler/common/color-scheme
+import std/pretty/printer
 import std/core/undiv
 
 // ----------------------------
@@ -19,39 +19,38 @@ import std/core/undiv
 // ----------------------------
 
 // Color scheme for the interpreter
-effect colorSchemeEffect
-  val colors: colorScheme;
+pub effect val colors: colorScheme;
 
-fun color-scheme-default(f)
+pub fun color-scheme-default(f)
   handle(f)
     val colors = ColorScheme()
 
-struct colorScheme
-  colorInterpreter: color = DarkRed
+pub struct colorScheme
+  colorInterpreter: color = DarkGreen
   colorType: color = DarkCyan
   colorParameter: color = DarkGray
   colorKind: color = ColorDefault
-  colorMarker: color = colorInterpreter
+  colorMarker: color = Red
   colorError: color = Red
-  colorWarning: color = colorError
+  colorWarning: color = DarkYellow
   colorSource: color = ColorDefault
-  colorCommand: color = Red
+  colorCommand: color = Green
   colorKeyword: color = DarkYellow
   colorEffect: color = colorType
-  colorRange: color = colorInterpreter
+  colorRange: color = DarkCyan
   colorSep: color = ColorDefault
   // syntax coloring
   colorComment: color = DarkGreen
   colorReserved: color = DarkYellow
   colorReservedOp: color = ColorDefault
   colorSpecial: color = ColorDefault
-  colorString: color = DarkRed
+  colorString: color = Cyan
   colorNumber: color = ColorDefault 
   colorModule: color = DarkCyan
-  colorCons: color = DarkGreen
+  colorCons: color = Yellow
   colorTypeCon: color = colorType
   colorTypeVar: color = colorType
-  colorTypeKeyword: color = Cyan
+  colorTypeKeyword: color = Blue
   colorTypeKeywordOp: color = colorType
   colorTypeSpecial: color = colorType
   colorTypeParam: color = colorParameter
@@ -59,7 +58,7 @@ struct colorScheme
   colorImplicitParameter: color = Gray
   colorImplicitExpr: color = colorSource
 
-fun cs/(==)(c1: colorScheme, c2: colorScheme): bool
+pub fun cs/(==)(c1: colorScheme, c2: colorScheme): bool
   c1.colorInterpreter == c2.colorInterpreter && c1.colorType == c2.colorType && c1.colorParameter == c2.colorParameter && c1.colorKind == c2.colorKind && c1.colorMarker == c2.colorMarker 
   && c1.colorError == c2.colorError && c1.colorWarning == c2.colorWarning && c1.colorSource == c2.colorSource && c1.colorCommand == c2.colorCommand && c1.colorKeyword == c2.colorKeyword 
   && c1.colorEffect == c2.colorEffect && c1.colorRange == c2.colorRange && c1.colorSep == c2.colorSep 
@@ -69,24 +68,29 @@ fun cs/(==)(c1: colorScheme, c2: colorScheme): bool
   && c1.colorTypeSpecial == c2.colorTypeSpecial && c1.colorTypeParam == c2.colorTypeParam 
   && c1.colorNameQual == c2.colorNameQual && c1.colorImplicitParameter == c2.colorImplicitParameter && c1.colorImplicitExpr == c2.colorImplicitExpr
 
-val light-color-scheme = ColorScheme(
+pub val dark-color-scheme = ColorScheme()
+pub val light-color-scheme = ColorScheme(
   colorNumber = DarkGray,
-  colorSource = DarkGray,
+  colorSource = ColorDefault,
   colorCommand = Black,
-  colorInterpreter = DarkRed,
-  colorError = DarkRed,
-  colorWarning = DarkRed,
+  colorSep = ColorDefault,
+  colorSpecial = ColorDefault,
+//  colorInterpreter = Black,
+  colorError = Red,
+  colorWarning = DarkYellow,
   colorNameQual = DarkGray,
   colorRange = DarkRed,
   colorMarker = DarkRed,
-  colorString = Red
+  colorString = DarkRed
 )
 
+pub val color-themes = [("dark", dark-color-scheme), ("light", light-color-scheme)]
+
 // Replace "default" with an explicit color value
-fun color/default(c: color, clr: color): color
+pub fun color/default(c: color, clr: color): color
   if clr == ColorDefault then c else clr
 
-fun scheme/default(cs: colorScheme, clr: color): colorScheme
+pub fun scheme/default(cs: colorScheme, clr: color): colorScheme
   cs(
     colorType = color/default(cs.colorType, clr),
     colorParameter = color/default(cs.colorParameter, clr),
@@ -121,9 +125,9 @@ fun scheme/default(cs: colorScheme, clr: color): colorScheme
     colorImplicitExpr = color/default(cs.colorImplicitExpr, clr)
   )
 
-val empty = make-color-scheme(ColorDefault)
+pub val empty = make-color-scheme(ColorDefault)
 
-fun make-color-scheme(clr: color)
+pub fun make-color-scheme(clr: color)
   ColorScheme(clr, clr, clr, clr, clr, clr, clr, clr, clr, clr, clr, clr, clr, clr,
     clr, clr, clr, clr, clr, clr, clr, clr, clr, clr, clr, clr, clr, clr, clr, clr)
 
@@ -131,7 +135,7 @@ fun make-color-scheme(clr: color)
 // Read colors
 // ----------------------------
 // Read a comma separated list of name=color pairs.
-fun read-color-flags(scheme: colorScheme, s: string)
+pub fun read-color-flags(scheme: colorScheme, s: string)
   fun split(xs: list<char>): list<string>
     val (pre, ys) = xs.span(fn(c) c != ',' && c != ';')
     match ys
@@ -143,11 +147,14 @@ fun read-color-flags(scheme: colorScheme, s: string)
   s.list.split.foldl(scheme, fn(sc, s') sc.read-color-flag(s'))
 
 // Read a name=color flag.
-fun read-color-flag(scheme: colorScheme, s: string)
+pub fun read-color-flag(scheme: colorScheme, s: string)
   val (name, xs) = s.list.span(fn(c) c != '=' && c != ':')
   match xs
     Cons(c, clr) | c == '=' || c == ':' -> scheme.update(name.string, clr.string)
-    _ -> scheme.update(name.string, "default")
+    _ -> 
+      match color-themes.find(fn((n,_)) n == name.string)
+        Just((_, theme)) -> theme
+        _ -> scheme.update(name.string, "default")
 
 fun update(scheme: colorScheme, name: string, color: string)
   val clr = match color
@@ -184,7 +191,7 @@ fun update(scheme: colorScheme, name: string, color: string)
     "darkgray" -> DarkGray
     _ -> ColorDefault
   match name.trim.to-lower
-    "type" -> scheme(colorType=clr, colorTypeCon=clr, colorTypeKeyword=clr, colorEffect=clr)
+    "type" -> scheme(colorType=clr, colorTypeCon=clr, colorTypeVar=clr, colorTypeKeyword=clr, colorEffect=clr)
     "kind" -> scheme(colorKind=clr)
     "marker" -> scheme(colorMarker=clr)
     "warning" -> scheme(colorWarning=clr)
@@ -192,7 +199,7 @@ fun update(scheme: colorScheme, name: string, color: string)
     "source" -> scheme(colorSource=clr)
     "interpreter" -> scheme(colorInterpreter=clr)
     "command" -> scheme(colorCommand=clr)
-    "keyword" -> scheme(colorKeyword=clr)
+    "keyword" -> scheme(colorKeyword=clr, colorTypeKeyword=clr)
     "typecon" -> scheme(colorTypeCon=clr)
     "typevar" -> scheme(colorTypeVar=clr)
     "typekeyword" -> scheme(colorTypeKeyword=clr)

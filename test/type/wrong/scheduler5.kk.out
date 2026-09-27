@@ -1,0 +1,5 @@
+test/type/wrong/scheduler5@kk(40, 9): type error: effects do not match
+ context : spawn(f)
+ term : f
+ inferred effect: <pure,process,st<global>|$e>
+ expected effect: <pure,alloc<global>,process,read<global>,write<global>,exn>
