@@ -12,8 +12,10 @@ module compiler/lsp/stdio
 import std/async
 import std/async/internal
 
+// libuv as std/async's event loop links it (lib/std/async/api/uv/evloop.kk):
+// from vcpkg, so a machine without a system libuv still builds this module
 extern import
-  c { library="uv" }
+  c { vcpkg="libuv"; library="uv" }
 
 extern import
   c file "stdio-inline.c"
