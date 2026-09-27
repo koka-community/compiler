@@ -405,11 +405,11 @@ fun check-file-ex(fl: flags, fnames: list<string>, isEntry: bool,
   // no `comp-flags`, and one `exn` where this row wants two.
   fun compile-source(src: path, nm: name, mods: bmodules): <io,pure,colors,comp-error,comp-flags,vfs-lookup,log,emit> bmodule
     compile-module(fl, src, odir / nm.module-name-to-path.path, False, mods, Just(nm))
-  // Stage 3, increment 1: discover the source import graph up front, each
-  // wave's files parsed in PARALLEL (std/os/task). The entry was parsed
-  // above, so shared lazy state is already warmed on the main thread (see
-  // scripts/partask-probe.kk rule 3). The sequential walk below then reuses
-  // these scans instead of re-parsing every source for its imports.
+  // Discover the source import graph up front; the walk below reuses these
+  // scans instead of re-parsing every source for its imports. The entry was
+  // parsed above, on this thread, so lazy global state (the lexer tables above
+  // all) is initialised before any worker thread can touch it: two threads
+  // touching a lazy global first at the same time crash.
   // ONE discovery over the union of every root's imports, so a shared
   // dependency (std, or a helper both tests import) is scanned once.
   // Canonical names, as every other module's imports are: a relative import

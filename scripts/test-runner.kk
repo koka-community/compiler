@@ -804,8 +804,7 @@ pub fun main()
   //
   // A warm-up is still needed: `precompile` shells out, so it warms the build
   // DIRECTORY but none of THIS process's lazy state, and concurrent
-  // first-touch of that (the lexer tables above all) is a crash this project
-  // has already paid for once (scripts/partask-probe.kk rule 3).
+  // first-touch of that (the lexer tables above all) crashes.
   val results = if subprocess-mode()
                   then run-chunks(bin, common, chunks(max(1, min(jobs(), tests.length)), tests)
                                                 .filter(fn(c) !c.is-nil)).concat
