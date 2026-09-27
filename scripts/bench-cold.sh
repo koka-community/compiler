@@ -11,7 +11,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 BIN=${BIN:-$(ls -t .koka/v3.2.7/clang-*/compiler_main_driver__main 2>/dev/null | head -1)}
-MOD=${MOD:-compiler/compile/schedule.kk}
+MOD=${MOD:-compiler/lib/scc.kk}
 N=${N:-3}
 for i in $(seq 1 "$N"); do
   rm -rf /tmp/bench_cold

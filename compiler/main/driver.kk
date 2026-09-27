@@ -18,7 +18,6 @@ import std/os/process
 import std/core/undiv
 import std/async
 import std/async/thread
-import compiler/compile/schedule
 import compiler/compile/phase
 import compiler/common/syntax
 import compiler/common/name

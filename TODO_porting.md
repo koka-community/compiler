@@ -922,7 +922,7 @@ misses are almost all naming differences, verified individually below.
 Reliability signal: **83 of 135 port `.kk` files carry a `// Ported as of` / `// Updated as of
 ... Commit <hash>` header**. The 52 without one are almost entirely the code we wrote
 DIFFERENTLY from upstream rather than ported line-by-line -- all of `lsp/`, plus
-`compile/{orchestrate,rpc,vfs,build-context,schedule,progress,registry}`, `interpreter/`,
+`compile/{orchestrate,rpc,vfs,build-context,progress,registry}`, `interpreter/`,
 `lib/log`, `main/driver`. Those are the files where "does it match upstream?" is not even the
 right question; the parity risk there is behavioural, not textual.
 

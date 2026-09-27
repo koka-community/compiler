@@ -46,7 +46,6 @@ import std/data/rb-set
 import compiler/common/name-collections
 import std/async
 import std/async/thread
-import compiler/compile/schedule
 import compiler/common/name-prim
 import compiler/common/color-scheme
 import compiler/common/unique
@@ -511,7 +510,7 @@ fun dep-tlog(nm: name, t0: int): _ ()
 // the compiler's own 97-module graph, discovery is 312ms against 18.6s of
 // load-modules -- 1.6% of the build -- so concurrency here buys nothing even
 // when it works. The parallelism worth having is per-module compilation
-// (increment 2b); see compile/schedule for the wave structure that enables it.
+// (increment 2b).
 //
 // A file that fails to parse contributes no edges here -- the build walk will
 // compile it and report the error with full diagnostics.
@@ -863,8 +862,7 @@ pub fun preload-ifaces(fl: flags, out-dir: path, source-dirs: module-dirs,
     // pre-loading nothing keeps this pass out of that path entirely
     val adj = entries.filter-map fn((nm, _, ds))
       if cands.any(fn(c) c == nm) then Just((nm, ds.filter(fn(d) cands.any(fn(c) c == d)))) else Nothing
-    val (_, cyclic) = build-waves(adj)
-    if !cyclic.is-nil then have0
+    if !import-cycles(adj).is-nil then have0
     else load-unordered(fl, out-dir, cands, have0)
 
 // Load every candidate interface concurrently, in no particular order. An
@@ -1213,6 +1211,19 @@ pub fun build-order(mods: bmodules, roots: list<name>): _ list<(name, bmodule)>
   val deps = closure.map fn((nm, m))
     (nm, m.bmod/core.imports.map(fn(i) i.importName).filter(fn(d) rb-set/member(inClosure, d) && mods.contains-key(d)))
   scc(deps).concat.filter-map(fn(nm) mods.lookup(nm).map(fn(m) (nm, m)))
+
+// The import cycles in `deps` (module, its direct imports), one list of
+// modules per cycle: upstream `toBuildOrder` reports every strongly connected
+// component with more than one module as "recursive imports". A module that
+// imports itself is a cycle as well, which upstream does not catch. Imports of
+// modules outside `deps` (interface-only) cannot close a cycle and are ignored.
+pub fun import-cycles(deps: list<(name, list<name>)>): div list<list<name>>
+  val keys = deps.foldl(names/empty) fn(s, (nm, _)) s + nm
+  val adj = deps.map(fn((nm, ds)) (nm, ds.filter(fn(d) rb-set/member(keys, d))))
+  scc(adj).filter fn(grp)
+    match grp
+      [nm] -> adj.any(fn((k, ds)) k == nm && ds.any(fn(d) d == nm))
+      _ -> True
 
 // upstream `codeGen`'s `eimports`: the `library` declarations of a module and
 // of its direct imports (`bcore : importcores`)

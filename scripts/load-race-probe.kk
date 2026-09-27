@@ -28,7 +28,6 @@ import compiler/core/core
 import compiler/type/type
 import compiler/compile/options
 import compiler/lib/log
-import compiler/compile/schedule
 import compiler/syntax/parse
 import compiler/syntax/syntax
 import compiler/common/parse

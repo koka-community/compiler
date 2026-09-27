@@ -5,7 +5,7 @@
 # importing only std/* modules, which resolve from interfaces (.kki) and never
 # exercise source-module discovery or the multi-module build walk. A segfault
 # in the dependency-discovery pre-pass sat behind a fully green 420/17/1 sweep
-# because of exactly that gap. Any change to compile/build.kk, compile/schedule.kk
+# because of exactly that gap. Any change to compile/build.kk, compile/orchestrate.kk
 # or the driver's module walk must pass this as well as the sweep.
 #
 #   scripts/multimodule-gate.sh          # fast: two multi-module targets
@@ -37,7 +37,7 @@ FLAGS="-c -v0 --console=raw -O2 --buildtag=mmgate --target=c --include=."
 
 # Increasing dependency depth. build.kk alone pulls in most of the front end,
 # so both defaults exercise real source-module discovery and the build walk.
-TARGETS="compiler/compile/schedule.kk compiler/compile/build.kk"
+TARGETS="compiler/lib/scc.kk compiler/compile/build.kk"
 # The whole compiler, the widest graph there is. Opt-in -- expensive on a cold
 # cache.
 if [ "${1:-}" = "--full" ]; then

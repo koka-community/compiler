@@ -22,7 +22,6 @@ import std/os/env
 import std/core/undiv
 import std/async
 import std/async/thread
-import compiler/compile/schedule
 import compiler/compile/phase
 import compiler/common/syntax
 import compiler/common/name
@@ -240,7 +239,7 @@ pub type orch-reply
 // backtrace: `kk_os_read_text_file` <- `compile_module` <-
 // `kk_xchan_async_cb` <- `uv__async_io`, all on one thread -- reentrancy,
 // not cross-thread corruption). `visited` breaks cycles (already reported
-// by the `build-waves` cycle check above `todo0`; treat as ready here so a
+// by the `import-cycles` check above `todo0`; treat as ready here so a
 // cyclic pending item doesn't get re-derived forever).
 pub fun transitively-ready(nm: name, dcache: dep-cache, have: bmodules, stale: list<name>, failed: list<name>, source-dirs: module-dirs, visited: list<name>): _ bool
   if have.contains-key(nm) then True
@@ -349,11 +348,11 @@ pub fun compile-graph-rpc(fl: flags, out-dir: path, search-dirs: list<path>,
                       decisions: maybe<name-map<rebuild-decision>> = Nothing
                      ): <io,async,comp-error,parse-error,vfs-lookup,log|e> (bmodules, list<(name, mod-outcome)>)
   val adj = dcache.list.map(fn((nm, (_, _, ds, _))) (nm, ds.map(fst)))
-  val (_, cyclic) = build-waves(adj)   // reused ONLY for its cycle detection
-  if !cyclic.is-nil then
+  val cycle = import-cycles(adj).head.default([])
+  if !cycle.is-nil then
     (rb-map/empty(),
-     [(cyclic.head.default(name/nil),
-       Mod-outcome(Left("recursive imports: " ++ cyclic.map(show-plain).join(" -> ")), []))])
+     [(cycle.head.default(name/nil),
+       Mod-outcome(Left("recursive imports: " ++ cycle.map(show-plain).join(" -> ")), []))])
   else
     val todo0 = stale-set.filter-map fn(nm)
       match dcache.lookup(nm)
