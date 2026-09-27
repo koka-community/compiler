@@ -10,7 +10,7 @@
 #   ./scripts/build-driver.sh --cold   # everything cold
 #   ./scripts/build-driver.sh --port   # INCREMENTAL build with the PINNED port binary (stage 1 -> stage 2)
 #   ./scripts/build-driver.sh --cold-port # same, but start from scratch (baseline only)
-#   ./scripts/build-driver.sh --pin    # pin the driver just built as the bootstrap
+#   ./scripts/build-driver.sh --pin [bin] # pin <bin>, or the newest built driver, as the bootstrap
 #   ./scripts/build-driver.sh --guard  # drop artifacts written by a different compiler
 #
 # std-warm works because build artifacts are prefix-separated: std_* vs compiler_*.
@@ -48,9 +48,19 @@ INC="-i$ROOT"
 
 case "${1:-}" in
   --pin)
-    built=$(ls -t "$ROOT"/.koka/v3.2.7/clang-*/compiler_main_driver__main 2>/dev/null | head -1)
-    [ -n "$built" ] || { echo "[build-driver] no driver binary to pin" >&2; exit 1; }
+    # Pins an EXISTING binary, never builds one: the given path, else the most
+    # recently built driver, from a port build (.koka/v3.2.7-bootstrap) or a
+    # reference build (.koka/v3.2.7) alike.
+    built=${2:-$(ls -t "$ROOT"/.koka/v3.2.7-bootstrap/clang-*/compiler_main_driver__main \
+                        "$ROOT"/.koka/v3.2.7/clang-*/compiler_main_driver__main 2>/dev/null | head -1)}
+    [ -n "$built" ] && [ -x "$built" ] || { echo "[build-driver] no driver binary to pin" >&2; exit 1; }
     mkdir -p "$(dirname "$BOOTSTRAP")"
+    if [ -e "$BOOTSTRAP" ]; then
+      cp -p "$BOOTSTRAP" "$BOOTSTRAP.$(date -r "$BOOTSTRAP" +%Y-%m-%d-%H%M)"
+      # A copy OVER an executable keeps its inode, and macOS then kills the new
+      # binary on launch (code-signature cache mismatch, exit 137): remove first.
+      rm "$BOOTSTRAP"
+    fi
     cp "$built" "$BOOTSTRAP"
     echo "[build-driver] pinned $built"
     echo "[build-driver]     as $BOOTSTRAP"
