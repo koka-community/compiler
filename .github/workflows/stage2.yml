@@ -1,6 +1,6 @@
 # Build the self-hosted compiler for people to try: stage 1 is compiled by the
-# reference (Haskell) compiler from TimWhiting/koka `dev-compiler` -- the branch
-# that carries every fix the port needs, ahead of upstream -- and stage 2 is the
+# reference (Haskell) compiler from TimWhiting/koka `dev-compiler2` -- the
+# branch that carries every fix the port needs, ahead of upstream -- and stage 2 is the
 # port compiled by stage 1. Stage 2 is what ships.
 #
 # A release is a directory `koka-port-<os>-<arch>/` holding `bin/koka`, `lib`
@@ -16,7 +16,7 @@ on:
     inputs:
       koka-ref:
         description: "TimWhiting/koka ref for the reference compiler"
-        default: dev-compiler
+        default: dev-compiler2
   push:
     tags:
       - 'v*'
@@ -30,7 +30,7 @@ permissions:
 
 env:
   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
-  KOKA_REF: ${{ github.event.inputs.koka-ref || 'dev-compiler' }}
+  KOKA_REF: ${{ github.event.inputs.koka-ref || 'dev-compiler2' }}
 
 jobs:
   build:
@@ -49,7 +49,7 @@ jobs:
 
     steps:
       - name: Checkout the port
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: false
 
@@ -60,7 +60,7 @@ jobs:
           git submodule update --init --recursive
 
       - name: Checkout the reference compiler
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: TimWhiting/koka
           ref: ${{ env.KOKA_REF }}
@@ -69,7 +69,7 @@ jobs:
 
       # vcpkg binary cache: https://learn.microsoft.com/en-us/vcpkg/consume/binary-caching-github-actions-cache
       - name: Setup vcpkg cache
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
@@ -92,6 +92,9 @@ jobs:
         with:
           working-directory: koka-ref
           test: false
+          # replaces the action's default `--pedantic`, which makes every GHC
+          # warning an error; the reference compiler is not warning-clean
+          stack-build-arguments: "--no-haddock"
           cache-save-always: true
 
       # stage 1: the reference compiler builds the port (what `./koka` does)
@@ -139,7 +142,7 @@ jobs:
           echo "packaged stage 2 compiles and runs programs"
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ env.DIST }}
           path: dist/${{ env.DIST }}.tar.gz
@@ -150,7 +153,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           path: dist
           merge-multiple: true
