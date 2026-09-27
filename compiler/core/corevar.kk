@@ -130,10 +130,24 @@ pub fun expr/(|->)(sub: list<(tName, expr)>, ex: expr): _ expr
     Con -> ex
     ELit -> ex
     Let(dgs, e) ->
-      val defnames = dgs.flatten.map(def-name)
-      val sub' = sub.filter(fn((nm, _)) !defnames.any(_ == nm.get-name))
-      Let(sub' |-> dgs, sub' |-> e)
+      val (dgs', sub') = subst-def-groups(sub, dgs)
+      Let(dgs', sub' |-> e)
     Case(exprs, bs) -> Case(sub |-> exprs, sub |-> bs)
+
+// Substitute into a let's definition groups in order: a group that binds a name
+// shadows it for the groups after it and for the body, so the substitution stops
+// there. Names are not always unique (a fresh name can coincide with a binder
+// minted by another counter), and substituting past a rebinding captures its
+// occurrences. Returns the substitution left for the body.
+fun subst-def-groups(sub: list<(tName, expr)>, dgs: list<def-group>): _ (list<def-group>, list<(tName, expr)>)
+  match dgs
+    Nil -> (Nil, sub)
+    Cons(dg, rest) ->
+      val dg' = sub.dg/(|->)(dg)
+      val names = [dg].flatten.map(def-name)
+      val sub1 = sub.filter(fn((nm, _)) !names.any(_ == nm.get-name))
+      val (rest', sub2) = subst-def-groups(sub1, rest)
+      (Cons(dg', rest'), sub2)
 
 pub noinline fun branch/(|->)(sub: list<(tName, expr)>, Branch(patts, guards): branch): _ branch
   val bvpat = patts.map(bound-vars).unions

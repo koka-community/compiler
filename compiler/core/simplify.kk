@@ -184,31 +184,40 @@ fun top-down-let(sub: list<(tName, expr)>, acc: list<def-group>, dgs0: list<def-
             top-down-let(sub, acc, uniqDgs ++ [DefNonRec(def(defExpr = uniqBody))] ++ dgs, body)
           _ -> failure/fail("core/simplify top-down-let: uniquefy changed let shape")
     Cons(dg, dgs) ->
-      val sdg = sub.dg/(|->)(dg)
+      // the names `dg` binds shadow the substitution for the rest of the let
+      // (and a recursive group's own right-hand sides): names are not always
+      // unique, as a fresh name can coincide with a binder minted by another
+      // counter, and substituting through the rebinding would capture its
+      // occurrences
+      val bound = dg.dg/bound-vars
+      val sub1 = sub.filter(fn((nm, _)) !bound.member(nm))
+      val sdg = match dg
+        DefRec -> sub1.dg/(|->)(dg)
+        _ -> sub.dg/(|->)(dg)
       match sdg
         DefRec([def]) ->
           if occurs-not(def.def-name, Let(dgs, body)) then
-            top-down-let(sub, acc, dgs, body) // dead definition
+            top-down-let(sub1, acc, dgs, body) // dead definition
           else
-            top-down-let(sub, Cons(sdg, acc), dgs, body) // don't inline recursive ones
+            top-down-let(sub1, Cons(sdg, acc), dgs, body) // don't inline recursive ones
         DefRec(_) ->
-          top-down-let(sub, Cons(sdg, acc), dgs, body) // don't inline recursive ones
+          top-down-let(sub1, Cons(sdg, acc), dgs, body) // don't inline recursive ones
         DefNonRec(Def(x, tp, se)) ->
           if !se.is-total then
             // cannot inline effectful expressions
-            top-down-let(sub, Cons(sdg, acc), dgs, body)
+            top-down-let(sub1, Cons(sdg, acc), dgs, body)
           else
             val maxSmallOccur = simp-env.dup-max // should be 10 or higher to inline partial bind applications
             val size = se.size-of-expr
             fun inline-expr()
-              top-down-let(Cons((TName(x, tp), se), sub), acc, dgs.pretend-decreasing, body)
+              top-down-let(Cons((TName(x, tp), se), sub1), acc, dgs.pretend-decreasing, body)
             match occurrences-of(x, Let(dgs, body))
-              Occur(0, _, _, 0) -> top-down-let(sub, acc, dgs, body) // no occurrence
+              Occur(0, _, _, 0) -> top-down-let(sub1, acc, dgs, body) // no occurrence
               Occur(acnt, _, _, vcnt) | vcnt + acnt == 1 -> inline-expr() // occurs once: inline
               Occur(acnt, _, _, vcnt) | (acnt + vcnt * 3) * size <= maxSmallOccur -> inline-expr()
               Occur(0, _, _, vcnt) | vcnt * size <= maxSmallOccur -> inline-expr()
               Many(n) | n * size <= maxSmallOccur -> inline-expr()
-              _ -> top-down-let(sub, Cons(sdg, acc), dgs, body)
+              _ -> top-down-let(sub1, Cons(sdg, acc), dgs, body)
 
 // bind non-atomic expressions to fresh names
 fun bind-exprs(exprs: list<expr>): simp-eff (expr -> pure expr, list<expr>)
