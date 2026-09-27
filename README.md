@@ -111,11 +111,7 @@ cd ../my-package
 ../compiler/.koka/bootstrap/driver -i. -c --output=.koka/bin/my-app src/main.kk
 ```
 
-- Build with `-c --output=<file>` and run the binary: `-e` exits 0 even when the program fails.
-- Write `--output=<file>`, not `-o <file>`; the directory must exist.
-- Pass include paths (`-i`) as absolute paths or paths inside the current directory.
-- Compile from the package root, so module names come from the include root rather than the file's path.
-- If a C compile fails (for example after an Xcode update, until `sudo xcodebuild -license accept` is run), the driver still reports `created` and later builds relink stale objects; delete `.koka/v3.2.7` and rebuild.
+- The directory of `--output=<file>` (or `-o <file>`) must already exist.
 - Constructors larger than 128 words (roughly 100+ fields) crash when allocated: `kk_block_alloc_at` always uses mimalloc's small-object path.
 
 ## Running the unit tests
