@@ -110,7 +110,8 @@ jobs:
           REF=$(cd koka-ref && stack exec which koka)
           "$REF" --version
           "$REF" --sharedir="$PWD" -i"$PWD" -O2 -c compiler/main/driver.kk
-          STAGE1=$(ls -t .koka/v*/*-release-*/compiler_main_driver__main | head -1)
+          # the reference compiler names an -O2 build `<cc>-drelease-<hash>`
+          STAGE1=$(ls -t .koka/v*/*release-*/compiler_main_driver__main | head -1)
           test -x "$STAGE1"
           echo "STAGE1=$PWD/$STAGE1" >> "$GITHUB_ENV"
 
@@ -118,7 +119,7 @@ jobs:
       - name: Stage 2
         run: |
           "$STAGE1" -i"$PWD" -O2 -c --buildtag=bootstrap compiler/main/driver.kk
-          STAGE2=$(ls -t .koka/v*-bootstrap/*-release-*/compiler_main_driver__main | head -1)
+          STAGE2=$(ls -t .koka/v*-bootstrap/*release-*/compiler_main_driver__main | head -1)
           test -x "$STAGE2"
           echo "STAGE2=$PWD/$STAGE2" >> "$GITHUB_ENV"
 
