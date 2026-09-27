@@ -131,9 +131,13 @@ fun compile-entry(st: server-state, fpath: string, entry: string, extra: string)
     // compiled as a dependency of the synthetic module anyway, so checking it
     // separately first just to learn its name doubled the work.
     // `add-show = False`: an entry point is run for its effects, not to print
-    // its result (upstream passes `addShow = False` here too).
+    // its result.
+    // The entry is QUALIFIED with the file's module: `@open import` also brings
+    // in that module's own user imports, so a bare `main()` is ambiguous as soon
+    // as the file imports another module with a `main` (samples/all).
     match try({ val root = module-name-of(fl, p)
-                compile-expr(fl, sess0, entry' ++ "()", [root], "",
+                val qentry = if entry'.new-name.is-qualified then entry'.new-name else qualify(root, entry'.new-name)
+                compile-expr(fl, sess0, qentry.show-plain ++ "()", [root], "",
                              add-show = False, on-progress = report) })
       Error(exn) ->
         msgs := msgs ++ [ErrorMsg(exn.message.error-position(p), exn.message.strip-location.text, SevError, ErrGeneral)]
@@ -143,8 +147,11 @@ fun compile-entry(st: server-state, fpath: string, entry: string, extra: string)
   build-it()
   write-bytes(progress-end(token, if (!exe).is-just then "done" else "failed").frame)
   val items = msgs.map(to-diagnostic)
-  // republish this file's diagnostics so a failed run points at the reason
-  val st2 = match st.find-doc(p.path-to-uri)
+  // republish this file's diagnostics so a failed run points at the reason:
+  // the reply is only "null", so without them a failed build shows nothing
+  val uri = p.path-to-uri
+  write-bytes(publish-diagnostics(uri, items).frame)
+  val st2 = match st.find-doc(uri)
     Just(d) -> st.put-doc(d(diags = items))
     Nothing -> st
   match !exe
