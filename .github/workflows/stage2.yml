@@ -87,6 +87,13 @@ jobs:
             echo "VCPKG_ROOT=$RUNNER_TEMP/vcpkg" >> "$GITHUB_ENV"
           fi
 
+      # isocline (compiler/lib/isocline.kk) is in neither vcpkg nor conan: build
+      # the vendored copy into a prefix the compilers search
+      - name: Install isocline
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then sudo -E sh scripts/install-isocline.sh /usr/local
+          else sh scripts/install-isocline.sh; fi
+
       - name: Build the reference compiler
         uses: freckle/stack-action@v5
         with:
