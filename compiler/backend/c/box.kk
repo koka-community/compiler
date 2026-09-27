@@ -79,13 +79,12 @@ fun box-expr(tp: ktype, ex: expr)
     Lam(tparams, eff, body) ->
       // upstream: `bbody <- boxExpr (boxTypeOf body) body` -- the body is
       // boxed against ITS OWN natural type, not `tp` (the type expected for
-      // the WHOLE lambda, i.e. a function type). The port previously reused
-      // `tp` here, so every nested Case/branch inside a lambda body was
-      // boxed as if it needed to look like a FUNCTION -- e.g. mlift_*
-      // wrappers' yielding-branch got wrongly (CFun,CFun)-coerced into an
-      // eta-expanded closure adapter instead of staying the plain concrete
-      // (e.g. int) value it actually is, corrupting the whole def's C
-      // return-type derivation (`kk_function_t` instead of `kk_integer_t`).
+      // the WHOLE lambda, i.e. a function type). Boxed against `tp`, every
+      // nested Case/branch inside a lambda body is boxed as if it had to look
+      // like a FUNCTION -- e.g. an mlift_* wrapper's yielding branch is
+      // (CFun,CFun)-coerced into an eta-expanded closure adapter instead of
+      // staying the plain concrete (e.g. int) value it is, corrupting the
+      // def's C return-type derivation (`kk_function_t` for `kk_integer_t`).
       val fnTp = ex.box-typeof
       val bbody = box-expr(body.box-typeof, body)
       bcoerce(fnTp, tp, Lam(tparams, eff, bbody))
@@ -197,14 +196,13 @@ fun bcoerceX(fromTp: ktype, toTp: ktype, ex: expr)
     // coerce between function arguments/results
     (CFun(fromPars, fromRes), CFun(toPars, toRes)) ->
       // upstream: `not (all(==) && fromRes==toRes)` = wrap if EITHER params
-      // differ OR the result differs. The port previously had `!all(==) &&
-      // fromRes==toRes` (De Morgan's law transcription error): wrap only
-      // when params differ AND results match, so a call whose PARAM and
-      // RESULT representations both mismatch (e.g. std/core/hnd's
-      // @open-none1 called with a concrete-typed marker arg where its
-      // signature is `<a,b,e1,e2> (f: a->e1 b, x1: a) -> e2 b` -- x1 AND
-      // the result are both TVar-vs-concrete mismatches) silently skipped
-      // the coercion wrapper, leaking an unboxed value into a kk_box_t slot.
+      // differ OR the result differs. Mind the De Morgan: `!all(==) &&
+      // fromRes==toRes` would wrap only when params differ AND results match,
+      // so a call whose PARAM and RESULT representations both mismatch (e.g.
+      // std/core/hnd's @open-none1 called with a concrete-typed marker arg
+      // where its signature is `<a,b,e1,e2> (f: a->e1 b, x1: a) -> e2 b` -- x1
+      // AND the result are both TVar-vs-concrete mismatches) would skip the
+      // coercion wrapper and leak an unboxed value into a kk_box_t slot.
       if !(fromPars.zip(toPars).all(fn((t1, t2)) t1 == t2) && fromRes == toRes) then
         match toTp.split-fun-scheme
           Just((_, toParTps, toEffTp, toResTp)) ->

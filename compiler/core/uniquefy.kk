@@ -36,10 +36,10 @@ alias renaming = int-map<list<(name, name)>>
 // Bucket on a hash of the FULL stem instead. It must be case-INSENSITIVE:
 // name equality ignores case, so equal names have to land in the same bucket.
 fun nkey(n: name): int64
-  // `keyStem` is the same case-insensitive full-stem hash this used to compute
-  // here, but cached on the name at construction. Computing it per call meant a
-  // `to-lower` ALLOCATION plus a full rehash of the stem on every `uq-member`
-  // and `uq-add` -- and those are on the hot path of every uniquefy pass.
+  // `keyStem` is that case-insensitive full-stem hash, cached on the name at
+  // construction: computing it here would be a `to-lower` ALLOCATION plus a
+  // full rehash of the stem on every `uq-member` and `uq-add`, which are on the
+  // hot path of every uniquefy pass.
   ((n.keyStem.int64 * 33.int64 + n.hashLocalQual.int64) * 33.int64 + n.hashModule.int64)
 
 fun uq-member(l: locals, n: name): bool

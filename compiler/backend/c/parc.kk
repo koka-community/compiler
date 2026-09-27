@@ -368,7 +368,8 @@ fun parc-guard(scrutinees: list<tName>, pats: list<pattern>, live: tnameset, g: 
 //    every branch that uses one dups it, and exactly one branch runs;
 //
 //  * THE SCRUTINEE MUST STILL BE LIVE IN THE NESTED BRANCHES. A deferred dup
-//    runs later than it used to, so nothing in between may release the field.
+//    runs later than an immediate one would, so nothing in between may release
+//    the field.
 //    The one thing that would is the drop of the scrutinee the field belongs to:
 //    if the scrutinee dies at THIS guard, this guard drops it, and the drop is
 //    specialized to free exactly those children that were not dup'ed here --

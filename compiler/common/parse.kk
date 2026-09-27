@@ -66,8 +66,7 @@ pub linear effect token-parse
   fun get-lexemes_(): list<lexeme>
 
 // Context only -- it adds "When parsing X" to an error under
-// KOKA_PARSE_CONTEXT=1. It used to push a backtrack frame as well, which bought
-// nothing: it never rewinds.
+// KOKA_PARSE_CONTEXT=1. It pushes no backtrack frame: it never rewinds.
 inline fun parse-delimited(msg: string, f: () -> _ a): _ a
   with override
     final ctl parse-error(e, r)
@@ -233,10 +232,10 @@ pub fun parse-lexemes(src: source, lexemes0: list<lexeme>, tpl: target-platform,
           Just(u) -> far-unexp := Just(u)
           Nothing -> ()
         // Just CONS it. This fires on every failed token match -- 11.5M times in
-        // one warm build -- and it used to dedup by scanning the list with string
-        // compares and appending with `++ [lbl]`, which copies: 33M string
-        // compares and 11.5M list copies, O(k^2) in the alternatives tried at a
-        // position. Parsec does not dedup as it accumulates either; it merges
+        // one warm build -- and deduplicating here, by scanning the list with
+        // string compares and appending with `++ [lbl]` (which copies), measured
+        // 33M string compares and 11.5M list copies, O(k^2) in the alternatives
+        // tried at a position. Parsec does not dedup as it accumulates either; it merges
         // and only tidies up in `showErrorMessages`. So do the same and dedup
         // when the message is RENDERED, which happens at most once per parse.
         if lbl != "" then far-msgs := Cons(lbl, far-msgs)

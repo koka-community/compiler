@@ -105,14 +105,13 @@ fun build-env(env: env): _ maybe<env>
   val old = get-env()
   Just(env ++ old.filter(fn((k,_)) env.lookup(_ == k).is-nothing))
 
-// File modification time, in epoch seconds.
+// File modification time, in nanoseconds since the epoch.
 //
-// A direct `stat(2)`. This used to shell out (`sh -c 'stat -f %m ... || stat -c
-// %Y ...'`), which cost a fork+exec per query -- MEASURED AT 8ms EACH. That is
-// paid per module AND per dependency by `stale-p`, so a warm build spent
-// seconds doing nothing but asking the shell for timestamps. Cheap mtimes are
-// also what makes it viable to check interface freshness before deciding
-// whether a source needs scanning at all.
+// A direct `stat(2)`, not a shell `stat`: a fork+exec per query MEASURED AT
+// 8ms EACH, and the rebuild walk asks per module AND per dependency, so a warm
+// build would spend seconds doing nothing but asking the shell for timestamps.
+// Cheap mtimes are also what makes it viable to check interface freshness
+// before deciding whether a source needs scanning at all.
 //
 // A missing or unreadable file reports 0, which makes a missing artifact
 // infinitely stale without needing a special case at the call sites.

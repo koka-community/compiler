@@ -180,15 +180,11 @@ pub fun code-gen(fl: flags, nt: newtypes, brw: borrowed, mbMain: maybe<(name, bo
       // The .c is NOT compiled here. `compile-graph-rpc` dispatches it to a
       // dedicated clang pool the moment this module's compile returns, so the
       // front-end worker never blocks on `run-system-read` and can go straight
-      // back for its next module. (Doing it inline here DID overlap the phases
-      // -- first .o at 0.2s instead of 259.7s -- but cost the front end its
-      // worker: the front-end span stretched 258s -> 491s, and on a serial
-      // dependency chain a single worker just alternated front-end/clang,
-      // because a module is not announced ready until its compile RETURNS.)
-      //
-      // An older note here said per-module compilation was tried and reverted
-      // as slower; that measurement was under the WAVE scheduler, whose
-      // barrier no longer exists.
+      // back for its next module. (Compiling inline here overlaps the phases
+      // -- first .o at 0.2s instead of 259.7s -- but costs the front end its
+      // worker: measured, the front-end span stretched 258s -> 491s, since on a
+      // serial dependency chain a single worker alternates front-end/clang --
+      // a module is not announced ready until its compile RETURNS.)
       // Link an executable when there's a `main`
       // to run (a library module with no entry has nothing to link)
       match mbMain

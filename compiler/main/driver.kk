@@ -1,6 +1,6 @@
 // Command-line entry point: upstream Main/Run.hs plus Main/plain/Main.hs.
 //
-// Everything that used to live here has moved to where upstream keeps it:
+// The compiler itself lives where upstream keeps it:
 //   * per-module compilation  -> compile/build.kk        (Build.hs)
 //   * the build entry surface -> compile/build-context.kk (BuildContext.hs)
 //   * parallel orchestration  -> compile/orchestrate.kk   (PORT-SPECIFIC: upstream

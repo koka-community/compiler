@@ -2,10 +2,7 @@
 // pipeline (runs after Compile/TypeCheck, before code generation).
 // Pretty.Env parameters are tracing-only in this port and dropped.
 //
-// The pipeline runs unconditionally. The KOKA_NO_GEN_INLINE
-// / KOKA_NO_CTAIL / KOKA_NO_PRIM_INLINE env gates that used to bracket the
-// inline, ctail and primitive-inline passes were A/B bisection aids; they are
-// retired (see the comments at each pass) because an env var that silently
+// The pipeline runs unconditionally: an environment variable that silently
 // changes generated code has no place in a drop-in upstream replacement.
 module compiler/compile/optimize
 import std/os/env
@@ -87,7 +84,6 @@ pub fun core-optimize(fl: flags, nt: newtypes, gamma0: gamma, inls: inlines, cor
   opt-fp("01-unroll")
 
   // inline: inline local definitions more aggressively (2x)
-  // (A/B bisection aid retired: was `&& get-env-value("KOKA_NO_GEN_INLINE").is-nothing`)
   if fl.optInlineMax > 0 then
     val inlinesX = if primitiveModule then inls
                    else inls.inlines-filter(fn(nm) nameCoreHnd.qualifier != nm.qualifier)
@@ -117,7 +113,6 @@ pub fun core-optimize(fl: flags, nt: newtypes, gamma0: gamma, inls: inlines, cor
   // backend optimizations
 
   // tail-call-modulo-cons optimization (context paths are C-only upstream)
-  // (A/B bisection aid retired: was `&& get-env-value("KOKA_NO_CTAIL").is-nothing`)
   if fl.optctail then
     val isC = match fl.target
       C -> True
@@ -149,7 +144,6 @@ pub fun core-optimize(fl: flags, nt: newtypes, gamma0: gamma, inls: inlines, cor
   // branch std/core/hnd's `yield-bind` is written to expand into -- calling
   // it as an opaque external instead leaves the C codegen with no way to
   // give the wrapper a concrete (non-`kk_function_t`) return type.
-  // (A/B bisection aid retired: was gated on `get-env-value("KOKA_NO_PRIM_INLINE").is-nothing`)
   inline-defs(2 * fl.optInlineMax, inls.inlines-filter(is-primitive-name))
   opt-fp("08-prim-inline")
 

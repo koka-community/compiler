@@ -10,8 +10,8 @@
 // console highlighter installs one that writes ANSI colours, and this module
 // installs one that writes HTML spans.
 //
-// `removeComment` used to live here and is already ported into `lsp/pretty.kk`,
-// which is where the language server needs it.
+// Upstream's `removeComment` is in `lsp/pretty.kk` instead, which is where the
+// language server needs it.
 module compiler/syntax/colorize
 
 import std/core/undiv

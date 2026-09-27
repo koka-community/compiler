@@ -505,13 +505,13 @@ fun parse-var()
 // PROTOTYPE: dispatch on the next token instead of trying alternatives.
 //
 // `parse-choices-nb` installs a `final ctl parse-error` frame PER ALTERNATIVE
-// and every miss is an install / raise / unwind round trip -- a string literal
-// used to cost two of those (Int fails, Float fails, String matches). The token
+// and every miss is an install / raise / unwind round trip -- through them a
+// string literal costs two (Int fails, Float fails, String matches). The token
 // already says which alternative applies, so peek and go straight there. The
 // alternatives here are disjoint on the token, so this is not a heuristic.
 //
-// The `_` arm keeps the old path, so anything not covered behaves exactly as
-// before rather than turning into a new error.
+// The `_` arm falls back to trying the alternatives, so a token not covered
+// here parses, or fails, exactly as the general path decides.
 fun parse-lit()
   match peek().lex
     LexInt    -> LitInt(parse-integer().fst)

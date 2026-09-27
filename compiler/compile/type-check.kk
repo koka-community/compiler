@@ -84,12 +84,11 @@ pub fun type-check(fl: flags, defs: definitions, coreImports: list<core/core/kim
     infer-kinds(data/is-value, fl.tpl, importMap, defs.defs-kgamma, defs.defs-synonyms, defs.defs-newtypes)
 
   // initial gamma: upstream `gammaUnions [defsGamma defs, extractGamma
-  // Core.dataInfoIsValue True coreProgram, extractGammaImports ...]`. The
-  // port previously used `gamma1` (kind-inference's own constructor-only
-  // gamma, upstream `constructorGamma`) here instead of `extractGamma`,
-  // which also pulls in the module's own `extern` declarations -- so a
-  // module referencing its own extern function would fail to resolve it
-  // during its own type inference.
+  // Core.dataInfoIsValue True coreProgram, extractGammaImports ...]`. Not
+  // `gamma1` (kind inference's own constructor-only gamma, upstream
+  // `constructorGamma`): only `extractGamma` also pulls in the module's own
+  // `extern` declarations, without which a module cannot resolve its own
+  // extern functions during its own type inference.
   val gamma0 = type/assumption/unions([defs.defs-gamma,
                                        extract-gamma(data/is-value, True, coreProgram),
                                        extract-gamma-imports(importMap.list, progName)])

@@ -267,7 +267,7 @@ fun canonical-module-name(fp: path, roots: list<path>): _ maybe<name>
 // directory (`.../std/async`) to `.../std`, so its relative import
 // `async/internal` resolves to `.../std/async/internal.kk`. A 0-segment
 // (nil) or unparsed declared name walks up 0 levels -- the importing file's
-// own directory, same as before this existed.
+// own directory.
 fun updirs(p: path, n: int): path
   if n <= 0 then p else updirs(p.dirname.path, (n - 1).pretend-decreasing)
 
@@ -307,7 +307,7 @@ pub fun resolve-module(mods0: bmodules, nm: name, out-dir: path, need-cfile: boo
                        compile-source: (path, name, bmodules) -> <io,comp-error,parse-error,vfs-lookup,log|e> bmodule,
                        deps-cache: dep-cache = rb-map/empty(),
                        in-progress: list<name> = [], irange: range = range/null,
-                       // see `resolve-module-name`'s doc comment: callers now
+                       // see `resolve-module-name`'s doc comment: callers
                        // canonicalize via `canonicalize-deps` before this is
                        // ever reached in the normal case, so this fallback is
                        // a safety net, not the primary mechanism.
@@ -453,7 +453,7 @@ pub fun resolve-module(mods0: bmodules, nm: name, out-dir: path, need-cfile: boo
 // KOKA_TRACE_ORCH=1: emit one line per module-resolution decision, so the
 // parallel and sequential paths can be diffed. A module that appears BOTH as
 // an orchestrator `compiled` event and as a `resolve compile-source` event
-// here was built twice -- the exact defect the wave path used to hide.
+// here was built twice.
 // DIAGNOSTIC (KOKA_INLINE_FP=1): the inline-definition set a module contributes,
 // and where it came from. An interface round-trip must preserve this set
 // exactly: the optimizer's inlining decisions depend on it, so a set that
@@ -1472,8 +1472,8 @@ pub fun add-default-handlers(core1: core, modName: name, gamma: gamma, mainName:
           // re-typechecks, so the handler scheme is instantiated by inference;
           // here we build core directly and instantiate by KIND: effect vars ->
           // total, star vars -> the entry's result type. (A blanket
-          // `[typeTotal]` previously set e.g. `@default-utc : forall<a> ...`'s
-          // RESULT type to `total`, generating C returning the total struct.)
+          // `[typeTotal]` would set e.g. `@default-utc : forall<a> ...`'s
+          // RESULT type to `total`, generating C that returns the total struct.)
           fun wrap(qname: name, info: compiler/type/assumption/name-info, b: compiler/core/core/expr): _ compiler/core/core/expr
             val (hvars, _) = info.typ.split-type-scheme
             val targs = hvars.map(fn(v) if v.kind == kindEffect then typeTotal else resTp)

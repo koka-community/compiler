@@ -98,15 +98,14 @@ pub fun run(fl0: flags): <io,async,colors,comp-flags> ()
     // is not processing messages, so a worker-side bump could never fire while
     // it mattered.
     //
-    // ONLY A CONTENT CHANGE BUMPS IT. It used to bump on ANY message, on the
-    // reasoning that a request arriving mid-compile is at least delaying an
-    // answer. But a superseded compile is DISCARDED and its document re-marked
-    // dirty (see `on-idle`), and this server advertises `diagnosticProvider`
-    // and `inlayHintProvider`, so an editor polls it continuously. Every
-    // compile was therefore cancelled by the next poll and restarted, forever:
-    // measured on `compiler/syntax/lexeme.kk` with a 1s poll, 118 compiles in
-    // 150s, 118 of them superseded, not one result ever stored. That is the
-    // "it just keeps reloading the file" loop.
+    // ONLY A CONTENT CHANGE BUMPS IT, not any message. A superseded compile is
+    // DISCARDED and its document re-marked dirty (see `on-idle`), and this
+    // server advertises `diagnosticProvider` and `inlayHintProvider`, so an
+    // editor polls it continuously: bumping on every message cancels each
+    // compile at the next poll and restarts it, forever. Measured that way on
+    // `compiler/syntax/lexeme.kk` with a 1s poll: 118 compiles in 150s, all 118
+    // superseded, not one result stored -- the "it just keeps reloading the
+    // file" loop.
     //
     // A request cannot invalidate a compile -- it is answered from the last
     // stored result -- so it must not cancel one. Upstream only rebuilds on

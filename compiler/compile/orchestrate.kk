@@ -5,9 +5,8 @@
 // shared module map with `moduleGuard`/`modmapPut`/`modmapRead`; this port
 // drives per-module compiles through an RPC orchestrator over `std/async`
 // worker threads (`compile-graph-rpc`). It is the only scheduler: a static
-// wave-barrier variant and a sequential bypass both existed and both lost on
-// wall-clock (72.2s and 81.3s against 37.5s on compiler/compile/build.kk), so
-// they were removed rather than maintained alongside it.
+// wave-barrier schedule and a sequential pass both measured slower on
+// compiler/compile/build.kk (72.2s and 81.3s wall against its 37.5s).
 // The isolation wrappers below (`compile-module-isolated`, `isolate-diagnostics`)
 // exist for the same reason: a worker must not let its diagnostics or its
 // failures escape into another worker's compile.
@@ -189,15 +188,6 @@ pub fun isolate-diagnostics(fl: flags, overlay: list<(path, vfile)>, action: () 
     Ok(res) -> Mod-outcome(res, msgs, emits, wmsgs, phs)
     Error(exn) -> Mod-outcome(Left(exn.message), msgs, emits, wmsgs, phs)
 
-// Run one wave's compiles on worker threads.
-//
-// This is a SEPARATE function because `compute` fixes each thunk's row to a
-// CLOSED `<async,ioc>`, and `interleaved` then unifies the ENCLOSING row with
-// it. Inlined into the wave body, that pinned it closed and
-// left no room for `resolve-module`'s `comp-error`/`exn`/`parse-error` --
-// the async dispatch row and the module-resolution row cannot be one row.
-// Confining the closed row to its own signature lets the call site open it,
-// which is how the old `compile-waves` was callable from `check-file-ex`.
 // One clang run on a C-compile pool worker. A pool worker is a worker like any
 // other: it must not write to the console while the front end is running, so
 // its phase reports are dropped rather than logged (the batch catch-up in
@@ -231,10 +221,10 @@ pub type orch-reply
 // without ever falling into a fresh `compile-source` call: `resolve-module`
 // (build.kk) recurses through EVERY reachable dependency BEFORE it decides
 // whether `nm` ITSELF needs compiling or can just be loaded, so a one-level
-// check of `nm`'s own direct deps (the old `find-ready`) missed a
-// GRANDCHILD dependency that was still stale and unresolved -- `drain`
-// (below) would then call `resolve-module`, its recursion would reach that
-// grandchild, and it would compile it INLINE on the orchestrator thread
+// check of `nm`'s own direct deps misses a GRANDCHILD dependency that is
+// still stale and unresolved -- `drain` (below) would then call
+// `resolve-module`, its recursion would reach that grandchild, and it would
+// compile it INLINE on the orchestrator thread
 // from inside the xchannel delivery callback (confirmed via a native
 // backtrace: `kk_os_read_text_file` <- `compile_module` <-
 // `kk_xchan_async_cb` <- `uv__async_io`, all on one thread -- reentrancy,
@@ -261,10 +251,8 @@ pub fun transitively-ready(nm: name, dcache: dep-cache, have: bmodules, stale: l
 // `restrict-to-closure`/`resolve-module` will find no compiled module for it
 // and report their own "not found"-style error), but because treating a
 // failure as permanently un-ready deadlocks the whole build. A pending
-// module blocked on a failed dependency must still get its turn, exactly as
-// the wave-barrier orchestrator's static schedule always gave every module a
-// turn regardless of earlier failures (cascading into secondary errors
-// rather than hanging). Caught via a real reproduction, not assumed: with a
+// module blocked on a failed dependency must still get its turn, and cascade
+// into secondary errors rather than hang. Caught via a real reproduction: with a
 // dependency compile failing, the orchestrator sat blocked at ~0% CPU for
 // the full timeout instead of finishing (`user` time far below `real` time
 // is the signature of a wait, not of slow work).
@@ -468,9 +456,9 @@ pub fun compile-graph-rpc(fl: flags, out-dir: path, search-dirs: list<path>,
       // How many workers have been told `AllDone`. Every spawned worker blocks
       // on a reply until it is released, and the run then waits for each to
       // confirm it exited -- so the serve loop MUST NOT stop before all of them
-      // have been released, however the build ended. Stopping early (the
-      // condition used to be "nothing pending and nothing waiting", which is
-      // trivially true before any worker has registered) leaves the workers
+      // have been released, however the build ended. Stopping early (say on
+      // "nothing pending and nothing waiting", which is trivially true before
+      // any worker has registered) leaves the workers
       // blocked on a request nobody will ever receive, and the run then hangs
       // on `done-ch`.
       var released := 0
