@@ -1,12 +1,12 @@
 {
+module compiler/syntax/lex
+
 import compiler/common/name
 import compiler/common/range
 import compiler/syntax/lexeme
 import std/core/bslice
 import std/num/float64
-import std/core-extras
 import std/core/undiv
-import std/data/word-set
 import std/data/trie
 // Updated to be roughly equivalent to commit dd910825 on 7/23/26
 
@@ -315,15 +315,15 @@ val special-names = [ "{", "}"
     , "[", "]"
     , ";", ","
 ]
-// A fixed keyword set: build it as a PURE IMMUTABLE trie. It used to be a
-// lazy `delay` around `string-pool()`, whose named handler closes over a
-// mutable `var trie`. Forcing a lazy thunk mutates it, and each parallel
-// worker gets its own Koka heap/refcount domain, so two workers forcing this
+// A fixed keyword set: build it as a PURE IMMUTABLE trie, not a lazy `delay`
+// around `string-pool()`, whose named handler closes over a mutable
+// `var trie`. Forcing a lazy thunk mutates it, and each parallel worker gets
+// its own Koka heap/refcount domain, so two workers forcing one
 // concurrently is a use-after-free (EXC_BAD_ACCESS in tuple2_unbox, with
 // another thread inside kk_block_fast_drop_free). Nothing here needs
 // interning or laziness.
-// the same words as `reserved-names`, as a LIST: a `word-set` cannot be
-// enumerated, and the language server offers keyword completions from it
+// the same words as `reserved-names`, as a LIST: a trie cannot be enumerated,
+// and the language server offers keyword completions from it
 pub val reserved-name-list : list<string> =
         ["infix", "infixr", "infixl"
               , "module", "import", "as"
@@ -366,11 +366,11 @@ pub val reserved-name-list : list<string> =
               , ":="
               , "|"]
 
-pub val reserved-names : word-set =
-        reserved-name-list.foldl(empty-word-set(), fn(t, w) t.add(w))
+pub val reserved-names : trie =
+        reserved-name-list.foldl(trie/empty(), fn(t, w) t.add(w))
 
 fun is-reserved(name: string)
-  reserved-names.contains(name)
+  reserved-names.lookup(name).is-just
 
 fun is-prefix-op(name: string)
   name == "!" || name == "~"
@@ -401,9 +401,9 @@ fun char/from-char-esc(c)
     _ -> c
 
 // Decode a string literal's escapes over the WHOLE text, once, when the chunk is
-// finalised. Escapes used to be decoded per match, which forced every chunk to
-// be a transformed slice and so forced the accumulate-and-copy shape; with this
-// at the end, every chunk in every state is a plain span of the input.
+// finalised. Decoding per match would make every chunk a transformed slice and
+// so force the accumulate-and-copy shape; decoded at the end, every chunk in
+// every state is a plain span of the input.
 fun unescape-string(s: string): string
   fun hexval(cs: list<char>, n: int, acc: int): (int, list<char>)
     if n <= 0 then (acc, cs)

@@ -244,11 +244,11 @@ value type alex-acc-res
   AlexAccResSkip(next: int, acc: int, acc-end: int)
 
 // The scan state holds the input ONCE and everything else as integer offsets
-// into it. It used to hold three separate `bslice`s -- seeked position, the
-// position one character back, and the accepted span -- all pointing into the
-// same buffer. A `bslice` is a value struct carrying a `bytes` reference, so
-// each of those had to be dup'ed and dropped every time the state was updated,
-// which happens once per INPUT CHARACTER. Offsets are scalars and cost nothing.
+// into it, not as separate `bslice`s (seeked position, the position one
+// character back, the accepted span) into the same buffer: a `bslice` is a
+// value struct carrying a `bytes` reference, so each would be dup'ed and
+// dropped every time the state is updated, which happens once per INPUT
+// CHARACTER. Offsets are scalars and cost nothing.
 //
 // All offsets are relative to `input`, so `input.byte-at(seek)` reads and
 // `input.subslice(acc, acc-end - acc)` materialises a span when an action wants
@@ -483,10 +483,10 @@ val special-names = [ "{", "}"
     , "[", "]"
     , ";", ","
 ]
-// A fixed keyword set: build it as a PURE IMMUTABLE trie. It used to be a
-// lazy `delay` around `string-pool()`, whose named handler closes over a
-// mutable `var trie`. Forcing a lazy thunk mutates it, and each parallel
-// worker gets its own Koka heap/refcount domain, so two workers forcing this
+// A fixed keyword set: build it as a PURE IMMUTABLE trie, not a lazy `delay`
+// around `string-pool()`, whose named handler closes over a mutable
+// `var trie`. Forcing a lazy thunk mutates it, and each parallel worker gets
+// its own Koka heap/refcount domain, so two workers forcing one
 // concurrently is a use-after-free (EXC_BAD_ACCESS in tuple2_unbox, with
 // another thread inside kk_block_fast_drop_free). Nothing here needs
 // interning or laziness.
@@ -569,9 +569,9 @@ fun char/from-char-esc(c)
     _ -> c
 
 // Decode a string literal's escapes over the WHOLE text, once, when the chunk is
-// finalised. Escapes used to be decoded per match, which forced every chunk to
-// be a transformed slice and so forced the accumulate-and-copy shape; with this
-// at the end, every chunk in every state is a plain span of the input.
+// finalised. Decoding per match would make every chunk a transformed slice and
+// so force the accumulate-and-copy shape; decoded at the end, every chunk in
+// every state is a plain span of the input.
 fun unescape-string(s: string): string
   fun hexval(cs: list<char>, n: int, acc: int): (int, list<char>)
     if n <= 0 then (acc, cs)
