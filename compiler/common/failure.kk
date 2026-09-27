@@ -9,7 +9,6 @@
 module compiler/common/failure
 pub import compiler/platform/config
 
-
 // ------------------------------------------
 // Internal errors and assertions
 // ------------------------------------------
