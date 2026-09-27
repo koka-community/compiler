@@ -102,7 +102,10 @@ pub fun create-data-def(
       val dd = conInfos.create-max-data-def
       match dd
         DataDefValue | isEnum -> dd
-        DataDefValue | isIso -> dd // iso types are preferred as value types
+        // iso types are preferred as value types; but a recursive type is never
+        // a value type (as for an explicit `value` below): its representation is
+        // a heap block, and boxing it as a value would disagree with that (#775)
+        DataDefValue | isIso && !isRec -> dd
         DataDefValue ->
           // val wouldGetTagField = conCount > 1 && !isEnum
           // val size = platform.size(vr) + (if wouldGetTagField then platform.fieldSize else 0)
