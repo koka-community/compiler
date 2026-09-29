@@ -28,7 +28,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/time.h>
-#include <sys/wait.h>
+#if !defined(__wasi__)
+#include <sys/wait.h>   // WASI has no processes
+#endif
 #include <unistd.h>
 #include <fcntl.h>
 #endif
@@ -613,6 +615,12 @@ kk_decl_export int kk_os_list_directory(kk_string_t dir, kk_vector_t* contents, 
 --------------------------------------------------------------------------------------------------*/
 
 kk_decl_export int kk_os_run_command(kk_string_t cmd, kk_string_t* output, kk_context_t* ctx) {
+#if defined(__wasi__)
+  // WASI has no processes
+  kk_string_drop(cmd, ctx);
+  *output = kk_string_empty();
+  return ENOSYS;
+#else
   FILE* f = NULL;
 #if defined(WIN32)
   kk_with_string_as_qutf16w_borrow(cmd, wcmd, ctx) {
@@ -639,6 +647,7 @@ kk_decl_export int kk_os_run_command(kk_string_t cmd, kk_string_t* output, kk_co
 #endif
   *output = out;
   return errno;
+#endif
 }
 
 kk_decl_export int kk_os_run_system(kk_string_t cmd, kk_context_t* ctx) {
@@ -647,6 +656,8 @@ kk_decl_export int kk_os_run_system(kk_string_t cmd, kk_context_t* ctx) {
   kk_with_string_as_qutf16w_borrow(cmd, wcmd, ctx) {
     exitcode = _wsystem(wcmd);
   }
+  #elif defined(__wasi__)
+  exitcode = -1;   // WASI has no processes
   #else
   kk_with_string_as_qutf8_borrow(cmd, ccmd, ctx) {
     int status = system(ccmd);

@@ -409,7 +409,9 @@ kk_decl_export void  kk_main_end(kk_context_t* ctx) {
   Debugger
 --------------------------------------------------------------------------------------------------*/
 
+#if !defined(__wasi__)   // WASI has no signals
 #include <signal.h>
+#endif
 
 kk_decl_export void kk_debugger_break(kk_context_t* ctx) {
   kk_unused(ctx);
