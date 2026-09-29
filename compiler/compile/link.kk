@@ -380,6 +380,11 @@ pub fun c-link(fl: flags, entry: c-unit, outExe: path, kklibInclude: path,
     val libs = nub-strings(nub-decls(clibs).flatmap(fn(d) { val _ = copy-c-library(fl, c, out-dir, d); val (l, _, _) = d; l.split(";") }))
     val libpaths = libs.map(fn(l) (out-dir / (c.ccLibFile)(l).path).string)
     val syslibs = nub-strings(csyslibs ++ fl.ccompLinkSysLibs ++ ["m", "pthread"])
+    // wasm stacks default to 64KB, too small for Koka's recursion. emscripten
+    // also fixes its memory at 16MB unless told otherwise, too small for
+    // mimalloc, which faults on its first allocation; wasi-sdk's memory grows.
+    val stksize = if fl.stackSize == 0 && (on-windows() || fl.target.is-target-wasm) then 8*1024*1024 else fl.stackSize
+    val hpsize = if fl.heapSize == 0 && fl.target.is-target-wasm && c.ccName.starts-with("emcc").bool then 1024*1024*1024 else fl.heapSize
     val cmd =
       [c.ccPath] ++
       c.ccFlags ++
@@ -387,8 +392,8 @@ pub fun c-link(fl: flags, entry: c-unit, outExe: path, kklibInclude: path,
       (c.ccTargetExe)(outExe.string).map(fn(t) if t.starts-with("-").is-just then t else t.quoted) ++
       Cons(kklibObj, objs).map(fn(o) o.string.quoted) ++
       c.ccFlagsLink ++
-      (c.ccFlagStack)(fl.stackSize) ++
-      (c.ccFlagHeap)(fl.heapSize) ++
+      (c.ccFlagStack)(stksize) ++
+      (c.ccFlagHeap)(hpsize) ++
       libpaths.flatmap(fn(l) (c.ccAddLib)(l.quoted)) ++
       syslibs.flatmap(fn(l) (c.ccAddSysLib)(l))
     run-cc(cmd.join(" "), outExe)

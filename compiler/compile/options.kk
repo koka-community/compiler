@@ -718,6 +718,19 @@ pub fun cc-from-path(fl: flags, cmdPath: string): <ndet,console> (cc, bool)
   val clang = gcc(ccFlagsWarn = gnu-warn ++
       ["-Wno-cast-qual","-Wno-undef","-Wno-reserved-id-macro","-Wno-unused-macros","-Wno-cast-align"] ++
       (if on-macos() && fl.targetArch == "arm64" then ["-Wno-unknown-warning-option"] else []))
+  // PORT-SPECIFIC: clang for a wasm target is wasi-sdk's (clang with wasi-libc).
+  // Upstream only has emcc for wasm, but emscripten's standalone WASI output has
+  // no file system (its `open` accepts only the standard streams), which a
+  // compiler cannot do without. WASI has no threads, process clocks, pids or
+  // signals; wasi-libc's emulations stand in for the ones kklib links against.
+  val wasi-emulated = ["pthread", "process-clocks", "getpid", "signal"]
+  val clang-wasi = clang(
+      ccFlagsCompile = clang.ccFlagsCompile ++
+        wasi-emulated.map(fn(e) "-D_WASI_EMULATED_" ++ e.to-upper.replace-all("-", "_")),
+      ccFlagsLink = clang.ccFlagsLink ++ wasi-emulated.map(fn(e) "-lwasi-emulated-" ++ e),
+      ccFlagStack = fn(stksize) if stksize == 0 then [] else ["-Wl,-z,stack-size=" ++ stksize.show],
+      ccFlagHeap = fn(hpsize) if hpsize == 0 then [] else ["-Wl,--initial-memory=" ++ hpsize.show],
+      ccTargetExe = fn(out) ["-o", out ++ target-exe-extension(fl.target)])
   val generic = gcc(ccFlagsWarn = [])
   val msvc = cc-msvc(name, cmdPath)
   val clangcl = msvc(
@@ -730,6 +743,7 @@ pub fun cc-from-path(fl: flags, cmdPath: string): <ndet,console> (cc, bool)
     if name.starts-with("clang-cl").bool then clangcl
     elif name.starts-with("mingw").bool then mingw
     elif name.starts-with("emcc").bool then emcc
+    elif name.starts-with("clang").bool && fl.target.is-target-wasm then clang-wasi
     elif name.starts-with("clang").bool || name.starts-with("musl-clang").bool then clang
     elif name.starts-with("musl-gcc").bool || name.starts-with("musl-g++").bool then gcc
     elif name.starts-with("gcc").bool || name.starts-with("g++").bool then (if on-windows() then mingw else gcc)
@@ -742,9 +756,9 @@ pub fun cc-from-path(fl: flags, cmdPath: string): <ndet,console> (cc, bool)
       ccFlagsCompile = cc0.ccFlagsCompile ++ fl.ccompCompileArgs,
       ccFlagsLink = cc0.ccFlagsLink ++ fl.ccompLinkArgs)
 
-  if fl.target.is-target-wasm && !name.starts-with("emcc").bool then
-    println("\nwarning: a wasm target should use the emscripten compiler (emcc),\n  but currently '" ++ cc1.ccPath ++ "' is used." ++
-      "\n  hint: specify the emscripten path using --cc=<emcc path>?")
+  if fl.target.is-target-wasm && !name.starts-with("emcc").bool && !name.starts-with("clang").bool then
+    println("\nwarning: a wasm target should use the emscripten compiler (emcc) or wasi-sdk's clang,\n  but currently '" ++ cc1.ccPath ++ "' is used." ++
+      "\n  hint: specify the compiler path using --cc=<emcc or wasi-sdk clang path>?")
 
   if fl.asan then
     if !(cc1.ccName.starts-with("clang").bool || cc1.ccName.starts-with("gcc").bool || cc1.ccName.starts-with("g++").bool) then
@@ -864,7 +878,11 @@ pub fun process-initial-options(flags0: flags, opts: list<string>): <io,comp-fla
   match parse-options(flags0, opts)
     Left(err) -> Left(err)
     Right((fl1, mode)) ->
-      val arch = if fl1.targetArch != "" then fl1.targetArch else host-arch()
+      // a wasm target runs on no host CPU, so neither the host's CPU flags
+      // (`-march`) nor its `arch=` conditional imports apply to it
+      val arch = if fl1.targetArch != "" then fl1.targetArch
+                 elif fl1.target.is-target-wasm then "wasm" ++ (8 * fl1.targetPlatform.ptrSize).show
+                 else host-arch()
       val os = if fl1.targetOS != "" then fl1.targetOS else host-os-name()
       val fl2 = fl1(targetArch = arch, targetOS = os)
       val fl3 = match mode
