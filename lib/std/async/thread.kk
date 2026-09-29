@@ -43,7 +43,7 @@ import async/async
 // threaded topologies on `native-threads()`.
 pub import async/api/thread
   [host=libc]                          async/api/uv/thread
-  [host=jsnode|jsweb|wasmweb] async/api/coop/thread
+  [host=jsnode|jsweb|wasmweb|wasm] async/api/coop/thread
 
 // Offload the pure computation `work` onto a worker thread (native/wasi) or a
 // cooperative strand (web/wasm), and await its result on the current async loop
