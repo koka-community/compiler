@@ -1531,7 +1531,9 @@ pub fun build-out-dir(fl: flags): _ path
   // and inlining differ), so each build type gets its own cache -- an -O0
   // interface reused by an -O2 build would be wrong code, silently. Mirrors
   // the reference compiler's clang-debug / clang-drelease naming.
-  val d = fl.buildDir.path / ("v" ++ comp-flags.version ++ tag) / fl.build-variant
+  // upstream `fullBuildDir`: `--outputdir` replaces the whole versioned path
+  val d = if fl.outBuildDir != "" then fl.outBuildDir.path
+          else fl.buildDir.path / ("v" ++ comp-flags.version ++ tag) / fl.build-variant
   ensure-dir(d)
   d
 

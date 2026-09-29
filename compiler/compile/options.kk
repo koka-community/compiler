@@ -311,15 +311,26 @@ pub fun flags-hash(fl: flags): string
 // -O1 and -O2 are RelWithDebInfo), so the flags hash is what actually keeps
 // them apart.
 pub fun build-variant(fl: flags): string
+  fl.build-lib-variant ++ (if fl.useBuildDirHash then "-" ++ fl.flags-hash else "")
+
+// upstream `buildLibVariant`: the variant without the flags hash, which is also
+// the directory of a precompiled library under `--libdir` (e.g. `js-debug`)
+pub fun build-lib-variant(fl: flags): string
   val bt = match fl.build-type
     DebugFull -> "debugfull"
     Debug -> "debug"
     RelWithDebInfo -> "drelease"
     Release -> "release"
-  val base = match fl.target
-    C -> "clang-" ++ bt
-    _ -> "js-" ++ bt
-  base ++ (if fl.useBuildDirHash then "-" ++ fl.flags-hash else "")
+  val pre = match fl.target
+    C(ctarget) ->
+      val arch = match ctarget
+        Wasm -> "-wasm" ++ (8 * fl.targetPlatform.ptrSize).show
+        WasmJs -> "-wasmjs"
+        WasmWeb -> "-wasmweb"
+        _ -> if fl.targetPlatform.has-compressed-fields then "-" ++ fl.targetArch ++ "c" else ""
+      fl.ccomp.ccName ++ arch
+    _ -> "js"
+  pre ++ "-" ++ bt
 
 pub fun flags/show-type-sigs(fl: flags): bool
   fl.showHiddenTypeSigs || fl.showTypeSigsField
