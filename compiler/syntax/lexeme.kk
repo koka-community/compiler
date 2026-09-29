@@ -10,7 +10,6 @@
 module compiler/syntax/lexeme
 
 import std/os/path
-import std/text/regex
 import std/text/unicode
 import std/num/float64
 import std/core/undiv
@@ -18,12 +17,13 @@ import compiler/common/name
 import compiler/common/range
 import compiler/common/syntax
 
-val type-var-regex = "^[a-z][0-9]*$".regex();
-
 pub fun is-type-var(n: name): bool
   // a type variable is an unqualified lowercase letter optionally followed by
   // digits: in particular a MODULE-qualified name can still be a type variable
-  n.nameLocalQual == "" && !type-var-regex.exec(n.nameStem).is-empty
+  if n.nameLocalQual != "" then False
+  else match n.nameStem.list
+    Cons(c, cs) -> c.is-lower && cs.all(is-digit)
+    Nil -> False
 
 // Lexer tokens
 // A lexical token with an associated range.
