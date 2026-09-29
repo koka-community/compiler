@@ -416,6 +416,7 @@ fun check-file-ex(fl: flags, fnames: list<string>, isEntry: bool,
   // left as written would be a second name for the same module.
   val allImports = roots.flatmap fn((srcPath, p0, p1))
     p1.imports.map(fn(i) (i.fullName, i.nameRange)).canonicalize-deps(srcPath, p0.name, srcdirs).map(fst)
+  copy-lib-ifaces(fl, odir)
   val dcache0 = discover-deps(allImports, srcdirs, fl.tpl, odir, sess.deps)
   val tdiscover = tlog("discover", tparse)
   // Decide what this round compiles (see `walk-rebuild`). The walk records each

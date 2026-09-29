@@ -36,6 +36,7 @@ import compiler/core/parse
 import compiler/core/inlines
 import compiler/kind/synonyms
 import compiler/compile/options
+import compiler/compile/cc
 import compiler/compile/module
 import compiler/compile/vfs
 import compiler/compile/phase
@@ -526,6 +527,28 @@ fun dep-tlog(nm: name, t0: int): _ ()
 // and a later lookup keyed on the source's text misses -- which shows up as
 // `Type async-cancel is not defined` when the module is compiled.
 pub alias dep-cache = name-map<(path, name, list<(name, range)>, bool)>
+
+// upstream `searchLibIfaceFile`/`copyLibIfaceToOutput`: a precompiled library
+// lives under `--libdir` as `<libdir>/<variant>/<module>.kki` next to its
+// generated code, and an interface there that is newer than the build
+// directory's copy is copied in (with that code), after which it is an ordinary
+// up-to-date interface. Upstream copies per module as it resolves each import;
+// this copies every newer interface before `discover-deps`, because discovery
+// already reads interfaces and the import graph is not known until it is done.
+pub fun copy-lib-ifaces(fl: flags, out-dir: path): _ ()
+  if fl.localLibDir != "" then
+    val lib-dir = fl.localLibDir.path / fl.build-lib-variant.path
+    if lib-dir.is-directory then
+      val companions = if fl.target.is-c then [".c", ".h", (fl.ccomp.ccObjFile)("")] else [".mjs"]
+      lib-dir.list-directory.foreach fn(kki)
+        if kki.extname == "kki" then
+          val out-kki = out-dir / kki.nodir
+          if file/file-mtime(kki) > file/file-mtime(out-kki) then
+            val base = kki.stemname
+            copy-file(kki, out-kki)
+            companions.foreach fn(ext)
+              val from = lib-dir / (base ++ ext).path
+              if from.dir/is-file then copy-file(from, out-dir / (base ++ ext).path)
 
 // `tpl`: the SAME target platform the real compile uses (`fl.tpl`), not
 // `parse-program-from-string`'s wildcard default. A conditional import
