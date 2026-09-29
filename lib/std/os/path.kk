@@ -111,7 +111,7 @@ pub fun path( s : string ) : path
   if s.is-empty return Path("",[])
   val t = s.replace-all("\\","/")
   match t.starts-with(proot)
-    Nothing          -> path-parts("",t)
+    Nothing          -> path-parts(if t.starts-with("/").is-just then "/" else "", t)
     Just((eof,rest)) -> path-parts(rest.before.string ++ (if eof then "/" else ""),rest.string)
 
 fun path-parts( root : string, s : string, dirs : list<string> = [] ) : path
@@ -128,8 +128,10 @@ fun push-part( dir : string, dirs : list<string> ) : list<string>
   elif dir==".." && dirs.is-cons then dirs.tail
   else Cons(dir,dirs)
 
+// A drive (`c:`) or a network share (`//server`); a lone leading `/` is the root
+// `path` falls back to.
 fun proot() : parse bool
-  ({ alpha(); char(':'); () }) || ({char('/'); many1({none-of("/")}); () })
+  ({ alpha(); char(':'); () }) || ({ char('/'); char('/'); many1({none-of("/")}); () })
   ({ char('/'); False }) || ({ eof(); True })
 
 // Parse a list of paths seperated by colon (`':'`) or semi-colon (`';'`)
