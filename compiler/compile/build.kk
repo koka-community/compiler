@@ -864,7 +864,7 @@ pub fun preload-ifaces(fl: flags, out-dir: path, source-dirs: module-dirs,
 // (see `load-iface`) and the inline section is deferred (see
 // `pending-inlines`), so there is no dependency to wait for. Results merge by
 // NAME in `cands` order, so which worker took which module cannot reach the
-// output.
+// output. Without worker threads (`native-threads()`) they load on this strand.
 fun load-unordered(fl: flags, out-dir: path, cands: list<name>, have0: bmodules): _ bmodules
   // mtimes and the C-file check stay on THIS strand (see `load-req`)
   val reqs = cands.filter-map fn(nm)
@@ -877,18 +877,22 @@ fun load-unordered(fl: flags, out-dir: path, cands: list<name>, have0: bmodules)
       else Just(Load-req(nm, kki, at, if need-cfile then Just(cfile) else Nothing, rb-map/empty()))
   if reqs.is-nil then have0
   else
-    val results = xchannel()
-    val n-workers = match get-env-value("KOKA_MAX_WORKERS")
-      Just(v) -> max(1, min(v.parse-int.default(get-cpu-count()), reqs.length))
-      Nothing -> max(1, min(get-cpu-count(), reqs.length))
-    val numbered = reqs.map-indexed(fn(i, r) (i, r))
-    list(0, n-workers - 1).foreach fn(w)
-      val mine = numbered.filter-map(fn((i, r)) if i % n-workers == w then Just(r) else Nothing)
-      spawn-thread fn()
-        mine.foreach fn(r)
-          results.xemit((r.nm, load-one-isolated(r)))
-    val got = list(1, reqs.length).map(fn(_) results.xreceive)
-    results.close
+    val (got, n-workers) =
+      if !native-threads() then (reqs.map(fn(r) (r.nm, load-one-isolated(r))), 1)
+      else
+        val results = xchannel()
+        val n-workers = match get-env-value("KOKA_MAX_WORKERS")
+          Just(v) -> max(1, min(v.parse-int.default(get-cpu-count()), reqs.length))
+          Nothing -> max(1, min(get-cpu-count(), reqs.length))
+        val numbered = reqs.map-indexed(fn(i, r) (i, r))
+        list(0, n-workers - 1).foreach fn(w)
+          val mine = numbered.filter-map(fn((i, r)) if i % n-workers == w then Just(r) else Nothing)
+          spawn-thread fn()
+            mine.foreach fn(r)
+              results.xemit((r.nm, load-one-isolated(r)))
+        val got = list(1, reqs.length).map(fn(_) results.xreceive)
+        results.close
+        (got, n-workers)
     if timing-on() then
       println("PRELOAD unordered: loaded " ++ got.filter(fn((_, mb)) mb.is-just).length.show ++ " of "
               ++ reqs.length.show ++ ", workers " ++ n-workers.show)
@@ -917,7 +921,8 @@ fun has-pending-inlines(m: bmodule): bool
 // Resolve every deferred inline section, IN PARALLEL. Each needs only the CORES
 // of its own closure, never another module's inline definitions, so there is
 // no ordering between them. (A serial pass here was measured SLOWER than
-// resolving during a dependency-ordered load: 58.6s -> 62.1s warm.)
+// resolving during a dependency-ordered load: 58.6s -> 62.1s warm.) Without
+// worker threads (`native-threads()`) they resolve on this strand.
 pub fun resolve-pending-inlines(mods: bmodules): _ bmodules
   // one resolution per MODULE, even when it is present under an alias key too
   val pending = mods.list.filter(fn((_, m)) m.has-pending-inlines).foldl([]) fn(acc, km)
@@ -925,18 +930,22 @@ pub fun resolve-pending-inlines(mods: bmodules): _ bmodules
     if acc.any(fn((_, m2)) m2.bmod/core.coreName == m.bmod/core.coreName) then acc else acc ++ [km]
   if pending.is-nil then mods
   else
-    val results = xchannel()
-    val n-workers = match get-env-value("KOKA_MAX_WORKERS")
-      Just(v) -> max(1, min(v.parse-int.default(get-cpu-count()), pending.length))
-      Nothing -> max(1, min(get-cpu-count(), pending.length))
-    val numbered = pending.map-indexed(fn(i, km) (i, km))
-    list(0, n-workers - 1).foreach fn(w)
-      val mine = numbered.filter-map(fn((i, km)) if i % n-workers == w then Just(km) else Nothing)
-      spawn-thread fn()
-        mine.foreach fn((_, m))
-          results.xemit((m.bmod/core.coreName, resolve-inlines-isolated(m, mods)))
-    val got = list(1, pending.length).map(fn(_) results.xreceive)
-    results.close
+    val got =
+      if !native-threads() then pending.map(fn((_, m)) (m.bmod/core.coreName, resolve-inlines-isolated(m, mods)))
+      else
+        val results = xchannel()
+        val n-workers = match get-env-value("KOKA_MAX_WORKERS")
+          Just(v) -> max(1, min(v.parse-int.default(get-cpu-count()), pending.length))
+          Nothing -> max(1, min(get-cpu-count(), pending.length))
+        val numbered = pending.map-indexed(fn(i, km) (i, km))
+        list(0, n-workers - 1).foreach fn(w)
+          val mine = numbered.filter-map(fn((i, km)) if i % n-workers == w then Just(km) else Nothing)
+          spawn-thread fn()
+            mine.foreach fn((_, m))
+              results.xemit((m.bmod/core.coreName, resolve-inlines-isolated(m, mods)))
+        val got = list(1, pending.length).map(fn(_) results.xreceive)
+        results.close
+        got
     mods.list.foldl(mods) fn(acc, km)
       val (k, m) = km
       if !m.has-pending-inlines then acc

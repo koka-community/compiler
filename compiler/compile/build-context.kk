@@ -483,8 +483,13 @@ fun check-file-ex(fl: flags, fnames: list<string>, isEntry: bool,
   phase("build", roots.map(fn((_, _, p1)) p1.name.show-plain).join(" ") ++
                  " (" ++ stale-set.length.show ++ " of " ++ dcache.list.length.show ++ " modules to compile)")
   val wall-before-waves = wall-ms()
-  val (graph-mods, outcomes) = compile-graph-rpc(fl, odir, sdirs, srcdirs, dcache, stale-set, compile-source, on-progress, cancelled, preloaded,
-                                                 decisions = Just(plan))
+  // Without worker threads the walk below compiles each stale module itself, in
+  // dependency order: `resolve-module` compiles a Stale module the map lacks.
+  val (graph-mods, outcomes) =
+    if native-threads() then
+      compile-graph-rpc(fl, odir, sdirs, srcdirs, dcache, stale-set, compile-source, on-progress, cancelled, preloaded,
+                        decisions = Just(plan))
+    else (preloaded, [])
   if timing-on() then println("WALL waves: " ++ (wall-ms() - wall-before-waves).show ++ "ms")
   // flush diagnostics in BUILD order, not completion order
   outcomes.foreach fn((_, o)) o.messages.foreach(println)
