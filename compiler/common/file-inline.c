@@ -29,8 +29,14 @@ kk_integer_t kk_compiler_file_mtime(kk_string_t p, kk_context_t* ctx) {
   struct stat st;
   const char* cpath = kk_string_cbuf_borrow(p, NULL, ctx);
   /* 0 for a missing or unreadable file: callers treat that as infinitely
-     stale, which is the same answer the shell version gave. */
-  int64_t r = (cpath != NULL && stat(cpath, &st) == 0) ? kk_compiler_stat_mtime_ns(&st) : 0;
+     stale, which is the same answer the shell version gave. So an existing
+     file is never 0, even where the file system records no times at all (the
+     playground's in-memory WASI file system reports 0 for every file). */
+  int64_t r = 0;
+  if (cpath != NULL && stat(cpath, &st) == 0) {
+    r = kk_compiler_stat_mtime_ns(&st);
+    if (r <= 0) r = 1;
+  }
   kk_string_drop(p, ctx);
   return kk_integer_from_int64(r, ctx);
 }
@@ -56,6 +62,7 @@ bool kk_compiler_write_atomic(kk_string_t path, kk_string_t content, kk_context_
   const char* cpath = kk_string_cbuf_borrow(path, NULL, ctx);
   const char* cbuf  = kk_string_cbuf_borrow(content, &clen, ctx);
   bool ok = false;
+#if !defined(__wasi__)   /* wasi-libc has no mkstemp; a WASI build has one writer anyway */
   if (cpath != NULL && cbuf != NULL) {
     /* temp file must live in the same directory as the destination, or the
        rename would cross filesystems and lose atomicity */
@@ -83,6 +90,7 @@ bool kk_compiler_write_atomic(kk_string_t path, kk_string_t content, kk_context_
       free(tmp);
     }
   }
+#endif
   kk_string_drop(path, ctx);
   kk_string_drop(content, ctx);
   return ok;
