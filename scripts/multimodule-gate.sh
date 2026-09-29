@@ -137,6 +137,27 @@ if [ "$fail" -eq 0 ]; then
   fi
 fi
 
+# A module's output also depends on the files its `extern import`s inline. `lib`
+# takes its extern from `lib-inline.c`: editing only that file must recompile
+# `lib`, and a rebuild with nothing changed afterwards must compile nothing.
+if [ "$fail" -eq 0 ]; then
+  printf '  %-40s ' "incremental: inlined C file"
+  W=.koka/gate-inline
+  rm -rf "$W"; cp -R scripts/gate-incremental-inline "$W"
+  IFLAGS2="--console=raw -O2 --buildtag=mmgate-inline --target=c --include=. -e -v0"
+  first=$($BIN $IFLAGS2 "$W/m.kk" 2>&1 | tail -1)
+  sed 's/kk_integer_from_small(1)/kk_integer_from_small(2)/' scripts/gate-incremental-inline/lib-inline.c > "$W/lib-inline.c"
+  edited=$($BIN $IFLAGS2 "$W/m.kk" 2>&1 | tail -1)
+  again=$(KOKA_TRACE_ORCH=1 $BIN $IFLAGS2 "$W/m.kk" 2>&1) || true
+  recompiled=$(printf '%s\n' "$again" | grep -c -E 'ORCH compiled|resolve compile-source' || true)
+  if [ "$first" != "1" ] || [ "$edited" != "2" ] || [ "$recompiled" -ne 0 ]; then
+    echo "FAIL (first=$first after-edit=$edited no-op-recompiled=$recompiled)"
+    fail=1
+  else
+    echo "ok"
+  fi
+fi
+
 if [ "$fail" -ne 0 ]; then
   echo "multimodule gate: FAILED" >&2
   exit 1

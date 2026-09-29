@@ -66,6 +66,12 @@ pub fun target/(==)(t1: target, t2: target): bool
     (Unsupported, Unsupported) -> True
     _ -> False
 
+// PORT-SPECIFIC: an `extern import` entry the parser adds beside inlined content
+// (from `file`, `header-file` or `header-end-file`), naming the file it came from.
+// The module's output depends on that file, so `code-gen` lists it beside the
+// interface for the rebuild check; it is never printed into an interface.
+pub val file-dependency-key = "file-dependency"
+
 pub fun is-target-wasm(t: target): bool
   match t
     C(Wasm) -> True

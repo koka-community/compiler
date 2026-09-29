@@ -135,7 +135,7 @@ fun pretty-external-import(e: external)
     ExternalImport(imports) ->
       fun prettyKeyval((k, v))
         LitString(k).pretty-lit |.| "=".text |.| LitString(v).pretty-lit |.| semi
-      match imports.filter(fn((key, _)) key != "include-inline" && key != "header-include-inline")
+      match imports.filter(fn((key, _)) key != "include-inline" && key != "header-include-inline" && key != file-dependency-key)
         [] -> pprint/empty
         keyvals ->
           "extern import".keyword |+| "{".text |-|

@@ -112,6 +112,16 @@ pub fun code-gen(fl: flags, nt: newtypes, brw: borrowed, mbMain: maybe<(name, bo
     with val pp-env = PrettyEnv(coreIface=True)
     pretty-core(fl.target, inlineDefs, c)
   val outname = outBase.change-ext("kki")
+  // The files this module's `extern import`s inlined, beside the interface, for
+  // the rebuild check (`module-input-time`). Written first: a crash between the
+  // two leaves an older interface, which is only stale.
+  val kkd = outBase.change-ext("kkd")
+  val file-deps = c.externals.flatmap fn(e)
+    match e
+      ExternalImport(imports, _) ->
+        imports.filter-map(fn((k, v)) if k == file-dependency-key then Just(v.path.realpath.string) else Nothing)
+      _ -> []
+  if file-deps.is-cons || kkd.dir/is-file then write-text-file(kkd, file-deps.unlines)
   write-text-file-atomic(outname, ifaceDoc.show)
   // upstream never prints per-file "wrote" progress at all (only the final
   // "created :" executable, gated on `verbose > 1` -- CodeGen.hs:404); match

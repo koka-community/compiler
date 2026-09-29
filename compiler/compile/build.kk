@@ -378,7 +378,7 @@ pub fun resolve-module(mods0: bmodules, nm: name, out-dir: path, need-cfile: boo
         // explicitly requested).
         val kki = out-dir / (nm.module-name-to-path ++ ".kki").path
         val cfile = out-dir / (nm.module-name-to-path ++ ".c").path
-        val src-t = vfs/file-mtime(src)
+        val src-t = module-input-time(src, kki)
         val iface-t = file/file-mtime(kki)
         val dep-ts = deps.map(fn((dep, _)) mods1.lookup(dep).map(bmod/at).default(0))
         val can-link = if need-cfile then cfile.dir/is-file else True
@@ -527,6 +527,18 @@ fun dep-tlog(nm: name, t0: int): _ ()
 // and a later lookup keyed on the source's text misses -- which shows up as
 // `Type async-cancel is not defined` when the module is compiled.
 pub alias dep-cache = name-map<(path, name, list<(name, range)>, bool)>
+
+// When a module's inputs last changed: its source, or a newer one of the files
+// its `extern import`s inlined, which `code-gen` lists beside its interface
+// (`<module>.kkd`). A listed file that is gone counts as changed now, since the
+// output was built from content that no longer exists.
+pub fun module-input-time(src: path, kki: path): _ int
+  val src-t = vfs/file-mtime(src)
+  val kkd = kki.change-ext("kkd")
+  if !kkd.dir/is-file then src-t
+  else kkd.file/read-text-file.lines.filter(fn(l) !l.is-empty).foldl(src-t) fn(t, f)
+    val ft = file/file-mtime(f.path)
+    max(t, if ft > 0 then ft else file/epoch-nanos())
 
 // upstream `searchLibIfaceFile`/`copyLibIfaceToOutput`: a precompiled library
 // lives under `--libdir` as `<libdir>/<variant>/<module>.kki` next to its
@@ -690,7 +702,7 @@ pub fun walk-rebuild(roots: list<name>, dcache: dep-cache, out-dir: path, search
               val kki = out-dir / (nm.module-name-to-path ++ ".kki").path
               val kki-t = iface-time(kki)
               val can-link = if need-cfile then (out-dir / (nm.module-name-to-path ++ ".c").path).dir/is-file else True
-              val stale = kki-t <= 0 || !can-link || vfs/file-mtime(src) > kki-t
+              val stale = kki-t <= 0 || !can-link || module-input-time(src, kki) > kki-t
                           || ds.any(fn(d) match d { Stale -> True; Fresh(t) -> t > kki-t })
               if !stale then Fresh(kki-t)
               elif !fromIface then Stale(src, declared, deps0)

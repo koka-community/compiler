@@ -279,14 +279,18 @@ fun parse-external-includes(target: target, rng: range, (key, fname): (string, s
   if key == "file" || key == "header-file" || key == "header-end-file" then
     val currentFile = rng.source.name
     val fpath = currentFile.path.dirname / fname
+    // the file's content is inlined, so the module's output depends on the file:
+    // record where it came from too (see `file-dependency-key`)
+    fun inline(k: string, p: path)
+      [(k, pread-file(p)), (file-dependency-key, p.string)]
     if target.is-c && fpath.extname == "" && key == "file" then
-      [("header-include-inline", pread-file(fpath.change-ext("h"))), ("include-inline", pread-file(fpath.change-ext("c")))]
+      inline("header-include-inline", fpath.change-ext("h")) ++ inline("include-inline", fpath.change-ext("c"))
     elif target.is-c && key == "header-file" then
-      [("header-include-inline", pread-file(fpath))]
+      inline("header-include-inline", fpath)
     elif target.is-c && key == "header-end-file" then
-      [("header-end-include-inline", pread-file(fpath))]
+      inline("header-end-include-inline", fpath)
     elif key == "file" then
-      [("include-inline", pread-file(fpath))]
+      inline("include-inline", fpath)
     else [(key, fpath.show)]
   else [(key, fname)]
 
