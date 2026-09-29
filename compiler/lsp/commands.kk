@@ -32,6 +32,7 @@ import compiler/lib/json
 import compiler/lib/log
 import compiler/lsp/jsonrpc
 import compiler/lsp/stdio
+import compiler/lsp/lsp-log
 import compiler/lsp/conversions
 import compiler/lsp/state
 import compiler/lsp/diagnostics
