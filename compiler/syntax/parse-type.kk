@@ -111,7 +111,7 @@ fun parse-row-label(): _ user-type
   val tid = parse-type-id()
   match tid
     TpVar(name, rng) ->
-      parse-error("encountered effect variable " ++ name.show ++ " when an effect label was expected\n  hint: effect variables must be after `|` (e.g `<labels|e>`), or by themselves (e.g. `e`)", rng)
+      parse-error("encountered effect variable " ++ name.show ++ " when an effect label was expected\n  hint: effect variables must be after `|` (e.g. `<labels|e>`), or by themselves (e.g. `e`)", rng)
     t -> parse-type-app(t)
 
 pub fun parse-result-type(): _ (user-type, user-type)
