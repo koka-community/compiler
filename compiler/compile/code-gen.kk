@@ -10,6 +10,7 @@
 module compiler/compile/code-gen
 import std/os/path
 import std/os/file
+import std/os/dir
 import compiler/common/syntax
 import compiler/common/name
 import compiler/common/range
@@ -200,6 +201,8 @@ pub fun code-gen(fl: flags, nt: newtypes, brw: borrowed, mbMain: maybe<(name, bo
             // collide with a DIRECTORY next to the source (test/lib/dir/)
             val exePath = if fl.outFinalPath != "" then fl.outFinalPath.path
                           else cBase
+            // the linker does not create the directory of `-o out/sub/app`
+            if fl.outFinalPath != "" then ensure-dir(exePath.dirname.path)
             phase("linking", exePath.string)
             match c-link(fl, C-unit(cBase.change-ext("c"), entryEimports), exePath, fl.kklibIncludeDir.path, cImports, clibs, csyslibs)
               Nothing ->
