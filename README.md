@@ -109,7 +109,7 @@ KOKA="$STAGE2" "$STAGE2" -i. -e run-tests.kk
 `web/playground` runs the compiler in the browser, as a WASI module built with [wasi-sdk](https://github.com/WebAssembly/wasi-sdk) 25:
 
 ```bash
-(cd web/playground && npm install)
+(cd web/playground && npm ci)
 KOKA="$STAGE2" scripts/playground.sh         # the wasm compiler, precompiled std, samples
 cd web/playground
 npm run build

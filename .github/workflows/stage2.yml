@@ -222,7 +222,7 @@ jobs:
 
       # before the build: its deploy step copies coi-serviceworker from node_modules
       - name: Install web dependencies
-        run: cd web/playground && npm install
+        run: cd web/playground && npm ci
 
       - name: Build the playground assets
         run: scripts/playground.sh all
