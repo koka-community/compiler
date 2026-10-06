@@ -832,6 +832,8 @@ pub fun main()
     if r.detail.is-empty then () else
       val ls = r.detail.split("\n")
       (if diff-mode() then ls else ls.take(2)).foreach(fn(l) println("      | " ++ l))
+  // a failing exit code, so CI can gate on the run
+  if results.any(fn(r) r.status != "PASS" && r.status != "SKIP") then exit(1)
 
 fun newest-driver(): io string
   val d = ".koka/v3.2.7".path
