@@ -265,7 +265,8 @@ async function run(
   await runKokaModules(
     refs.current.vfs.precompiledMjs,
     generatedMjs,
-    kokaModuleToFilename(moduleName),
+    // the module name itself: runKokaModules encodes it to find the entry file
+    moduleName,
     (text) => appendConsole(dispatch, text, 'stdout'),
     (text) => appendConsole(dispatch, text, 'stderr'),
     entryFunction,
