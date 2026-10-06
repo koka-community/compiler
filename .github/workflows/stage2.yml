@@ -6,6 +6,7 @@
 # - Stage 2 is the port compiled by stage 1. It runs the test corpus and the
 #   unit tests, and is what ships.
 # - The playground job builds the browser playground with the Linux stage 2.
+#   On pushes to main it is deployed to GitHub Pages.
 #
 # A release is a directory `koka-port-<os>-<arch>/` holding `bin/koka`, `lib`
 # (the standard library sources) and `kklib` (the C runtime sources): the
@@ -130,8 +131,8 @@ jobs:
           echo "STAGE2=$PWD/$STAGE2" >> "$GITHUB_ENV"
 
       # the corpus in test/, compiled and run by stage 2; the runner is itself
-      # compiled by stage 2, reusing stage 2's modules through the build tag
-      # the fixtures were recorded in the C locale
+      # compiled by stage 2, reusing stage 2's modules through the build tag.
+      # The fixtures were recorded in the C locale.
       - name: Test corpus
         env:
           LANG: C
@@ -240,6 +241,30 @@ jobs:
         with:
           name: koka-playground
           path: web/playground/dist
+
+      - name: Upload for GitHub Pages
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: web/playground/dist
+
+  # https://koka-community.github.io/compiler/ serves the playground built from
+  # main. Pages cannot set the COOP/COEP headers the wasm worker needs;
+  # coi-serviceworker (deployed with the frontend) provides them.
+  pages:
+    name: Deploy the playground
+    needs: playground
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
 
   release:
     name: Release

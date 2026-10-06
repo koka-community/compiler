@@ -119,6 +119,8 @@ npx vite                                     # serve it locally
 
 `scripts/playground.sh` finds wasi-sdk through `WASI_SDK_PATH`, `~/.wasi-sdk` or `~/wasi-sdk-*`.
 
+CI deploys the playground built from `main` to <https://koka-community.github.io/compiler/>.
+
 ## Repository layout
 
 | directory | contents |
