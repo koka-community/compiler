@@ -218,6 +218,15 @@ jobs:
             | tar -C "$RUNNER_TEMP" -xz
           echo "WASI_SDK_PATH=$RUNNER_TEMP/wasi-sdk-$V.0-x86_64-linux" >> "$GITHUB_ENV"
 
+      # wasm-opt (binaryen) shrinks the compiler's wasm by about a quarter
+      # (44.6 MB -> 32.5 MB with -O3); scripts/playground.sh uses it when on PATH
+      - name: Install binaryen
+        run: |
+          V=version_133
+          curl -sSL "https://github.com/WebAssembly/binaryen/releases/download/$V/binaryen-$V-x86_64-linux.tar.gz" \
+            | tar -C "$RUNNER_TEMP" -xz
+          echo "$RUNNER_TEMP/binaryen-$V/bin" >> "$GITHUB_PATH"
+
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
