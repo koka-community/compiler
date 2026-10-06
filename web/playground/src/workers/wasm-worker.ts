@@ -109,7 +109,10 @@ function runCompiler(
     wasi.start(instance as unknown as { exports: { memory: WebAssembly.Memory; _start: () => void } });
   } catch (e) {
     if (!(e instanceof Error && e.message?.includes('exit'))) {
+      // a trap or exception in the compiler itself: show it in the log, which is
+      // the only place the user sees why there is no result
       stderrLines.push(String(e));
+      self.postMessage({ type: 'log', text: 'compiler crashed: ' + String(e) });
     }
   }
 
