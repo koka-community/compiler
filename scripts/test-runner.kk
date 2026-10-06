@@ -394,6 +394,9 @@ fun run-one-raw(bin: string, common: list<string>, kk: path): <exn,ioc> outcome
   val caseFlags = if flagsFile.dir/is-file
                     then flagsFile.file/read-text-file.replace-all("\"", " ").split(" ").map(trim).filter(fn(s) !s.is-empty)
                     else []
+  precompile-for(kk).foreach fn((extra, file))
+    val pre = [bin] ++ common ++ extra ++ [(test-root() / file.path).string]
+    run-system-read(pre.join(" ") ++ " >/dev/null 2>&1").ignore
   val argv = [bin] ++ common ++ dir-flags(kk.dirname.path) ++ caseFlags ++ [kk.string]
   // stdout ONLY: stderr (e.g. `trace()`) is discarded, which is what the
   // fixtures were recorded against. Without the redirect a test program's
@@ -410,6 +413,17 @@ fun run-one-raw(bin: string, common: list<string>, kk: path): <exn,ioc> outcome
         val kind = if low.contains("parse error") || low.contains("type error") || low.contains("cannot be found")
                      then "COMPILEFAIL" else "MISMATCH"
         Outcome(kk.string, kind, failure-detail(actual, expected))
+
+// Builds a fixture assumes are already in the build directory when its test
+// runs: upstream's test/Spec.hs compiles them, output discarded, into the one
+// directory every test shares before any test starts. Each worker here has its
+// own directory, so a test's worker compiles them just before it, with the same
+// flags. `medium/allsamples` loads the samples from their interfaces, so their
+// warnings are not in its output (`util/link-test.kk` imports `samples/all`).
+fun precompile-for(kk: path): io list<(list<string>, string)>
+  match kk.string.replace-all(corpus-test().string ++ "/", "")
+    "medium/allsamples.kk" -> [(["-e"], "util/link-test.kk")]
+    _ -> []
 
 // ---------------------------------------------------------------------------
 
