@@ -131,7 +131,7 @@ pub fun await1-noexn( label : string = "", setup : (resume : (a) -> ioc () ) -> 
   
 // Convenience function for async functions where the setup cannot fail. In that case
 // the result will never be an error.
-fun await-noexn( label : string = "", setup : (evloop : event-loop, resume : (a) -> ioc ()) -> ioc dispose-fn ) : async a  
+pub fun await-noexn( label : string = "", setup : (evloop : event-loop, resume : (a) -> ioc ()) -> ioc dispose-fn ) : async a  
   val res = setup/await-error( label, fn(evloop,resume) setup(evloop,resume).Ok )   
   match res
     Ok(x)      -> x
@@ -175,7 +175,7 @@ fun await-result/error( res : await-result<a>, ?label : string ) : discontinue e
     Result(value)  -> Ok(value)
     Exception(exn) -> Error(exn)
     Cancel -> 
-      trace("discontinue from await: " ++ label)
+      // trace("discontinue from await: " ++ label)
       discontinue()
 
 extend type exception-info
@@ -250,12 +250,12 @@ fun async-evloop(evloop : event-loop, action : () -> <async,ioc> () ) : ioc ()
 
   // Cancel all outstanding async requests that are in `scope`
   fun cancel-outstanding-in-scope( scope : async-scope ) : ioc ()
-    (!outstanding).foreach fn(AwaitResumption(await-scope,label,resume-cb))
+    (!outstanding).foreach fn(AwaitResumption(await-scope,_label,resume-cb))
       if await-scope <= scope then 
-        trace("cancel: " ++ label ++ " at " ++ scope.show)
+        // trace("cancel: " ++ label ++ " at " ++ scope.show)
         resume-cb(Cancel,True)
-      else 
-        trace("no cancel: " ++ label ++ " at " ++ scope.show)
+      // else
+      // trace("no cancel: " ++ label ++ " at " ++ scope.show)
   
   // Schedule an async call for the next evloop iteration (uv_check_t / setImmediate)
   fun schedule( f : () -> ioc () ) : ioc ()    
@@ -275,14 +275,14 @@ fun async-evloop(evloop : event-loop, action : () -> <async,ioc> () ) : ioc ()
     val async-scope = root-scope    
     fun is-scope-canceled(scope)        (scope==root-scope && !canceled)
     fun cancel-scope(scope)             
-      trace("cancel-scope: " ++ scope.show)
+      // trace("cancel-scope: " ++ scope.show)
       if scope == root-scope then canceled := True
       cancel-outstanding-in-scope(scope)
   
   with handler<discontinue>
     final ctl discontinue()             
       cancel-outstanding-in-scope(root-scope)
-      trace("discontinue occurred at the toplevel async-scope")      
+      // trace("discontinue occurred at the toplevel async-scope")
 
   action()
     
