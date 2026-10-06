@@ -203,7 +203,10 @@ fun dir-flags(dir: path): io list<string>
 // failure (the Python harness reports 17 SKIP; this reported none).
 fun dir-excludes(dir: path): io list<string>
   val cfg = (dir / "config.json".path)
-  val mine = if cfg.dir/is-file then parse-config-excludes(cfg.file/read-text-file) else []
+  val platform-keys = [host-os-name(), host-arch(), host-os-name() ++ "-" ++ host-arch()]
+  val mine = if !cfg.dir/is-file then [] else
+    val txt = cfg.file/read-text-file
+    txt.parse-config-excludes ++ txt.parse-platform-excludes(platform-keys)
   val parent = dir.dirname.path
   if parent.string == dir.string || !dir.string.starts-with(corpus-test().string).bool
     then mine
@@ -219,6 +222,20 @@ fun parse-config-excludes(txt: string): _ list<string>
       m.replace-all("exclude", " ").replace-all("\"", " ").replace-all(",", " ")
        .replace-all(":", " ").replace-all("[", " ").replace-all("]", " ")
        .split(" ").map(trim).filter(fn(x) !x.is-empty)
+
+// `"exclude-platform": { "linux-arm64": [ "a", "b" ], ... }`: the tests a
+// platform does not run, keyed by an os, an architecture, or `os-arch`.
+fun parse-platform-excludes(txt: string, keys: list<string>): _ list<string>
+  match txt.find(regex("\"exclude-platform\"[ \t]*:[ \t]*\\{[^}]*\\}"))
+    Nothing -> []
+    Just(obj) ->
+      obj.find-all(regex("\"[a-zA-Z0-9_-]+\"[ \t]*:[ \t]*\\[[^\\]]*\\]")).flatmap fn(entry)
+        val key = entry.find(regex("\"[a-zA-Z0-9_-]+\"")).default("").replace-all("\"", "")
+                       .replace-all("_", "-").to-lower
+        if !keys.any(fn(k) k == key) then [] else
+          entry.find(regex("\\[[^\\]]*\\]")).default("")
+               .replace-all("\"", " ").replace-all(",", " ").replace-all("[", " ").replace-all("]", " ")
+               .split(" ").map(trim).filter(fn(x) !x.is-empty)
 
 // upstream Spec.hs / the Python harness: a pattern containing regex
 // metacharacters is matched as a regex, anything else compared literally

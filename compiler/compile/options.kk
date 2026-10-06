@@ -633,7 +633,7 @@ pub fun parse-options(fl0: flags, args: list<string>): either<string, (flags, mo
 // upstream `hostArch`/`getTargetArch`: normalize the OS-reported CPU arch
 // name to koka's own vocabulary (x64/arm64/x86/...). Upstream additionally
 // special-cases Windows-on-ARM (`PROCESSOR_IDENTIFIER`); not ported here.
-fun host-arch(): ndet string
+pub fun host-arch(): ndet string
   match get-cpu-arch().to-lower
     "aarch64" -> "arm64"
     "armv8" -> "arm64"
@@ -647,7 +647,7 @@ fun host-arch(): ndet string
     "powerpc64le" -> "ppc64le"
     arch -> arch
 
-fun host-os-name(): ndet string
+pub fun host-os-name(): ndet string
   match get-os-name()
     "windows" -> "windows"
     "macos" -> "macos"
