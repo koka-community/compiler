@@ -56,7 +56,7 @@ fun corpus-test(): io path
 
 pub struct outcome
   file   : string
-  status : string   // PASS | SKIP | MISMATCH | COMPILEFAIL | TIMEOUT
+  status : string   // PASS | SKIP | KNOWN | MISMATCH | COMPILEFAIL | TIMEOUT
   detail : string
 
 // ---------------------------------------------------------------------------
@@ -805,7 +805,7 @@ pub fun main()
   // A warm-up is still needed: `precompile` shells out, so it warms the build
   // DIRECTORY but none of THIS process's lazy state, and concurrent
   // first-touch of that (the lexer tables above all) crashes.
-  val results = if subprocess-mode()
+  val results0 = if subprocess-mode()
                   then run-chunks(bin, common, chunks(max(1, min(jobs(), tests.length)), tests)
                                                 .filter(fn(c) !c.is-nil)).concat
                 elif jobs() <= 1
@@ -819,7 +819,16 @@ pub fun main()
                         safe-group(common, k0, [warm], Session()).snd ++
                           run-groups(common, Cons((k0, more), rest))
   val ms = wall-ms() - t0
-  val counts = ["PASS", "SKIP", "MISMATCH", "COMPILEFAIL", "ERROR"].map fn(st)
+  val known = known-mismatches()
+  val corpus-prefix = corpus-test().string ++ "/"
+  fun relative(r: outcome): string
+    r.file.replace-all(corpus-prefix, "")
+  val results = results0.map fn(r)
+    if r.status != "PASS" && r.status != "SKIP" && known.any(fn(k) k == r.relative)
+      then r(status = "KNOWN") else r
+  // a listed test that passes must come off the list, so the list stays true
+  val fixed = results.filter(fn(r) r.status == "PASS" && known.any(fn(k) k == r.relative))
+  val counts = ["PASS", "SKIP", "KNOWN", "MISMATCH", "COMPILEFAIL", "ERROR"].map fn(st)
     (st, results.filter(fn(r) r.status == st).length)
   println("")
   counts.foreach fn((st, n))
@@ -832,8 +841,17 @@ pub fun main()
     if r.detail.is-empty then () else
       val ls = r.detail.split("\n")
       (if diff-mode() then ls else ls.take(2)).foreach(fn(l) println("      | " ++ l))
+  fixed.foreach fn(r)
+    println("  known mismatch now passes, remove it from test/known-mismatches.txt: " ++ r.relative)
   // a failing exit code, so CI can gate on the run
-  if results.any(fn(r) r.status != "PASS" && r.status != "SKIP") then exit(1)
+  if fixed.is-cons || results.any(fn(r) r.status != "PASS" && r.status != "SKIP" && r.status != "KNOWN") then exit(1)
+
+// The tests expected to mismatch, one path per line relative to `test/`, each
+// with the reason after a `#`. They are reported as KNOWN and do not fail a run.
+fun known-mismatches(): io list<string>
+  val listed = corpus-test() / "known-mismatches.txt".path
+  if !listed.dir/is-file then [] else
+    listed.file/read-text-file.lines.map(fn(l) l.split("#").head.default("").trim).filter(fn(l) !l.is-empty)
 
 fun newest-driver(): io string
   val d = ".koka/v3.2.7".path

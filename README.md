@@ -88,7 +88,9 @@ export LANG=C
 "$STAGE2" -i. -O2 --buildtag=bootstrap -e scripts/test-runner.kk -- "$STAGE2" static/wrong   # one directory
 ```
 
-It exits nonzero when a test fails. Environment variables:
+It exits nonzero when a test fails. The tests listed in `test/known-mismatches.txt` are expected to fail and are reported as KNOWN; a listed test that passes fails the run, so the list stays accurate.
+
+Environment variables:
 
 | variable | effect |
 | --- | --- |
@@ -107,11 +109,15 @@ KOKA="$STAGE2" "$STAGE2" -i. -e run-tests.kk
 `web/playground` runs the compiler in the browser, as a WASI module built with [wasi-sdk](https://github.com/WebAssembly/wasi-sdk) 25:
 
 ```bash
-KOKA="$STAGE2" scripts/playground.sh        # the wasm compiler, precompiled std, samples
-cd web/playground && npm install && npm run build
-node test/test-wasm.mjs                     # compile and run samples through the wasm compiler
-npx vite                                    # serve it locally
+(cd web/playground && npm install)
+KOKA="$STAGE2" scripts/playground.sh         # the wasm compiler, precompiled std, samples
+cd web/playground
+npm run build
+node test/test-wasm.mjs                      # compile and run samples through the wasm compiler
+npx vite                                     # serve it locally
 ```
+
+`scripts/playground.sh` finds wasi-sdk through `WASI_SDK_PATH`, `~/.wasi-sdk` or `~/wasi-sdk-*`.
 
 ## Repository layout
 
