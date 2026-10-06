@@ -58,6 +58,8 @@ Each of these is small and independently shippable.
 
 Today the port is validated entirely against someone else's fixtures. That is the right gate for parity and the wrong one for a compiler that intends to move ahead of them.
 
+As of 2026-10-05, CI (`.github/workflows/stage2.yml`) builds the port on four platforms and runs the corpus and the unit tests (`run-tests.kk`) with stage 2 on every push and pull request.
+
 - **Tests for the std library, in this repo.** `std/data/rb-map`, `rb-set`, `int-map`, `sort` and `trie` have tests in `koka-community/std/test`; they come along in Phase 1.2. Everything else in `lib/` has none here.
 - **Unit tests for compiler internals.** `test/tests/{lex,parse}` is the whole of it. The passes with the most porting risk and no direct test are specialize, parc/reuse, monadic lifting and the interface round-trip (`kkc-check.kk` covers the last one as a script, not as a test).
 - **A regression test per fixed bug.** The specialize borrow/TRMC fix went upstream with a test; several earlier fixes (evidence-vector scramble, unroll unique counter, interface qualified wildcards) have none here.

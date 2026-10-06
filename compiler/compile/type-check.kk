@@ -5,10 +5,9 @@
 //
 // Divergences from upstream (documented, not silent):
 //  - Pretty.Env / colorScheme parameters are ambient effects in this port.
-//  - Core.Check (coreCheck) is not ported; the `--checkcore` flag is parsed
-//    but never consulted (upstream default is False anyway), so the port has
-//    no inter-pass Core-IR well-formedness checking. CheckFBIP IS ported and
-//    wired -- see `check-fbip(...)` below.
+//  - CheckFBIP is wired here (`check-fbip(...)` below); the `--checkcore`
+//    well-formedness check runs between optimization passes instead
+//    (compile/optimize).
 //  - range maps: the port's infer-types always builds one via the ambient
 //    build-range-map handler installed by the caller (upstream threads a
 //    Maybe RangeMap).

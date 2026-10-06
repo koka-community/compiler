@@ -13,11 +13,11 @@ Companions: `docs/port-optimization-state.md` (the optimization queue), `docs/ro
 - Compiling a script needs neither `--sharedir` nor `-i` (`c1a5088`).
 - Language server: mid-session restarts fixed (`f165f65`, libuv's zero-byte read treated as end of input); VS Code edit-latency test in `support/vscode/koka.language-koka` (`8f73d90`, run with `KOKA_BENCH=1`).
 
-### Upstream PR stack
+### Reference-compiler stack
 
-- 8 PRs cleaned and verified standalone; only #932 (interface round-trip) is pushed, as a draft.
-- `infer-effects` carries an `isHandlerFree` rule derived from the evidence invariant, with two tests (`open-none-core`, `open-none-extern`), each failing on the older rule.
-- The stack (`tim/all`, 437 examples / 0 failures) and `dev-compiler` (431 / 0) are synced with the PRs.
+- The fixes the port needs are 21 single-commit layers (`stack/*` in `~/koka`, top `stack/all`) on `upstream/dev`; see `docs/upstream-pr-burndown.md`.
+- CI builds stage 1 with `port-reference` on `TimWhiting/koka`, the top of the stack plus the recursive-group type-argument fix (2026-10-05).
+- Its `Type/TypeVar.hs` keeps upstream's kind assertions; `dev-compiler2`, the previous CI reference, comments them out, so a port built with it hid ill-kinded core.
 
 ### Port commits of 2026-09-25/26
 

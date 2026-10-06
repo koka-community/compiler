@@ -1,14 +1,39 @@
 # Upstream PR burn-down
 
-The port's compiler fixes that belong in `koka-lang/koka`, as a stack of single-commit branches in the HASKELL checkout (`~/koka`, branches `tim/*`).
-`tim/all` is a name for the top of the stack, not a separate layer.
+The port depends on fixes to the reference compiler that are not in `koka-lang/koka` yet.
+They live in the Haskell checkout (`~/koka`) as a stack of single-commit branches, `stack/NN-<topic>`, on top of `upstream/dev`, managed with `gh stack` and kept local.
+`stack/all` names the top of the stack.
 
-State as of 2026-09-24: **nothing is pushed**; no branch has a tracking ref.
-The stack is restacked onto `upstream/dev` at `d881e92b6`, one commit per layer.
-`scripts/restack-upstream-stack.sh` replays `branch.<layer>.stackBaseRev..layer` rather than using a merge-base, which is what stops an amended layer's OLD version from being swept into the next rebase.
-Edit the stack in the detached worktree `~/koka/.worktrees/tim-stack`, so the script can check out any layer.
+CI builds stage 1 with `port-reference` on `TimWhiting/koka`: the top of the stack plus any fixes that have not been folded into a layer yet, pinned by commit in `.github/workflows/stage2.yml`.
+When the stack changes, push a new `port-reference` and update the pin.
 
-## Submission order
+The layers, bottom to top:
+
+- `stack/01-simplify-substitution-stops-at-a-binder`
+- `stack/02-simplify-keep-fresh-names-clear-of-an-in`
+- `stack/02b-rec-call-type-args`
+- `stack/03-divergence-leave-never-decreasing-parame`
+- `stack/06-open-resolve-only-proven-code-skips-open`
+- `stack/07-simplify-bound-case-of-case-duplication`
+- `stack/08-specialize-only-respecialize-an-ancestor`
+- `stack/09-specialize-fix-infinite-loop-and-unbound`
+- `stack/10-parc-defer-pattern-dups-into-an-immediat`
+- `stack/11-std-core-update-a-reference-or-local-var`
+- `stack/12-core-interfaces-serialize-constructor-co`
+- `stack/13-core-interfaces-declare-private-synonyms`
+- `stack/14-core-interfaces-print-a-synonym-without`
+- `stack/15-core-interfaces-do-not-module-qualify-wi`
+- `stack/16-core-interfaces-an-unqualified-type-cons`
+- `stack/18-kklib-stuck-refcounts-for-process-lifeti`
+- `stack/19-kklib-initialize-string-literals-once-sa`
+- `stack/20-codegen-a-module-s-init-runs-exactly-onc`
+- `stack/21-std-core-delayed-force-a-delayed-value-a`
+- `stack/23-std-async-worker-threads-and-a-thread-sa`
+- `stack/24-std-async-a-bounded-channel-with-backpre`
+
+## Submission order (2026-09-24)
+
+The plan as of 2026-09-24, from the earlier `tim/*` stack.
 
 The stack layers were squashes by theme; the PRs are rebuilt from them standalone on `upstream/dev`, one per compiler pass or runtime area, folding in the related upstream PRs so there are fewer to track.
 Local branches are `tim/pr/<name>` in `~/koka`; only #932 is pushed.
