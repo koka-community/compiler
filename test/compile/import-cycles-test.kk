@@ -9,7 +9,7 @@ fun n( s : string ) : name
 fun cycles( deps : list<(string, list<string>)> ) : div list<list<string>>
   import-cycles(deps.map(fn((m, ds)) (n(m), ds.map(n)))).map(fn(c) c.map(show-plain).sort)
 
-fun suite()
+pub fun suite()
   test("an acyclic graph has no cycles")
     expect([])
       cycles([("c", ["b"]), ("b", ["a"]), ("a", [])])

@@ -211,7 +211,7 @@ fun patarg/pretty(pa: (maybe<(name, range)>, pattern<t>), ?t/pretty: t -> <div|e
     (Just((n, _)), p) -> n.pretty |+| "as".text |+| p.pretty
     (Nothing, p) -> p.pretty
 
-fun pat/pretty(p: pattern<t>, ?t/pretty: t -> <div|e> doc): <div|e> doc
+pub fun pat/pretty(p: pattern<t>, ?t/pretty: t -> <div|e> doc): <div|e> doc
   match p
     PatWild -> "_".text
     PatVar(patvar) -> patvar.vbm/pretty

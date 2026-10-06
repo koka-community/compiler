@@ -6,7 +6,7 @@ import std/test
 fun n( s : string ) : name
   s.new-name
 
-fun suite()
+pub fun suite()
   val evs = [
     PhaseEnd(n("a"), TypeCheck, 10),
     PhaseEnd(n("b"), TypeCheck, 20),

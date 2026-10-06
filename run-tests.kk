@@ -1,27 +1,35 @@
-import std/test/detect
+// Runs the unit tests: every `test/**/*-test.kk` that defines `pub fun suite()`.
+//
+//   ./koka -e run-tests.kk [-- <std/test options>]
+//   KOKA=<a built driver> <a built driver> -e run-tests.kk
+//
+// A generated module imports every suite and runs them with `std/test/run`, so a
+// new suite needs no registration. `KOKA` selects the compiler that builds the
+// generated module (default `./koka`, the reference compiler wrapper); the exit
+// code is nonzero when a test fails.
 import std/os/path
+import std/os/dir
+import std/os/file
 import std/os/env
 import std/os/process
-import std/core-extras
+
+fun suites(): io list<path>
+  "test".path.list-directory-recursive.filter fn(p)
+    p.string.ends-with("-test.kk").bool && p.read-text-file.contains("pub fun suite()")
+
+fun runner-source(files: list<path>): string
+  val mods = files.map(fn(p) p.string.replace-all("\\", "/")).map(fn(s) s.ends-with(".kk").map(string).default(s))
+  val imports = mods.map-indexed(fn(i, m) "import t" ++ i.show ++ " = " ++ m ++ "\n").join
+  val calls = mods.map-indexed(fn(i, _) "    t" ++ i.show ++ "/suite()\n").join
+  "import std/test\nimport std/test/run\n" ++ imports ++
+    "\npub fun main()\n  run-tests\n" ++ calls
 
 pub fun main()
-  val test-path = generate-test-runner()
-
-  // run the generated tests, passing through any arguments
-  val args = get-args().map fn(arg)
-    // basic escaping effort, TODO a version of run-system that accepts a list of args
-    "'" ++ arg ++ "'"
-  .join(" ")
-  // Which koka to use: `KOKA=/path/to/koka ./koka -e run-tests.kk`.
-  // Defaults to whatever is on PATH, which on this machine is an older
-  // system install whose std lacks modules this repo needs -- so the fork's
-  // koka must be selected explicitly.
-  val koka-exe = get-env-value("KOKA").default("koka")
-  // Include the generated runner's own directory so koka can resolve it
-  // regardless of where generate-test-runner put it.
-  val cmd = koka-exe ++ " -e -i../std -i../parsing -i" ++ test-path.dirname
-              ++ " " ++ test-path.string ++ " -- " ++ args
-
-  println(" + " ++ cmd)
-  val status = run-system(cmd)
-  exit(status)
+  val files = suites()
+  val runner = ".koka/unit-tests/run-all.kk".path
+  write-text-file(runner, runner-source(files))
+  val koka = get-env-value("KOKA").default("./koka")
+  val args = get-args().map(fn(a) "'" ++ a ++ "'").join(" ")
+  val cmd = koka ++ " -i. -e " ++ runner.string ++ " -- " ++ args
+  println("running " ++ files.length.show ++ " suites: " ++ cmd)
+  exit(run-system(cmd))

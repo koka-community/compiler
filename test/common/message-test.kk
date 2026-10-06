@@ -1,11 +1,11 @@
 import compiler/common/message
 import compiler/common/range
 import compiler/common/color-scheme
-import std/pretty/pprint
+import compiler/lib/pprint
 import std/pretty/printer
 import std/test
 
-fun suite()
+pub fun suite()
   test("tables")
     expect(r#"
 Test          : here

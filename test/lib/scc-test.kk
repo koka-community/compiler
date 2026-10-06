@@ -1,7 +1,7 @@
 import compiler/lib/scc
 import std/test
 
-fun suite()
+pub fun suite()
   test("scc")
     // 1 -> 2 (from 1's edge list) and 2 -> 1, so {1,2} is a single strongly
     // connected component; the previous expectation split them, which is not

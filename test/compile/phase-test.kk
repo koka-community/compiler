@@ -3,7 +3,7 @@ import compiler/common/name
 import std/os/path
 import std/test
 
-fun suite()
+pub fun suite()
   test("is-stale: source newer than output")
     expect(True)
       is-stale(200, 100, [])

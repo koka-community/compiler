@@ -6,7 +6,7 @@ import compiler/common/syntax
 import compiler/lib/pprint
 import std/test
 
-fun suite()
+pub fun suite()
   val v = "v".new-name
   val vvar : expr<user-type> = Var(v, False, null)
   val tint = TpCon("int".new-name, null)

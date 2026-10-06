@@ -2,7 +2,7 @@ import compiler/common/name
 import compiler/common/name-collections
 import std/test
 
-fun suite()
+pub fun suite()
   group("Name collections")
     test("Qualified Name Map")
       val qname1 = "hello/world".read-qualified-name

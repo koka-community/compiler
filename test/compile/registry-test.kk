@@ -5,7 +5,7 @@ import std/test
 fun n( s : string ) : name
   s.new-name
 
-fun suite()
+pub fun suite()
   test("demand registers a module once")
     expect(1)
       val (r1, _) = registry/empty().demand(Nothing, n("a"))
