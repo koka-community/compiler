@@ -116,7 +116,7 @@ fun conan-settings-from-flags(fl: flags, cc: cc): ndet (list<string>, list<(stri
 // upstream `conanCLibrary`. `pkg` is e.g. "pcre2/[>=10.37]"; `pkgBase` is the
 // part before the first "/" ("pcre2"), used for the shared/static-linkage
 // option upstream passes to `conan install`.
-fun conan-c-library(fl: flags, cc: cc, clib: string, pkg: string): io either<list<string>, (string, list<string>)>
+fun conan-c-library(fl: flags, cc: cc, clib: string, pkg: string): <io,log> either<list<string>, (string, list<string>)>
   val isWindows = cc/on-windows()
   match search-path(fl.conan)
     Nothing ->
@@ -163,7 +163,7 @@ fun conan-c-library(fl: flags, cc: cc, clib: string, pkg: string): io either<lis
           match ppaths
             [ppath] -> if ppath.path.is-directory then Just((cachepkg, ppath)) else Nothing
             _ -> Nothing
-      fun install-package(): io ()
+      fun install-package(): <io,log> ()
         val installCmd = Cons(conanCmd, ["install", "--build", "missing", "--requires", pkg]) ++ settings
         if !fl.autoInstallLibs then
           println("warning: this module requires the conan package " ++ pkg ++
@@ -173,12 +173,12 @@ fun conan-c-library(fl: flags, cc: cc, clib: string, pkg: string): io either<lis
                     "\n         to install the required C library and header files")
         else
           val _ = run-conan-env([conanCmd, "profile", "detect"])  // ensure a default profile exists
-          println("install: conan package: " ++ pkg)
+          phase("install", "conan package: " ++ pkg)
           val _ = run-conan-env(installCmd)
           ()
       match find-package-dir()
         Just((pkgName, pkgDir)) ->
-          println("package : conan " ++ pkgName)
+          phase("package", "conan " ++ pkgName)
           match search-c-library(fl, clib, cc, [pkgDir ++ "/lib"])
             Just(res) -> Right(res)
             Nothing -> Left([])
@@ -186,7 +186,7 @@ fun conan-c-library(fl: flags, cc: cc, clib: string, pkg: string): io either<lis
           install-package()
           match find-package-dir()
             Just((pkgName, pkgDir)) ->
-              println("package : conan " ++ pkgName)
+              phase("package", "conan " ++ pkgName)
               match search-c-library(fl, clib, cc, [pkgDir ++ "/lib"])
                 Just(res) -> Right(res)
                 Nothing -> Left([])
@@ -216,7 +216,7 @@ fun vcpkg-find-root(vcpkg-root: string): io (string, string)
           (root, fname)
 
 // upstream `vcpkgCLibrary`.
-fun vcpkg-c-library(fl: flags, cc: cc, clib: string, pkg: string): io either<list<string>, (string, list<string>)>
+fun vcpkg-c-library(fl: flags, cc: cc, clib: string, pkg: string): <io,log> either<list<string>, (string, list<string>)>
   val (root, vcpkgCmd) = vcpkg-find-root(fl.vcpkgRoot)
   if !vcpkgCmd.path.is-file then
     Left(["this module requires vcpkg to install the " ++ clib ++ " library.",
@@ -227,7 +227,7 @@ fun vcpkg-c-library(fl: flags, cc: cc, clib: string, pkg: string): io either<lis
   else
     val debugish = match fl.build-type { DebugFull -> True; Debug -> True; _ -> False }
     val libDir = root ++ "/installed/" ++ fl.vcpkgTriplet ++ (if debugish then "/debug/lib" else "/lib")
-    println("package : vcpkg " ++ pkg)
+    phase("package", "vcpkg " ++ pkg)
     match search-c-library(fl, clib, cc, [libDir])
       Just(res) -> Right(res)
       Nothing ->
@@ -244,7 +244,7 @@ fun vcpkg-c-library(fl: flags, cc: cc, clib: string, pkg: string): io either<lis
                     "\n         to install the required C library and header files")
           Left([])
         else
-          println("install: vcpkg package: " ++ pkg)
+          phase("install", "vcpkg package: " ++ pkg)
           val _ = run-system-read(installCmd.map(quoted).join(" ") ++ " 2>&1")
           match search-c-library(fl, clib, cc, [libDir])
             Just(res) -> Right(res)
