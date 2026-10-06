@@ -135,6 +135,8 @@ jobs:
       - name: Test corpus
         env:
           LANG: C
+          # a failure shows its whole expected and actual output
+          KOKA_TEST_DIFF: "1"
         run: |
           "$STAGE2" -i"$PWD" -O2 --buildtag=bootstrap -e scripts/test-runner.kk -- "$STAGE2"
 
