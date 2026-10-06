@@ -105,57 +105,97 @@ pub fun def/free-vars(Def(_, _, e): def): _ rbset<tName>
   e.free-vars
 
 // Term substitutions
-pub noinline fun list/(|->)(sub: list<(tName, expr)>, l: list<a>, ?(|->): (list<(tName, expr)>, a) -> _ a): _ list<a>
-  l.map(sub |-> _)
 
-pub fun dg/(|->)(sub: list<(tName, expr)>, dg: def-group): _ def-group
+// A substitution that rewrites each occurrence of a variable: the replacement
+// for `x` gets the occurrence, `Var x`, or `TypeApp (Var x) targs` as a whole.
+pub alias occ-subst = list<(tName, (expr) -> div expr)>
+
+// `|->` substitutes variables; an occurrence keeps the type arguments it is
+// applied to. `subst-occurrences` is the substitution behind it. It stops at a
+// binder that rebinds a name: names are not always unique (a fresh name can
+// coincide with a binder minted by another counter), and substituting past a
+// rebinding captures its occurrences.
+fun keep-type-args(sub: list<(tName, expr)>): occ-subst
+  sub.map fn((nm, e))
+    fun replace(occurrence: expr): div expr
+      match occurrence
+        TypeApp(_, targs) -> TypeApp(e, targs)
+        _ -> e
+    (nm, replace)
+
+// The substitution without the names a binder rebinds.
+fun unbind-names(sub: occ-subst, names: list<name>): occ-subst
+  sub.filter(fn((nm, _)) !names.any(_ == nm.get-name))
+
+pub noinline fun list/(|->)(sub: list<(tName, expr)>, l: list<a>, ?subst-occurrences: (occ-subst, a) -> div a): div list<a>
+  sub.keep-type-args.list/subst-occurrences(l)
+
+pub fun dg/(|->)(sub: list<(tName, expr)>, dg: def-group): div def-group
+  sub.keep-type-args.dg/subst-occurrences(dg)
+
+pub fun def/(|->)(sub: list<(tName, expr)>, d: def): div def
+  sub.keep-type-args.def/subst-occurrences(d)
+
+pub fun expr/(|->)(sub: list<(tName, expr)>, ex: expr): div expr
+  sub.keep-type-args.expr/subst-occurrences(ex)
+
+pub noinline fun branch/(|->)(sub: list<(tName, expr)>, b: branch): div branch
+  sub.keep-type-args.branch/subst-occurrences(b)
+
+pub noinline fun guard/(|->)(sub: list<(tName, expr)>, g: guard): div guard
+  sub.keep-type-args.guard/subst-occurrences(g)
+
+pub noinline fun list/subst-occurrences(sub: occ-subst, l: list<a>, ?subst-occurrences: (occ-subst, a) -> div a): div list<a>
+  l.map(fn(x) subst-occurrences(sub, x))
+
+pub fun dg/subst-occurrences(sub: occ-subst, dg: def-group): div def-group
   match dg
-    DefRec(defs) -> DefRec(sub |-> defs)
-    DefNonRec(def) -> DefNonRec(sub |-> def)
+    DefRec(defs) -> DefRec(sub.list/subst-occurrences(defs))
+    DefNonRec(def) -> DefNonRec(sub.def/subst-occurrences(def))
 
-pub fun def/(|->)(sub: list<(tName, expr)>, d: def): _ def
-  val dname = d.def-name
-  val sub' = sub.filter(fn((nm, _)) nm.get-name != dname)
-  d(defExpr = sub' |-> d.defExpr)
+pub fun def/subst-occurrences(sub: occ-subst, d: def): div def
+  d(defExpr = sub.unbind-names([d.def-name]).expr/subst-occurrences(d.defExpr))
 
-pub fun expr/(|->)(sub: list<(tName, expr)>, ex: expr): _ expr
+pub fun expr/subst-occurrences(sub: occ-subst, ex: expr): div expr
   match ex
     Lam(tnames, eff, expr) ->
       val sub' = sub.filter(fn((nm, _)) !tnames.any(_ == nm))
-      Lam(tnames, eff, sub' |-> expr)
-    Var(tn, _) -> sub.lookup(_ == tn).default(ex)
-    App(e1, e2) -> App(sub |-> e1, sub |-> e2)
-    TypeLam(tvs, e) -> TypeLam(tvs, sub |-> e)
-    TypeApp(e, tp) -> TypeApp(sub |-> e, tp)
+      Lam(tnames, eff, sub'.expr/subst-occurrences(expr))
+    Var(tn, _) -> match sub.lookup(_ == tn)
+      Just(replace) -> replace(ex)
+      Nothing -> ex
+    TypeApp(Var(tn, _), _) | sub.lookup(_ == tn).is-just -> match sub.lookup(_ == tn)
+      Just(replace) -> replace(ex)
+      Nothing -> ex
+    App(e1, e2) -> App(sub.expr/subst-occurrences(e1), sub.list/subst-occurrences(e2))
+    TypeLam(tvs, e) -> TypeLam(tvs, sub.expr/subst-occurrences(e))
+    TypeApp(e, tp) -> TypeApp(sub.expr/subst-occurrences(e), tp)
     Con -> ex
     ELit -> ex
     Let(dgs, e) ->
       val (dgs', sub') = subst-def-groups(sub, dgs)
-      Let(dgs', sub' |-> e)
-    Case(exprs, bs) -> Case(sub |-> exprs, sub |-> bs)
+      Let(dgs', sub'.expr/subst-occurrences(e))
+    Case(exprs, bs) -> Case(sub.list/subst-occurrences(exprs), sub.list/subst-occurrences(bs))
 
 // Substitute into a let's definition groups in order: a group that binds a name
 // shadows it for the groups after it and for the body, so the substitution stops
-// there. Names are not always unique (a fresh name can coincide with a binder
-// minted by another counter), and substituting past a rebinding captures its
-// occurrences. Returns the substitution left for the body.
-fun subst-def-groups(sub: list<(tName, expr)>, dgs: list<def-group>): _ (list<def-group>, list<(tName, expr)>)
+// there. Returns the substitution left for the body.
+fun subst-def-groups(sub: occ-subst, dgs: list<def-group>): div (list<def-group>, occ-subst)
   match dgs
     Nil -> (Nil, sub)
     Cons(dg, rest) ->
-      val dg' = sub.dg/(|->)(dg)
-      val names = [dg].flatten.map(def-name)
-      val sub1 = sub.filter(fn((nm, _)) !names.any(_ == nm.get-name))
+      val dg' = sub.dg/subst-occurrences(dg)
+      val sub1 = sub.unbind-names([dg].flatten.map(def-name))
       val (rest', sub2) = subst-def-groups(sub1, rest)
       (Cons(dg', rest'), sub2)
 
-pub noinline fun branch/(|->)(sub: list<(tName, expr)>, Branch(patts, guards): branch): _ branch
+pub noinline fun branch/subst-occurrences(sub: occ-subst, Branch(patts, guards): branch): div branch
   val bvpat = patts.map(bound-vars).unions
   val sub' = sub.filter(fn((nm, _)) !bvpat.member(nm))
-  Branch(patts, sub' |-> guards)
+  Branch(patts, sub'.list/subst-occurrences(guards))
 
-pub noinline fun guard/(|->)(sub: list<(tName, expr)>, Guard(test, expr): guard): _ guard
-  Guard(sub |-> test, sub |-> expr)
+pub noinline fun guard/subst-occurrences(sub: occ-subst, Guard(test, expr): guard): div guard
+  Guard(sub.expr/subst-occurrences(test), sub.expr/subst-occurrences(expr))
 
 //--------------------------------------------------------------------------
 // Module-dependency extraction (upstream Core/CoreVar.hs

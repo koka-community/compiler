@@ -452,12 +452,19 @@ fun infer-def-group(topLevel: bool, defgroup: syntax/syntax/def-group<ktype>, co
             core/core/DefNonRec(cd) -> [cd]
         coreGroups2.foreach fn(cgroup)
           cgroup.group-defs.foreach(fn(cd) add-range-info-core-def(topLevel, infer-env.contxt, lookup-orig(cd).fst, cd))
-        // fix local info in the core
-        val sub = coreGroups2.map(group-defs).concat.map fn(cdef)
-          val tname = cdef.defTName
+        // a member's references to the other members get their final types and infos
+        // (its references to itself were replaced by infer-rec-def2)
+        val members = coreGroups2.map(group-defs).concat.map fn(cdef)
           val nameInfo = create-name-infoX(Public, cdef.def-name, sd, cdef.sort, cdef.nameRange, cdef.ktype, cdef.doc)
-          (tname, core/core/Var(tname, nameInfo.core-var-info))
-        val coreGroups3 = coreGroups2.map(fn(cg) sub.dg/(|->)(cg))
+          (cdef.def-name, cdef.ktype, nameInfo.core-var-info)
+        fun replace-siblings(cdef: core/core/def)
+          val ex = members.foldl(cdef.defExpr) fn(ex, (name, tp, info))
+            if name == cdef.def-name then ex else replace-rec-calls(name, tp, info, ex)
+          cdef(defExpr = ex)
+        val coreGroups3 = coreGroups2.map fn(cgroup)
+          match cgroup
+            core/core/DefRec(cdefs) -> core/core/DefRec(cdefs.map(replace-siblings))
+            core/core/DefNonRec(cd) -> core/core/DefNonRec(cd.replace-siblings)
         val x = (if topLevel then extend-gamma-core(True, coreGroups3, cont) else extend-inf-gamma-core(False, coreGroups3, cont))
         (coreGroups3, x)
 

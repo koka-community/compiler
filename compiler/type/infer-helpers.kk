@@ -225,21 +225,74 @@ pub fun infer-rec-def2(topLevel: bool, coreDef: core/core/def, divergent: bool, 
       val assumedTpX = normalize(True, sassumedTp)
       val coreX = expr.subst
       val (mvars, msub) = fresh-sub(Bound, tvars)
-      val resCoreX = [(TName(name, assumedTpX),
-                       core/core/TypeApp(core/core/Var(TName(name, resTp1), info), mvars.map(TVar)))].corevar/expr/(|->)(msub |-> coreX)
+      val resCoreX = replace-rec-calls(name, resTp1, info, msub |-> coreX)
       val resCoreY = add-type-lambdas(mvars, resCoreX)
       (resTp1, resCoreY)
     _ | divergent -> // we added a divergent effect, fix up the occurrences of the assumed type
       val assumedTpX = normalize(True, assumedTp).subst
       val coreX = resCore1.subst
-      val resCoreX = [(TName(name, assumedTpX), core/core/Var(TName(name, resTp1), info))].corevar/expr/(|->)(coreX)
+      val resCoreX = replace-rec-calls(name, resTp1, info, coreX)
       (resTp1, resCoreX)
     _ -> // ensure we insert the right info (test: static/div2-ack)
       val assumedTpX = normalize(True, assumedTp).subst
       val coreX = resCore1.subst
-      val resCoreX = [(TName(name, assumedTpX), core/core/Var(TName(name, resTp1), info))].corevar/expr/(|->)(coreX)
+      val resCoreX = replace-rec-calls(name, resTp1, info, coreX)
       (resTp1, resCoreX)
   def/substitute(get-subst(), core/core/Def(name, resTp2, coreExpr, coreDef.vis, csort, coreDef.kinline, coreDef.nameRange, coreDef.doc))
+
+// Replace the references in `ex` to `name`, a member of a recursive group, by
+// references at its generalized type `tp`. The group was checked with `name` at the
+// type `occTp`: its annotation, or the monomorphic type assumed for it. A reference's
+// type arguments instantiate `occTp`, and are mapped to the ones that instantiate
+// `tp` at the same type (see `instance-type-args`). They cannot be reused as they are,
+// since an annotation can quantify in another order than `tp` (tests
+// cgen/rec-annot-order, cgen/rec-mutual-order), nor dropped, since a polymorphic
+// recursive call has arguments of its own (test cgen/rec-polytargs).
+pub fun replace-rec-calls(name: name, tp: ktype, info: var-info, ex: core/core/expr): _ core/core/expr
+  match ex.free-vars.list.find(fn(TName(n, _)) n == name)
+    Nothing -> ex
+    Just(TName(_, occTp)) ->
+      val to-tp-args = instance-type-args(name, occTp, tp)
+      fun type-args-of(occurrence: core/core/expr): list<ktype>
+        match occurrence
+          core/core/TypeApp(_, targs) -> targs
+          _ -> []
+      fun call(occurrence: core/core/expr): div core/core/expr
+        make-type-app(core/core/Var(TName(name, tp), info), to-tp-args(occurrence.type-args-of))
+      [(TName(name, occTp), call)].expr/subst-occurrences(ex)
+
+// Given the type `occTp` that the body of `name` was checked at, and its generalized
+// type `tp`, map the type arguments of an instance of `occTp` to those of the same
+// instance of `tp`; every instance of `occTp` is one of `tp`. The two can differ in
+// the order of their quantifiers, `tp` can close an effect row that `occTp`
+// quantifies over, and `tp` can quantify a variable that is free in `occTp` (the
+// wildcard in `act : () -> _ a`). Unifying their bodies, with the quantifiers of both
+// as unknowns, expresses each quantifier of `tp` in those of `occTp`. The unknowns
+// are meta variables. A variable free in a body and not quantified by its own scheme
+// must stay as it is, so it is a skolem during the unification: a meta variable can
+// be bound to a skolem, but not to a bound variable.
+fun instance-type-args(name: name, occTp: ktype, tp: ktype): _ ((list<ktype>) -> div list<ktype>)
+  val (occVars, occRho) = occTp.split-type-scheme
+  val (tpVars, tpRho) = tp.split-type-scheme
+  val fixed = ((occRho.free-type-vars - occVars) + (tpRho.free-type-vars - tpVars)).list
+  val (occMetas, occSub) = fresh-sub(Meta, occVars)
+  val (tpMetas, tpSub) = fresh-sub(Meta, tpVars)
+  val (skolems, toSkolem) = fresh-sub(Skolem, fixed)
+  match run-unify({ unify(toSkolem |-> (tpSub |-> tpRho), toSkolem |-> (occSub |-> occRho)) })
+    (Left(_), _) -> failure/fail("type/infer-helpers/instance-type-args: the type the body was checked at is not an instance of the generalized type: " ++ name.show)
+    (Right(_), usub) ->
+      val fromSkolem = skolems.zip(fixed.map(TVar)).sub
+      fn(targs)
+        if targs.length != occMetas.length then
+          unsafe-total({ failure/fail("type/infer-helpers/instance-type-args: type arguments of " ++ name.show) })
+        else
+          // after unification, a quantifier of `occTp` is a variable, or a type where `tp` closed it
+          fun arg-binding((occMeta, targ))
+            match usub |-> TVar(occMeta)
+              TVar(tv) -> [(tv, targ)]
+              _ -> []
+          val argSub = occMetas.zip(targs).flatmap(arg-binding).sub
+          tpMetas.map(fn(tpMeta) fromSkolem |-> (argSub |-> (usub |-> TVar(tpMeta))))
 
 pub fun add-range-info-core-def(topLevel: bool, mod: name, def: syntax/syntax/def<ktype>, coreDef: core/core/def): _ ()
   val qname =
