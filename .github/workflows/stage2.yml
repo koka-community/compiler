@@ -1,7 +1,11 @@
-# Build the self-hosted compiler for people to try: stage 1 is compiled by the
-# reference (Haskell) compiler from TimWhiting/koka `dev-compiler2` -- the
-# branch that carries every fix the port needs, ahead of upstream -- and stage 2 is the
-# port compiled by stage 1. Stage 2 is what ships.
+# Build, test and package the self-hosted compiler.
+#
+# - Stage 1 is the port compiled by the reference (Haskell) compiler, from
+#   TimWhiting/koka at KOKA_REF: a pinned commit of `port-reference`, which
+#   carries the reference-compiler fixes the port needs.
+# - Stage 2 is the port compiled by stage 1. It runs the test corpus and the
+#   unit tests, and is what ships.
+# - The playground job builds the browser playground with the Linux stage 2.
 #
 # A release is a directory `koka-port-<os>-<arch>/` holding `bin/koka`, `lib`
 # (the standard library sources) and `kklib` (the C runtime sources): the
@@ -12,14 +16,15 @@
 name: stage2
 
 on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
   workflow_dispatch:
     inputs:
       koka-ref:
-        description: "TimWhiting/koka ref for the reference compiler"
-        default: dev-compiler2
-  push:
-    tags:
-      - 'v*'
+        description: "TimWhiting/koka ref for the reference compiler (default: the pinned commit)"
+        required: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -30,13 +35,14 @@ permissions:
 
 env:
   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
-  KOKA_REF: ${{ github.event.inputs.koka-ref || 'dev-compiler2' }}
+  # the reference compiler: a commit, so that a build is reproducible
+  KOKA_REF: ${{ github.event.inputs.koka-ref || '4474f07311740ad184e68c3285ad8e5111333871' }}
 
 jobs:
   build:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 240
+    timeout-minutes: 300
     strategy:
       fail-fast: false
       matrix:
@@ -75,8 +81,8 @@ jobs:
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
-      # libuv comes from vcpkg (lib/std/async/api/uv/evloop.kk); both compilers
-      # install it on demand under VCPKG_ROOT
+      # libuv and pcre2 come from vcpkg; both compilers install them on demand
+      # under VCPKG_ROOT
       - name: Setup vcpkg
         run: |
           if [ -n "${VCPKG_INSTALLATION_ROOT:-}" ] && [ -x "$VCPKG_INSTALLATION_ROOT/vcpkg" ]; then
@@ -123,6 +129,19 @@ jobs:
           test -x "$STAGE2"
           echo "STAGE2=$PWD/$STAGE2" >> "$GITHUB_ENV"
 
+      # the corpus in test/, compiled and run by stage 2; the runner is itself
+      # compiled by stage 2, reusing stage 2's modules through the build tag
+      # the fixtures were recorded in the C locale
+      - name: Test corpus
+        env:
+          LANG: C
+        run: |
+          "$STAGE2" -i"$PWD" -O2 --buildtag=bootstrap -e scripts/test-runner.kk -- "$STAGE2"
+
+      - name: Unit tests
+        run: |
+          KOKA="$STAGE2" "$STAGE2" -i"$PWD" -e run-tests.kk
+
       - name: Package
         run: |
           DIST="koka-port-${{ matrix.name }}"
@@ -155,14 +174,80 @@ jobs:
           name: ${{ env.DIST }}
           path: dist/${{ env.DIST }}.tar.gz
 
+  # The browser playground (web/playground): the compiler as a WASI module,
+  # built by the Linux stage 2 with wasi-sdk, then the frontend, then a Node
+  # harness that compiles and runs samples through the wasm compiler.
+  playground:
+    name: Playground
+    needs: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    env:
+      WASI_SDK_VERSION: "25"
+    steps:
+      - name: Checkout the port
+        uses: actions/checkout@v5
+        with:
+          submodules: false
+
+      - name: Submodules over https
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --recursive
+
+      - name: Download stage 2
+        uses: actions/download-artifact@v5
+        with:
+          name: koka-port-linux-x64
+          path: dist
+
+      - name: Unpack stage 2
+        run: |
+          tar -C dist -xzf dist/koka-port-linux-x64.tar.gz
+          echo "KOKA=$PWD/dist/koka-port-linux-x64/bin/koka" >> "$GITHUB_ENV"
+
+      # wasi-sdk 25: later releases break mimalloc (`PAGE_SIZE` becomes a
+      # link-time address)
+      - name: Install wasi-sdk
+        run: |
+          V="$WASI_SDK_VERSION"
+          curl -sSL "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$V/wasi-sdk-$V.0-x86_64-linux.tar.gz" \
+            | tar -C "$RUNNER_TEMP" -xz
+          echo "WASI_SDK_PATH=$RUNNER_TEMP/wasi-sdk-$V.0-x86_64-linux" >> "$GITHUB_ENV"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+
+      # before the build: its deploy step copies coi-serviceworker from node_modules
+      - name: Install web dependencies
+        run: cd web/playground && npm install
+
+      - name: Build the playground assets
+        run: scripts/playground.sh all
+
+      - name: Build the frontend
+        run: cd web/playground && npm run build
+
+      - name: Test
+        run: node web/playground/test/test-wasm.mjs
+
+      - name: Upload
+        uses: actions/upload-artifact@v5
+        with:
+          name: koka-playground
+          path: web/playground/dist
+
   release:
     name: Release
-    needs: build
+    needs: [build, playground]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v5
         with:
+          pattern: koka-port-*
           path: dist
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
