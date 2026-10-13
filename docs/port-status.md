@@ -149,6 +149,4 @@ In parallel: cut the ~17s warm load, and attribute the warm-small regression (0.
 - The type checker segfault with the substitution index (see above).
 - Warm-small regression, unattributed.
 - The language server exits with SIGPIPE (status 141) at teardown.
-- The driver exits 0 on an unrecognised flag, and does not accept `-o file` with a space, as upstream does.
-- A change to an `extern import`ed C file does not make its module recompile.
 - "parallel compile of X failed" is not fatal if the sequential retry succeeds; whether that is intended is undecided.

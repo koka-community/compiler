@@ -13,12 +13,14 @@ Start with the [README](../README.md) to install, build, test and use the compil
 
 ## Status and plans
 
+- [retiring-upstream.md](retiring-upstream.md): what has to happen before this compiler replaces the Haskell one.
 - [port-status.md](port-status.md): what works, the test results, and the open problems.
 - [roadmap-to-primary.md](roadmap-to-primary.md): what remains before this replaces the reference compiler.
 - [port-optimization-state.md](port-optimization-state.md): the optimisation queue, with measurements.
 - [upstream-pr-burndown.md](upstream-pr-burndown.md): the reference-compiler fixes the port depends on.
 - [parity-checklist.md](parity-checklist.md): a pass-by-pass comparison with the reference compiler.
 - [parser-backtracking-audit.md](parser-backtracking-audit.md): where interface parsing spends its time.
+- [fusion-investigation.md](fusion-investigation.md): mutual-recursion fusion (koka-lang/koka#900), its stack cost on the lazy protocol, and the fixes still to make.
 - [TODO_porting.md](../TODO_porting.md) and [compiler/next.md](../compiler/next.md): working notes from the port.
 
 ## History
