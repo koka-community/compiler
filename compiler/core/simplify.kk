@@ -112,9 +112,20 @@ fun top-down(ex: expr): simp-eff expr
       Let(binds, TypeApp(e, targs))
     App(f, args) ->
       val (fbinds, fexpr) = f.float-let
-      val (abindss, aexprs) = args.map(float-let).unzip
-      make-let(Cons(fbinds, abindss).concat, App(fexpr, aexprs)) // note: assumes unique bindings!
+      val (abinds, aexprs) = float-args(fexpr.is-total, args)
+      make-let(fbinds ++ abinds, App(fexpr, aexprs)) // note: assumes unique bindings!
     _ -> ex
+
+// An argument's bindings move before the function and the earlier arguments,
+// so they may float only while all of those are total: `f(g(), val x = h(); x)`
+// must still call `g` before `h`.
+fun float-args(can-float: bool, args: list<expr>): _ (list<def-group>, list<expr>)
+  match args
+    Nil -> ([], [])
+    Cons(arg, rest) ->
+      val (binds, arg') = if can-float then arg.float-let else ([], arg)
+      val (binds', rest') = float-args(can-float && arg'.is-total, rest)
+      (binds ++ binds', Cons(arg', rest'))
 
 fun make-par-def(tn: tName, arg: expr): def-group
   DefNonRec(Def(tn.get-name, tn.type-of, arg, Private, DefVal, InlineAuto, range/null, ""))
