@@ -87,38 +87,14 @@ pub fun cFromCore(cTarget: cTarget, b: buildType, sourceDir: path,
   val core1 = genModule(core, mbMain, nt)
   (rcdoc.reverse.vcat, rhdoc.reverse.vcat, core1)
 
-// Thread-safe module-init guard. Upstream (`src/Backend/C/FromCore.hs:107-109`) emits
-// a plain `static bool _kk_initialized` double-checked-init with no synchronization --
-// safe for upstream's own single-threaded compiler, but this port's RPC orchestrator
-// runs codegen for multiple modules concurrently on real OS threads (spawn-thread),
-// and any module can be first-touched by two worker threads at once. Both threads then
-// pass the unguarded `if (_kk_initialized) return;` check before either publishes
-// `true`, and both proceed to (re)build this module's toplevel constants -- e.g. two
-// threads racing to build+overwrite the same `kk_std_core_types__list` global, one
-// freeing cons cells the other is still reading. Confirmed via lldb: `EXC_BAD_ACCESS` in
-// memcmp comparing a corrupted string pointer, both crashing threads inside this same
-// class of module-init path (`compiler/backend/c/helpers.kk`'s `reserved` list, built and
-// published via `kk_box_mark_static` -- but that mark_static only protects READS of the
-// already-published value, not this construction race itself). This is a DISTINCT gap
-// from the already-ported `pr/uv-thread-safety` fix (`kk_box_mark_static`/`kk_block_make_stuck`/
-// `kk_string_literal_init`), which secures already-initialized globals but not concurrent
-// entry into the initializer.
-//
-// Fixed with a proper CAS-guarded init: the losing thread(s) spin-wait for the winner to
-// finish (not just skip past), since later code in this function depends on the toplevel
-// constants this init constructs.
+// A plain flag is enough: `main` runs the main module's `@init`, which runs every
+// import's `@init`, before `main`'s body, so no second thread exists while modules
+// initialize. (An atomic guard for concurrent entry is kept on the branch
+// `stash/init-guard` in case generated code is ever entered from a thread first.)
 val checkInitDoc = [
-  "static _Atomic(int32_t) _kk_init_state = 0; // 0=not started, 1=in progress, 2=done".text,
-  "{ int32_t _kk_init_expected = 0;".text,
-  "  if (kk_atomic_cas_strong_acq_rel(&_kk_init_state, &_kk_init_expected, 1)) {".text,
-  "    // this thread won the race and performs initialization below".text,
-  "  } else {".text,
-  "    while (kk_atomic_load_acquire(&_kk_init_state) != 2) { kk_atomic_yield(); }".text,
-  "    return;".text,
-  "  }".text,
-  "}".text].vcat
-
-val publishInitDoneDoc = "kk_atomic_store_release(&_kk_init_state, 2);".text
+  "static bool _kk_initialized = false;".text,
+  "if (_kk_initialized) return;".text,
+  "_kk_initialized = true;".text].vcat
 
 fun initImport(i: kimport)
   i.importName.qualify("@init".new-name).cpp-name |.| emptyArgs |.| semi
@@ -203,10 +179,6 @@ fun genModule(core0: core, mbMain: maybe<(name, bool)>, nt: newtypes): _ core
   gen-top-groups(core.defs)
 
   genMain(mbMain)
-
-  // publish "done" only after every emitToInit call above (this module's own toplevel
-  // constants, plus its dependency @init calls) has completed -- see checkInitDoc.
-  publishInitDoneDoc.emitToInit
 
   emitToDone(
     vcat([
