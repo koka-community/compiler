@@ -17,10 +17,14 @@
 name: stage2
 
 on:
+  # documentation does not change what is built or tested; a tag push ignores
+  # these filters, so a release always builds
   push:
     branches: [main]
     tags: ['v*']
+    paths-ignore: ['docs/**', '**/*.md']
   pull_request:
+    paths-ignore: ['docs/**', '**/*.md']
   workflow_dispatch:
     inputs:
       koka-ref:
