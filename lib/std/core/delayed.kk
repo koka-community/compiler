@@ -44,22 +44,21 @@ pub fun force/go( delayed : delayed<e,a> ) : <div,read<global>,write<global>,all
   match !r
     XDone(x) -> x
     _ ->
-      // The action must run at most once, even if several threads force the same
-      // value concurrently -- a `delayed` reachable from a toplevel binding is a
-      // shared cell, and running `action` twice would both duplicate its effects and
-      // race two writers on the cell. Claiming it therefore has to be a single
-      // indivisible step: `swap` is atomic on a thread-shared or static reference, so
-      // exactly one forcer can observe `XComputation` and take the work. Reading and
-      // then writing would let two forcers both see it.
-      match r.swap(XBlocking)  // XBlocking also ensures the action can be unique
+      // `swap` is atomic on a thread-shared or static reference, so
+      // exactly one forcer can observe `XComputation` and take the work. 
+      // Reading and then writing would let two forcers both see it.
+      match r.swap(XBlocking) // XBlocking ensures the action can be unique
         XComputation(action) ->
           val x = mask-st{ mask<div>(action) }()
           r := XDone(x)
           x
         XDone(x) ->
-          r := XDone(x)      // lost the race to a forcer that already finished
+          // `swap` changed `r` to `XBlocking` right when the computation finished, restore the done value.
+          r := XDone(x)
           x
-        XBlocking -> delayed.go()   // another forcer holds the claim; wait for it
+        XBlocking -> 
+          // another forcer holds the claim; wait for it
+          delayed.go() 
 
 fun unsafe-no-state-div(f : () -> <st<global>,div|e> a): e a
   unsafe-no-state-div-cast(f)()
@@ -77,9 +76,8 @@ pub fun force( delayed : delayed<e,a> ) : e a
 // a total function that only calculates the value once and then
 // returns the cached result.
 pub fun once( calc : () -> a ) : (() -> a)
-  // Delegates to `delay`/`force` so that `calc` runs at most once even when the
+  // Delegate to `delay`/`force` so that `calc` runs at most once even when the
   // returned function is called from several threads: claiming the computation
-  // needs the atomic swap in `force/go`, which a plain read-then-write here
-  // would not provide.
+  // needs the atomic swap in `force/go`.
   val d = delay(calc)
   fn() d.force
