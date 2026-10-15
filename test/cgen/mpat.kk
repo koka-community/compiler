@@ -1,8 +1,7 @@
 import mpat-lib
 
-// See mpat-lib.kk: `cross` is inlined from the .kki inline section; if the
-// branch patterns round-trip in the wrong order the scrutinees swap and
-// `cross(South, North)` wrongly returns True.
+// `cross` is inlined from mpat-lib's .kki; swapped scrutinees make
+// `cross(South, North)` return True.
 fun main()
   println( cross(South, North) )
   println( cross(North, South) )
