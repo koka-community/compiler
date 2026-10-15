@@ -775,15 +775,20 @@ fun get-effect(e: expr): keffect
 //     Let(binders, body) -> binders.flatten.foldl(acc(e), fn(s, a) s ++ acc(a.expr)) ++ foldMap(body, acc)
 //     Case(cases, branches) -> branches.foldl(cases.foldl(acc(e), fn(s, a) s ++ acc(a)), fn(s, b) b.guards.foldl(s, fn(s', g) s' ++ acc(g.test) ++ acc(g.expr)))
 
-// effect efind
-//   final ctl found(e: expr): a
-
-// fun anySubExpr(e, f)
-//   with handler 
-//     final ctl found(ex) Just(ex)
-//     return(x) Nothing
-//   val c = ctx hole
-//   e.foldMap(fn(a) if f(a) then found(e) else c)
+// Does `f` hold for `e` or any of its subexpressions? (upstream `anySubExpr`, as a search
+// that stops at the first match)
+pub fun any-sub-expr(e: expr, f: expr -> pure bool): pure bool
+  if f(e) then True
+  else match e
+    Lam(_, _, body) -> body.any-sub-expr(f)
+    App(g, xs) -> g.any-sub-expr(f) || xs.any(fn(x) x.any-sub-expr(f))
+    TypeLam(_, body) -> body.any-sub-expr(f)
+    TypeApp(body, _) -> body.any-sub-expr(f)
+    Let(dgs, body) -> dgs.flatten.any(fn(d) d.defExpr.any-sub-expr(f)) || body.any-sub-expr(f)
+    Case(xs, branches) ->
+      xs.any(fn(x) x.any-sub-expr(f)) ||
+      branches.any(fn(b) b.guards.any(fn(g) g.test.any-sub-expr(f) || g.body.any-sub-expr(f)))
+    _ -> False
 
 
 // TODO: More here
