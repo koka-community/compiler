@@ -218,9 +218,10 @@ pub fun generalize(contextRng: range, rng: range, close: bool, f: () -> _ (rho,k
           // Create free type variables for the bounds
           // Important to avoid duplicate names (`test/algeff/exn3`)
           val (bvars, bsub) = fresh-sub(Bound, tvars)
+          // substitute first so metas unified with a generalized variable are bound as well
+          val score = bodycore1.subst
           val TForAll([], rho5) = bsub |-> (TForAll([], nrho))
-          // Core 
-          val corePre = bsub |-> bodycore1
+          val corePre = bsub |-> score
           val core1 = bvars.add-type-lambdas(corePre)
           val resTp = bvars.quantify-type(rho5)
           (resTp, seff, core1)
