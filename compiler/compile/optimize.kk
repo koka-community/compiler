@@ -117,7 +117,7 @@ pub fun core-optimize(fl: flags, nt: newtypes, gamma0: gamma, inls: inlines, cor
     val isC = match fl.target
       C -> True
       _ -> False
-    ctail-optimize(fl.tpl, nt, fl.optctailCtxPath && isC)
+    ctail-optimize(fl.tpl, nt, gamma0, fl.optctailCtxPath && isC)
   opt-fp("05-ctail")
 
   // transform effects to explicit monadic binding (and resolve .open calls)

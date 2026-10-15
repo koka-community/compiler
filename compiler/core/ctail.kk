@@ -10,18 +10,8 @@
 // true tail call. Shares the `nameCCtx*`/`typeCCtx`/`ctx-path` machinery with
 // compiler/core/analysis-cctx.kk (which implements the *forward* `ctx` literal
 // desugaring); this pass implements the independent *backward* accumulator
-// construction. The two passes share no code -- this one defines its own
-// makeFieldAddrOf/makeCCtxEmpty/makeCCtxExtend/makeCCtxApply
-// rather than importing Core.AnalysisCCtx's versions -- so this port follows
-// the same shape but reuses this port's `lookup`/`make-empty`/`make-field-addr-of`
-// from analysis-cctx.kk where the logic is exactly identical).
-//
-// NOT wired into compiler/main/driver.kk's core-phase pipeline (upstream's
-// ctail pass isn't invoked from run-core-phase in this port either -- the
-// pipeline comment in driver.kk lists unreturn/simplify/lift-functions/
-// mon-transform/open-resolve/simplify/monadic-lift but no ctail stage yet).
-// This file only adds the standalone pass; wiring it up is left to a
-// follow-up change since the task here is the port itself.
+// construction; the context primitives (`make-cctx-prim` and its builders) and
+// `lookup` come from analysis-cctx.kk.
 
 module compiler/core/ctail
 
@@ -35,6 +25,7 @@ import compiler/kind/newtypes
 import compiler/type/type
 import compiler/type/typevar
 import compiler/type/kind
+import compiler/type/assumption
 import compiler/core/core
 import compiler/core/corevar
 import compiler/core/analysis-cctx
@@ -44,15 +35,11 @@ import std/data/rb-set
 // Entry point
 //--------------------------------------------------------------------------
 
-// Upstream `ctailOptimize :: Pretty.Env -> TargetPlatform -> Newtypes -> Gamma -> Bool -> CorePhase b ()`.
-// `Pretty.Env` was only used for tracing (dropped, like other ported passes --
-// simplify.kk/monadic.kk carry no such tracing infra either) and `Gamma` is
-// read into upstream's `Env` but never actually consulted anywhere in
-// Core/CTail.hs's body, so it is dropped from the port's signature too
-// (documented here rather than silently ported as dead weight).
-pub fun ctail-optimize(tpl: target-platform, nt: newtypes, use-context-path: bool)
+// Upstream `ctailOptimize` also takes a `Pretty.Env`, used only for tracing.
+pub fun ctail-optimize(tpl: target-platform, nt: newtypes, gamma: gamma, use-context-path: bool)
   with withNewtypes(nt)
   with val ctail-target-platform = tpl
+  with val ctail-gamma = gamma
   with val ctail-use-context-path = use-context-path
   with val ctail-fn-name = TName(name/nil, typeUnit)
   with val ctail-slot = Nothing
@@ -176,7 +163,7 @@ fun ctail-wrapper-body(resTp: ktype, slot: tName, mbMulti: maybe<expr>, targs: l
   val tailVar = ctail-fun-expr()
   val tpl = ctail-target-platform
   val ctailCall = App(make-type-app(tailVar, targs.map(fn(tv) TVar(tv))),
-                       args.map(fn(nm) Var(nm, InfoNone)) ++ [make-empty(resTp, tpl)])
+                       args.map(fn(nm) Var(nm, InfoNone)) ++ [make-empty(ctail-gamma, resTp, tpl)])
   match mbMulti
     Nothing -> ctailCall
     Just(ctailMultiVar) ->
@@ -240,7 +227,7 @@ fun ctail-expr(e: expr, top: bool): ctail-eff expr
   fun tail-result(body: expr): ctail-eff expr
     match ctail-slot
       Nothing   -> body
-      Just(slot) -> ctail-make-cctx-apply(ctail-target-platform, ctail-is-multi, ctail-always-affine, slot, body)
+      Just(slot) -> ctail-make-cctx-apply(ctail-gamma, ctail-target-platform, ctail-is-multi, ctail-always-affine, slot, body)
   fun handle-con-app(cname: tName, fcon: expr, fargs: list<expr>): ctail-eff expr
     fun mk-cons(cpath: ctx-path, args: list<expr>): ctail-eff (list<def-group>, expr)
       ctail-bind-args(args) fn(xs) ([], fcon.ctail-mk-con-app(cpath, xs))
@@ -365,47 +352,28 @@ fun ctail-found-arg(cname: tName, mbC: maybe<tName>,
       else match cname.lookup(field)
         Left(msg) -> failure/fail(msg)  // todo: allow this? see test/cgen/ctail7
         Right(fieldName) ->
-          val holeExpr = resTp.ctail-make-hole
+          val holeExpr = make-hole(ctail-gamma, resTp)
           val (defs, cons) = mkConsApp([holeExpr])
           val consName = cons.type-of.ctail-unique-tname
-          val comp = ctail-make-cctx-extend(ctail-target-platform, slot, consName, mbC.default(consName), cname, fieldName.get-name, resTp, ctail-always-affine)
+          val comp = ctail-make-cctx-extend(ctail-gamma, ctail-target-platform, slot, consName, mbC.default(consName), cname, fieldName.get-name, resTp, ctail-always-affine)
           (defs ++ [DefNonRec(make-tdef(consName, cons))], mkTailApp(ctailVar, comp))
 
 //--------------------------------------------------------------------------
 // Primitives
 //--------------------------------------------------------------------------
 
-// Polymorphic hole
-fun ctail-make-hole(tp: ktype): expr
-  val a = TypeVar(0, kindStar, Bound)
-  val funType = TForAll([a], TFun([], typeTotal, TVar(a)))
-  App(TypeApp(Var(TName(nameCCtxHoleCreate, funType), InfoExternal("")), [tp]), [])
-
-// Note: the initial empty context and the field-address-of primitive are
-// exactly the same shape as analysis-cctx.kk's `make-empty`/`make-field-addr-of`
-// (this port reuses those directly rather than duplicating them, unlike
-// upstream where Core.CTail.hs keeps its own copies of `makeCCtxEmpty` and
-// `makeFieldAddrOf` since it does not import Core.AnalysisCCtx.hs at all).
-
 // Extend a context with a non-empty context
-// (no explicit return-effect annotation: `unsupported-external` traces on the
-// unreachable fallback target, same as analysis-cctx.kk's `make-empty` etc.
-// leaving the effect row to be inferred rather than pinned to pure)
-fun ctail-make-cctx-extend(tpl: target-platform, slot: tName, resName: tName, objName: tName, conName: tName,
+fun ctail-make-cctx-extend(gamma: gamma, tpl: target-platform, slot: tName, resName: tName, objName: tName, conName: tName,
                             fieldName: name, tp: ktype, alwaysAffine: bool)
-  val fieldOf = make-field-addr-of(Var(objName, InfoNone), conName, fieldName, tp)
-  val a = TypeVar(0, kindStar, Bound)
-  val funType = TForAll([a], TFun([(name/nil, type-cctx(TVar(a))), (name/nil, TVar(a)), (name/nil, TApp(typeFieldAddr, [TVar(a)]))],
-                                   typeTotal, type-cctx(TVar(a))))
+  val fieldOf = make-field-addr-of(gamma, Var(objName, InfoNone), conName, fieldName, tp)
   val external = match tpl.tpl-target
     C(_) -> "kk_cctx_extend" ++ (if alwaysAffine then "_linear" else "") ++ "(#1,#2,#3,kk_context())"
     JS(_) -> "$std_core_types._cctx_extend(#1,#2,#3)"
     _    -> unsupported-external("kk_cctx_extend")
-  App(TypeApp(Var(TName(nameCCtxExtend, funType), InfoExternal(external)), [tp]),
-      [Var(slot, InfoNone), Var(resName, InfoNone), fieldOf])
+  make-cctx-prim(gamma, nameCCtxExtend, external, [tp, tp, tp], [Var(slot, InfoNone), Var(resName, InfoNone), fieldOf])
 
 // Apply a context to its final value.
-fun ctail-make-cctx-apply(tpl: target-platform, isMulti: bool, alwaysAffine: bool, slot: tName, e: expr)
+fun ctail-make-cctx-apply(gamma: gamma, tpl: target-platform, isMulti: bool, alwaysAffine: bool, slot: tName, e: expr)
   if isMulti then
     App(Var(slot, InfoNone), [e])  // slot `a -> a` is an accumulating function; apply to resolve
   else
@@ -414,13 +382,11 @@ fun ctail-make-cctx-apply(tpl: target-platform, isMulti: bool, alwaysAffine: boo
       TApp(_, [t])   -> t
       TSyn(_, [t], _) -> t
       _ -> failure/fail("core/ctail ctail-make-cctx-apply: illegal slot type")
-    val a = TypeVar(-1, kindStar, Bound)
-    val funType = TForAll([a], TFun([(name/nil, type-cctx(TVar(a))), (name/nil, TVar(a))], typeTotal, TVar(a)))
     val external = match tpl.tpl-target
       C(_) -> "kk_cctx_apply" ++ (if alwaysAffine then "_linear" else "") ++ "(#1,#2,kk_context())"
       JS(_) -> "$std_core_types._cctx_apply(#1,#2)"
       _    -> unsupported-external("kk_cctx_apply")
-    App(TypeApp(Var(TName(nameCCtxApply, funType), InfoExternal(external)), [tp]), [Var(slot, InfoNone), e])
+    make-cctx-prim(gamma, nameCCtxApply, external, [tp, tp], [Var(slot, InfoNone), e])
 
 //--------------------------------------------------------------------------
 // Utilities for readability
@@ -439,12 +405,13 @@ fun ctail-unique-tname(tp: ktype): <unique> tName
 // stateful/lookup parts -- no hand-rolled Reader/State monad transformer.
 //--------------------------------------------------------------------------
 
-alias ctail-eff = <ctail-target-platform,ctail-use-context-path,ctail-fn-name,ctail-slot,
+alias ctail-eff = <ctail-target-platform,ctail-gamma,ctail-use-context-path,ctail-fn-name,ctail-slot,
                     ctail-is-multi,ctail-always-affine,ctail-current-def,
                     // `pure` IS `<exn,div>` -- listing all three duplicated both labels
                     unique,newtypes-eff,pure>
 
 effect val ctail-target-platform: target-platform
+effect val ctail-gamma: gamma
 effect val ctail-use-context-path: bool
 effect val ctail-fn-name: tName          // TName of the ctail (trmc-suffixed) variant currently being built
 effect val ctail-slot: maybe<tName>      // current accumulator/context slot, if any

@@ -211,7 +211,7 @@ fun expr/infer(prop: maybe<(ktype, range)>, expect: expect, ex: syntax/syntax/ex
           [("because".text, "the context has no hole".text),
            ("hint".text, "perhaps you used an underscore instead of the \"hole\" keyword?".text)])
       val score = core.subst
-      val (ccore, errs) = analyze(rng, score, get-target-platform())
+      val (ccore, errs) = analyze(rng, infer-env.gamma, score, get-target-platform())
       errs.foreach(fn(err) inf-error(rng, err))
       val ctp = ccore.type-of
       add-range-info(nameRng, RIId("ctx".new-name, NIValue("expr", ctp, "", False), [], False))
