@@ -171,31 +171,14 @@ fun tdl/kinfer(isRec: bool, tdefs0: list<syntax/syntax/typedef<user-type, user-t
     with extend-infgamma(infgamma) // extend inference gamma, also checks for duplicates
     val names = infgamma.map(name)
     val tdefs1 = xinfgamma.map(fst).zip(tdefs).map(fn((a, b)) kinfer(a, b))
-    // Resolve SYNONYMS in this group before anything else.
-    //
-    // `resolve-typedef` is what registers a synonym (via `add-synonym`), and
-    // `resolve-app` needs that registration to build a `TSyn` -- without it a
-    // reference to the alias silently becomes an opaque `TCon` with no
-    // expansion, which later fails to unify against a structured effect row
-    // (reported, confusingly, as "effects do not match ... cannot be subsumed").
-    //
-    // The dependency is one-directional and so this order is always safe: data
-    // types are NOMINAL, so a synonym body referring to a group data type only
-    // needs its `TCon`, whereas a data type field referring to a group synonym
-    // needs the synonym's expansion. Relying on the scc's member order to get
-    // this right is fragile -- any change in grouping or
-    // sort order silently reintroduces the bug. Mutually recursive synonyms are
-    // rejected separately by `check-recursion`.
-    // pass 1: resolve the group's SYNONYMS only; pass 2: everything else.
-    // Order within the list is preserved for the emitted core typedefs.
-    val pass1 = tdefs1.map fn(td)
-      match td
-        Synonym(_, _, _, _, _, _) -> Just(resolve-typedef(isRec, names, td))
-        _ -> Nothing
-    tdefs1.zip(pass1).map fn((td, mb))
-      match mb
-        Just(r) -> r
-        Nothing -> resolve-typedef(isRec, names, td)
+    // A group's synonyms are resolved before its data types: resolving a synonym
+    // registers it (`add-synonym`), and a data type field that mentions it needs that
+    // registration to build a `TSyn` instead of an opaque `TCon`. The reverse never
+    // matters, since a synonym body needs only the `TCon` of a (nominal) data type.
+    val (syns, datas) = tdefs1.partition(syntax/syntax/is-synonym)
+    val csyns = syns.map(fn(td) resolve-typedef(isRec, names, td))
+    val cdatas = datas.map(fn(td) resolve-typedef(isRec, names, td))
+    csyns ++ cdatas
   check-recursion(tdefs) // check for recursive type synonym definitions rather late so we spot duplicate definitions first
   val (ctdefs, lazyExprss) = ctdefs'.unzip
   (ctdefs, lazyExprss.concat)
