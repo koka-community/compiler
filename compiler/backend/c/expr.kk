@@ -368,24 +368,28 @@ fun gen-match(res0: c-result, exprDocs: list<doc>, branches: list<branch>)
       ResultReturn -> True
       ResultAssign(_ , Just) -> True
       _ -> False
+  val isMultiGuardLast = branches.last.unjust.guards.length > 1
   val (r, genLabel) =
     match res0
-      ResultAssign(nm, Nothing) | branches.length > 1 && !isSingleTestBranch ->
+      ResultAssign(nm, Nothing) | (branches.length > 1 && !isSingleTestBranch) || isMultiGuardLast ->
         val lab = "match".new-var-name
         (ResultAssign(nm, Just(lab)), [lab.cpp-name |.| colon |+| semi])
       _ -> (res0, [])
-  val docsInit = branches.init.map(gen-branch(r, exprDocs, True, _))
-  val docLast0 = gen-branch(res0, exprDocs, False, branches.last.unjust)
+  val docsInit = branches.init.map(gen-branch(r, r, exprDocs, True, _))
+  val docLast0 = gen-branch(r, res0, exprDocs, False, branches.last.unjust)
   val docLast = if isSingleTestBranch && !r.is-jump-result then "else".text |+| block(docLast0) else docLast0
   val doc = vcat(docsInit ++ [docLast] ++ genLabel)
   doc
  
-fun gen-branch(r: c-result, exprDocs: list<doc>, doTest: bool, Branch(patts, guards): branch)
-  val doc = gen-pattern(doTest, [], exprDocs.zip(patts), fn(binds) gen-guards(r, guards, binds))
+// The last guard uses `rLast`; the other guards use `r`, which must jump past the
+// remaining guards (all guards of a branch are generated after each other).
+fun gen-branch(r: c-result, rLast: c-result, exprDocs: list<doc>, doTest: bool, Branch(patts, guards): branch)
+  val doc = gen-pattern(doTest, [], exprDocs.zip(patts), fn(binds) gen-guards(r, rLast, guards, binds))
   if doc.doc-starts-with("if") then doc else block(doc)
 
-fun gen-guards(r: c-result, g: list<guard>, binds: bindings)
-  val (docs, _) = g.foldl(([], binds), fn(acc, g') gen-guard(r, acc, g'))
+fun gen-guards(r: c-result, rLast: c-result, g: list<guard>, binds: bindings)
+  val results = replicate(r, g.length - 1) ++ [rLast]
+  val (docs, _) = results.zip(g).foldl(([], binds), fn(acc, (res, g')) gen-guard(res, acc, g'))
   vcat(docs)
 
 fun gen-guard(r: c-result, (docs, bindings): (list<doc>, bindings), Guard(test, body): guard)
