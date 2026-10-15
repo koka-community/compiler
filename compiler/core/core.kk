@@ -891,6 +891,18 @@ pub fun make-ev-index(i: int)
   val sizet = Var(TName(nameInternalSSizeT, TFun([(nil, typeInt)], typeTotal, typeEvIndex)), InfoArity(1, 0))
   App(sizet, [ELit(LitInt(i))])
 
+// The index of an effect label in the evidence vector: `@evv-index<eff,h<as>>(tag<as>)`,
+// given the `@evv-index` function, the (uninstantiated) tag of the effect, the current effect,
+// and the label (with type arguments `as`).
+pub fun make-evv-index(evvIndex: expr, htag: expr, eff: ktype, label: ktype): exn expr
+  val (name, _, tpArgs) = label.label-name-ex
+  // the head of `h` is the effect label itself, not its `@hnd` datatype: Simplify's
+  // effect-offset matches `label-name(h)` against the labels of the effect row
+  val hndCon = TCon(TypeCon(name, kind-fun-n(tpArgs.map(kind) ++ [kindEffect, kindStar], kindStar)))
+  // `type-app`, not `TApp`: without type arguments `h` must be the bare `TCon`, or
+  // structural comparisons (Core.Check's `unify`) see two `htag<exn>` that differ
+  App(make-type-app(evvIndex, [eff, hndCon.type-app(tpArgs)]), [make-type-app(htag, tpArgs)])
+
 pub fun make-sizet(i: int)
   if i < 0 then throw("core/core make-sizet: size_t < 0 " ++ i.int/show)
   val sizet = Var(TName(nameInternalSSizeT, TFun([(nil, typeInt)], typeTotal, typeSSizeT)), InfoArity(1, 0))

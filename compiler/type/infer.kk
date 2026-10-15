@@ -110,7 +110,7 @@ fun infer-inject(prop: maybe<(ktype, range)>, label: ktype, expr0: syntax/syntax
       val (maskQName, _maskTp, maskInfo) = resolve-fun-name(nameMaskAt, CtxFunArgs(False, 3, [], Nothing), rng, rng)
       val (evvIndexQName, _evvIndexTp, evvIndexInfo) = resolve-fun-name(nameEvvIndex, CtxFunArgs(False, 1, [], Nothing), rng, rng)
       val coreMask = maskInfo.core-expr(maskQName)
-      val coreIndex = core/core/App(TypeApp(evvIndexInfo.core-expr(evvIndexQName), [effTo]), [coreHTag])
+      val coreIndex = make-evv-index(evvIndexInfo.core-expr(evvIndexQName), coreHTag, effTo, label)
       core/core/App(TypeApp(coreMask, [resTp, eff, effTo]), [coreIndex, coreLevel, exprCore])
     Nothing ->
       val (maskQName, _maskTp, maskInfo) = resolve-fun-name(nameMaskBuiltin, CtxFunArgs(False, 1, [], Nothing), rng, rng)
