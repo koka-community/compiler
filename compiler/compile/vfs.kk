@@ -14,13 +14,6 @@
 //     such monad here, so this is an ambient effect. `no-vfs` answers `Nothing`
 //     for everything, so installing it changes nothing until a file is added.
 //
-//   * `with-vfs` really composes: an inner overlay shadows an outer one and the
-//     outer stays visible for paths the inner does not define. Upstream's
-//     `vfsCompose find1 find2 = VFS (M.union find2 find2)` unions the new map
-//     with ITSELF, dropping the outer map -- so its `withVFS` replaces rather
-//     than layers. Layering is what a language server needs (a session-wide
-//     overlay plus a per-request one), so this fixes it rather than copying it.
-//
 //   * Keys are canonicalized. Upstream matches the path string exactly and its
 //     own comment concedes "must match exactly; we may improve this later on".
 //     The port reaches the same source through several spellings (as-written
