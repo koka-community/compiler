@@ -126,7 +126,16 @@ fun mon-expr'(expr: expr, topLevel: bool): monadic-eff trans<expr>
     // type application and abstraction
     TypeLam(tvars, body) ->
       val body' = body.mon-expr'(topLevel)
-      fn(k) body'(fn(xx) k(TypeLam(tvars, xx)))
+      // `is-mon-expr'`, not the total `is-mon-expr`: a total function called from here runs
+      // under the empty evidence vector, where the `exn` that `unsafe-total` hides has no evidence
+      if body.is-never-mon || !body.is-mon-expr' then
+        fn(k) k(TypeLam(tvars, body'(id)))
+      else // the type variables scope over the whole computation, so bind its generalized result
+        val nameY = "y".unique-name
+        fn(k)
+          val resTp = expr.type-of
+          val contBody = k(Var(TName(nameY, resTp), InfoNone))
+          apply-bind(resTp, typeTotal, contBody.type-of, TypeLam(tvars, body'(id)), Lam([TName(nameY, resTp)], typeTotal, contBody))
     TypeApp(body, tps) ->
       val body' = body.mon-expr'(topLevel)
       fn(k) body'(fn(xx) k(TypeApp(xx, tps)))
