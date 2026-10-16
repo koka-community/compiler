@@ -30,7 +30,7 @@ Prerequisites: [wasi-sdk](https://github.com/WebAssembly/wasi-sdk) (`WASI_SDK_PA
 cd web/playground && npm install && cd ../..
 scripts/playground.sh            # wasm + precompile + deploy into web/playground/public
 node web/playground/test/test-wasm.mjs
-cd web/playground && npx vite --host
+cd web/playground && npm run dev -- --host
 ```
 
 `scripts/playground.sh wasm|precompile|deploy` runs one step. `KOKA=<port binary>` chooses the native compiler that does the building.

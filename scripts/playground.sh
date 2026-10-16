@@ -2,7 +2,7 @@
 # Build the web playground (web/playground) assets into web/playground/public.
 #
 #   scripts/playground.sh [wasm|precompile|deploy|all]    # default: all
-#   cd web/playground && npm install && npx vite           # then serve it
+#   cd web/playground && npm install && npm run dev        # then serve it
 #
 #   wasm        the compiler (compiler/main/playground.kk) as a WASI module,
 #               built by the port with wasi-sdk's clang
