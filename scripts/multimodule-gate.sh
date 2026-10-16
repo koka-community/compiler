@@ -19,8 +19,10 @@
 # Exits nonzero on the first target that fails, and prints its phase timings.
 set -eu
 cd "$(dirname "$0")/.."
+ROOT=$(pwd)
+. "$ROOT/scripts/build-dirs.sh"
 
-BIN=${KOKA_GATE_BIN:-$(ls -t .koka/v3.2.7/clang-*/compiler_main_driver__main 2>/dev/null | head -1)}
+BIN=${KOKA_GATE_BIN:-$(ls -t "$REF_DIR"/clang-*/compiler_main_driver__main 2>/dev/null | head -1)}
 if [ -z "$BIN" ]; then
   echo "no release port binary; build with ./koka -O2 --no-buildhash -c compiler/main/driver.kk" >&2
   exit 1
@@ -31,7 +33,7 @@ echo "gate binary: $BIN"
 # run against a mixed cache reports on code that is no longer there; that is how
 # a clean gate turned into a kind error on a cache holding three compilers'
 # output.
-./scripts/cache-guard.sh --fix "$BIN" .koka/v3.2.7-mmgate 2>/dev/null || true
+./scripts/cache-guard.sh --fix "$BIN" "$(port_dir mmgate)" || true
 
 FLAGS="-c -v0 --console=raw -O2 --buildtag=mmgate --target=c --include=."
 

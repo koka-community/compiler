@@ -885,11 +885,13 @@ fun known-mismatches(): io list<string>
     listed.file/read-text-file.lines.map(fn(l) l.split("#").head.default("").trim).filter(fn(l) !l.is-empty)
 
 fun newest-driver(): io string
-  val d = ".koka/v3.2.7".path
-  val cands = d.dir/list-directory.filter(fn(p) p.stemname.starts-with("clang-").bool)
+  // every untagged `.koka/v<version>`: the version is the reference compiler's
+  // that built the driver, and it moves independently of this script
+  val ds = ".koka".path.dir/list-directory.filter(fn(p) p.basename.starts-with("v").bool && !p.basename.contains("-"))
+  val cands = ds.flatmap(fn(d) d.dir/list-directory).filter(fn(p) p.stemname.starts-with("clang-").bool)
                 .map(fn(p) p / "compiler_main_driver__main".path).filter(dir/is-file)
   // newest by MTIME -- sorting by name picks whichever hash sorts last, which
   // silently selected a stale binary
   match cands.map(fn(p) (p.file/file-mtime, p)).sort(fn((a, _), (b, _)) a > b).map(snd)
     Cons(p, _) -> p.string
-    Nil -> throw("no port binary found under .koka/v3.2.7")
+    Nil -> throw("no port binary found under .koka/v<version>")

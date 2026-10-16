@@ -16,11 +16,11 @@
 set -eu
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
+. "$ROOT/scripts/build-dirs.sh"
 TARGET=${1:?usage: compare-warm.sh <target.kk> [runs]}
 RUNS=${2:-3}
-KOKA_DEV_DIR="${KOKA_DEV_DIR:-$HOME/koka/.worktrees/dev-compiler}"
-UP=$(cd "$KOKA_DEV_DIR" && stack exec which koka)
-PORT=$(ls -t "$ROOT"/.koka/v3.2.7/clang-*/compiler_main_driver__main 2>/dev/null | head -1)
+UP=$REF_KOKA
+PORT=$(ls -t "$REF_DIR"/clang-*/compiler_main_driver__main 2>/dev/null | head -1)
 [ -x "$UP" ]   || { echo "no reference compiler at $UP" >&2; exit 1; }
 [ -x "$PORT" ] || { echo "no port driver at $PORT (run scripts/build-driver.sh)" >&2; exit 1; }
 grep -qE '^(pub )?fun main' "$TARGET" || {
@@ -42,14 +42,15 @@ run() { # run <binary> <buildtag> ; echoes elapsed seconds. ONE execution: a
     echo "FAILED: $_bin exited non-zero on $TARGET" >&2; tail -3 "$TMP" >&2; exit 1; }
   awk '/^real/{print $2}' "$TMP"
 }
-count() { find ".koka/v3.2.7-$1" -maxdepth 2 -name "*.$2" 2>/dev/null | wc -l | tr -d ' '; }
+UDIR="$ROOT/.koka/v$REF_VERSION-cwu"; PDIR=$(port_dir cwp)
+count() { find "$1" -maxdepth 2 -name "*.$2" | wc -l | tr -d ' '; }
 
-rm -rf ".koka/v3.2.7-cwu" ".koka/v3.2.7-cwp"
+rm -rf "$UDIR" "$PDIR"
 echo "warming both (cold build of $TARGET's closure)..."
 run "$UP"   cwu >/dev/null
 run "$PORT" cwp >/dev/null
 
-uc=$(count cwu c); uo=$(count cwu o); pc=$(count cwp c); po=$(count cwp o)
+uc=$(count "$UDIR" c); uo=$(count "$UDIR" o); pc=$(count "$PDIR" c); po=$(count "$PDIR" o)
 echo "artifacts  upstream: ${uc} .c ${uo} .o    port: ${pc} .c ${po} .o"
 [ "$uo" -gt 0 ] && [ "$po" -gt 0 ] || { echo "ABORT: one side produced no objects" >&2; exit 1; }
 d=$(( uc > pc ? uc - pc : pc - uc ))
