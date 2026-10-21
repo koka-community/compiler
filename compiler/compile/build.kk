@@ -170,6 +170,17 @@ pub fun bmod/gamma(m: bmodule): gamma
     ModCompiled(mgamma=g) -> g
     ModTyped(mgamma=g) -> g
 
+// The view of `m` that an `@open import` gives: its private definitions are
+// visible as if public (upstream `defsFromCore (modShouldOpen mod)`). Only
+// definitions present in its core can be promoted, so a module loaded from an
+// interface exposes nothing more.
+pub fun bmod/opened(m: bmodule): _ bmodule
+  val g = extract-gamma(data/is-value, True, m.bmod/core)
+  match m
+    ModIface(c, idefs, _, at, cf, pending) -> ModIface(c, idefs, g, at, cf, pending)
+    ModCompiled(c, idefs, _, cf, at) -> ModCompiled(c, idefs, g, cf, at)
+    ModTyped(c, _, t) -> ModTyped(c, g, t)
+
 pub fun bmod/core(m: bmodule): core
   match m
     ModIface(c) -> c
@@ -1172,6 +1183,12 @@ pub fun canonical-modname(mods: bmodules, nm: name): name
     Nothing -> nm
 
 pub fun pub-import-closure(mods: bmodules, progImports: list<syntax/syntax/kimport>): div list<name>
+  import-closure(mods, progImports).map(snd)
+
+// `pub-import-closure` with each module's open flag: True when it is reached
+// through an `@open import`, directly or as a user import of an opened module
+// (upstream `modShouldOpen`, set in `moduleWaitForPubImports`).
+pub fun import-closure(mods: bmodules, progImports: list<syntax/syntax/kimport>): div list<(bool, name)>
   // A name reaching this closure can be an AS-WRITTEN relative-import alias
   // (e.g. "async/internal") rather than the module's own CANONICAL identity
   // (e.g. "std/async/internal") -- `resolve-module`'s fallback mechanism
@@ -1191,7 +1208,7 @@ pub fun pub-import-closure(mods: bmodules, progImports: list<syntax/syntax/kimpo
   // particular importer happened to write) fixes this at the source.
   fun canonical(nm: name): name
     canonical-modname(mods, nm)
-  fun closure(alreadyDone0: list<name>, level: list<(bool, name)>): div list<name>
+  fun closure(alreadyDone0: list<name>, level: list<(bool, name)>): div list<(bool, name)>
     val alreadyDone = alreadyDone0 ++ level.map(snd)
     val extras0 = level.flatmap fn((isOpen, mn))
       match mods.lookup(mn)
@@ -1203,8 +1220,8 @@ pub fun pub-import-closure(mods: bmodules, progImports: list<syntax/syntax/kimpo
     val extras = extras0.foldl([]) fn(acc: list<(bool, name)>, x)
       val (_, nm) = x
       if alreadyDone.any(fn(d) d == nm) || acc.any(fn((_, a)) a == nm) then acc else acc ++ [x]
-    if extras.is-nil then level.map(fn((_, nm)) nm.canonical)
-    else closure(alreadyDone, extras) ++ level.map(fn((_, nm)) nm.canonical)
+    if extras.is-nil then level.map(fn((o, nm)) (o, nm.canonical))
+    else closure(alreadyDone, extras) ++ level.map(fn((o, nm)) (o, nm.canonical))
   // the program's own import list can name the same module twice (a redundant
   // `import m` is legal and upstream tolerates it); dedupe it on first
   // occurrence exactly as `extras` above, otherwise the module contributes its
@@ -1721,8 +1738,8 @@ pub fun compile-module(fl: flags, srcPath: path, outBase: path, isEntry: bool, m
   // closure order) -- NOT every transitively loaded module; a private import of
   // an imported module must not resolve here, and the closure ORDER determines
   // gamma/kgamma candidate order in error messages (ambiguity hints etc.)
-  val tcMods = (pub-import-closure(mods, prog1.imports)
-    .flatmap(fn(nm) match mods.lookup(nm) { Just(m) -> [(nm, m)]; Nothing -> [] }))
+  val tcMods = (import-closure(mods, prog1.imports)
+    .flatmap(fn((o, nm)) match mods.lookup(nm) { Just(m) -> [(nm, if o then m.opened else m)]; Nothing -> [] }))
   val modDefs0 = defs-of(tcMods)
   // bootstrap fallback for a module with literally zero (transitive) imports
   // (named `modDefs`, not `defs` -- that would shadow core.kk's `defs` field
@@ -1754,8 +1771,8 @@ pub fun compile-module(fl: flags, srcPath: path, outBase: path, isEntry: bool, m
   // environment (pub-import closure defs + core imports) must be recomputable
   // for the EXTENDED program rather than fixed to prog1's imports
   fun defs-for(progX: syntax/syntax/program<user-type, user-kind>)
-    val tcModsX = (pub-import-closure(mods, progX.imports)
-      .flatmap(fn(nm) match mods.lookup(nm) { Just(m) -> [(nm, m)]; Nothing -> [] }))
+    val tcModsX = (import-closure(mods, progX.imports)
+      .flatmap(fn((o, nm)) match mods.lookup(nm) { Just(m) -> [(nm, if o then m.opened else m)]; Nothing -> [] }))
     val modDefsX0 = defs-of(tcModsX)
     if mods.list.is-empty && prog1.name != nameCoreTypes
       then modDefsX0(defs-gamma = modDefsX0.defs-gamma.builtin-extend, defs-newtypes = modDefsX0.defs-newtypes.builtin-newtypes)

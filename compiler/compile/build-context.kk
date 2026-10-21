@@ -286,14 +286,9 @@ fun build-entry-module(fl: flags, mods: bmodules, odir: path, rootName: name, bm
     val (atName, content) = entry-module-source(rootName, mainName, resTp)
     val atSrc = virtual-path(atName.show-plain ++ ".kk")
     with with-vfs([(atSrc, Vfile(content, epoch-nanos()))])
-    // `@open import` sees the program's PRIVATE definitions -- an entry
-    // function is rarely `pub` -- so the program is handed to this one compile
-    // with its private bindings promoted. No other module gets that view.
-    val openMods = match bm
-      ModCompiled(c, inls, _g, cf, at) ->
-        mods.set(rootName, ModCompiled(c, inls, extract-gamma(data/is-value, True, c), cf, at))
-      _ -> mods
-    val atMod = compile-module(fl, atSrc, odir / atName.module-name-to-path.path, True, openMods,
+    // `@open import` lets it call the program's private entry function
+    // (`bmod/opened`): an entry function is rarely `pub`
+    val atMod = compile-module(fl, atSrc, odir / atName.module-name-to-path.path, True, mods,
                                Just(atName), fn(_mc) (), cancelled, on-exe)
     mods.set(atName, atMod)
 
