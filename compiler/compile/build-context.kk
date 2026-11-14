@@ -364,7 +364,7 @@ fun check-file-ex(fl: flags, fnames: list<string>, isEntry: bool,
   // them is meant not to parse.
   val parsed = rootPaths.map fn(srcPath)
     phase("parse", srcPath.string)
-    match try({ val p0 = parse-program-from-string(vfs/read-text-file(srcPath), srcPath, allow-at, fl.semiInsert, fl.tpl)
+    match try({ val p0 = parse-program-from-string(read-source(srcPath, fl.includePath.map(path)), srcPath, allow-at, fl.semiInsert, fl.tpl)
                 (srcPath, p0, name-program(fl, p0, srcPath, isEntry)) })
       Ok(t)      -> Right(t)
       Error(exn) -> Left((srcPath, exn.message))

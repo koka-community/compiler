@@ -1,8 +1,8 @@
 // Parallel test runner, in Koka.
 //
-// Runs the port against the test corpus in `test/`: for every `<t>.kk` that has a
-// sibling `<t>.kk.out`, invoke the port, sanitize its stdout the same way the
-// expected output was sanitized, and compare.
+// Runs the port against the test corpus in `test/`: for every `<t>.kk` or literate
+// `<t>.kk.md` that has a sibling `.out`, invoke the port, sanitize its stdout the
+// same way the expected output was sanitized, and compare.
 //
 // The point of writing this in Koka rather than extending the Python harness
 // is that the runner is itself a realistic parallel workload for the port --
@@ -182,7 +182,7 @@ fun discover(dir: path): io list<path>
   val entries = dir.dir/list-directory.sort(fn(a, b) a.string < b.string)
   entries.flatmap fn(p)
     if p.dir/is-directory then discover(p.pretend-decreasing)
-    elif p.extname == "kk" && (p.string ++ ".out").path.dir/is-file then [p]
+    elif (p.extname == "kk" || p.string.ends-with(".kk.md").bool) && (p.string ++ ".out").path.dir/is-file then [p]
     else []
 
 // `<dir>/config.json` cascades from parent directories, flags concatenated

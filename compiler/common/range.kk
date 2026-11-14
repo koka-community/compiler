@@ -20,6 +20,51 @@ pub fun source/(==)(s1: source, s2: source): bool
 
 pub val source/null = Source("", "")
 
+// The code of a literate document (`.kk.md`) for the lexer, as upstream
+// `extractLiterate`: every line keeps its place, so ranges point into the
+// document. The lines of a ``` or ```koka block are code (less the fence's
+// indentation), and the line of a block's closing fence is empty. Every other
+// line is commented out; a block with any other info string is skipped whole. A
+// `////` line in a block empties itself and the lines above it in the block
+// (shown in the document, not compiled). A block left open at the end is dropped.
+pub fun extract-literate(input: string): div string
+  // the lines as upstream's `BC.span (/='\n')` scan visits them
+  val lines0 = input.split("\n")
+  val lines = match lines0.last
+    Just("") -> lines0.init
+    _ -> lines0
+  literate-scan(False, lines).join
+
+// a line's indentation, its count of leading backticks, and the rest
+fun literate-fence(line: string): (int, int, string)
+  val indent = line.list.take-while(fn(c) c == ' ').length
+  val iline = line.list.drop(indent)
+  val qs = iline.take-while(fn(c) c == '`').length
+  (indent, qs, iline.drop(qs).string)
+
+fun literate-white(cs: string): bool
+  cs.list.all(fn(c) c == ' ' || c == '\r' || c == '\n' || c.int == 11 || c.int == 12)  // and \v \f
+
+fun literate-scan(skipping: bool, ls: list<string>): div list<string>
+  match ls
+    Nil -> Nil
+    Cons(line, rest) ->
+      val (indent, qs, cs) = literate-fence(line)
+      if qs == 3 && !skipping && (cs.literate-white || cs.starts-with("koka").bool)
+        then Cons("\n", literate-scan-code(indent, [], rest))
+        else Cons("//" ++ line ++ "\n", literate-scan(if qs == 3 then !skipping else skipping, rest))
+
+fun literate-scan-code(indent: int, acc: list<string>, ls: list<string>): div list<string>
+  match ls
+    Nil -> Nil
+    Cons(line, rest) ->
+      val (_, qs, cs) = literate-fence(line)
+      if qs == 3 && cs.literate-white
+        then Cons("", acc).reverse.map(fn(l) l ++ "\n") ++ literate-scan(False, rest)
+      elif cs.starts-with("////").bool
+        then literate-scan-code(indent, Cons("", acc.map(fn(_) "")), rest)
+      else literate-scan-code(indent, Cons(line.list.drop(indent).string, acc), rest)
+
 pub struct pos
   source: source
   off: int

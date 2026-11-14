@@ -338,8 +338,16 @@ pub fun highlight-fragment(hctx: highlight-ctx, str: string): _ string
   highlight(id, hctx, 1, str)
   out
 
+// nice type-variable names and full names, as upstream's
+// `niceEnv (env{ fullNames = True }) (tvsList (ftv tp))`
 pub fun show-type(tp: ktype): _ string
-  highlight-fragment(CtxType([], ":"), html/compress(tp.ktp/pretty-string))
+  val s = with-pretty-env fn()
+    with handler
+      val pp-env = PrettyEnv(fullNames = True)
+    match [tp].nice-types
+      Cons(d) -> d.pprint/show
+      Nil -> ""
+  highlight-fragment(CtxType([], ":"), html/compress(s))
 
 pub fun show-kind(k: kind): _ string
   // upstream `prettyKind`, not the raw `show`: the latter prints a kind arrow
@@ -375,8 +383,7 @@ fun transform1(env: html-env, lex: lexeme, acc: (list<range>, string),
         _ -> False
       val body = match info
         NIValue(_, tp) ->
-          signature(env, to-lit, env.literate, "type", qname, mangle(qname, tp), pdocs(show-type(tp)),
-                    if is-kw then cspan("keyword", pcontent) else pcontent)
+          signature(env, to-lit, env.literate, "type", qname, mangle(qname, tp), pdocs(show-type(tp)), content)
         NICon(tp) ->
           signature(env, to-lit, env.literate, "type", qname, qname.mangle-con-name, pdocs(show-type(tp)),
                     cspan("constructor", pcontent))
@@ -584,6 +591,13 @@ fun lex-doc-comment(doc: string): _ list<token-comment<lexeme>>
     fun fmt(token, _lex, _s) token
   lex-comment(1, remove-comment(doc))
 
+// A literate document as a comment, as `lex-doc-comment`: the `fmt` operation is never reached
+fun lex-literate(source: string, line-no: int, input: string): _ list<token-comment<lexeme>>
+  with handler
+    val source-file = source
+    fun fmt(token, _lex, _s) token
+  lex-comment(line-no, input)
+
 // A definition's documentation, rendered.
 // `lit` carries what a name inside an inline code span needs to become a
 // link (upstream's `fmtComment env kgamma gamma`). Omitting it renders the
@@ -640,9 +654,17 @@ pub val html-footer: list<string> = ["</body>", "</html>"]
 // needs the module's range map, kgamma and gamma; this is the plain
 // `highlightLexemes id fmtHtml CtxNormal` path upstream falls back to when it
 // has no range map.
+//
+// A literate document (`.kk.md`) is markdown: its text passes through and its
+// code blocks are highlighted (upstream's first `colorize` equation). Its code
+// gets type popups from `gammas` but no definition links, as `fmt-comment`
+// takes no range map.
 pub fun colorize(source-name: path, line-no: int, input: string,
                  rmap: maybe<range-map> = Nothing, env: html-env = Html-env(name/nil),
-                 full-html: bool = False, css: list<string> = [], js: string = ""): _ string
+                 full-html: bool = False, css: list<string> = [], js: string = "",
+                 gammas: maybe<(gamma, kGamma)> = Nothing): _ string
+  if source-name.string.ends-with(".kk.md").bool then
+    return lex-literate(source-name.string, line-no, input).map(fn(c) fmt-comment(c, gammas.map(fn((g, kg)) (env, g, kg)))).join
   var out := ""
   // ranges whose `</span>` is still owed, innermost first
   var rctx : list<range> := []
