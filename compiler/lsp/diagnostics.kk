@@ -1,4 +1,4 @@
-// `textDocument/publishDiagnostics` and `textDocument/diagnostic`.
+// `textDocument/publishDiagnostics`.
 //
 // Split out of `server.kk` to mirror upstream's one-file-per-handler
 // `LanguageServer/Handler/` layout.
@@ -47,8 +47,10 @@ pub type check-result
     prog: maybe<user-program>,
     ntypes: newtypes,
     syns: synonyms,
-    diags: list<json>,
-    note: string)
+    // a `publishDiagnostics` per file, and the URIs that now have diagnostics
+    // (see `publish-errors`)
+    notes: list<string>,
+    diagnosed: list<string>)
 
 // Type-check the document from the OVERLAY (never from disk) and turn whatever
 // the compiler reports into a `publishDiagnostics` notification.
@@ -125,8 +127,26 @@ pub fun diagnostics-for(st: server-state, d: state/doc, revalidate: bool = False
   // when the text matches /error/i.
   msgs.foreach fn(e)
     write-bytes(log-diagnostic(e.err/show, e.severity.severity/to-lsp <= 1).frame)
-  val items = msgs.map(to-diagnostic)
-  CheckResult(sess2, !rmap, !gam, !prog, !ntypes, !syns, items, publish-diagnostics(d.uri, items))
+  val (notes, diagnosed) = st.publish-errors(d.uri, msgs)
+  CheckResult(sess2, !rmap, !gam, !prog, !ntypes, !syns, notes, diagnosed)
+
+// Diagnostics for every file the errors are in, as upstream `diagnoseErrors`: a
+// message is reported at its file's URI in the editor's terms (`client-uri`),
+// or at `default-uri` when it has no file. Each file the last check reported
+// and this one does not is cleared. A document the editor has open is
+// published with its current version. Returns the notifications and the URIs
+// that now have diagnostics.
+pub fun publish-errors(st: server-state, default-uri: string, msgs: errors): io (list<string>, list<string>)
+  val keyed = msgs.map fn(e)
+    val src = e.range.start.source.name
+    (if src.is-empty then default-uri else st.client-uri(src.path), e.to-diagnostic)
+  val uris = keyed.foldl([]) fn(acc, (u, _)) if acc.any(fn(a) a == u) then acc else acc ++ [u]
+  fun diags-of(u: string): list<json>
+    keyed.filter(fn((k, _)) k == u).map(snd)
+  val cleared = st.diagnosed.filter(fn(u) !uris.any(fn(v) v == u))
+  val notes = (uris ++ cleared).map fn(u)
+    publish-diagnostics(u, diags-of(u), st.find-doc(u).map(fn(dd) dd.version))
+  (notes, uris)
 
 pub fun to-diagnostic(e: error-msg): _ json
   JSObj([
@@ -136,6 +156,8 @@ pub fun to-diagnostic(e: error-msg): _ json
     ("message", JSString(e.message.show))
   ])
 
-pub fun publish-diagnostics(uri: string, ds: list<json>): string
+pub fun publish-diagnostics(uri: string, ds: list<json>, version: maybe<int> = Nothing): string
   notification("textDocument/publishDiagnostics",
-               JSObj([("uri", JSString(uri)), ("diagnostics", JSList(ds))]))
+               JSObj([("uri", JSString(uri))] ++
+                     version.map(fn(v) [("version", JSInt(v))]).default([]) ++
+                     [("diagnostics", JSList(ds))]))

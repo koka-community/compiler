@@ -147,14 +147,12 @@ fun compile-entry(st: server-state, fpath: string, entry: string, extra: string)
   write-bytes(progress-begin(token, "Koka: compiling " ++ p.basename).frame)
   build-it()
   write-bytes(progress-end(token, if (!exe).is-just then "done" else "failed").frame)
-  val items = msgs.map(to-diagnostic)
-  // republish this file's diagnostics so a failed run points at the reason:
-  // the reply is only "null", so without them a failed build shows nothing
-  val uri = p.path-to-uri
-  write-bytes(publish-diagnostics(uri, items).frame)
-  val st2 = match st.find-doc(uri)
-    Just(d) -> st.put-doc(d(diags = items))
-    Nothing -> st
+  // republish the diagnostics so a failed run points at the reason: the reply
+  // is only "null", so without them a failed build shows nothing
+  val uri = st.client-uri(p)
+  val (notes, diagnosed) = st.publish-errors(uri, msgs)
+  notes.foreach(fn(n) write-bytes(n.frame))
+  val st2 = st(diagnosed = diagnosed)
   match !exe
     Just(e) -> (st2, JSString(e.string))
     Nothing -> (st2, JSNull)

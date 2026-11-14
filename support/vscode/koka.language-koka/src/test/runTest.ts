@@ -1,5 +1,6 @@
 import * as path from 'path'
 import * as fs from 'fs'
+import * as os from 'os'
 import { runTests, downloadAndUnzipVSCode } from '@vscode/test-electron'
 
 // Launches a real VS Code with this extension loaded and runs the suite in it.
@@ -11,7 +12,6 @@ import { runTests, downloadAndUnzipVSCode } from '@vscode/test-electron'
 async function main() {
   const extensionDevelopmentPath = path.resolve(__dirname, '../../')
   const extensionTestsPath = path.resolve(__dirname, './suite/index')
-  const fixtureWorkspace = path.resolve(__dirname, './fixtures')
 
   const repoRoot = path.resolve(extensionDevelopmentPath, '../../../')
   const defaultCompiler = path.join(repoRoot, '.koka', 'bootstrap', 'driver')
@@ -22,6 +22,27 @@ async function main() {
     process.exit(1)
   }
   console.log(`integration test: compiler=${compiler}`)
+  const cwd = process.env.KOKA_TEST_CWD || repoRoot
+
+  // A fresh workspace of two folders whose settings select the compiler under test.
+  // Each folder is opened through a symbolic link (a junction on Windows), so the
+  // paths in the editor differ from the real paths the compiler uses
+  // (koka-lang/koka#970, #810).
+  function linkedFolder(name: string): string {
+    const real = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), `koka-vscode-${name}-`))
+    fs.symlinkSync(real, real + '-link', 'junction')
+    return real + '-link'
+  }
+  const folders = [linkedFolder('test'), linkedFolder('lib')]
+  const workspace = path.join(path.dirname(folders[0]), path.basename(folders[0]) + '.code-workspace')
+  fs.writeFileSync(workspace, JSON.stringify({
+    folders: folders.map(folder => ({ path: folder })),
+    settings: {
+      'koka.languageServer.compiler': compiler,
+      'koka.languageServer.workingDirectory': cwd,
+      'koka.languageServer.compilerArguments': [],
+    },
+  }, null, 2))
 
   const shortBase = '/tmp/koka-vsc-test'
   const userDataDir = path.join(shortBase, 'ud')
@@ -45,7 +66,7 @@ async function main() {
     extensionDevelopmentPath,
     extensionTestsPath,
     launchArgs: [
-      fixtureWorkspace,
+      workspace,
       // other extensions must not race this one for the .kk language id
       '--disable-extensions',
       '--disable-gpu',
@@ -58,7 +79,7 @@ async function main() {
     ],
     extensionTestsEnv: {
       KOKA_TEST_COMPILER: compiler,
-      KOKA_TEST_CWD: process.env.KOKA_TEST_CWD || repoRoot,
+      KOKA_TEST_CWD: cwd,
     },
   })
 }

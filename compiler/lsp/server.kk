@@ -101,8 +101,7 @@ pub fun run(fl0: flags): <io,async,colors,comp-flags> ()
     //
     // ONLY A CONTENT CHANGE BUMPS IT, not any message. A superseded compile is
     // DISCARDED and its document re-marked dirty (see `on-idle`), and this
-    // server advertises `diagnosticProvider` and `inlayHintProvider`, so an
-    // editor polls it continuously: bumping on every message cancels each
+    // server advertises `inlayHintProvider`, so an editor polls it continuously: bumping on every message cancels each
     // compile at the next poll and restarts it, forever. Measured that way on
     // `compiler/syntax/lexeme.kk` with a 1s poll: 118 compiles in 150s, all 118
     // superseded, not one result stored -- the "it just keeps reloading the
@@ -224,17 +223,6 @@ fun on-message(st: server-state, msg: message): _ (maybe<server-state>, list<str
         Nothing ->
           val cmd = ps.field("command").as-string.default("")
           (Just(st), [error-response(id, method-not-found-code, "unsupported command: " ++ cmd)])
-    Request(id, "textDocument/diagnostic", ps) ->
-      // PULL diagnostics (LSP 3.17). The client uses this because we advertise
-      // `diagnosticProvider`; answering -32601 while still pushing on every edit
-      // is what produced "unsupported method: textDocument/diagnostic" in the
-      // client log even though diagnostics appeared. Served from the last
-      // compile's result rather than recompiling, so a pull is free.
-      val duri = ps.field("textDocument").field-of("uri").as-string.default("")
-      val items = match st.find-doc(duri)
-        Just(d) -> d.diags
-        Nothing -> []
-      (Just(st), [response(id, JSObj([("kind", JSString("full")), ("items", JSList(items))]))])
     Request(id, "textDocument/inlayHint", ps) ->
       (Just(st), [response(id, st.inlay-hints(ps))])
     Request(id, "textDocument/definition", ps) ->
@@ -275,7 +263,7 @@ fun on-idle(st: server-state, edits: ref<global,int>): _ (server-state, list<str
           // opening a document is the moment an external change on disk is
           // plausible, so revalidate the session then; an edit only changed the
           // buffer, which the overlay already reflects
-          val CheckResult(sess2, rm, g, pr, nts, sy, items, note) = sti.diagnostics-for(d, d.rmap.is-nil, superseded)
+          val CheckResult(sess2, rm, g, pr, nts, sy, notes, diagnosed) = sti.diagnostics-for(d, d.rmap.is-nil, superseded)
           // a superseded compile has partial diagnostics: do not publish them,
           // and leave the document dirty so the next idle pass redoes it
           // A check that failed outright (a syntax error while typing is the
@@ -283,11 +271,11 @@ fun on-idle(st: server-state, edits: ref<global,int>): _ (server-state, list<str
           // what lets hover, completion and inlay hints keep working through a
           // half-typed line; overwriting with the empty result made every
           // feature go blank on the very edit the user needs help with.
-          val d2 = if rm.is-nil && !d.rmap.is-nil then d(diags = items)
-                   else d(rmap = rm, gam = g, prog = pr, ntypes = nts, syns = sy, diags = items)
+          val d2 = if rm.is-nil && !d.rmap.is-nil then d
+                   else d(rmap = rm, gam = g, prog = pr, ntypes = nts, syns = sy)
           if timing-on() then println("ONIDLE store: " ++ sess2.mods.list.length.show ++ " modules, superseded=" ++ superseded().show)
           if superseded() then (sti.mark-dirty(u), acc)
-          else (sti(sess = sess2).put-doc(d2), acc ++ [note])
+          else (sti(sess = sess2, diagnosed = diagnosed).put-doc(d2), acc ++ notes)
     (st2, notes)
 
 // Answer `textDocument/completion` from the last check's range map and gamma.
@@ -321,7 +309,5 @@ fun initialize-result(): json
     ("foldingRangeProvider", JSBool(True)),
     // the extension's run/debug code lenses drive these; a client only sends a
     // command the server advertises here
-    ("executeCommandProvider", JSObj([("commands", JSList(command-names.map(JSString)))])),
-    ("diagnosticProvider", JSObj([("interFileDependencies", JSBool(True)),
-                                  ("workspaceDiagnostics", JSBool(False))]))
+    ("executeCommandProvider", JSObj([("commands", JSList(command-names.map(JSString)))]))
   ]))])
