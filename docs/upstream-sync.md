@@ -2,6 +2,7 @@
 
 The port is synced with `koka-lang/koka` `dev` through **`0700777dc`** (2026-11-14, #971).
 Update that line and the table below whenever upstream changes are brought in.
+CI's reference compiler (`KOKA_REF` in `.github/workflows/stage2.yml`) is `port-reference` 6c6aa5f25 on TimWhiting/koka: the same upstream commit plus the fixes in `docs/upstream-pr-burndown.md`.
 
 Per-file `// Updated as of ...: Commit <hash>` headers and `./check-upstream-sync.sh` (see `TODO_porting.md`) are older and finer-grained; this file is the sync point of the port as a whole.
 
