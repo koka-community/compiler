@@ -419,10 +419,14 @@ fun run-one-raw(bin: string, common: list<string>, kk: path): <exn,ioc> outcome
 // directory every test shares before any test starts. Each worker here has its
 // own directory, so a test's worker compiles them just before it, with the same
 // flags. `medium/allsamples` loads the samples from their interfaces, so their
-// warnings are not in its output (`util/link-test.kk` imports `samples/all`).
+// warnings are not in its output (`util/link-test.kk` imports `samples/all`),
+// and `cgen/mpat` and `cgen/specbox` load their libraries from the `.kki`
+// (`specbox-lib.kk.flags` is `-O2`).
 fun precompile-for(kk: path): io list<(list<string>, string)>
   match kk.string.replace-all(corpus-test().string ++ "/", "")
     "medium/allsamples.kk" -> [(["-e"], "util/link-test.kk")]
+    "cgen/mpat.kk"         -> [([], "test/cgen/mpat-lib.kk")]
+    "cgen/specbox.kk"      -> [(["-O2"], "test/cgen/specbox-lib.kk")]
     _ -> []
 
 // ---------------------------------------------------------------------------
