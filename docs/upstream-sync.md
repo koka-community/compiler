@@ -20,7 +20,7 @@ A change to `src/` has to be ported by reading it.
 | upstream | change | port |
 | --- | --- | --- |
 | 0700777dc #971 | LSP: diagnostics follow the editor buffer and the document version | b548344 (and drops `diagnosticProvider`, which upstream does not advertise) |
-| 7e9c1e593 #962 | literate snippet includes; HTML popups | cb90ab1 (also adds the literate support the port lacked) |
+| 7e9c1e593 #962 | literate snippet includes; HTML popups | cb90ab1 (also adds the literate support the port lacked), 55f7f2e (book.js, playground embed) |
 | bd457c10e #963 | entry module next to the module it calls (`foo_at_main`) | 8a305b9 |
 | d23ee7cd7 #965 | CI; library fixtures are not tests | 2e0bae7 |
 | 198fc3bbd #961 | playground color themes | a52c1a7 |
@@ -46,4 +46,6 @@ A change to `src/` has to be ported by reading it.
 
 - A literate document's colorized `.md` has type popups but no definition links: the port's `fmt-comment` takes no range map (`syntax/colorize.kk`).
 - `syntax/gen-doc.kk` names type variables per declaration; upstream's #962 threads one nice-name environment through each declaration's highlighting.
-- The VS Code extension's test suite keeps the port's own harness (`src/test/runTest.ts`); upstream's `.vscode-test.mjs` workspace setup is reproduced there.
+- The VS Code extension's test suite keeps the port's own harness (`src/test/runTest.ts`, `@vscode/test-electron`); upstream's `.vscode-test.mjs` workspace and its `@vscode/test-cli` dependencies in `package.json` are not brought in, the workspace setup is reproduced in `runTest.ts`.
+- `web/playground/test/test-wasm.mjs` is the port's own; upstream's e38005d97 line (print the compile result on failure) has no counterpart there.
+- The playground's default backend stays `wasm` (`editor/context.tsx`), as the port's language server does not run under WASI.
