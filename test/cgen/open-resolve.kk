@@ -1,13 +1,12 @@
+// The call to `set-root` opens `main`'s effect row into one with a different tail.
 import std/os/path
-import std/os/env
 
-effect val package-root: path
+effect val root : path
 
 fun main()
-  println("Expecting :" ++ (cwd() / ".kokac").show)
-  with set-package-root(cwd())
-  println(package-root)
+  with set-root(cwd())
+  println(root.nodir)
 
-noinline fun set-package-root(root: path, f: () -> <package-root,ndet|e> a): <ndet|e> a
-  with val package-root = root / ".kokac"
+noinline fun set-root( r : path, f : () -> <root,ndet|e> a ) : <ndet|e> a
+  with val root = r / "b"
   f()

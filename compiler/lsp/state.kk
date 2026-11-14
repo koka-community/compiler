@@ -48,10 +48,6 @@ pub struct doc
   // the module's gamma from that same check: resolves a name under the cursor
   // to the range where it was defined
   gam: gamma = gamma/new([])
-  // the diagnostics last published for this buffer. Kept so `textDocument/
-  // diagnostic` (the PULL model, which the client uses because we advertise
-  // `diagnosticProvider`) can answer without recompiling.
-  diags: list<json> = []
 
 pub struct server-state
   flags: flags
@@ -65,6 +61,9 @@ pub struct server-state
   // roots, symlinked checkouts, or a differently-cased drive, a URI rebuilt
   // from the server's cwd names a file the client will not recognise.
   roots: list<(path, string)> = []
+  // The URIs the last check published diagnostics for: the next check clears
+  // those it has none for (upstream `diagnosedUris`).
+  diagnosed: list<string> = []
   // The overload the client last accepted from a completion, set by the
   // `koka/signature-help/set-context` command. Signature help makes it the
   // ACTIVE signature -- otherwise accepting one overload and then typing its
@@ -84,7 +83,7 @@ pub struct server-state
   dirty: list<string> = []
 
 pub fun new-state(fl: flags): server-state
-  Server-state(fl, [], False, Session(), [], Nothing, True, True, True, [])
+  Server-state(fl, [])
 
 //----------------------------------------------------------------------
 // the document table
@@ -110,7 +109,7 @@ pub fun clear-dirty(st: server-state): server-state
 // file's timestamp and nothing is needlessly recompiled.
 pub fun opened-doc(u: string, text: string, version: int): _ doc
   val ft = u.uri-to-path.file/file-mtime
-  Doc(u, text, version, if ft > 0 then ft else epoch-nanos(), [], Nothing, newtypes/empty, synonyms/empty, gamma/new([]), [])
+  Doc(u, text, version, if ft > 0 then ft else epoch-nanos())
 
 // A buffer that has just been edited: it is newer than any artifact built from
 // the previous content.
@@ -124,7 +123,7 @@ pub fun opened-doc(u: string, text: string, version: int): _ doc
 pub fun edited-doc(prev: maybe<doc>, u: string, text: string, version: int): _ doc
   match prev
     Just(d) -> d(text = text, version = version, mtime = epoch-nanos())
-    Nothing -> Doc(u, text, version, epoch-nanos(), [], Nothing, newtypes/empty, synonyms/empty, gamma/new([]), [])
+    Nothing -> Doc(u, text, version, epoch-nanos())
 
 // A buffer that has just been SAVED. Buffer and file agree again, so the
 // overlay takes the file's (new) timestamp -- otherwise the edit-time stamp
@@ -145,7 +144,7 @@ pub fun with-roots(st: server-state, uris: list<string>): _ server-state
 
 // The URI to report for `p`, in the client's own terms:
 //   1. a document the client opened -- reuse the very URI it sent
-//   2. a file under a declared root -- rebuild from that ROOT's uri
+//   2. a file under a declared root -- rebuild from the longest such ROOT's uri
 //   3. otherwise -- a plain absolute `file:` uri
 // Only (3) invents anything, and only for a file the client never named.
 pub fun client-uri(st: server-state, p: path): io string
@@ -153,9 +152,10 @@ pub fun client-uri(st: server-state, p: path): io string
   match st.docs.find(fn(d) d.uri.uri-to-path.canon == ps)
     Just(d) -> d.uri
     Nothing ->
-      match st.roots.find(fn((rp, _)) ps.starts-with(rp.canon ++ "/").bool)
-        Just((rp, ru)) ->
-          val rel = ps.list.drop(rp.canon.count + 1).string
+      val under = st.roots.map(fn((rp, ru)) (rp.canon, ru)).filter(fn((rc, _)) ps.starts-with(rc ++ "/").bool)
+      match under.foldl(Nothing) fn(best : maybe<(string, string)>, r) match best { Just((bc, _)) | bc.count >= r.fst.count -> best; _ -> Just(r) }
+        Just((rc, ru)) ->
+          val rel = ps.list.drop(rc.count + 1).string
           (if ru.ends-with("/").bool then ru else ru ++ "/") ++ rel
         Nothing -> p.path-to-uri
 

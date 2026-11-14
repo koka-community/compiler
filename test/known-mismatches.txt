@@ -1,6 +1,2 @@
 # Corpus tests the port is expected to fail, read by scripts/test-runner.kk.
 # One path per line, relative to test/, with the reason after the `#`.
-
-# The port creates the three lifted copies in `@lift-fexec-loop` in another
-# order (`key@1, key, key@0` against `key, key@0, key@1`); only names differ.
-cgen/specialize/recursive-arg.kk

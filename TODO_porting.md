@@ -48,6 +48,8 @@ Compiler-side fixes made in the `dev-compiler` toolchain while syncing (upstream
 
 ## Upstream sync status
 
+The sync point of the port as a whole, and what each upstream merge since v3.3.0 became here, is in `docs/upstream-sync.md`. This section is the older per-file record.
+
 Checked 2026-07-23 against the `dev-compiler` branch (`0ed6ce07d`, in `~/koka/.worktrees/dev-compiler`).
 Each ported file records the upstream commit it was synced to in its `// Updated as of ...: Commit <hash>` header;
 `./check-upstream-sync.sh` regenerates this comparison (update its table when adding baselines).

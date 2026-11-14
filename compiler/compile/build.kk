@@ -170,6 +170,17 @@ pub fun bmod/gamma(m: bmodule): gamma
     ModCompiled(mgamma=g) -> g
     ModTyped(mgamma=g) -> g
 
+// The view of `m` that an `@open import` gives: its private definitions are
+// visible as if public (upstream `defsFromCore (modShouldOpen mod)`). Only
+// definitions present in its core can be promoted, so a module loaded from an
+// interface exposes nothing more.
+pub fun bmod/opened(m: bmodule): _ bmodule
+  val g = extract-gamma(data/is-value, True, m.bmod/core)
+  match m
+    ModIface(c, idefs, _, at, cf, pending) -> ModIface(c, idefs, g, at, cf, pending)
+    ModCompiled(c, idefs, _, cf, at) -> ModCompiled(c, idefs, g, cf, at)
+    ModTyped(c, _, t) -> ModTyped(c, g, t)
+
 pub fun bmod/core(m: bmodule): core
   match m
     ModIface(c) -> c
@@ -226,11 +237,10 @@ pub struct module-dirs
 // CANONICAL name, so nothing downstream sees the as-written name again.
 // Also used to find the source of a name that is already canonical.
 fun resolve-module-name(nm: name, dirs: module-dirs, fallback-dir: maybe<path>): _ (maybe<path>, name)
-  val fname = (nm.show-plain ++ ".kk").path
   val candidates = match fallback-dir
     Just(fd) -> Cons(fd, dirs.search)
     Nothing -> dirs.search
-  match candidates.map(fn(d) d / fname).find(vfs/is-file)
+  match candidates.flatmap(fn(d) source-files(d, nm.show-plain)).find(vfs/is-file)
     Just(fp) -> (Just(fp), canonical-module-name(fp, dirs.roots).default(nm))
     Nothing -> (Nothing, nm)
 
@@ -254,7 +264,7 @@ fun canonical-module-name(fp: path, roots: list<path>): _ maybe<name>
       Nothing -> Nothing
   match fromRoot.foldl(Nothing) fn(best, (n, rel)) match best { Just((m, _)) | m >= n -> best; _ -> Just((n, rel)) }
     Just((_, rel)) ->
-      val stem = if rel.ends-with(".kk").bool then rel.list.take(rel.count - 3).string else rel
+      val stem = rel.noexts
       val canonical = stem.path-to-module-name
       if canonical.show-plain == stem then Just(canonical) else Nothing
     Nothing -> Nothing
@@ -281,7 +291,7 @@ pub fun relative-fallback-dir(src: path, declared: name): path
 // interface (see `resolve-module`).
 fun with-source-aliases(mods: bmodules, src: path, declared: name, source-dirs: module-dirs, tpl: target-platform): _ bmodules
   val fallback-dir = Just(relative-fallback-dir(src, declared))
-  parse-dependencies-of(src, tpl).snd.foldl(mods) fn(acc, (asWritten, _))
+  parse-dependencies-of(src, source-dirs.search, tpl).snd.foldl(mods) fn(acc, (asWritten, _))
     val dep = resolve-module-name(asWritten, source-dirs, fallback-dir).snd
     if asWritten == dep || acc.contains-key(asWritten) then acc
     else match acc.lookup(dep)
@@ -340,10 +350,10 @@ pub fun resolve-module(mods0: bmodules, nm: name, out-dir: path, need-cfile: boo
         // so always re-parse `src` directly in that case rather than trust
         // the cache.
         val (declared0, deps00, fromIface) = if orig-nm != nm then
-                      { val (dn, ds) = parse-dependencies-of(src, tpl); (dn, ds, False) }
+                      { val (dn, ds) = parse-dependencies-of(src, source-dirs.search, tpl); (dn, ds, False) }
                     else match deps-cache.lookup(nm)
                       Just((_, dn, ds, fi)) -> (dn, ds, fi)
-                      Nothing -> { val (dn, ds) = parse-dependencies-of(src, tpl); (dn, ds, False) }
+                      Nothing -> { val (dn, ds) = parse-dependencies-of(src, source-dirs.search, tpl); (dn, ds, False) }
         // Interface-derived deps are canonical: they carry no as-written form,
         // so they produce none of the relative-import aliases below. A module
         // loaded from its interface needs none, since it is never type-checked;
@@ -610,21 +620,21 @@ pub fun discover-deps(roots: list<name>, source-dirs: module-dirs, tpl: target-p
                       // it dominates the cost of the edit itself
                       cache0: dep-cache = rb-map/empty()): _ dep-cache
   fun locate(nm: name): _ maybe<path>
-    source-dirs.search.map(fn(d) d / (nm.show-plain ++ ".kk")).find(vfs/is-file)
+    source-dirs.search.flatmap(fn(d) source-files(d, nm.show-plain)).find(vfs/is-file)
   fun waves(cache: dep-cache, frontier: list<name>): _ dep-cache
     val work = frontier.filter-map fn(nm)
       if cache.contains-key(nm) then Nothing
       else match locate(nm)
         Just(src) ->
-          if !iface-discovery() then Just((nm, src, Right(vfs/read-text-file(src))))
+          if !iface-discovery() then Just((nm, src, Right(read-source(src, source-dirs.search))))
           else
             val kki = out-dir / (nm.module-name-to-path ++ ".kki").path
             val it = file/file-mtime(kki)
             if it > 0 && vfs/file-mtime(src) <= it then
               match imports-of-kki(kki)
                 Just((dn, ds)) -> Just((nm, src, Left((dn, ds))))
-                Nothing        -> Just((nm, src, Right(vfs/read-text-file(src))))
-            else Just((nm, src, Right(vfs/read-text-file(src))))
+                Nothing        -> Just((nm, src, Right(read-source(src, source-dirs.search))))
+            else Just((nm, src, Right(read-source(src, source-dirs.search))))
         Nothing -> Nothing   // interface-only module; the walk loads its kki
     if work.is-nil then cache
     else
@@ -707,7 +717,7 @@ pub fun walk-rebuild(roots: list<name>, dcache: dep-cache, out-dir: path, search
               if !stale then Fresh(kki-t)
               elif !fromIface then Stale(src, declared, deps0)
               else
-                val (declared1, deps1) = parse-dependencies-of(src, tpl)
+                val (declared1, deps1) = parse-dependencies-of(src, source-dirs.search, tpl)
                 deps1.canonicalize-deps(src, declared1, source-dirs).foreach fn((dep, _))
                   val _ = visit(dep, chain1)
                   ()
@@ -1149,8 +1159,8 @@ pub fun trace-env(label: string, nm: name, mods: bmodules): _ ()
 // silently picks the wrong branch -- `timer-setup` then "cannot be found"
 // because it lives in the uv backend. `scan-deps` already threads `tpl`; this
 // path did not, which was latent while it was only a cache-miss fallback.
-pub fun parse-dependencies-of(src: path, tpl: target-platform = target-platform-default): _ (name, list<(name, range)>)
-  val prog = parse-program-from-string(vfs/read-text-file(src), src, allow-at, tpl = tpl)
+pub fun parse-dependencies-of(src: path, search: list<path>, tpl: target-platform = target-platform-default): _ (name, list<(name, range)>)
+  val prog = parse-program-from-string(read-source(src, search), src, allow-at, tpl = tpl)
   (prog.name, prog.imports.map(fn(i) (i.fullName, i.nameRange)))
 
 // EVERY resolved module (transitive, not
@@ -1172,6 +1182,12 @@ pub fun canonical-modname(mods: bmodules, nm: name): name
     Nothing -> nm
 
 pub fun pub-import-closure(mods: bmodules, progImports: list<syntax/syntax/kimport>): div list<name>
+  import-closure(mods, progImports).map(snd)
+
+// `pub-import-closure` with each module's open flag: True when it is reached
+// through an `@open import`, directly or as a user import of an opened module
+// (upstream `modShouldOpen`, set in `moduleWaitForPubImports`).
+pub fun import-closure(mods: bmodules, progImports: list<syntax/syntax/kimport>): div list<(bool, name)>
   // A name reaching this closure can be an AS-WRITTEN relative-import alias
   // (e.g. "async/internal") rather than the module's own CANONICAL identity
   // (e.g. "std/async/internal") -- `resolve-module`'s fallback mechanism
@@ -1191,7 +1207,7 @@ pub fun pub-import-closure(mods: bmodules, progImports: list<syntax/syntax/kimpo
   // particular importer happened to write) fixes this at the source.
   fun canonical(nm: name): name
     canonical-modname(mods, nm)
-  fun closure(alreadyDone0: list<name>, level: list<(bool, name)>): div list<name>
+  fun closure(alreadyDone0: list<name>, level: list<(bool, name)>): div list<(bool, name)>
     val alreadyDone = alreadyDone0 ++ level.map(snd)
     val extras0 = level.flatmap fn((isOpen, mn))
       match mods.lookup(mn)
@@ -1203,8 +1219,8 @@ pub fun pub-import-closure(mods: bmodules, progImports: list<syntax/syntax/kimpo
     val extras = extras0.foldl([]) fn(acc: list<(bool, name)>, x)
       val (_, nm) = x
       if alreadyDone.any(fn(d) d == nm) || acc.any(fn((_, a)) a == nm) then acc else acc ++ [x]
-    if extras.is-nil then level.map(fn((_, nm)) nm.canonical)
-    else closure(alreadyDone, extras) ++ level.map(fn((_, nm)) nm.canonical)
+    if extras.is-nil then level.map(fn((o, nm)) (o, nm.canonical))
+    else closure(alreadyDone, extras) ++ level.map(fn((o, nm)) (o, nm.canonical))
   // the program's own import list can name the same module twice (a redundant
   // `import m` is legal and upstream tolerates it); dedupe it on first
   // occurrence exactly as `extras` above, otherwise the module contributes its
@@ -1388,7 +1404,7 @@ pub fun make-expr-def(isFun: bool, modName: name, mainName: string, endRng: rang
   // effect-generated @tag/@handle groups could no longer bubble past @expr in
   // the wrapper pass and ended up AFTER main (algeff/exn3 with -e under the
   // name-ordered scc input). Diagnostics keep the null binder ranges.
-  // PRIVATE. Upstream puts this synthesized def in its own `<entry>/@main`
+  // PRIVATE. Upstream puts this synthesized def in its own `<entry>@main`
   // module, where nothing imports it; this port appends it to the ENTRY module
   // instead, so `Public` exported it in the entry's own `.kki` -- `pub fun
   // @expr : () -> <console> ()` plus its inline body, in the public interface of
@@ -1449,7 +1465,7 @@ pub fun show-module-info(fl: flags, modName: name, mods: bmodules, core: core): 
       emit-line(" ")
       emit-line((if fl.showHiddenTypeSigs then pp-gamma-hidden(ownGamma) else pp-gamma(ownGamma)).show)
 
-// The source of a program's entry module, `<root>/@main`:
+// The source of a program's entry module, `<root>@main`:
 //
 //     @open import prog
 //     pub fun @expr() : _ ()
@@ -1457,7 +1473,7 @@ pub fun show-module-info(fl: flags, modName: name, mods: bmodules, core: core): 
 //
 // Keeping the entry in a module of its own leaves the program's own `.c` and
 // `.kki` free of entry glue, and names the executable after this module
-// (`prog__main`). `@open import` brings the program's PRIVATE definitions into
+// (`prog_at_main`). `@open import` brings the program's PRIVATE definitions into
 // scope as well, so an entry function need not be public.
 //
 // A non-unit result is printed; a function-typed one prints `<function>`
@@ -1472,7 +1488,16 @@ pub fun entry-module-source(rootName: name, mainName: string, resTp: maybe<ktype
   val lines = ["@open import " ++ rootName.show-plain,
                "pub fun @expr() : _ ()",
                "  " ++ shown]
-  ((rootName.show-plain ++ "/@main").new-module-name, lines.unlines ++ "\n")
+  ((rootName.show-plain ++ "@main").new-module-name, lines.unlines ++ "\n")
+
+// Where the entry module's source sits, as upstream `buildcCompileExpr`: next to
+// the source of the module it calls (`dir/foo.kk` gets `dir/foo@main.kk`), so its
+// import of that module resolves relative to its own directory, whatever the
+// include path is. Without a root source it is `/@virtual/@main.kk`.
+pub fun entry-module-path(rootSrc: string): path
+  if rootSrc.is-empty then virtual-path("@main.kk")
+  else
+    (rootSrc.noexts ++ "@main.kk").path
 
 // Complete the entry for execution: install `@default-<eff>` handlers (e.g.
 // `@default-exn`) around it, so a raised effect runs under the top-level
@@ -1626,7 +1651,7 @@ pub fun builtin-newtypes(nt: newtypes): _ newtypes
 // a path segment is not a valid module identifier. An in-memory overlay is
 // named by its path as given, as upstream looks the VFS up before `realPath`.
 pub fun module-path-name(fl: flags, srcPath: path, isEntry: bool): _ string
-  val stem = srcPath.stemname
+  val stem = srcPath.basename.noexts
   if !isEntry then stem
   else
     val s = match vfs-find(srcPath)
@@ -1638,7 +1663,7 @@ pub fun module-path-name(fl: flags, srcPath: path, isEntry: bool): _ string
         Nothing -> Nothing
     match fromInclude.foldl(Nothing) fn(best, (n, rel)) match best { Just((m, _)) | m >= n -> best; _ -> Just((n, rel)) }
       Just((_, rel)) ->
-        val relStem = if rel.ends-with(".kk").bool then rel.list.take(rel.count - 3).string else rel
+        val relStem = rel.noexts
         if relStem.split("/").all(is-valid-module-id) then relStem else stem
       Nothing -> stem
 
@@ -1654,7 +1679,7 @@ fun is-valid-module-id(s: string): bool
 // import`; going through a full check just to learn the name cost an entire
 // extra build pass on every click of the run lens.
 pub fun module-name-of(fl: flags, srcPath: path, isEntry: bool = True): _ name
-  val prog0 = parse-program-from-string(vfs/read-text-file(srcPath), srcPath, allow-at, fl.semiInsert, fl.tpl)
+  val prog0 = parse-program-from-string(read-source(srcPath, fl.includePath.map(path)), srcPath, allow-at, fl.semiInsert, fl.tpl)
   name-program(fl, prog0, srcPath, isEntry).name
 
 pub fun name-program(fl: flags, prog0: syntax/syntax/program<user-type, user-kind>, srcPath: path, isEntry: bool): _ syntax/syntax/program<user-type, user-kind>
@@ -1708,7 +1733,7 @@ pub fun compile-module(fl: flags, srcPath: path, outBase: path, isEntry: bool, m
       // upstream `phase "parse"` (Build.hs:522). At verbose 1 it shows the module's
       // relative path, at 2 the full one.
       phase("parse", if fl.verbose > 1 then srcPath.string else srcPath.basename)
-      val prog0 = parse-program-from-string(vfs/read-text-file(srcPath), srcPath, allow-at, fl.semiInsert, fl.tpl)
+      val prog0 = parse-program-from-string(read-source(srcPath, fl.includePath.map(path)), srcPath, allow-at, fl.semiInsert, fl.tpl)
       // a module resolved through the import search path is named by its
       // REQUESTED import name (e.g. `import static/modA` found at
       // <include>/static/modA.kk is `static/modA`): a module name is always
@@ -1721,8 +1746,8 @@ pub fun compile-module(fl: flags, srcPath: path, outBase: path, isEntry: bool, m
   // closure order) -- NOT every transitively loaded module; a private import of
   // an imported module must not resolve here, and the closure ORDER determines
   // gamma/kgamma candidate order in error messages (ambiguity hints etc.)
-  val tcMods = (pub-import-closure(mods, prog1.imports)
-    .flatmap(fn(nm) match mods.lookup(nm) { Just(m) -> [(nm, m)]; Nothing -> [] }))
+  val tcMods = (import-closure(mods, prog1.imports)
+    .flatmap(fn((o, nm)) match mods.lookup(nm) { Just(m) -> [(nm, if o then m.opened else m)]; Nothing -> [] }))
   val modDefs0 = defs-of(tcMods)
   // bootstrap fallback for a module with literally zero (transitive) imports
   // (named `modDefs`, not `defs` -- that would shadow core.kk's `defs` field
@@ -1754,8 +1779,8 @@ pub fun compile-module(fl: flags, srcPath: path, outBase: path, isEntry: bool, m
   // environment (pub-import closure defs + core imports) must be recomputable
   // for the EXTENDED program rather than fixed to prog1's imports
   fun defs-for(progX: syntax/syntax/program<user-type, user-kind>)
-    val tcModsX = (pub-import-closure(mods, progX.imports)
-      .flatmap(fn(nm) match mods.lookup(nm) { Just(m) -> [(nm, m)]; Nothing -> [] }))
+    val tcModsX = (import-closure(mods, progX.imports)
+      .flatmap(fn((o, nm)) match mods.lookup(nm) { Just(m) -> [(nm, if o then m.opened else m)]; Nothing -> [] }))
     val modDefsX0 = defs-of(tcModsX)
     if mods.list.is-empty && prog1.name != nameCoreTypes
       then modDefsX0(defs-gamma = modDefsX0.defs-gamma.builtin-extend, defs-newtypes = modDefsX0.defs-newtypes.builtin-newtypes)
@@ -1830,7 +1855,7 @@ pub fun compile-module(fl: flags, srcPath: path, outBase: path, isEntry: bool, m
     // only the entry-point machinery is suppressed.
     // ONLY the synthesized entry module carries the entry point: the `@expr`
     // wrapper, the default effect handlers and the link. A program is a plain
-    // module; `build-entry-module` (build-context.kk) builds its `<root>/@main`.
+    // module; `build-entry-module` (build-context.kk) builds its `<root>@main`.
     val at-main = progX.name.show-plain.ends-with("@main").bool
     val wantEntry = at-main && !fl.library
     // `--main-entry=<name>` selects the entry function
@@ -1908,12 +1933,21 @@ pub fun compile-module(fl: flags, srcPath: path, outBase: path, isEntry: bool, m
       // backend runs, so a code-generation failure still leaves the HTML
       // behind. `--html` implies `genRangeMap` (options.kk:833), which is what
       // the LINKED version will need; this is the plain highlighted source.
-      if fl.outHtml > 0 then
+      // upstream writes a literate document's colorized markdown whether or not `--html` is given
+      if srcPath.is-literal-doc then
+        phase-verbose(3, "trace", "write html document")
+        val docGamma = type/assumption/union(fullDefsGamma, extract-gamma(data/is-value, True, coreForGen))
+        val md = with-pretty-env fn()
+          colorize(srcPath, 1, read-source(srcPath, fl.includePath.map(path)),
+                   env = Html-env(progX.name, fl.htmlBases),
+                   full-html = fl.outHtml > 1, gammas = Just((docGamma, kg)))
+        write-text-file-atomic((outBase.string ++ ".md").path, md)
+      elif fl.outHtml > 0 then
         phase-verbose(3, "trace", "write html source")
         // the range map is what turns identifiers into links and adds the type
         // popups; `--html` forces `genRangeMap` on precisely for this
         val html = with-pretty-env fn()
-          colorize(srcPath, 1, vfs/read-text-file(srcPath),
+          colorize(srcPath, 1, read-source(srcPath, fl.includePath.map(path)),
                    rmap = Just(rmap),
                    env = Html-env(progX.name, fl.htmlBases),
                    full-html = fl.outHtml > 1,
@@ -2013,3 +2047,71 @@ pub fun compile-module(fl: flags, srcPath: path, outBase: path, isEntry: bool, m
         JS -> write-text-file(encBase.change-ext("mjs"), file/read-text-file(outBase.change-ext("mjs")))
         _ -> ()
   finalMod
+//----------------------------------------------------------------------
+// Expand [INCLUDE=file:snippet] in the code blocks of literate documents
+// (upstream `expandIncludes`, `Compile/Build.hs`). Only inside a code block
+// (between ``` lines): elsewhere the line is a Madoko include, which Madoko
+// expands after the compiler -- book.kk.md assembles its chapters that way, and
+// each chapter is compiled on its own. An included file is code, so includes
+// in it are expanded too.
+//----------------------------------------------------------------------
+
+// A module's source as the compiler reads it (upstream `moduleLex`): a
+// literate document has its code blocks' includes expanded, so the snippets'
+// imports count and the document's ranges point into the expanded text.
+// `search` is where an include not next to the document is looked for.
+pub fun read-source(src: path, search: list<path>): _ string
+  val text = vfs/read-text-file(src)
+  if src.is-literal-doc then expand-includes(src, [], False, text, search) else text
+
+// `BC.lines`: no element after a final newline, and none at all for ""
+fun byte-lines(s: string): list<string>
+  val ls = s.split("\n")
+  match ls.last
+    Just("") -> ls.init
+    _ -> ls
+
+fun expand-includes(current: path, stack: list<path>, in-code: bool, input: string, search: list<path>): _ string
+  fun expand-lines(code: bool, ls: list<string>): _ list<string>
+    match ls
+      Nil -> Nil
+      Cons(line, rest) ->
+        val is-fence = line.trim.starts-with("```").bool
+        val line' = if code && !is-fence then expand-line(current, stack, line, search) else line
+        Cons(line', expand-lines(if is-fence then !code else code, rest))
+  expand-lines(in-code, input.byte-lines).join("\n")
+
+fun expand-line(current: path, stack: list<path>, line: string, search: list<path>): _ string
+  val s = line.trim
+  if !(s.starts-with("[INCLUDE=").bool && s.ends-with("]").bool) then line
+  else
+    val content = s.list.drop(9).take(s.count - 10).string     // remove [INCLUDE= and ]
+    val (fname, snippet) = match content.find(":")
+      Just(sl) -> (sl.before.string, sl.after.string)
+      Nothing -> (content, "")
+    val rel = current.dirname.path / fname.path
+    val found = if vfs/is-file(rel) then Just(rel)
+                else search.flatmap(fn(d) Cons(d / fname.path, source-files(d, fname))).find(vfs/is-file)
+    match found
+      Nothing ->
+        msg/add-warning(warning-message-kind(("include not found: " ++ fname).text, range/null, ErrBuild))
+        line
+      Just(inc) ->
+        if stack.any(fn(p) p.string == inc.string) then
+          msg/add-error(error-message-kind(("recursive include: " ++ inc.string).text, range/null, ErrBuild))
+        else
+          val snip = extract-snippet(snippet, vfs/read-text-file(inc))
+          expand-includes(inc, Cons(inc, stack), True, snip, search)
+
+// the lines between `// begin <name>` and `// end <name>`, or all of `content`
+// when no snippet is named
+fun extract-snippet(name: string, content: string): _ string
+  if name.is-empty then content
+  else
+    val start-tag = "// begin " ++ name
+    val end-tag = "// end " ++ name
+    match content.byte-lines.drop-while(fn(l) l.trim != start-tag)
+      Cons(_, rest) -> rest.take-while(fn(l) l.trim != end-tag).join("\n")
+      Nil ->
+        msg/add-warning(warning-message-kind(("snippet not found: " ++ name).text, range/null, ErrBuild))
+        ""

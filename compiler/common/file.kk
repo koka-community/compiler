@@ -16,9 +16,19 @@ import std/os/env
 import std/core/unsafe
 import std/os/process
 
-fun is-literal-doc(fname: path)
+pub fun is-literal-doc(fname: path)
   fname.string.ends-with(source-ext ++ ".md").bool ||
   fname.string.ends-with(source-ext ++ ".mdk").bool
+
+// A file name without any of its extensions (`dir/foo.kk.md` is `dir/foo`), as upstream `noexts`
+pub fun noexts(fname: string): string
+  match fname.split("/").reverse
+    Cons(base, dirs) -> Cons(base.list.take-while(fn(c) c != '.').string, dirs).reverse.join("/")
+    Nil -> fname
+
+// The source files module `stem` may be in, in search order: `.kk`, then a literate `.kk.md`
+pub fun source-files(dir: path, stem: string): list<path>
+  [dir / (stem ++ source-ext).path, dir / (stem ++ source-ext ++ ".md").path]
 
 // -------------------------
 // File names

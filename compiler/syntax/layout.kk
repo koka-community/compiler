@@ -5,7 +5,7 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
-// Updated as of 8/5/24: Commit 5087104, needs is-literal-doc, and extract-literate
+// Updated as of 8/5/24: Commit 5087104
 
 // Add braces and semicolons based on layout.
 
@@ -16,6 +16,7 @@ import compiler/syntax/lexer
 import compiler/syntax/syntax
 import compiler/common/range
 import compiler/common/name
+import compiler/common/file
 import std/os/file
 import std/os/path
 import std/core/undiv
@@ -23,9 +24,8 @@ import std/core/unsafe
 
 // Lex a source
 pub fun lex-source(source: source, line: int, allow-at: bool, semi-insert: bool, preprocess: list<lexeme> -> _ list<lexeme>): _ list<lexeme>
-  // val input = if source.name.is-literal-doc then rawinput.extract-literate else rawinput
-  val rawinput = source.contents
-  lexing(source, line, rawinput).layout(allow-at, semi-insert).preprocess
+  val input = if source.name.path.is-literal-doc then source.contents.extract-literate else source.contents
+  lexing(source, line, input).layout(allow-at, semi-insert).preprocess
 
 pub fun layout(lexemes: list<lexeme>, allow-at: bool, semi-insert: bool): list<lexeme>
   fun semi(v: list<lexeme>, f: (list<lexeme>) -> list<lexeme>) if semi-insert then f(v) else v

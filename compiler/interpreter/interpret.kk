@@ -285,7 +285,7 @@ fun with-expr(st: istate, line: string, check-only: bool): _ (istate, maybe<ktyp
           ()
         fun add-warnings(w: warnings) w.foreach(fn(e) println(e.err/show))
         fun add-infos(w: warnings) w.foreach(fn(e) println(e.err/show))
-      match try({ compile-expr(fl, st.sess, line, st.roots, "", type-check-only = check-only) })
+      match try({ compile-expr(fl, st.sess, line, st.roots, st.last-load.head.default(""), type-check-only = check-only) })
         Error(exn) -> println(exn.message)
         Ok(Expr-result(s2, tp, exe)) -> out := (st(sess = s2), tp, exe)
     go()

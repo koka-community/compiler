@@ -1,8 +1,8 @@
 // Parallel test runner, in Koka.
 //
-// Runs the port against the test corpus in `test/`: for every `<t>.kk` that has a
-// sibling `<t>.kk.out`, invoke the port, sanitize its stdout the same way the
-// expected output was sanitized, and compare.
+// Runs the port against the test corpus in `test/`: for every `<t>.kk` or literate
+// `<t>.kk.md` that has a sibling `.out`, invoke the port, sanitize its stdout the
+// same way the expected output was sanitized, and compare.
 //
 // The point of writing this in Koka rather than extending the Python harness
 // is that the runner is itself a realistic parallel workload for the port --
@@ -182,7 +182,7 @@ fun discover(dir: path): io list<path>
   val entries = dir.dir/list-directory.sort(fn(a, b) a.string < b.string)
   entries.flatmap fn(p)
     if p.dir/is-directory then discover(p.pretend-decreasing)
-    elif p.extname == "kk" && (p.string ++ ".out").path.dir/is-file then [p]
+    elif (p.extname == "kk" || p.string.ends-with(".kk.md").bool) && (p.string ++ ".out").path.dir/is-file then [p]
     else []
 
 // `<dir>/config.json` cascades from parent directories, flags concatenated
@@ -419,10 +419,14 @@ fun run-one-raw(bin: string, common: list<string>, kk: path): <exn,ioc> outcome
 // directory every test shares before any test starts. Each worker here has its
 // own directory, so a test's worker compiles them just before it, with the same
 // flags. `medium/allsamples` loads the samples from their interfaces, so their
-// warnings are not in its output (`util/link-test.kk` imports `samples/all`).
+// warnings are not in its output (`util/link-test.kk` imports `samples/all`),
+// and `cgen/mpat` and `cgen/specbox` load their libraries from the `.kki`
+// (`specbox-lib.kk.flags` is `-O2`).
 fun precompile-for(kk: path): io list<(list<string>, string)>
   match kk.string.replace-all(corpus-test().string ++ "/", "")
     "medium/allsamples.kk" -> [(["-e"], "util/link-test.kk")]
+    "cgen/mpat.kk"         -> [([], "test/cgen/mpat-lib.kk")]
+    "cgen/specbox.kk"      -> [(["-O2"], "test/cgen/specbox-lib.kk")]
     _ -> []
 
 // ---------------------------------------------------------------------------
@@ -885,11 +889,16 @@ fun known-mismatches(): io list<string>
     listed.file/read-text-file.lines.map(fn(l) l.split("#").head.default("").trim).filter(fn(l) !l.is-empty)
 
 fun newest-driver(): io string
-  val d = ".koka/v3.2.7".path
-  val cands = d.dir/list-directory.filter(fn(p) p.stemname.starts-with("clang-").bool)
-                .map(fn(p) p / "compiler_main_driver__main".path).filter(dir/is-file)
+  // every untagged `.koka/v<version>`: the version is the reference compiler's
+  // that built the driver, and it moves independently of this script; the
+  // executable is `<entry>_at_main`, or `<entry>__main` from a compiler without
+  // koka-lang/koka#963
+  val ds = ".koka".path.dir/list-directory.filter(fn(p) p.basename.starts-with("v").bool && !p.basename.contains("-"))
+  val cands = ds.flatmap(fn(d) d.dir/list-directory).filter(fn(p) p.stemname.starts-with("clang-").bool)
+                .flatmap(fn(p) ["compiler_main_driver_at_main", "compiler_main_driver__main"].map(fn(e) p / e.path))
+                .filter(dir/is-file)
   // newest by MTIME -- sorting by name picks whichever hash sorts last, which
   // silently selected a stale binary
   match cands.map(fn(p) (p.file/file-mtime, p)).sort(fn((a, _), (b, _)) a > b).map(snd)
     Cons(p, _) -> p.string
-    Nil -> throw("no port binary found under .koka/v3.2.7")
+    Nil -> throw("no port binary found under .koka/v<version>")

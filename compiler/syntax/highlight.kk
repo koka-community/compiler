@@ -407,8 +407,9 @@ fun scan-pre-block(m: int, n: int, lacc: ctx<list<token-comment<lexeme>>>, acc: 
 
 fun scan-code-block(n: int, com: (list<lexeme>, string) -> token-comment<lexeme>, m: int, lacc: ctx<list<token-comment<lexeme>>>, acc: list<char>, chs: list<char>): _ list<token-comment<lexeme>>
   match chs
+    // the lines before `////` are shown but not compiled; the block keeps its kind and class
     Cons('/', Cons('/', Cons('/', Cons('/', rest)))) | on-line(acc, rest) ->
-      scan-code-block2(n + 1, comCodeLit(""), n + 1, lacc, acc.reverse, [], rest.drop-line)
+      scan-code-block2(n + 1, com, n + 1, lacc, acc.reverse, [], rest.drop-line)
     Cons('`', Cons('`', Cons('`', rest))) | on-line(acc, rest) ->
       end-code-block(n + 1, com, m, lacc, [], acc, rest.drop-line)
     Cons(c, rest) -> scan-code-block(if c == '\n' then n + 1 else n, com, m, lacc, Cons(c, acc), rest)

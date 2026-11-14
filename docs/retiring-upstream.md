@@ -5,17 +5,22 @@ Written 2026-10-12 for the discussion with Daan. What has to be true before this
 ## Where it stands
 
 - CI (`.github/workflows/stage2.yml`) builds the port on Linux and macOS, x64 and arm64: the Haskell compiler builds stage 1, stage 1 builds stage 2, and stage 2 runs the corpus, the unit tests and a packaged smoke test.
-- Corpus with stage 2: 438 pass, 21 skip, 1 known mismatch on every platform (`test/known-mismatches.txt`); unit tests: 43 pass.
+- Corpus with stage 2: 441 pass, 21 skip, no known mismatch (measured locally on macOS arm64, 2026-10-12); unit tests: 43 pass.
 - The port is faster than the Haskell compiler on every workload but a cold small build (`docs/roadmap-to-primary.md`).
 - The browser playground runs this compiler as wasm: <https://koka-community.github.io/compiler/>.
 
 ## Must happen first
 
-1. **Bootstrap without Haskell.** Stage 1 is still built by the Haskell compiler, from `port-reference` (21 single-commit fixes on `upstream/dev`, plus one more) pinned by commit. Instead: tag a release, and build stage 1 with the previous release's binary; keep a Haskell build only as a periodic parity check.
+1. **Bootstrap without Haskell.** Stage 1 is still built by the Haskell compiler, from `port-reference` (21 single-commit fixes on `upstream/dev`, plus two more) pinned by commit. Instead: tag a release, and build stage 1 with the previous release's binary; keep a Haskell build only as a periodic parity check.
 2. **No silently ill-kinded core.** The port's `new/sub` does not check kinds. Turning the check on crashes ordinary compiles, because computing the kind of some substituted type throws: something builds ill-kinded types. Find it and keep the check on. (The recursive-group type-argument bug was one such source; it is fixed in both compilers.)
 3. **The shared evidence-vector crash.** A pure change to `compiler/type/typevar.kk` makes code from both compilers read past the evidence vector (`docs/port-status.md`, "Crashes seen"). It is a code generation bug in both; it needs a minimal repro and a fix before the port is the only compiler.
-4. **The last corpus mismatch.** `cgen/specialize/recursive-arg`: the port creates three lifted copies in a different order than the Haskell compiler; only names differ, but it is a fidelity gap in lifting or specialization.
-5. **Windows.** Not built or supported: the port drives the C compiler through a POSIX shell.
+4. **Windows.** Not built or supported: the port drives the C compiler through a POSIX shell.
+
+## Fixed since the first draft
+
+- **Evaluation order after inlining** (`stack/25-simplify-float-let-order`, both compilers). The simplifier floated an argument's `let`s in front of the whole application, so `(tick(), second())` with `second` inlined ran the second `tick` first. It miscompiled the port's own `uniquefy`, which was the cause of the last corpus mismatch, `cgen/specialize/recursive-arg`. Regression test: `test/cgen/float-let-order`.
+- **Specializer visiting order** (port only). `spec-descend-children` specialized a `match`'s branches before its scrutinees.
+- **Module `@init` guard removed** (both compilers). `main` initializes every module before any thread starts, so the atomic guard was never contended: stage 1, 2 and 3 build and the corpus passes with upstream's plain flag. The other half of that layer, marking top-level constants stuck, is required: without it stage 1 crashes on any input. The guard is kept on the branches `stash/init-guard`.
 
 ## Can follow
 

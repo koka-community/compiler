@@ -328,7 +328,7 @@ pub fun ktype/substitute(s: sub, tp: ktype): _ tau
     TFun(args, eff, res) -> TFun(args.map(fn(a) (a.fst, s |-> a.snd)), s |-> eff, s |-> res)
     TCon -> tp
     TVar(tv) -> s.find(tv)
-    TApp(t, args) -> TApp(s |-> t, args.map(s |-> _))
+    TApp(t, args) -> type-app(s |-> t, args.map(s |-> _))
     TSyn(syn, xs, t) -> TSyn(syn, s |-> xs, s |-> t)
 pub fun ktype/odftv(tp: ktype): _ list<type-var>
   match tp

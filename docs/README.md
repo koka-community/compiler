@@ -17,6 +17,7 @@ Start with the [README](../README.md) to install, build, test and use the compil
 - [port-status.md](port-status.md): what works, the test results, and the open problems.
 - [roadmap-to-primary.md](roadmap-to-primary.md): what remains before this replaces the reference compiler.
 - [port-optimization-state.md](port-optimization-state.md): the optimisation queue, with measurements.
+- [upstream-sync.md](upstream-sync.md): the upstream commit the port is synced with, and what each upstream merge became here.
 - [upstream-pr-burndown.md](upstream-pr-burndown.md): the reference-compiler fixes the port depends on.
 - [parity-checklist.md](parity-checklist.md): a pass-by-pass comparison with the reference compiler.
 - [parser-backtracking-audit.md](parser-backtracking-audit.md): where interface parsing spends its time.

@@ -145,9 +145,12 @@ fun spec-descend-children(this-def-name: name, e: expr): spec-eff expr
           DefRec(ds) -> DefRec(ds.map(fn(d) d(defExpr = spec-descend(this-def-name, d.defExpr))))
       Let(binders', spec-descend(this-def-name, body))
     Case(exprs, branches) ->
+      // scrutinees first: specialization draws unique names, so the visiting
+      // order shows in the output
+      val exprs' = exprs.map(fn(x) spec-descend(this-def-name, x))
       val branches' = branches.map fn(b)
         Branch(b.patterns, b.guards.map(fn(g) Guard(spec-descend(this-def-name, g.test), spec-descend(this-def-name, g.body))))
-      Case(exprs.map(fn(x) spec-descend(this-def-name, x)), branches')
+      Case(exprs', branches')
 
 // upstream local `go` in specOneExpr (PRs #906 + #899)
 fun spec-go(this-def-name: name, nm: name, typeArgs: list<ktype>, e: expr): spec-eff expr

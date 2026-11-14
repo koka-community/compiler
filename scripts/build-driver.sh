@@ -45,14 +45,15 @@ cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 BOOTSTRAP=${KOKA_BOOTSTRAP:-$ROOT/.koka/bootstrap/driver}
 INC="-i$ROOT"
+. "$ROOT/scripts/build-dirs.sh"
 
 case "${1:-}" in
   --pin)
     # Pins an EXISTING binary, never builds one: the given path, else the most
-    # recently built driver, from a port build (.koka/v3.2.7-bootstrap) or a
-    # reference build (.koka/v3.2.7) alike.
-    built=${2:-$(ls -t "$ROOT"/.koka/v3.2.7-bootstrap/clang-*/compiler_main_driver__main \
-                        "$ROOT"/.koka/v3.2.7/clang-*/compiler_main_driver__main 2>/dev/null | head -1)}
+    # recently built driver, from a port build (`port_dir bootstrap`) or a
+    # reference build ($REF_DIR) alike.
+    built=${2:-$(ls -t "$(port_dir bootstrap)"/clang-*/compiler_main_driver*_main \
+                        "$REF_DIR"/clang-*/compiler_main_driver*_main 2>/dev/null | head -1)}
     [ -n "$built" ] && [ -x "$built" ] || { echo "[build-driver] no driver binary to pin" >&2; exit 1; }
     mkdir -p "$(dirname "$BOOTSTRAP")"
     if [ -e "$BOOTSTRAP" ]; then
@@ -76,22 +77,22 @@ case "${1:-}" in
     # is pinned and does not move, so the only thing that could poison this
     # directory is a DIFFERENT compiler having written to it, which the guard
     # catches. Pass --cold-port if you genuinely want to start over.
-    "$ROOT/scripts/cache-guard.sh" --fix "$BOOTSTRAP" "$ROOT/.koka/v3.2.7-bootstrap" || true
+    "$ROOT/scripts/cache-guard.sh" --fix "$BOOTSTRAP" "$(port_dir bootstrap)" || true
     exec "$BOOTSTRAP" $INC -O2 -c --buildtag=bootstrap compiler/main/driver.kk ;;
   --cold-port)
     [ -x "$BOOTSTRAP" ] || { echo "[build-driver] no pinned bootstrap at $BOOTSTRAP" >&2; exit 1; }
     echo "[build-driver] stage 1 (COLD): $BOOTSTRAP"
-    rm -rf "$ROOT/.koka/v3.2.7-bootstrap"
+    rm -rf "$(port_dir bootstrap)"
     exec "$BOOTSTRAP" $INC -O2 -c --buildtag=bootstrap compiler/main/driver.kk ;;
   --cold)
     echo "[build-driver] fully cold"; rm -rf .koka ;;
   --guard)
     # artifacts a DIFFERENT compiler wrote are reused silently; drop them
-    exec "$ROOT/scripts/cache-guard.sh" --fix "$(cd "${KOKA_DEV_DIR:-$HOME/koka/.worktrees/dev-compiler}" && stack exec which koka)" "$ROOT"/.koka/v3.2.7/clang-* ;;
+    exec "$ROOT/scripts/cache-guard.sh" --fix "$REF_KOKA" "$REF_DIR"/clang-* ;;
   *)
     echo "[build-driver] std warm, compiler cold"
     n=0
-    for d in .koka/v3.2.7/clang-*; do
+    for d in "$REF_DIR"/clang-*; do
       [ -d "$d" ] || continue
       c=$(ls "$d" 2>/dev/null | grep -c '^compiler_' || true)
       n=$((n + c))
@@ -102,5 +103,5 @@ case "${1:-}" in
 esac
 # The reference compiler may have been rebuilt since these artifacts were
 # written, and the build directory hash does not cover the compiler's identity.
-"$ROOT/scripts/cache-guard.sh" --fix "$(cd "${KOKA_DEV_DIR:-$HOME/koka/.worktrees/dev-compiler}" && stack exec which koka)" "$ROOT"/.koka/v3.2.7/clang-* || true
+"$ROOT/scripts/cache-guard.sh" --fix "$REF_KOKA" "$REF_DIR"/clang-* || true
 exec ./koka -O2 -c compiler/main/driver.kk

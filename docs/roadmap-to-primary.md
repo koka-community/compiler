@@ -49,9 +49,9 @@ After this phase, `git clone --recursive && ./build.sh` is the whole setup, and 
 Each of these is small and independently shippable.
 
 - ~~`kklibIncludeDir` is resolved against the current directory~~ — FIXED with phase 1: it comes from the sniffed share dir, so linking works from any directory. A failed link still exits 0; that part stands.
-- **`scripts/build-driver.sh --pin` picks the newest `.koka/v3.2.7/clang-drelease*/compiler_main_driver__main`**, which is whatever a benchmark happened to write last. Pin by explicit path and verify the checksum.
+- **`scripts/build-driver.sh --pin` picks the newest `.koka/v3.2.7/clang-drelease*/compiler_main_driver_at_main`**, which is whatever a benchmark happened to write last. Pin by explicit path and verify the checksum.
 - **The `~/.local/bin/koka-port` wrapper needs an absolute `--sharedir`.** Phase 1.1 removes the need for the wrapper entirely.
-- ~~No `@main` module~~ — DONE 2026-09-18: a program's entry point is built as its own virtual `<root>/@main` module, so the program's artifacts carry no entry glue and the executable is `prog__main`.
+- ~~No `@main` module~~ — DONE 2026-09-18: a program's entry point is built as its own `<root>@main` module (next to the root's source since koka-lang/koka#963), so the program's artifacts carry no entry glue and the executable is `prog_at_main`.
 - **`discover-deps` segfaults when the `out-dir` default argument is omitted** (`std/os/path`'s parse handler). Open, unreproduced in isolation; it is worked around by always passing the argument.
 
 ## Phase 3 — own the test story

@@ -933,50 +933,7 @@ reading, not just a fresh comparative pass.)
   checker now uses `std/core/types.kk`'s real definitions instead of a
   hardcoded bool/`@optional` stand-in when that module is itself being compiled.
 
-### Entry `@main` wrapper is not its own module — interface leak FIXED, structure still diverges
+### Entry `@main` module — RESOLVED
 
-- **Upstream**: every entry program gets a synthesized virtual module
-  `<entry>/@main` (`/@virtual/tiny/@main.kk`), compiled as its own module to
-  `tiny__main.{c,h,o,kki}`, and the executable is linked from it and named
-  `tiny__main`.
-- **Port**: no wrapper module. For a unit `main` the entry module is linked
-  directly (exe named `tiny`). For a NON-UNIT `main` the synthesized `@expr`
-  def is appended to the entry program itself (`build.kk`'s `needsWrapper`),
-  so the entry module's own `.kki` carries it.
-- **Classification**: DIVERGENCE, and the non-unit case is a real fidelity bug
-  — upstream keeps the synthesized def out of the entry's interface.
-- **Also**: differing executable names are a drop-in difference (`tiny` vs
-  `tiny__main`), and the extra module means artifact counts differ (28 vs 27
-  on a one-module program), so a port-vs-upstream comparison is not exactly
-  like-for-like. The bias is AGAINST the port — upstream does the extra module
-  compile plus a clang invocation — so measured ratios are conservative.
-- **Scope** (five interacting pieces, all in the entry path, which produced the
-  `@main`-misses-async class of bugs):
-  1. build a fresh `program` named `<entry>/@main`;
-  2. add the compiled entry to `mods` and thread `defs-for` /
-     `core-imports-from-modules`;
-  3. give the wrapper its own `outBase` (`code-gen` derives `.c`/`.h` from the
-     module name already, but `outBase` drives the `.kki` and the exe path);
-  4. move the link to the wrapper module, stop linking from the entry;
-  5. keep `completeMain`'s default-handler installation in the right module.
-- **Verify on a one-module program** (`tiny.kk` with a unit `main`, and one with
-  a non-unit `main`); per AGENTS section 3 do not scale up for this.
-
-**Interface leak fixed** (`make-expr-def` now emits the def `Private`). The
-port appends the synthesized `@expr` to the ENTRY module rather than a separate
-one, and `Public` exported it in the entry's own `.kki` -- `pub fun @expr : ()
--> <console> ()` plus its inline body, in the public interface of a module a
-user may import. Upstream's entry interface has no trace of it. Verified on
-three-line programs: for a non-unit `main` the port's entry `.kki` exported
-`@expr` and upstream's did not; both now export nothing. Programs still run
-(`unit-main ok`, `42`); sweep 423/17/2/0.
-
-**Still diverging, and now classified as cosmetic rather than a fidelity bug:**
-upstream additionally emits `<entry>__main.{c,h,o,kki}` and names the exe
-`<entry>__main`; the port generates the entry glue inside the entry module and
-names the exe `<entry>`. Consequences are (a) a drop-in difference in the
-produced executable name, and (b) artifact counts differ by one module, which
-biases port-vs-upstream comparisons AGAINST the port (upstream does the extra
-compile). Neither affects the port's interfaces or correctness, so the
-five-piece restructure above is no longer urgent -- reassess only if drop-in
-executable naming matters.
+- The entry of `dir/foo.kk` is its own module `foo@main` (in practice `<root>@main`), with its source in the overlay at `dir/foo@main.kk`, next to the module it calls, as upstream's `buildcCompileExpr` since koka-lang/koka#963 (`build.kk` `entry-module-source`/`entry-module-path`).
+- It is compiled to `<root>_at_main.{c,h,o,kki}` and the executable is `<root>_at_main`, as upstream's; the program's own `.kki` carries no entry glue.

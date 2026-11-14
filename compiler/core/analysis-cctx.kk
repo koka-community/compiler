@@ -13,27 +13,32 @@ import compiler/kind/kind
 import compiler/type/type
 import compiler/type/typevar
 import compiler/type/pretty
+import compiler/type/assumption
 import compiler/core/core
 import compiler/platform/config
 
 // take a context and check if it is well-formed and return a well-typed context expression
-pub fun analyze(rng: range, expr: expr, tpl: target-platform = target-platform-c64): _ (expr, list<doc>)
+pub fun analyze(rng: range, gamma: gamma, expr: expr, tpl: target-platform = target-platform-c64): _ (expr, list<doc>)
   with handler
     val cctx-target-platform = tpl
+    val cctx-gamma = gamma
     return(x) (x, [])
-    final ctl emit-ctx-err(e) (expr.type-of.make-empty(tpl), [e])
-    final ctl emit-ctx-errs(e) (expr.type-of.make-empty(tpl), e)
+    final ctl emit-ctx-err(e) (make-empty(gamma, expr.type-of, tpl), [e])
+    final ctl emit-ctx-errs(e) (make-empty(gamma, expr.type-of, tpl), e)
   expr.cctx-create
 
 effect cctx-eff
   val cctx-target-platform: target-platform
+  val cctx-gamma: gamma
   final ctl emit-ctx-err(d: doc): a
   final ctl emit-ctx-errs(d: list<doc>): a
 
 fun tryC(f: () -> _ a): _ either<list<doc>,a>
   val tpl = cctx-target-platform
+  val gamma = cctx-gamma
   with override
     val cctx-target-platform = tpl
+    val cctx-gamma = gamma
     return(x) Right(x)
     final ctl emit-ctx-err(e) Left([e])
     final ctl emit-ctx-errs(e) Left(e)
@@ -50,11 +55,11 @@ value struct cctx
 
 fun cctx-create(e: expr)
   // empty context
-  if e.is-hole then e.type-of.make-empty(cctx-target-platform)
+  if e.is-hole then make-empty(cctx-gamma, e.type-of, cctx-target-platform)
   else
     // non-empty context
     val (Cctx(defs, top, Chole(addr, holeTp))) = e.expr
-    val cctx = make-create(top.type-of, holeTp, top, addr)
+    val cctx = make-create(cctx-gamma, cctx-target-platform, top.type-of, holeTp, top, addr)
     Let(defs.map(DefNonRec), cctx)
 
 fun expr(e: expr)
@@ -88,7 +93,7 @@ fun con-final(cName: tName, cRepr: con-repr, targs: list<ktype>, pre: list<expr>
   val ctxrepr = cRepr.update-ctx-path(CtxField(fname))
   holetp.ensure-valid-hole-type
   val (d1, var1) = make-unique-def(App(make-type-app(Con(cName, ctxrepr), targs), pre ++ [chole] ++ post))
-  val (d2, addr) = make-unique-def(make-field-addr-of(var1, cName, fname.get-name, holetp))
+  val (d2, addr) = make-unique-def(make-field-addr-of(cctx-gamma, var1, cName, fname.get-name, holetp))
   Cctx([d1, d2], var1, Chole(addr, holetp))
 
 fun check-no-hole(e: expr): ()
@@ -115,42 +120,48 @@ fun is-hole(e: expr)
       open.get-name == nameEffectOpen && hname.get-name == nameCCtxHoleCreate
     _ -> False
 
+// A primitive of `std/core/types` applied to type and value arguments. The type scheme is
+// taken from its declaration (so `--checkcore` checks the use against the declaration).
+pub fun make-cctx-prim(gamma: gamma, name: name, external: string, targs: list<ktype>, args: list<expr>): pure expr
+  val scheme = match gamma.lookupQ(name)
+    [info] -> info.scheme
+    _ -> failure/fail("core/analysis-cctx make-cctx-prim: cannot find " ++ name.show)
+  val arityOk = match scheme.split-fun-scheme
+    Just((tvars, pars, _, _)) -> tvars.length == targs.length && pars.length == args.length
+    Nothing -> False
+  assert("core/analysis-cctx make-cctx-prim: wrong number of arguments for " ++ name.show ++ ": " ++ scheme.show, arityOk,
+    App(make-type-app(Var(TName(name, scheme), core/InfoExternal(external)), targs), args))
+
+// Polymorphic hole
+pub fun make-hole(gamma: gamma, tp: ktype): pure expr
+  make-cctx-prim(gamma, nameCCtxHoleCreate, "", [tp], [])
+
 // Initial empty context (ctx hole)
-pub fun make-empty(tp: ktype, tpl: target-platform)
-  val a = TypeVar(0, kindStar, Bound)
-  val funType = TForAll([a], TFun([], typeTotal, type-cctx(TVar(a))))
+pub fun make-empty(gamma: gamma, tp: ktype, tpl: target-platform)
   val external = match tpl.tpl-target
     C(_) -> "kk_cctx_empty(kk_context())"
     JS(_) -> "$std_core_types._cctx_empty()"
     _ -> unsupported-external("kk_cctx_empty")
-  App(TypeApp(Var(TName(nameCCtxEmpty, funType), InfoExternal(external)), [tp]), [])
+  make-cctx-prim(gamma, nameCCtxEmpty, external, [tp], [])
 
 // Create a context (ctx Cons(e, Cons(2, hole)))
-fun make-create(tp: ktype, holetp: ktype, top: expr, holeaddr: expr)
-  val a = TypeVar(0, kindStar, Bound)
-  val b = TypeVar(1, kindStar, Bound)
-  val funType = TForAll([a, b], 
-    TFun([(nil, TVar(a)), (nil, TApp(typeFieldAddr, [TVar(a)]))], 
-      typeTotal, TApp(typeCCtxx, [TVar(a), TVar(b)])))
-  val external = match cctx-target-platform.tpl-target
+fun make-create(gamma: gamma, tpl: target-platform, tp: ktype, holetp: ktype, top: expr, holeaddr: expr)
+  val external = match tpl.tpl-target
     C(_) -> "kk_cctx_create(#1,#2,kk_context())"
     JS(_) -> "$std_core_types._cctx_create(#1,#2)"
     _ -> unsupported-external("kk_cctx_create")
-  App(TypeApp(Var(TName(nameCCtxCreate, funType),
-    InfoExternal(external)),
-    [tp, holetp]), [top, holeaddr])
+  make-cctx-prim(gamma, nameCCtxCreate, external, [tp, holetp], [top, holeaddr])
 
 // The address of a field in a constructor (for context holes)
-pub fun make-field-addr-of(obj: expr, cName: tName, fieldName: name, fieldTp: ktype)
-  val a = TypeVar(0, kindStar, Bound)
-  val funType = TForAll([a], TFun([(nil, TVar(a)), (nil, typeString), (nil, typeString)], typeTotal, TApp(typeFieldAddr, [TVar(a)])))
-  App(TypeApp(Var(TName(nameFieldAddrOf, funType), InfoExternal("")), [fieldTp]), [obj, ELit(LitString(show-tupled(cName.get-name))), ELit(LitString(show-tupled(fieldName)))])
+pub fun make-field-addr-of(gamma: gamma, obj: expr, cName: tName, fieldName: name, fieldTp: ktype): pure expr
+  make-cctx-prim(gamma, nameFieldAddrOf, "", [fieldTp],
+    [obj, ELit(LitString(show-tupled(cName.get-name))), ELit(LitString(show-tupled(fieldName)))])
 
 // Set the index of the field in a constructor to follow the path to the hole at runtime.
 fun make-set-ctx-path(obj: expr, cName: tName, fieldName: name)
   val tp = obj.type-of
   val funType = TFun([(nil, tp), (nil, typeString), (nil, typeString)], typeTotal, tp)
-  App(Var(TName(nameCCtxSetCtxPath, funType), InfoExternal("@cctx-setcp(#1,#2,#3)")), 
+  App(Var(TName(nameCCtxSetCtxPath, funType), core/InfoExternal("@cctx-setcp(#1,#2,#3)")), 
     [obj, ELit(LitString(show-tupled(cName.get-name))), ELit(LitString(show-tupled(fieldName)))])
 
 

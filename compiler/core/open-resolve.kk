@@ -115,22 +115,7 @@ fun resolve-open(eopen: expr, effFrom: ktype, effTo: ktype, tpFrom: ktype, tpTo:
             App(TypeApp(openExpr, targs.map(snd) ++ [tres, effFrom, effTo]), 
               evExprs ++ [exprVar] ++ params.map(Var(_, InfoNone)))))
         fun ev-index-of(l: ktype)
-          val (htagTp, hndTp) =
-            val (name, _, tpArgs) = l.label-name-ex
-            // use the effect label name itself (NOT the @hnd handler-datatype name):
-            // Simplify's effect-offset does `label-name(hndTp)` and matches it against
-            // the effect-row labels, so hndTp's head must be the effect con `<eff>`, not
-            // `<eff>/@hnd`.
-            val hndCon = TCon(TypeCon(name, kind-fun-n(tpArgs.map(kind) ++ [kindEffect, kindStar], kindStar)))
-            // `type-app`, not the raw `TApp` constructor: upstream's `typeApp t []`
-            // returns `t` unchanged, so for a label with no type parameters (e.g.
-            // `exn`) hndTp must be the bare `TCon`. Building `TApp(TCon exn, [])`
-            // is semantically the same type but structurally different, and any
-            // pass that compares types by structure -- `Core.Check`'s `unify`
-            // being the one that caught it -- sees two `htag<exn>` that will not
-            // unify.
-            (make-type-app(resolve(name.to-effect-tag-name), tpArgs), hndCon.type-app(tpArgs))
-          App(TypeApp(resolve(nameEvvIndex), [effTo, hndTp]), [htagTp])
+          make-evv-index(resolve(nameEvvIndex), resolve(l.label-name.to-effect-tag-name), effTo, l)
         // account for duplicate labels in the row (issue #511): the Nth
         // occurrence of the same label needs the Nth evidence frame for it,
         // found via `@evv-index-mask` instead of the plain (always-first) index

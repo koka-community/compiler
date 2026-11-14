@@ -1,13 +1,7 @@
 module mpat-lib
 
-// Helper for mpat.kk: a small cross-module inlineable function with a
-// multi-scrutinee match. Its branch patterns are emitted into the .kki
-// inline-definition section; parsing them back must preserve the pattern
-// order (Core.Pretty.prettyPatterns once emitted them reversed, so
-// cross-module inlining swapped the scrutinees).
-//
-// This module is precompiled in test/Spec.hs (before the parallel test phase,
-// like bankers.kk) so mpat.kk deterministically loads it from the .kki.
+// Helper for mpat.kk: an inlineable function with a multi-scrutinee match,
+// whose branch patterns must keep their order through the .kki inline section.
 pub type dir
   North
   East(i : int)

@@ -20,8 +20,10 @@ import compiler/common/syntax
 import compiler/common/name
 import compiler/common/name-prim
 import compiler/common/range
+import compiler/common/file
 import std/core/debug
 import std/os/env
+import std/os/path
 
 pub effect parse-error
   final ctl parse-error(e: string, r: range): a
@@ -92,7 +94,7 @@ pub inline fun next(): _ lexeme
 
 pub fun lex-parse(allow-at: bool, insert-semis: bool, preprocess: list<lexeme> -> pure list<lexeme>, p: () -> _ a, tpl: target-platform, sourceName: string, input: string): _ a
   val src = Source(sourceName, input)
-  val lexes = lexing(src, 1, input)
+  val lexes = lexing(src, 1, if sourceName.path.is-literal-doc then input.extract-literate else input)
   // trace(lexes.map(show).join("\n"))
   val lexes' = preprocess(layout(lexes, allow-at, insert-semis))
   // trace(lexes'.map(show).join("\n"))

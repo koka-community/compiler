@@ -138,7 +138,7 @@ fun compile-entry(st: server-state, fpath: string, entry: string, extra: string)
     // as the file imports another module with a `main` (samples/all).
     match try({ val root = module-name-of(fl, p)
                 val qentry = if entry'.new-name.is-qualified then entry'.new-name else qualify(root, entry'.new-name)
-                compile-expr(fl, sess0, qentry.show-plain ++ "()", [root], "",
+                compile-expr(fl, sess0, qentry.show-plain ++ "()", [root], p.string,
                              add-show = False, on-progress = report) })
       Error(exn) ->
         msgs := msgs ++ [ErrorMsg(exn.message.error-position(p), exn.message.strip-location.text, SevError, ErrGeneral)]
@@ -147,14 +147,12 @@ fun compile-entry(st: server-state, fpath: string, entry: string, extra: string)
   write-bytes(progress-begin(token, "Koka: compiling " ++ p.basename).frame)
   build-it()
   write-bytes(progress-end(token, if (!exe).is-just then "done" else "failed").frame)
-  val items = msgs.map(to-diagnostic)
-  // republish this file's diagnostics so a failed run points at the reason:
-  // the reply is only "null", so without them a failed build shows nothing
-  val uri = p.path-to-uri
-  write-bytes(publish-diagnostics(uri, items).frame)
-  val st2 = match st.find-doc(uri)
-    Just(d) -> st.put-doc(d(diags = items))
-    Nothing -> st
+  // republish the diagnostics so a failed run points at the reason: the reply
+  // is only "null", so without them a failed build shows nothing
+  val uri = st.client-uri(p)
+  val (notes, diagnosed) = st.publish-errors(uri, msgs)
+  notes.foreach(fn(n) write-bytes(n.frame))
+  val st2 = st(diagnosed = diagnosed)
   match !exe
     Just(e) -> (st2, JSString(e.string))
     Nothing -> (st2, JSNull)
