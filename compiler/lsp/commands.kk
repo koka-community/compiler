@@ -138,7 +138,7 @@ fun compile-entry(st: server-state, fpath: string, entry: string, extra: string)
     // as the file imports another module with a `main` (samples/all).
     match try({ val root = module-name-of(fl, p)
                 val qentry = if entry'.new-name.is-qualified then entry'.new-name else qualify(root, entry'.new-name)
-                compile-expr(fl, sess0, qentry.show-plain ++ "()", [root], "",
+                compile-expr(fl, sess0, qentry.show-plain ++ "()", [root], p.string,
                              add-show = False, on-progress = report) })
       Error(exn) ->
         msgs := msgs ++ [ErrorMsg(exn.message.error-position(p), exn.message.strip-location.text, SevError, ErrGeneral)]

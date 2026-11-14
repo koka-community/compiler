@@ -13,7 +13,7 @@ ROOT=$(pwd)
 # Newest release driver, not a hard-coded hashed directory: the hashed dir
 # changes with the flag set, and a stale path here fails as exit 127 inside
 # `/usr/bin/time`, which reports "real 0.00" and looks like a fast build.
-PORT=$(ls -t "$REF_DIR"/clang-*/compiler_main_driver__main 2>/dev/null | head -1)
+PORT=$(ls -t "$REF_DIR"/clang-*/compiler_main_driver*_main 2>/dev/null | head -1)
 [ -n "$PORT" ] && [ -x "$PORT" ] || { echo "no release port binary; build with ./koka -O2 --no-buildhash -c compiler/main/driver.kk" >&2; exit 1; }
 echo "port binary: $PORT"
 UP=$REF_KOKA

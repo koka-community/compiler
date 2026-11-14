@@ -210,14 +210,14 @@ pub struct expr-result
 // upstream's `koka/compileFunction` is built on -- `buildcCompileEntry` is just
 // `buildcCompileExpr` with the expression `"<name>()"`.
 pub fun compile-expr(fl: flags, sess: session, expr: string, roots: list<name>,
-                     rel-dir: string,
+                     root-src: string,
                      type-check-only: bool = False, add-show: bool = True,
                      on-progress: (int, int, name) -> _ () = fn(_c, _t, _n) ())
       // INFERRED, not written out: spelling `io` and `pure` together puts `exn`
       // and `div` in the row TWICE (see `check-file-ex`'s note), which then fails
       // to unify at the language-server call site.
       : _ expr-result
-  val src = virtual-path(rel-dir ++ "/@main.kk")
+  val src = entry-module-path(root-src)
   // `@open import` also exposes the module's PRIVATE definitions, which is what
   // lets a REPL expression call them.
   val imports = roots.map(fn(nm) "@open import " ++ nm.show-plain)
@@ -268,10 +268,10 @@ pub fun compile-expr(fl: flags, sess: session, expr: string, roots: list<name>,
         val sess2 = check(body2.unlines, fl(library = False, evaluate = False), fn(p) exe.set(Just(p)))
         Expr-result(sess2, Just(user-tp), !exe)
 
-// Build a program's entry module, `<root>/@main` (see `entry-module-source`),
+// Build a program's entry module, `<root>@main` (see `entry-module-source`),
 // and run it under `-e`. A library, a type check, and the entry module itself
 // build nothing; nor does a module that does not define the entry function.
-fun build-entry-module(fl: flags, mods: bmodules, odir: path, rootName: name, bm: bmodule, isEntry: bool,
+fun build-entry-module(fl: flags, mods: bmodules, odir: path, rootName: name, rootSrc: path, bm: bmodule, isEntry: bool,
                        cancelled: () -> _ bool, on-exe: (path) -> _ ()): _ bmodules
   val mainName = if fl.mainEntryName == "" then "main" else fl.mainEntryName
   val resTp = match bm
@@ -284,7 +284,7 @@ fun build-entry-module(fl: flags, mods: bmodules, odir: path, rootName: name, bm
   if !isEntry || fl.library || fl.typeCheckOnly || resTp.is-nothing then mods
   else
     val (atName, content) = entry-module-source(rootName, mainName, resTp)
-    val atSrc = virtual-path(atName.show-plain ++ ".kk")
+    val atSrc = entry-module-path(rootSrc.string)
     with with-vfs([(atSrc, Vfile(content, epoch-nanos()))])
     // `@open import` lets it call the program's private entry function
     // (`bmod/opened`): an entry function is rarely `pub`
@@ -572,7 +572,7 @@ fun check-file-ex(fl: flags, fnames: list<string>, isEntry: bool,
           // a type-check-only entry has no interface or C file; keeping it in the
           // session would let a later FULL build reuse it as if compiled
           val mods1 = if fl.typeCheckOnly then mods else mods.set(prog1.name, bm)
-          val modsE = build-entry-module(fl, mods1, odir, prog1.name, bm, isEntry, cancelled, on-exe)
+          val modsE = build-entry-module(fl, mods1, odir, prog1.name, srcPath, bm, isEntry, cancelled, on-exe)
           // the signature listing comes last, after the program has run
           match bm
             ModCompiled(c) -> if isEntry then show-module-info(fl, prog1.name, mods1, c)
@@ -608,7 +608,7 @@ fun check-file-ex(fl: flags, fnames: list<string>, isEntry: bool,
               val bm = compile-module(fl, srcPath, outBase, isEntry, mods, Nothing,
                                       fn(_mc) (), fn() False, fn(p) rexe := Just(p))
               val mods1 = if fl.typeCheckOnly then mods else mods.set(prog1.name, bm)
-              rmods := build-entry-module(fl, mods1, odir, prog1.name, bm, isEntry,
+              rmods := build-entry-module(fl, mods1, odir, prog1.name, srcPath, bm, isEntry,
                                           fn() False, fn(p) rexe := Just(p))
               match bm
                 ModCompiled(c) -> if isEntry then show-module-info(fl, prog1.name, mods1, c)

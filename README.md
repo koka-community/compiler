@@ -52,7 +52,7 @@ KOKA_DEV_DIR=../koka-ref ./koka -O2 -c compiler/main/driver.kk
 ### Stage 2
 
 ```bash
-STAGE1=$(ls -t .koka/v*/*release-*/compiler_main_driver__main | head -1)
+STAGE1=$(ls -t .koka/v*/*release-*/compiler_main_driver*_main | head -1)
 "$STAGE1" -i. -O2 -c --buildtag=bootstrap compiler/main/driver.kk
 ```
 

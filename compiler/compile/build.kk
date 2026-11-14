@@ -1405,7 +1405,7 @@ pub fun make-expr-def(isFun: bool, modName: name, mainName: string, endRng: rang
   // effect-generated @tag/@handle groups could no longer bubble past @expr in
   // the wrapper pass and ended up AFTER main (algeff/exn3 with -e under the
   // name-ordered scc input). Diagnostics keep the null binder ranges.
-  // PRIVATE. Upstream puts this synthesized def in its own `<entry>/@main`
+  // PRIVATE. Upstream puts this synthesized def in its own `<entry>@main`
   // module, where nothing imports it; this port appends it to the ENTRY module
   // instead, so `Public` exported it in the entry's own `.kki` -- `pub fun
   // @expr : () -> <console> ()` plus its inline body, in the public interface of
@@ -1466,7 +1466,7 @@ pub fun show-module-info(fl: flags, modName: name, mods: bmodules, core: core): 
       emit-line(" ")
       emit-line((if fl.showHiddenTypeSigs then pp-gamma-hidden(ownGamma) else pp-gamma(ownGamma)).show)
 
-// The source of a program's entry module, `<root>/@main`:
+// The source of a program's entry module, `<root>@main`:
 //
 //     @open import prog
 //     pub fun @expr() : _ ()
@@ -1474,7 +1474,7 @@ pub fun show-module-info(fl: flags, modName: name, mods: bmodules, core: core): 
 //
 // Keeping the entry in a module of its own leaves the program's own `.c` and
 // `.kki` free of entry glue, and names the executable after this module
-// (`prog__main`). `@open import` brings the program's PRIVATE definitions into
+// (`prog_at_main`). `@open import` brings the program's PRIVATE definitions into
 // scope as well, so an entry function need not be public.
 //
 // A non-unit result is printed; a function-typed one prints `<function>`
@@ -1489,7 +1489,18 @@ pub fun entry-module-source(rootName: name, mainName: string, resTp: maybe<ktype
   val lines = ["@open import " ++ rootName.show-plain,
                "pub fun @expr() : _ ()",
                "  " ++ shown]
-  ((rootName.show-plain ++ "/@main").new-module-name, lines.unlines ++ "\n")
+  ((rootName.show-plain ++ "@main").new-module-name, lines.unlines ++ "\n")
+
+// Where the entry module's source sits, as upstream `buildcCompileExpr`: next to
+// the source of the module it calls (`dir/foo.kk` gets `dir/foo@main.kk`), so its
+// import of that module resolves relative to its own directory, whatever the
+// include path is. Without a root source it is `/@virtual/@main.kk`.
+pub fun entry-module-path(rootSrc: string): path
+  if rootSrc.is-empty then virtual-path("@main.kk")
+  else
+    val p = rootSrc.path
+    val stem = p.basename.list.take-while(fn(c) c != '.').string
+    (p.dirname.path / (stem ++ "@main.kk")).path
 
 // Complete the entry for execution: install `@default-<eff>` handlers (e.g.
 // `@default-exn`) around it, so a raised effect runs under the top-level
@@ -1847,7 +1858,7 @@ pub fun compile-module(fl: flags, srcPath: path, outBase: path, isEntry: bool, m
     // only the entry-point machinery is suppressed.
     // ONLY the synthesized entry module carries the entry point: the `@expr`
     // wrapper, the default effect handlers and the link. A program is a plain
-    // module; `build-entry-module` (build-context.kk) builds its `<root>/@main`.
+    // module; `build-entry-module` (build-context.kk) builds its `<root>@main`.
     val at-main = progX.name.show-plain.ends-with("@main").bool
     val wantEntry = at-main && !fl.library
     // `--main-entry=<name>` selects the entry function

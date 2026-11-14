@@ -52,8 +52,8 @@ case "${1:-}" in
     # Pins an EXISTING binary, never builds one: the given path, else the most
     # recently built driver, from a port build (`port_dir bootstrap`) or a
     # reference build ($REF_DIR) alike.
-    built=${2:-$(ls -t "$(port_dir bootstrap)"/clang-*/compiler_main_driver__main \
-                        "$REF_DIR"/clang-*/compiler_main_driver__main 2>/dev/null | head -1)}
+    built=${2:-$(ls -t "$(port_dir bootstrap)"/clang-*/compiler_main_driver*_main \
+                        "$REF_DIR"/clang-*/compiler_main_driver*_main 2>/dev/null | head -1)}
     [ -n "$built" ] && [ -x "$built" ] || { echo "[build-driver] no driver binary to pin" >&2; exit 1; }
     mkdir -p "$(dirname "$BOOTSTRAP")"
     if [ -e "$BOOTSTRAP" ]; then

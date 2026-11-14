@@ -12,7 +12,7 @@ set -eu
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 . "$ROOT/scripts/build-dirs.sh"
-BIN=${BIN:-$(ls -t "$REF_DIR"/clang-*/compiler_main_driver__main 2>/dev/null | head -1)}
+BIN=${BIN:-$(ls -t "$REF_DIR"/clang-*/compiler_main_driver*_main 2>/dev/null | head -1)}
 MOD=${MOD:-compiler/lib/scc.kk}
 N=${N:-3}
 for i in $(seq 1 "$N"); do

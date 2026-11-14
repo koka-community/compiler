@@ -890,10 +890,13 @@ fun known-mismatches(): io list<string>
 
 fun newest-driver(): io string
   // every untagged `.koka/v<version>`: the version is the reference compiler's
-  // that built the driver, and it moves independently of this script
+  // that built the driver, and it moves independently of this script; the
+  // executable is `<entry>_at_main`, or `<entry>__main` from a compiler without
+  // koka-lang/koka#963
   val ds = ".koka".path.dir/list-directory.filter(fn(p) p.basename.starts-with("v").bool && !p.basename.contains("-"))
   val cands = ds.flatmap(fn(d) d.dir/list-directory).filter(fn(p) p.stemname.starts-with("clang-").bool)
-                .map(fn(p) p / "compiler_main_driver__main".path).filter(dir/is-file)
+                .flatmap(fn(p) ["compiler_main_driver_at_main", "compiler_main_driver__main"].map(fn(e) p / e.path))
+                .filter(dir/is-file)
   // newest by MTIME -- sorting by name picks whichever hash sorts last, which
   // silently selected a stale binary
   match cands.map(fn(p) (p.file/file-mtime, p)).sort(fn((a, _), (b, _)) a > b).map(snd)

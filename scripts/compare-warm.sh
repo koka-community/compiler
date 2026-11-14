@@ -20,7 +20,7 @@ ROOT=$(pwd)
 TARGET=${1:?usage: compare-warm.sh <target.kk> [runs]}
 RUNS=${2:-3}
 UP=$REF_KOKA
-PORT=$(ls -t "$REF_DIR"/clang-*/compiler_main_driver__main 2>/dev/null | head -1)
+PORT=$(ls -t "$REF_DIR"/clang-*/compiler_main_driver*_main 2>/dev/null | head -1)
 [ -x "$UP" ]   || { echo "no reference compiler at $UP" >&2; exit 1; }
 [ -x "$PORT" ] || { echo "no port driver at $PORT (run scripts/build-driver.sh)" >&2; exit 1; }
 grep -qE '^(pub )?fun main' "$TARGET" || {
@@ -55,7 +55,7 @@ echo "artifacts  upstream: ${uc} .c ${uo} .o    port: ${pc} .c ${po} .o"
 [ "$uo" -gt 0 ] && [ "$po" -gt 0 ] || { echo "ABORT: one side produced no objects" >&2; exit 1; }
 d=$(( uc > pc ? uc - pc : pc - uc ))
 [ "$d" -le 1 ] || { echo "ABORT: .c counts differ by $d (>1); not like-for-like" >&2; exit 1; }
-[ "$d" -eq 1 ] && echo "  (1-module difference is upstream's separate <entry>__main wrapper)"
+[ "$d" -eq 1 ] && echo "  (1-module difference is upstream's separate <entry>@main module)"
 
 echo "warm re-runs, ${RUNS}x each:"
 i=1

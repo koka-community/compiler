@@ -22,7 +22,7 @@ cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 . "$ROOT/scripts/build-dirs.sh"
 
-BIN=${KOKA_GATE_BIN:-$(ls -t "$REF_DIR"/clang-*/compiler_main_driver__main 2>/dev/null | head -1)}
+BIN=${KOKA_GATE_BIN:-$(ls -t "$REF_DIR"/clang-*/compiler_main_driver*_main 2>/dev/null | head -1)}
 if [ -z "$BIN" ]; then
   echo "no release port binary; build with ./koka -O2 --no-buildhash -c compiler/main/driver.kk" >&2
   exit 1
