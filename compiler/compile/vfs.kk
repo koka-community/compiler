@@ -21,11 +21,12 @@
 //     such monad here, so this is an ambient effect. `no-vfs` answers `Nothing`
 //     for everything, so installing it changes nothing until a file is added.
 //
-//   * Keys are canonicalized. Upstream matches the path string exactly and its
-//     own comment concedes "must match exactly; we may improve this later on".
+//   * Keys are canonicalized with `realpath` on both sides. Upstream's
+//     `lookupVFS` only `normalize`s the path string and relies on whoever fills
+//     the overlay to key it by real path (the language server's `fromLspUri`).
 //     The port reaches the same source through several spellings (as-written
-//     relative import, include-root-relative, absolute), so exact-string
-//     matching would miss.
+//     relative import, include-root-relative, absolute), so a lookup that only
+//     normalizes would miss.
 //
 //   * Upstream's wsl `/@virtual///` special case in `searchSourceFile` is not
 //     reproduced; it is a Windows path workaround, not part of the model.

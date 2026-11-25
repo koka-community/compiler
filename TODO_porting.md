@@ -72,7 +72,7 @@ for the new bslice `maybe2` API), and the small syncs: `common/name.kk`, `common
   (`analysis-cctx`, `open-resolve`, `pretty`, `parse`, `backend/c` shape-updated to match).
 - Target platform threaded through kind inference (`run-kind-infer` takes a `target-platform`;
   externals formatted via `format-call(tpl)`; the DefaultTarget bridge is gone) and through the
-  type-inference env (`inferEnv.tplatform`, `get-target-platform`, `subst-nice`).
+  type-inference env (`infer-env.tplatform`, `get-target-platform`, `subst-nice`).
 - `kind/infer.kk` split: data-type synthesis (accessors/testers/tags/lazy) now lives in
   `kind/synthesize.kk` (type resolution injected via the small `lazy-resolve` effect).
 - `type/infer.kk` split: dependency-free helpers (expectation contexts, arg/pattern matching helpers,

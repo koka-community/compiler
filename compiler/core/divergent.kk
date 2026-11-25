@@ -34,7 +34,7 @@ fun is-divergent-body(b: expr, dname: name)
     Lam(pars, _, e) -> e.is-divergent-fun(pars, dname)
     _ -> True
 
-fun is-divergent-fun(b: expr, pars: list<tName>, dname: name): _ bool
+fun is-divergent-fun(b: expr, pars: list<t-name>, dname: name): _ bool
   match pars
     Nil -> True
     _ ->
@@ -140,7 +140,7 @@ fun set-rel(r: rel, f: () -> _ a): _ a
     fun add-call(n, c) add-call(n, c)
   f()
 
-fun run-div(dname: name, args: list<tName>, f: () -> _ a): _ list<call>
+fun run-div(dname: name, args: list<t-name>, f: () -> _ a): _ list<call>
   var calls: list<call> := []
   with handler
     val rel = Rel(dname, args.map(names/empty + _.get-name), args.map(fn(a) names/empty))

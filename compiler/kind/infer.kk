@@ -51,7 +51,7 @@ pub fun infer-kinds(
       isValue: (data-info) -> pure bool, // is this a value type
       target: target-platform, // target platform
       imports: import-map, // import aliases
-      kgamma0: kGamma, // initial kind kgamma
+      kgamma0: k-gamma, // initial kind kgamma
       syns0: synonyms, // initial list of synonyms
       data0: newtypes) // initial list of data types
   // original program
@@ -229,7 +229,7 @@ fun externals/kinfer(externals0: list<syntax/syntax/external>)
 
 fun external/kinfer(ex: syntax/syntax/external, names: list<name>)
   match ex
-    syntax/syntax/External(name, tp, pinfos, nameRng, rng, calls, vis, fipT, doc) ->
+    syntax/syntax/External(name, tp, pinfos, nameRng, rng, calls, vis, fip-t, doc) ->
       with override val uctx = Check("Externals must be values", rng)
       val tp' = tp.inf-resolve-type()
       val qname = name.qualify-def
@@ -239,7 +239,7 @@ fun external/kinfer(ex: syntax/syntax/external, names: list<name>)
       else
         add-range-info(nameRng, RIId(qname, NIValue("extern", tp', doc, True), [], True))
         add-range-info(rng, RIDecl("extern", qname, cname.mangle(tp'), Just(tp')))
-      (core/core/External(cname, tp', pinfos, calls.format-call(tp', target-platform), vis, fipT, nameRng, doc), Cons(qname, names))
+      (core/core/External(cname, tp', pinfos, calls.format-call(tp', target-platform), vis, fip-t, nameRng, doc), Cons(qname, names))
     syntax/syntax/ExternalImport(imps, rng) -> (core/core/ExternalImport(imps, rng), names)
 
 fun format-call(external-call: external-call, tp: ktype, tpl: target-platform): string

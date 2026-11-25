@@ -81,7 +81,7 @@ fun sort-on-name(xs: list<a>, f: (a) -> e name): e list<a>
 // each name in it is resolved against kgamma/gamma and linked to its
 // definition.
 // what `show-doc` and the literate formatter need, as one value
-fun lit-env(): _ maybe<(html-env, gamma, kGamma)>
+fun lit-env(): _ maybe<(html-env, gamma, k-gamma)>
   Just((genv, ggamma, gkgamma))
 
 fun doc/show-doc(doc: string): _ string
@@ -429,9 +429,9 @@ effect val genv: html-env
 // upstream threads `kgamma`/`gamma` alongside `Env` through every formatter;
 // they are what turn a name inside a rendered type into a link.
 effect val ggamma: gamma
-effect val gkgamma: kGamma
+effect val gkgamma: k-gamma
 
-pub fun gen-doc(c: core, kgam: kGamma, gam: gamma, env: html-env = Html-env(name/nil),
+pub fun gen-doc(c: core, kgam: k-gamma, gam: gamma, env: html-env = HtmlEnv(name/nil),
                 css: list<string> = [], js: string = ""): _ list<string>
   with val genv = env
   with val ggamma = gam

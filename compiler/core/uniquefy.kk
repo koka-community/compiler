@@ -100,7 +100,7 @@ fun fun/run-unique(f: () -> _ a): _ a
 pub fun expr/uniquefy(e: expr): _ expr
   uniquefy(e, tnames/empty)
 
-pub fun free/uniquefy(e: expr, free: rbset<tName>): _ expr
+pub fun free/uniquefy(e: expr, free: rbset<t-name>): _ expr
   val locals = uq-from-names(free.union(e.free-locals).list.map(get-name))
   with start/run-unique(0)
   set-locals(locals)
@@ -195,7 +195,7 @@ fun pattern/uniquefyX(p: pattern, patTp: ktype)
       PatCon(patName, pats.zip(typeArgs).map(fn((p', t)) p'.uniquefy(t)), repr, typeArgs, kexists, typeRes, info, skip)
     PatVar(tname, pat) -> PatVar(tname.uniquefy, pat.uniquefyX(patTp)) 
 
-fun tname/uniquefy(tn: tName)
+fun tname/uniquefy(tn: t-name)
   TName(tn.get-name.uniquefy, tn.type-of)
 
 fun make-full-unique()

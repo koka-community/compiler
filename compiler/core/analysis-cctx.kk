@@ -71,13 +71,13 @@ fun expr(e: expr)
       make-con(name, repr, targs, args)
     _ -> emit-ctx-errs([])
 
-fun make-con(cName: tName, cRepr: con-repr, targs: list<ktype>, args: list<expr>)
+fun make-con(cName: t-name, cRepr: con-repr, targs: list<ktype>, args: list<expr>)
   match args.span(!_.is-hole)
     (pre, Cons(h, post)) ->
       con-final(cName, cRepr, targs, pre, h, post)
     _ -> con-recurse(cName, cRepr, targs, args)
 
-fun con-recurse(cName: tName, cRepr: con-repr, targs: list<ktype>, args: list<expr>)
+fun con-recurse(cName: t-name, cRepr: con-repr, targs: list<ktype>, args: list<expr>)
   val (pre,cctx,post) = find([], [], args)
   (pre ++ post).foreach(check-no-hole)
   val (ds, vars) = pre.map(make-unique-def).unzip
@@ -86,7 +86,7 @@ fun con-recurse(cName: tName, cRepr: con-repr, targs: list<ktype>, args: list<ex
   val (d1, var1) = make-unique-def(App(make-type-app(Con(cName, ctxrepr), targs), vars ++ [cctx.top] ++ post))
   cctx(defs=ds ++ cctx.defs ++ [d1], top=var1)
 
-fun con-final(cName: tName, cRepr: con-repr, targs: list<ktype>, pre: list<expr>, chole: expr, post: list<expr>)
+fun con-final(cName: t-name, cRepr: con-repr, targs: list<ktype>, pre: list<expr>, chole: expr, post: list<expr>)
   (pre ++ post).foreach(check-no-hole)
   val fname = cName.get-field-name(pre.length + 1)
   val holetp = chole.type-of
@@ -153,19 +153,19 @@ fun make-create(gamma: gamma, tpl: target-platform, tp: ktype, holetp: ktype, to
   make-cctx-prim(gamma, nameCCtxCreate, external, [tp, holetp], [top, holeaddr])
 
 // The address of a field in a constructor (for context holes)
-pub fun make-field-addr-of(gamma: gamma, obj: expr, cName: tName, fieldName: name, fieldTp: ktype): pure expr
-  make-cctx-prim(gamma, nameFieldAddrOf, "", [fieldTp],
+pub fun make-field-addr-of(gamma: gamma, obj: expr, cName: t-name, fieldName: name, fieldTp: ktype): pure expr
+  make-cctx-prim(gamma, nameFieldAddrOf, "", [obj.type-of, fieldTp],
     [obj, ELit(LitString(show-tupled(cName.get-name))), ELit(LitString(show-tupled(fieldName)))])
 
 // Set the index of the field in a constructor to follow the path to the hole at runtime.
-fun make-set-ctx-path(obj: expr, cName: tName, fieldName: name)
+fun make-set-ctx-path(obj: expr, cName: t-name, fieldName: name)
   val tp = obj.type-of
   val funType = TFun([(nil, tp), (nil, typeString), (nil, typeString)], typeTotal, tp)
   App(Var(TName(nameCCtxSetCtxPath, funType), core/InfoExternal("@cctx-setcp(#1,#2,#3)")), 
     [obj, ELit(LitString(show-tupled(cName.get-name))), ELit(LitString(show-tupled(fieldName)))])
 
 
-fun get-field-name(cName: tName, fieldIdx: int)
+fun get-field-name(cName: t-name, fieldIdx: int)
   match cName.lookup(fieldIdx)
     Left(err) -> failure/fail("core/analysiscctx: " ++ err)
     Right(name) -> name
@@ -193,12 +193,12 @@ fun data-type-name-res(tp: ktype)
     Right(name) -> name
     Left(t) -> failure/fail("core/ctail data-type-name-res: illegal result type: " ++ t.show)
 
-fun data-type-name(cName: tName)
+fun data-type-name(cName: t-name)
   match cName.type-of.split-fun-scheme
     Just((_, _, _, tres)) -> tres.data-type-name-res
     _ -> failure/fail("core/ctail get-data-type-name: illegal constructor type: " ++ cName.show)
 
-pub fun lookup(cName: tName, fieldIdx: int)
+pub fun lookup(cName: t-name, fieldIdx: int)
   match newtypes-lookup-any(cName.data-type-name)
     Just(dinfo) ->
       val (drepr, _) = dinfo.data-repr(is-value)

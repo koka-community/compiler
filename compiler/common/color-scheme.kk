@@ -19,13 +19,13 @@ import std/core/undiv
 // ----------------------------
 
 // Color scheme for the interpreter
-pub effect val colors: colorScheme;
+pub effect val colors: color-scheme;
 
 pub fun color-scheme-default(f)
   handle(f)
     val colors = dark-color-scheme
 
-pub struct colorScheme
+pub struct color-scheme
   colorInterpreter: color = DarkGreen
   colorType: color = DarkCyan
   colorParameter: color = DarkGray
@@ -58,7 +58,7 @@ pub struct colorScheme
   colorImplicitParameter: color = Gray
   colorImplicitExpr: color = colorSource
 
-pub fun cs/(==)(c1: colorScheme, c2: colorScheme): bool
+pub fun cs/(==)(c1: color-scheme, c2: color-scheme): bool
   c1.colorInterpreter == c2.colorInterpreter && c1.colorType == c2.colorType && c1.colorParameter == c2.colorParameter && c1.colorKind == c2.colorKind && c1.colorMarker == c2.colorMarker 
   && c1.colorError == c2.colorError && c1.colorWarning == c2.colorWarning && c1.colorSource == c2.colorSource && c1.colorCommand == c2.colorCommand && c1.colorKeyword == c2.colorKeyword 
   && c1.colorEffect == c2.colorEffect && c1.colorRange == c2.colorRange && c1.colorSep == c2.colorSep 
@@ -91,7 +91,7 @@ pub fun color/default(c: color, clr: color): color
   if clr == ColorDefault then c else clr
 
 // Replace every `ColorDefault` of the scheme with `clr`
-pub fun scheme/default(cs: colorScheme, clr: color): colorScheme
+pub fun scheme/default(cs: color-scheme, clr: color): color-scheme
   cs(
     colorType = clr.color/default(cs.colorType),
     colorParameter = clr.color/default(cs.colorParameter),
@@ -136,7 +136,7 @@ pub fun make-color-scheme(clr: color)
 // Read colors
 // ----------------------------
 // Read a comma separated list of name=color pairs.
-pub fun read-color-flags(scheme: colorScheme, s: string)
+pub fun read-color-flags(scheme: color-scheme, s: string)
   fun split(xs: list<char>): list<string>
     val (pre, ys) = xs.span(fn(c) c != ',' && c != ';')
     match ys
@@ -148,7 +148,7 @@ pub fun read-color-flags(scheme: colorScheme, s: string)
   s.list.split.foldl(scheme, fn(sc, s') sc.read-color-flag(s'))
 
 // Read a name=color flag. An unknown name or color leaves the scheme as it is.
-pub fun read-color-flag(scheme: colorScheme, s: string)
+pub fun read-color-flag(scheme: color-scheme, s: string)
   val (name, xs) = s.list.span(fn(c) c != '=' && c != ':')
   match xs
     Cons(c, clr) | c == '=' || c == ':' ->
@@ -201,7 +201,7 @@ fun read-color(s: string): maybe<color>
     "darkgray" -> Just(DarkGray)
     _ -> Nothing
 
-fun read-update(name: string): maybe<(color, colorScheme) -> colorScheme>
+fun read-update(name: string): maybe<(color, color-scheme) -> color-scheme>
   match name.norm
     "type" -> Just(fn(clr, scheme) scheme(colorType=clr, colorTypeCon=clr, colorTypeVar=clr, colorTypeKeyword=clr, colorEffect=clr))
     "kind" -> Just(fn(clr, scheme) scheme(colorKind=clr))

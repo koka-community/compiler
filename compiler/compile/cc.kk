@@ -26,7 +26,7 @@ pub struct cc
   ccName: string = ""
   ccPath: string = ""
   ccFlags: list<string> = []
-  ccFlagsBuild: list<(buildType,list<string>)> = []
+  ccFlagsBuild: list<(build-type,list<string>)> = []
   ccFlagsWarn: list<string> = []
   ccFlagsCompile: list<string> = []
   ccFlagsLink: list<string> = []
@@ -45,7 +45,7 @@ pub struct cc
 
 // Pick the right `(BuildType,Args)` entry
 // (falling back to no extra flags) and append the arch-optimization flags.
-pub fun cc/flags-build(c: cc, bt: buildType, optimize: int, cpuArch: string): list<string>
+pub fun cc/flags-build(c: cc, bt: build-type, optimize: int, cpuArch: string): list<string>
   val base = match c.ccFlagsBuild.find(fn(be) { val (b, _) = be; b == bt })
     Just((_, args)) -> args
     Nothing -> []
@@ -123,7 +123,7 @@ pub fun cc-gcc(name: string, path: string, hasOptG: bool): ndet cc
     // unfortunately not as widely supported as one may hope, so only at -O2+
     if opt < 2 then []
     elif cpuArch == "x64" then ["-march=haswell","-mtune=native"]        // Haswell (2013) = x86-64-v3
-    elif cpuArch == "arm64" then ["-march=armv8.1-a+crypto+aes","-mtune=native"]
+    elif cpuArch == "arm64" then ["-march=armv8.3-a+crypto+aes","-mtune=native"]  // popcnt, simd, lse, pmull (+aes), ldapr
     else []
   Cc(
     ccName = name, ccPath = path,

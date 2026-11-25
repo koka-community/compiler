@@ -77,7 +77,7 @@ fun gen-fun-sig(ex: expr, inlineC: bool, vis: visibility, nm: name)
     Lam(params, _, body) -> body.gen-lam-sig(inlineC, vis, nm, params)
     _ -> failure/fail("backend/c/from-core gen-fun-sig: expected lambda expression in " ++ nm.show ++ ": " ++ ex.show)
 
-fun gen-lam-sig(body: expr, inlineC: bool, vis: visibility, nm: name, params: list<tName>)
+fun gen-lam-sig(body: expr, inlineC: bool, vis: visibility, nm: name, params: list<t-name>)
   val inl = if inlineC then "static inline ".text else pprint/empty
   inl |.| body.type-of.cpp-type |+| nm.cpp-name |.| params.t-parameters
 
@@ -94,7 +94,7 @@ fun gen-topdef-decl(d: def, genSig: bool, inlineC: bool)
     val resTp = match d.ktype.split-fun-scheme
       Nothing -> d.ktype
       Just((_, _, _, res)) -> res
-    fun genFunDef(body: expr, params: list<tName>)
+    fun genFunDef(body: expr, params: list<t-name>)
       val args = params.map(_.get-name.cpp-name)
       val isTailCall = body.is-tail-calling(d.def-name)
       val bodyDoc = gen-statement(ResultReturn(Just(TName(d.def-name, resTp)), params), body)
@@ -172,7 +172,7 @@ fun gen-top-level-string-literal(s: string, name: name, vis: visibility)
   if vis.is-public then
     emit-to-h(linebreak |.| "extern".text |+| typeString.cpp-type |+| nameDoc |.| semi)
 
-fun gen-lambda(body: expr, params: list<tName>, eff: ktype)
+fun gen-lambda(body: expr, params: list<t-name>, eff: ktype)
   val fnName = "fun".newDefVarName
   val newLamName = "new-".prepend-raw(fnName)
   val fnTpName = fnName.postpend-raw("_t")
@@ -270,13 +270,13 @@ fun try-tailcall(r: c-result, ex: expr)
   fun tailblock(d: doc)
     hang("{ // tailcall".text |-| d, 2) |-| "}".text
   
-  fun gen-tailvar-binding(params: list<tName>, (p: tName, e: expr))
+  fun gen-tailvar-binding(params: list<t-name>, (p: t-name, e: expr))
     match e
       Var(tn) | tn != p && params.any(_ == tn) -> e.gen-var-binding-always
       _ -> e.gen-var-binding
 
   // overriding function arguments carefully
-  fun gen-override(params: list<tName>, args: list<expr>)
+  fun gen-override(params: list<t-name>, args: list<expr>)
     val (stmts, varNames) = zip(params, args).map(gen-tailvar-binding(params, _)).unzip
     val docs1 = params.map(gen-def-name)
     val docs2 = varNames.map(gen-def-name)
@@ -344,7 +344,7 @@ fun gen-expression-statement(r: c-result, ex: expr)
 
 // Match
 
-alias bindings = list<(tName,doc)>
+alias bindings = list<(t-name,doc)>
 
 // Generates a statement for a match expression regarding a given return context
 fun gen-match(res0: c-result, exprDocs: list<doc>, branches: list<branch>)
@@ -464,7 +464,7 @@ fun gen-pattern-test(doTest: bool, (exprDoc, pat): (doc, pattern))
             val typeDoc = "struct".text |+| ci.name.cpp-name |.| "*".text
             val assign = typeDoc |+| local.ppDefName |+| "=".text |+| ci.con-as-name |.| arguments([exprDoc]) |.| semi
             [(xtest([ci.con-test-name |.| arguments([exprDoc])]), [assign], [], next)] 
-          fun valTest(conName: tName, ci: con-info, drepr: data-repr)
+          fun valTest(conName: t-name, ci: con-info, drepr: data-repr)
             val selectOp = if drepr.needsTagField then "._cons." ++ conName.get-name.ppDefName.show ++ "." else "."
             val next = gen-next-patterns(fn(slf, fld) slf |.| selectOp.text |.| fld, exprDoc, tname.type-of, patts)
             [(xtest([ci.con-test-name |.| arguments([exprDoc])]), [], [], next)] 
@@ -711,14 +711,14 @@ fun gen-app-normal(f: expr, args: list<expr>)
                   failure/fail("backend/c/gen-app-normal: expecting function type: " ++ f.type-of.pretty.show)
               (fdecls ++ decls, "kk_function_call".text |.| arguments([cresTp, cargTps, fdoc, arguments(Cons(fdoc, argDocs))]))
 
-fun pp-ctx-path(crepr: con-repr, cname: tName, noArgs: bool)
+fun pp-ctx-path(crepr: con-repr, cname: t-name, noArgs: bool)
   if noArgs then []
   else match crepr.ctx-path
     Just(CtxNone) -> ["0".text]
     Just(CtxField(fname)) -> ["kk_field_index_of".text |.| tupled(["struct".text |+| cname.get-name.cpp-name, fname.get-name.unqualify.cpp-name])]
     _ -> []
 
-fun gen-assign-fields(tmp: doc, conName: tName, crepr: con-repr, reuseName: tName, fieldNames: list<name>, fieldValues: list<expr>)
+fun gen-assign-fields(tmp: doc, conName: t-name, crepr: con-repr, reuseName: t-name, fieldNames: list<name>, fieldValues: list<expr>)
   val (decls, fieldDocs) = fieldValues.gen-expressions
   val conTp = "struct".text |+| conName.get-name.cpp-name |.| "*".text
   val tmpDecl = conTp |+| tmp |+| "=".text |+| parens(conTp) |.| reuseName.get-name.cpp-name |.| semi
@@ -729,10 +729,10 @@ fun gen-assign-fields(tmp: doc, conName: tName, crepr: con-repr, reuseName: tNam
   val result = con-base-case-nameX(conName.get-name) |.| arguments([tmp])
   (decls, tmpDecl, ctxPath ++ assigns, result)
 
-fun gen-field-address(conVar: tName, conName: name, fieldName: name)
+fun gen-field-address(conVar: t-name, conName: name, fieldName: name)
   "kk_field_addr_create".text |.| arguments(["&".text |.| con-as-nameX(conName) |.| arguments([conVar.get-name.cpp-name]) |.| "->".text |.| fieldName.unqualify.cpp-name])
 
-fun gen-cctx-set-ctx-path(conVar: tName, conName: name, fieldName: name)
+fun gen-cctx-set-ctx-path(conVar: t-name, conName: name, fieldName: name)
   "kk_cctx_setcp".text |.| arguments([conVar.get-name.cpp-name, "offsetof".text |.| tupled(["struct".text |+| conName.cpp-name, fieldName.unqualify.cpp-name])])
 
 fun gen-app-special(f: expr, args: list<expr>)
@@ -780,14 +780,14 @@ fun extract-extern(ex: expr)
     _ -> Nothing
 
 // inlined external sometimes needs wrapping in an applied function block
-fun gen-inline-external(tname: tName, formats: string, args: list<doc>)
+fun gen-inline-external(tname: t-name, formats: string, args: list<doc>)
   val (decls, doc) = gen-expression-external(tname, formats, args)
   if decls.is-nil then doc
   else failure/fail("backend/c/from-core gen-inline-external: TODO: inline external declarations: " ++ show(vcat(decls ++ [doc])))
 
 // generate external: needs to add try blocks for primitives that can throw exceptions
 
-fun gen-expression-external(tname: tName, formats: string, args: list<doc>)
+fun gen-expression-external(tname: t-name, formats: string, args: list<doc>)
   val nm = tname.get-name
   match args
     [argDoc] 

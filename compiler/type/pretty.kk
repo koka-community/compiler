@@ -553,7 +553,7 @@ pub fun pp-typesyn(ts: type-syn)
     then ts.name.pp-name-plain.color-by-kind-def(ts.kind, colorTypeCon)
     else ts.name.pp-name-plain.wrap-kind(ts.kind).color-by-kind-def(ts.kind, colorTypeCon)
 
-fun color-by-kind-def(d: doc, k: kind, defcolor: (colorScheme -> _ color))
+fun color-by-kind-def(d: doc, k: kind, defcolor: (color-scheme -> _ color))
   d.color-by-kind(k, fn(d') d'.color(defcolor(colors)))
 
 fun color-by-kind(d: doc, k: kind, defcolor: (doc -> _ doc))

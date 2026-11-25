@@ -81,11 +81,11 @@ pub fun pp-kind(k: kind, prec: prec)
 // Print each name's kind, one per line, (sorted map to match upstream results) 
 // Names local to `context` print unqualified; 
 // upstream's `importsAlias` handling for OTHER modules' names
-// (only relevant if a foreign kGamma is ever printed, not the entry module's own) isn't ported.
+// (only relevant if a foreign k-gamma is ever printed, not the entry module's own) isn't ported.
 fun pp-own-kname(n: name, ctxt: name): _ doc
   (if n.qualifier == ctxt then n.unqualify else n).pretty
 
-pub fun pp-kgamma(kg: kGamma, ctxt: name): _ doc
+pub fun pp-kgamma(kg: k-gamma, ctxt: name): _ doc
   val nameSchemes = kg.list.flatmap(fn((_, xs)) xs).map(fn((n, tni)) (n, tni.kind))
                      .sort(fn((n1: name, _), (n2: name, _)) n1.show < n2.show)
   val maxwidth = nameSchemes.map(fn((n, _)) n.show.count).maximum(0).min(12)

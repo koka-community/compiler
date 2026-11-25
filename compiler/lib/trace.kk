@@ -10,7 +10,7 @@
 module compiler/lib/trace
 
 import std/core/unsafe
-pub import std/pretty/printer
+pub import pretty/printer
 import compiler/lib/pprint
 
 pub fun color/trace(s: string, a: a, ?kk-file-line: string): a

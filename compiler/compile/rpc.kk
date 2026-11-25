@@ -59,7 +59,7 @@ pub struct rpc-client<a, b>
 // Create a client on the CURRENT loop. Call this inside the worker, never on the
 // owner: the inbox must belong to the loop that will receive on it.
 pub fun rpc-client(requests: xsender<rpc<a, b>>): async rpc-client<a, b>
-  Rpc-client(requests, xchannel())
+  RpcClient(requests, xchannel())
 
 // One round-trip: send `arg` with our reply address, then wait for the answer.
 // NOTE the row is `<async,ioc>`, NOT `<async,ndet,ioc>`: `ioc` already contains

@@ -24,9 +24,9 @@ pub infixr 5 (|->)
 
 pub type name-info
   InfoVal(vis: visibility, cname: name, typ: scheme, scopeDepthX: int, range: range, isVar: bool, allowImplicitMaskX: bool, doc: string)
-  InfoFun(vis: visibility, cname: name, typ: scheme, scopeDepthX: int, arity: (int, int), fipt: fipT, range: range, doc: string)
+  InfoFun(vis: visibility, cname: name, typ: scheme, scopeDepthX: int, arity: (int, int), fipt: fip-t, range: range, doc: string)
   InfoCon(vis: visibility, typ: scheme, repr: con-repr, conInfo: con-info, range: range, doc: string)
-  InfoExternal(vis: visibility, cname: name, typ: scheme, format: string, fipt: fipT, range: range, doc: string)
+  InfoExternal(vis: visibility, cname: name, typ: scheme, format: string, fipt: fip-t, range: range, doc: string)
   InfoImport(vis: visibility, typ: scheme, nameAlias: name, fullName: name, range: range)
 
 pub fun tp/update-type(ni : name-info, tp: scheme): name-info
@@ -133,7 +133,7 @@ pub fun doc(info)
     assumption/InfoExternal(doc=d) -> d
     _ -> ""
 
-pub fun fipT(info: name-info)
+pub fun fip-t(info: name-info)
   match info
     InfoFun(fipt=fipt) -> fipt
     assumption/InfoExternal(fipt=fipt) -> fipt
@@ -335,7 +335,7 @@ pub fun create-name-infoX(vis, name, scopeDepth: int, sort, rng, tp, doc)
 pub fun create-name-infoEX(vis, name, scopeDepth: int, sort, allowImplicitMask, rng, tp, doc)
   val d = if scopeDepth == 0 && name.is-in-default-namespace then -1 else scopeDepth
   match sort
-    DefFun(_, fipT) -> InfoFun(vis, name, tp, d, tp.arity, fipT, rng, doc)
+    DefFun(_, fip-t) -> InfoFun(vis, name, tp, d, tp.arity, fip-t, rng, doc)
     DefVar -> InfoVal(vis, name, tp, d, rng, True, False, doc)
     _ -> InfoVal(vis, name, tp, d, rng, False, allowImplicitMask, doc)
 
@@ -349,8 +349,8 @@ pub fun arity(tp: ktype): _ (int, int)
 
 pub fun extract-external(external: external, update-vis)
   match external
-    External(name, tp, _, body, vis, fipT, nameRng, doc) ->
-      gamma/single(name, InfoExternal(update-vis(vis), name, tp, body, fipT, nameRng, doc))
+    External(name, tp, _, body, vis, fip-t, nameRng, doc) ->
+      gamma/single(name, InfoExternal(update-vis(vis), name, tp, body, fip-t, nameRng, doc))
     _ -> assumption/empty
 
 // TODO: ftc

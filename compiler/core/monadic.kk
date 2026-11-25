@@ -55,8 +55,8 @@ fun monDef(d: def, isRecursive: bool)
     with set-current-def(d)
     d(defExpr = d.defExpr.mon-expr'(True)(id))
 
-alias trans<a> = transX<a, a>
-alias transX<a, b> = (a -> monadic-eff b) -> monadic-eff b
+alias trans<a> = trans-x<a, a>
+alias trans-x<a, b> = (a -> monadic-eff b) -> monadic-eff b
 
 fun mon-expr(e: expr): monadic-eff trans<expr>
   e.mon-expr'(False)
@@ -164,12 +164,12 @@ fun mon-let-group(dg: def-group)
       val ldef = mon-let-def(False, d)
       fn(k) ldef(fn((xds, yds, nds)) k([xds,yds,nds].concat.map(DefNonRec)))
 
-fun mon-let-def(isRec: bool, d: def): monadic-eff transX<(list<def>, list<def>, list<def>), expr>
+fun mon-let-def(isRec: bool, d: def): monadic-eff trans-x<(list<def>, list<def>, list<def>), expr>
   with set-current-def(d)
   val expr' = d.defExpr.mon-expr'(True)
   fn(k) expr'(fn(xx:expr) k(([d(defExpr=xx)], [], [])))
 
-fun mon-trans(f: (a -> monadic-eff transX<b, c>), xs: list<a>): monadic-eff transX<list<b>,c>
+fun mon-trans(f: (a -> monadic-eff trans-x<b, c>), xs: list<a>): monadic-eff trans-x<list<b>,c>
   match xs
     Nil -> fn(k) k([])
     Cons(x, xx) ->

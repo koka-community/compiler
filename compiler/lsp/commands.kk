@@ -142,7 +142,7 @@ fun compile-entry(st: server-state, fpath: string, entry: string, extra: string)
                              add-show = False, on-progress = report) })
       Error(exn) ->
         msgs := msgs ++ [ErrorMsg(exn.message.error-position(p), exn.message.strip-location.text, SevError, ErrGeneral)]
-      Ok(Expr-result(_s2, _tp, mbexe)) -> exe.set(mbexe)
+      Ok(ExprResult(_s2, _tp, mbexe)) -> exe.set(mbexe)
   write-bytes(progress-create(token).frame)
   write-bytes(progress-begin(token, "Koka: compiling " ++ p.basename).frame)
   build-it()

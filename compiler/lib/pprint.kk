@@ -220,13 +220,13 @@ pub type doc
   Colored(b: bool, c: color, d: doc)
   ColoredEnd
 
-pub type simpleDoc
+pub type simple-doc
   SEmpty
-  SChar(i: int, c: char, d: simpleDoc)
-  SText(i: int, s: string, d: simpleDoc)
-  SLine(i: int, d: simpleDoc)
-  SColorOpen(b: bool, c: color, d: simpleDoc)
-  SColorClose(d: simpleDoc)
+  SChar(i: int, c: char, d: simple-doc)
+  SText(i: int, s: string, d: simple-doc)
+  SLine(i: int, d: simple-doc)
+  SColorOpen(b: bool, c: color, d: simple-doc)
+  SColorClose(d: simple-doc)
 
 pub fun make-markdown(d: doc): doc
   match d
@@ -347,9 +347,9 @@ pub fun doc/(==)(d1: doc, d2: doc): bool
 // render-pretty: the default pretty printing algorithm
 
 // list of indentation/document pairs; saves an indirection over list<(int, doc)>
-type docList
+type doc-list
   DocNil
-  DocCons(i: int, d: doc, dl: docList)
+  DocCons(i: int, d: doc, dl: doc-list)
 
 pub fun render-pretty-b(rfrac: float64, w: int, xdoc: doc): div string
   // r - the ribbon width in characters
@@ -383,7 +383,7 @@ pub fun render-pretty-b(rfrac: float64, w: int, xdoc: doc): div string
           ColoredEnd -> best(b, n, k, ds)
   best(0, 0, 0, [(0, xdoc)])
 
-pub fun render-pretty(rfrac: float64, w: int, xdoc: doc): div simpleDoc
+pub fun render-pretty(rfrac: float64, w: int, xdoc: doc): div simple-doc
   // r - the ribbon width in characters
   val r = max(0, min(w, (w.float64 * rfrac).int))
 
@@ -416,7 +416,7 @@ pub fun render-pretty(rfrac: float64, w: int, xdoc: doc): div simpleDoc
           ColoredEnd -> SColorClose(best(b, n, k, ds))
   best(0, 0, 0, [(0, xdoc)])
 
-pub fun fits(w: int, x: simpleDoc)
+pub fun fits(w: int, x: simple-doc)
   if w < 0 then False
   else match x
     SEmpty -> True
@@ -428,7 +428,7 @@ pub fun fits(w: int, x: simpleDoc)
 
 // render-compact: renders documents without indentation
 // fast and fewer characters output, good for machines
-pub fun render-compact(xdoc: doc): simpleDoc
+pub fun render-compact(xdoc: doc): simple-doc
   fun scan(k, l)
     match l
       Nil -> SEmpty
@@ -452,11 +452,11 @@ pub fun as-string(d: doc)
 
 // Displayers: displayS and displayIO
 
-pub fun display-string(simple: simpleDoc): string
+pub fun display-string(simple: simple-doc): string
   // accumulator style: the naive right-recursive `s ++ x.display-string`
   // overflows the C stack on very large documents (e.g. a compiler emitting
   // a large module interface as one doc)
-  fun go(s: simpleDoc, acc: list<string>): list<string>
+  fun go(s: simple-doc, acc: list<string>): list<string>
     match s
       SEmpty -> acc
       SChar(_, c, x) -> go(x, Cons(c.string, acc))
@@ -466,7 +466,7 @@ pub fun display-string(simple: simpleDoc): string
       SColorClose(x) -> go(x, acc)
   go(simple, []).reverse.join
 
-pub fun skip-spaces(simple: simpleDoc): simpleDoc
+pub fun skip-spaces(simple: simple-doc): simple-doc
   fun is-space(c : char) : bool
     c == ' ' || c == '\t'
   match simple
@@ -479,7 +479,7 @@ pub fun skip-spaces(simple: simpleDoc): simpleDoc
         SText(i, noSpaces, x)
     _ -> simple 
 
-pub fun display-pretty(w: int, simple: simpleDoc): <coloredPrinter,printer,div> ()
+pub fun display-pretty(w: int, simple: simple-doc): <colored-printer,printer,div> ()
   fun display(curCol, simp)
     match simp
       SEmpty -> ()

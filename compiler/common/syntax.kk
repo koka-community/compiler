@@ -8,26 +8,26 @@
 // Updated as of 8/3/26: Commit eb98b61d
 module compiler/common/syntax
 
-pub type jsTarget
+pub type js-target
   JsDefault
   JsNode
   JsWeb
 
-pub fun jstarget/(==)(j1: jsTarget, j2: jsTarget): bool
+pub fun jstarget/(==)(j1: js-target, j2: js-target): bool
   match (j1, j2)
     (JsDefault, JsDefault) -> True
     (JsNode, JsNode) -> True
     (JsWeb, JsWeb) -> True
     _ -> False
 
-pub type cTarget
+pub type c-target
   CDefault
   LibC
   Wasm
   WasmJs
   WasmWeb
 
-pub fun ctarget/(==)(c1: cTarget, c2: cTarget): bool
+pub fun ctarget/(==)(c1: c-target, c2: c-target): bool
   match (c1, c2)
     (CDefault, CDefault) -> True
     (LibC, LibC) -> True
@@ -52,8 +52,8 @@ pub fun ctarget/(==)(c1: cTarget, c2: cTarget): bool
 pub value type target
   DefaultTarget
   CS
-  JS(t: jsTarget)
-  C(t: cTarget)
+  JS(t: js-target)
+  C(t: c-target)
   Unsupported
 
 pub fun target/(==)(t1: target, t2: target): bool
@@ -144,13 +144,13 @@ fun align-up(x: int, y: int): int
   if y <= 0 then x
   else ((x + y - 1) / y) * y
 
-pub type buildType
+pub type build-type
   DebugFull
   Debug
   RelWithDebInfo
   Release
 
-pub fun build-type/(==)(b1: buildType, b2: buildType): bool
+pub fun build-type/(==)(b1: build-type, b2: build-type): bool
   match (b1, b2)
     (DebugFull, DebugFull) -> True
     (Debug, Debug) -> True
@@ -160,17 +160,17 @@ pub fun build-type/(==)(b1: buildType, b2: buildType): bool
 
 // ordered debugfull < debug < relwithdebinfo < release (used by e.g.
 // `buildType flags <= Debug`)
-pub fun build-type/rank(b: buildType): int
+pub fun build-type/rank(b: build-type): int
   match b
     DebugFull -> 0
     Debug -> 1
     RelWithDebInfo -> 2
     Release -> 3
 
-pub fun build-type/(<=)(b1: buildType, b2: buildType): bool
+pub fun build-type/(<=)(b1: build-type, b2: build-type): bool
   b1.rank <= b2.rank
 
-pub fun build-type/show(b: buildType): string
+pub fun build-type/show(b: build-type): string
   match b
     DebugFull -> "debugfull"
     Debug -> "debug"
@@ -434,7 +434,7 @@ pub fun datakind/show(k: data-kind): string
 pub type data-def
   DataDefValue(repr: value-repr) // value type
   DataDefNormal // reference type
-  DataDefLazy(fipT: fipT) // Lazy reference type
+  DataDefLazy(fipT: fip-t) // Lazy reference type
   DataDefOpen(isExtend: bool)
   DataDefAuto(declaredAsStruct: bool) // value or reference type; determined by kind inference (in kind/repr.kk:create-data-def)
 
@@ -511,7 +511,7 @@ pub fun value-repr-scan(n: int)
   ValueRepr(0,n,0)
 
 pub type def-sort
-  DefFun(param: list<param-info>, fipKind: fipT=NoFip(False))
+  DefFun(param: list<param-info>, fipKind: fip-t=NoFip(False))
   DefVal
   DefVar
 
@@ -519,7 +519,7 @@ pub type param-info
   Borrow
   Own
 
-pub fun def-fun-ex(pinfos: list<param-info>, fipKind: fipT)
+pub fun def-fun-ex(pinfos: list<param-info>, fipKind: fip-t)
   if pinfos.all(_.is-own) then DefFun([], fipKind) else DefFun(pinfos, fipKind)
 
 pub fun def-fun(pinfos: list<param-info>)
@@ -605,12 +605,12 @@ pub fun assoc/show(a: assoc): string
     AssocLeft -> "AssocLeft"
 
 // Fip
-pub type fipT
+pub type fip-t
   Fip(alloc: fip-alloc)
   Fbip(alloc: fip-alloc, tail: bool)
   NoFip(tail: bool) // Ordering seems wrong as `NoFip False` should be top but now NoFip True is the top
 
-pub fun fipt/show(f: fipT): string
+pub fun fipt/show(f: fip-t): string
   fun show-n(fip-alloc: fip-alloc): string
     match fip-alloc
       AllocAtMost(0) -> ""
@@ -624,7 +624,7 @@ pub fun fipt/show(f: fipT): string
     Fbip(a, t) -> [show-tail(t), "fbip" ++ show-n(a)].sep-by-space
     NoFip(t) -> show-tail(t)
 
-pub fun fipt/(==)(f1: fipT, f2: fipT): bool
+pub fun fipt/(==)(f1: fip-t, f2: fip-t): bool
   match (f1, f2) 
     (Fip(a1), Fip(a2)) -> a1 == a2
     (Fbip(a1, t1), Fbip(a2, t2)) -> a1 == a2 && t1 == t2
@@ -632,7 +632,7 @@ pub fun fipt/(==)(f1: fipT, f2: fipT): bool
     _ -> False
 
 // Note that "fbip" and "fip(1)" are incomparable so this cannot have an `cmp` function
-pub fun subsumes(f1: fipT, f2: fipT): bool
+pub fun subsumes(f1: fip-t, f2: fip-t): bool
   match (f1, f2)
     (NoFip, Fip) -> True
     (NoFip(t1), f2) -> !t1 || f2.is-tail
@@ -683,24 +683,24 @@ pub val fipTop = NoFip(False)
 pub val fipNoAlloc = fipBot
 pub val noFip = fipTop
 
-pub fun is-top(f: fipT): bool
+pub fun is-top(f: fip-t): bool
   match f
     NoFip(False) -> True
     _ -> False
 
-pub fun fipt/is-tail(f: fipT): bool
+pub fun fipt/is-tail(f: fip-t): bool
   match f
     Fip(_) -> True
     Fbip(_, t) -> t
     NoFip(t) -> t
 
-pub fun fipt/alloc(f: fipT): fip-alloc
+pub fun fipt/alloc(f: fip-t): fip-alloc
   match f
     Fip(a) -> a
     Fbip(a) -> a
     NoFip() -> AllocUnlimited
 
-pub fun show-fip(f: fipT)
+pub fun show-fip(f: fip-t)
   fun show-tail(b: bool): string
     if b then "tail" else ""
   fun show-n(n: fip-alloc): string
@@ -717,7 +717,7 @@ pub fun show-fip(f: fipT)
 pub fun sep-by-space(xs: list<string>)
   xs.filter(_ != "").join(" ")
 
-pub fun fipt/max(fip1: fipT, fip2: fipT)
+pub fun fipt/max(fip1: fip-t, fip2: fip-t)
   match (fip1, fip2)
     (NoFip(isTail1), NoFip(isTail2)) -> NoFip(isTail1 && isTail2)
     (NoFip(t1), _) -> NoFip(t1 && fip2.is-tail)

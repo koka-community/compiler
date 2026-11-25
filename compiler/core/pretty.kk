@@ -301,7 +301,7 @@ fun pretty-expr(ex: expr)
         tab(branches.pretty-branches) |--| "}".text
       doc.pparens(pp-prec, precTypeTop) 
 
-fun pretty-var(tn: tName)
+fun pretty-var(tn: t-name)
   // in coreIface mode names print in the EXPLICIT /# form
   // (prettyCoreName), which is what marks a LOCAL qualifier apart from a
   // module path segment.
@@ -328,7 +328,7 @@ fun pretty-pattern-type(pat: pattern, tp: ktype)
   val doc = override-prec(pp-prec - 1, {pat.pretty-pattern})
   doc |.| (if pp-env.coreShowTypes then " :".text |+| tp.pretty-type else empty)
 
-fun pretty-con-name(tname: tName)
+fun pretty-con-name(tname: t-name)
   tname.get-name.pretty
 
 // upstream threads its (functional) pretty env through the PatCon argument
@@ -389,7 +389,7 @@ fun show-xchar(c: char): string
 
 // Pretty-printers for non-core terms
 
-fun pretty-tname(TName(nm, t): tName)
+fun pretty-tname(TName(nm, t): t-name)
   // Use pretty-core-name unconditionally (the /# form)
   nm.pretty-core-name(colors) |.| ":".text |+| t.pp-type
 

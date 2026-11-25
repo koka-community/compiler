@@ -29,7 +29,7 @@ import std/data/rb-map
 // the definitions imported from compiled module interfaces
 pub struct definitions
   defs-gamma: gamma
-  defs-kgamma: kGamma
+  defs-kgamma: k-gamma
   defs-synonyms: synonyms
   defs-newtypes: newtypes
   fixities: fixities = rb-map/empty()

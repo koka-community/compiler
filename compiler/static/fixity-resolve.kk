@@ -40,8 +40,8 @@ fun tdef/resolve(tdef: user-typedef)
 
 fun con/resolve(constr: user-user-con)
   match constr
-    UserCon(nm, exists0, params, result, Just((fipT, lzy)), nmrng, rng, vis, doc) ->
-      UserCon(nm, exists0, params, result, Just((fipT, lzy.expr/resolve)), nmrng, rng, vis, doc)
+    UserCon(nm, exists0, params, result, Just((fip-t, lzy)), nmrng, rng, vis, doc) ->
+      UserCon(nm, exists0, params, result, Just((fip-t, lzy.expr/resolve)), nmrng, rng, vis, doc)
     c -> c
 
 // Rewrite syntax tree
@@ -136,7 +136,7 @@ pub fun fixities-compose(fix1: fixities, fix2: fixities): fixities
 pub fun fixities-new(fs: list<(name, fixity)>): fixities
   fixitiesEmpty + fs.filter(_.snd.is-fixInfix)
 
-effect fixityEff
+effect fixity-eff
   fun add-fix-error(s: doc, r: range): ()
   fun get-fixities(): fixities
   fun update-fixities(f: fixities -> pure fixities): ()

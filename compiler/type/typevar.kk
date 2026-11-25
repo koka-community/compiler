@@ -431,11 +431,11 @@ pub fun guard/substitute(s: sub, Guard(e, e2): guard): _ guard
   Guard(s |-> e, s |-> e2)
 
 // Type utilities for type names
-pub fun tn/free-type-vars(TName(_, tp): tName): _ tvs
+pub fun tn/free-type-vars(TName(_, tp): t-name): _ tvs
   tp.free-type-vars
-pub fun tn/bound-type-vars(TName(_, tp): tName): _ tvs
+pub fun tn/bound-type-vars(TName(_, tp): t-name): _ tvs
   tp.bound-type-vars
-pub fun tn/substitute(s: sub, TName(n, tp): tName): _ tName
+pub fun tn/substitute(s: sub, TName(n, tp): t-name): _ t-name
   TName(n, s |-> tp)
 
 

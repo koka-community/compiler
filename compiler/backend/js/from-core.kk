@@ -24,7 +24,7 @@ pub alias doc = pprint/doc
 
 // the assembly environment
 pub effect val js-module: name                    // current module
-pub effect val subst-env: list<(tName, doc)>      // substituting names
+pub effect val subst-env: list<(t-name, doc)>      // substituting names
 pub effect val in-statement: bool                 // for generating correct function declarations in strict mode
 
 pub alias asm-eff = <js-module, subst-env, in-statement, unique, pure, comp-flags>
@@ -32,11 +32,11 @@ pub alias asm-eff = <js-module, subst-env, in-statement, unique, pure, comp-flag
 // return context for statement generation
 type result
   // first field carries function name if not anonymous; second the arguments (always known)
-  ResultReturn(mbName: maybe<name>, params: list<tName>)
+  ResultReturn(mbName: maybe<name>, params: list<t-name>)
   // variable name and optional label to break
   ResultAssign(name: name, label: maybe<name>)
 
-fun external-names(): list<(tName, doc)>
+fun external-names(): list<(t-name, doc)>
   [ (TName(nameTrue, typeBool), "true".text),
     (TName(nameFalse, typeBool), "false".text),
     (TName(nameOptionalNone, typeOptional), "undefined".text) ] // ugly but has real performance benefit
@@ -45,14 +45,14 @@ fun external-names(): list<(tName, doc)>
 // Entry point
 //--------------------------------------------------------------------------
 
-pub fun javascript-from-core(bt: buildType, mbMain: maybe<(name, bool)>, imports: kimports, core0: core): _ doc
+pub fun javascript-from-core(bt: build-type, mbMain: maybe<(name, bool)>, imports: kimports, core0: core): _ doc
   with val js-module = core0.coreName
   with val subst-env = external-names()
   with val in-statement = False
   with run-unique(0)
   gen-module(bt, mbMain, imports, core0)
 
-fun gen-module(bt: buildType, mbMain: maybe<(name, bool)>, imports: kimports, core0: core): _ doc
+fun gen-module(bt: build-type, mbMain: maybe<(name, bool)>, imports: kimports, core0: core): _ doc
   val externs = core0.externals.map(fn(ext) include-external(bt, ext)).concat.vcat
   val (tagDefs, defs) = core0.defs.partition(is-tag-def)
   val decls0 = gen-groups(True, tagDefs)
@@ -94,12 +94,12 @@ fun is-tag-def(dg: def-group): bool
 fun module-import(imp: kimport): doc
   (if imp.package.is-empty then ".".text else imp.package.text) |.| "/".text |.| imp.importName.module-name-to-path.text
 
-fun include-external(bt: buildType, ext: external): _ list<doc>
+fun include-external(bt: build-type, ext: external): _ list<doc>
   match external-import-lookup(bt, "include-inline", ext)
     Just(content) -> [content.lines.map(text).vcat.align]
     _ -> []
 
-fun import-external(bt: buildType, ext: external): _ list<(doc, doc)>
+fun import-external(bt: build-type, ext: external): _ list<(doc, doc)>
   match external-import-lookup(bt, "library", ext)
     Just(path) ->
       val libid = match external-import-lookup(bt, "library-id", ext)
@@ -147,7 +147,7 @@ fun try-fun-def(name: name, comm: doc, ex: expr): asm-eff maybe<doc>
       else Just(gen-fun-def(name, args, comm, body))
     _ -> Nothing
 
-fun gen-fun-def(name: name, params: list<tName>, comm: doc, body: expr): asm-eff doc
+fun gen-fun-def(name: name, params: list<t-name>, comm: doc, body: expr): asm-eff doc
   val args = params.map(fn(p) p.get-name.js/pp-name)
   val isTailCall = body.is-tail-calling(name)
   val bodyDoc =
@@ -243,7 +243,7 @@ fun gen-assign-result(n: name, ml: maybe<name>, puredoc: doc, retdoc: doc): doc
   vcat([assign, brkDoc])
 
 fun try-tail-call(res: result, ex: expr): asm-eff maybe<doc>
-  fun matches(n: tName, info: var-info, args: list<expr>): bool
+  fun matches(n: t-name, info: var-info, args: list<expr>): bool
     match res
       ResultReturn(Just(m)) -> m == n.get-name && info.arity == args.length
       _ -> False
@@ -259,7 +259,7 @@ fun try-tail-call(res: result, ex: expr): asm-eff maybe<doc>
     _ -> Nothing
 
 // overriding function arguments carefully
-fun gen-override(params: list<tName>, args: list<expr>): asm-eff doc
+fun gen-override(params: list<t-name>, args: list<expr>): asm-eff doc
   val (stmts, varNames) = args.map(tail-call-arg).map(gen-var-binding).unzip
   val docs1 = params.map(gen-tname)
   val docs2 = varNames.map(gen-tname)
@@ -279,7 +279,7 @@ fun tail-call-arg(ex: expr): asm-eff expr
     val sub = captured.zip(cnames.map(fn(cn) Var(cn, InfoNone)))
     App(Lam(cnames, typeTotal, sub |-> ex), captured.map(fn(arg) Var(arg, InfoNone)))
 
-fun captured-var(ex: expr): div rbset<tName>
+fun captured-var(ex: expr): div rbset<t-name>
   match ex
     Lam -> ex.free-vars // we only care about captures inside a lambda
     Let(bgs, body) -> Cons(body.captured-var, bgs.map(captured-def-group)).unions
@@ -289,15 +289,15 @@ fun captured-var(ex: expr): div rbset<tName>
     TypeApp(e) -> e.captured-var
     _ -> tnames/empty
 
-fun captured-def-group(bg: def-group): div rbset<tName>
+fun captured-def-group(bg: def-group): div rbset<t-name>
   match bg
     DefRec(defs) -> defs.map(fn(d) d.defExpr.captured-var).unions - defs.map(dg/bound-vars-def).unions
     DefNonRec(def) -> def.defExpr.captured-var
 
-fun dg/bound-vars-def(d: def): rbset<tName>
+fun dg/bound-vars-def(d: def): rbset<t-name>
   tnames/empty + TName(d.def-name, d.ktype)
 
-fun captured-branch(Branch(pat, grds): branch): div rbset<tName>
+fun captured-branch(Branch(pat, grds): branch): div rbset<t-name>
   grds.map(fn(Guard(test, e)) test.captured-var.union(e.captured-var)).unions - pat.map(pat/bound-vars).unions
 
 // Generates a statement from an expression by applying a return context (deeply) inside
@@ -405,7 +405,7 @@ fun gen-branch(lastBranch: bool, res: result, tnDocs: list<doc>, Branch(patterns
       (conditions, gs.vcat |-| g)
     Nil -> failure/fail("backend/js/from-core gen-branch: no guards")
 
-fun get-substitutions(nameDoc: doc, pat: pattern): pure list<(tName, doc)>
+fun get-substitutions(nameDoc: doc, pat: pattern): pure list<(t-name, doc)>
   match pat
     PatCon(tn, args, repr, _, _, _, info) ->
       fun sub-of((pat': pattern, fname: doc))
@@ -484,7 +484,7 @@ fun gen-expr(ex: expr): asm-eff (doc, doc)
     App(Var(tname), [ELit(LitInt(i))]) | [nameInt64, nameIntPtrT].any(fn(nm) nm == tname.get-name) && i.is-small-int64 ->
       (pprint/empty, i.show.text |.| "n".text)
     // special: .cctx-field-addr-of: create a tuple with the object and the field name as a string
-    App(TypeApp(Var(cfieldOf), [_]), [Var(conName), ELit(LitString(_)), ELit(LitString(fieldName))]) | cfieldOf.get-name == nameFieldAddrOf ->
+    App(TypeApp(Var(cfieldOf), [_, _]), [Var(conName), ELit(LitString(_)), ELit(LitString(fieldName))]) | cfieldOf.get-name == nameFieldAddrOf ->
       val conDoc = gen-tname(conName)
       (pprint/empty, "{obj:".text |+| conDoc |.| ", field_name: \"".text |.| fieldName.qualified/read.unqualify.js/pp-name |.| "\"}".text)
     App(f, args) ->
@@ -540,7 +540,7 @@ fun gen-exprs(exprs: list<expr>): asm-eff (list<doc>, list<doc>)
 
 // Introduces an additional let binding in core if necessary
 // The expression in the result is guaranteed to be a Var afterwards
-fun gen-var-binding(ex: expr): asm-eff (doc, tName)
+fun gen-var-binding(ex: expr): asm-eff (doc, t-name)
   match ex
     Var(tn) -> (pprint/empty, tn)
     _ ->
@@ -597,27 +597,27 @@ fun gen-inline(ex: expr): asm-eff doc
             _ -> gen-inline(f) |.| argDocs.tupled
     _ -> failure/fail("backend/js/from-core gen-inline: invalid expression")
 
-fun extract-extern(ex: expr): maybe<(tName, string)>
+fun extract-extern(ex: expr): maybe<(t-name, string)>
   match ex
     TypeApp(Var(tname, InfoExternal(format))) -> Just((tname, format))
     Var(tname, InfoExternal(format)) -> Just((tname, format))
     _ -> Nothing
 
 // not fully applied external gets wrapped in a function
-fun gen-wrap-external(tname: tName, format: string): asm-eff doc
+fun gen-wrap-external(tname: t-name, format: string): asm-eff doc
   val n = tname.type-of.type-arities.snd
   val vs = gen-var-names(n)
   val (decls, doc) = gen-expr-external(tname, format, vs)
   ("function".text |.| vs.tupled |+| block((decls ++ ["return".text |+| doc |.| semi]).vcat)).parens
 
 // inlined external sometimes needs wrapping in an applied function block
-fun gen-inline-external(tname: tName, format: string, argDocs: list<doc>): asm-eff doc
+fun gen-inline-external(tname: t-name, format: string, argDocs: list<doc>): asm-eff doc
   val (decls, doc) = gen-expr-external(tname, format, argDocs)
   if decls.is-empty then doc
   else (("function()".text |+| block((decls ++ ["return".text |+| doc |.| semi]).vcat)).parens |.| "()".text).parens
 
 // generate external: adds a try block for primitives that can throw exceptions
-fun gen-expr-external(tname: tName, format: string, argDocs0: list<doc>): asm-eff (list<doc>, doc)
+fun gen-expr-external(tname: t-name, format: string, argDocs0: list<doc>): asm-eff (list<doc>, doc)
   val (decls, doc) = gen-expr-external-prim(tname, format, argDocs0)
   match tname.type-of.split-fun-type
     Nothing -> (decls, doc)
@@ -632,7 +632,7 @@ fun gen-expr-external(tname: tName, format: string, argDocs0: list<doc>): asm-ef
             ]))).parens |.| "()".text).parens
           ([], tryDoc)
 
-fun gen-expr-external-prim(tname: tName, format: string, argDocs0: list<doc>): asm-eff (list<doc>, doc)
+fun gen-expr-external-prim(tname: t-name, format: string, argDocs0: list<doc>): asm-eff (list<doc>, doc)
   // special case: .cctx-hole-create
   if tname.get-name == nameCCtxHoleCreate && argDocs0.is-empty then ([], "undefined".text)
   else
@@ -645,7 +645,7 @@ fun gen-expr-external-prim(tname: tName, format: string, argDocs0: list<doc>): a
         Cons(lastD, initRev) -> (initRev.reverse, lastD)
         Nil -> ([], pprint/empty)
 
-fun pp-external-f(tname: tName, k: list<char>, args: list<doc>): pure doc
+fun pp-external-f(tname: t-name, k: list<char>, args: list<doc>): pure doc
   match k
     Nil -> pprint/empty
     Cons('\\', Cons('#', xs)) -> '#'.char |.| pp-external-f(tname, xs, args)
@@ -659,7 +659,7 @@ fun pp-external-f(tname: tName, k: list<char>, args: list<doc>): pure doc
       else y.char |.| pp-external-f(tname, xs, args)
     Cons(x, xs) -> x.char |.| pp-external-f(tname, xs, args)
 
-fun gen-tname(tname: tName): asm-eff doc
+fun gen-tname(tname: t-name): asm-eff doc
   match subst-env.find(fn((tn, _)) tn == tname)
     Nothing -> gen-name(tname.get-name)
     Just((_, d)) -> d
@@ -677,7 +677,7 @@ fun gen-var-names(i: int): _ list<doc>
   list(1, i).map(fn(_) new-var-name("x").js/pp-name)
 
 // Generate a name with its type in comments
-fun gen-comment-tname(TName(n, t): tName): _ doc
+fun gen-comment-tname(TName(n, t): t-name): _ doc
   n.js/pp-name |+| t.ktp/pretty.comment
 
 fun trim-optional-args(args: list<expr>): list<expr>

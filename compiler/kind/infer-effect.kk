@@ -26,7 +26,7 @@ import std/data/rb-map
 pub type infer-kind-env
   InferKindEnv(
     imports: import-map,
-    kGamma: kGamma,
+    kGamma: k-gamma,
     infgamma: inf-kgamma,
     synonyms: synonyms,
     newtypesImported: newtypes,
@@ -57,7 +57,7 @@ pub fun allnewtypes(env: infer-kind-env)
 pub fun get-platform(): _ platform
   target-platform.tpl-platform
 
-pub fun run-kind-infer(tplatform: target-platform, moduleName: name, imports: import-map, kgamma: kGamma, syns: synonyms, datas: newtypes, f: () -> _ a): _ a
+pub fun run-kind-infer(tplatform: target-platform, moduleName: name, imports: import-map, kgamma: k-gamma, syns: synonyms, datas: newtypes, f: () -> _ a): _ a
   with val current-error-kind = ErrKind
   val imports' = match imports.extend(moduleName, moduleName)
     Just(imp) -> imp
@@ -119,7 +119,7 @@ pub fun extend-kgamma(rngs: list<range>, dg: compiler/core/core/typedef-group, f
     match tdef
       core/Synonym(syn-info) -> (syn-info.name, syn-info.kind, syn-info.doc)
       core/Data(ntInfo) -> (ntInfo.name, ntInfo.kind, ntInfo.doc)
-  fun check((kgamma: kGamma, tdefs: list<compiler/core/core/typedef>), (rng: range, tdef: compiler/core/core/typedef))
+  fun check((kgamma: k-gamma, tdefs: list<compiler/core/core/typedef>), (rng: range, tdef: compiler/core/core/typedef))
     if tdef.is-extension then (kgamma, tdefs)
     else
       val (nm, knd, doc) = nameKind(tdef)

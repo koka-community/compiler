@@ -94,7 +94,7 @@ pub fun main()
     // closure env and the inline section actually parses (with an empty env
     // `force-inlines` fails and returns [], which hides the interesting path).
     val out-dir = args.drop(1).head.default(".").path
-    val srcdirs = Module-dirs([".".path, "lib".path], [".".path, "lib".path].map(fn(d) d.realpath))
+    val srcdirs = ModuleDirs([".".path, "lib".path], [".".path, "lib".path].map(fn(d) d.realpath))
     val prog = parse-program-from-file(kki, False)
     val dcache = discover-deps(prog.imports.map(fn(i) i.fullName), srcdirs, target-platform-default, out-dir)
     val mods = preload-ifaces(flags-default(target = C(LibC)), out-dir, srcdirs, dcache, [], rb-map/empty())

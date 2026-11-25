@@ -87,7 +87,7 @@ pub type module-check
     // alongside the data types (`synonymCompletions`)
     syns: synonyms,
     // for the REPL's `:k` listing
-    kgam: kGamma)
+    kgam: k-gamma)
 
 // `@`-identifiers are permitted when lexing ANY module, not only primitive
 // ones and the synthesized `@main` module.
@@ -151,7 +151,7 @@ pub struct typed-module
   tcore: core
   gamma0: gamma
   newtypes: newtypes
-  kgamma: kGamma
+  kgamma: k-gamma
   rmap: range-map
   unique: int
 
@@ -919,7 +919,7 @@ fun load-unordered(fl: flags, out-dir: path, cands: list<name>, have0: bmodules)
       val cfile = out-dir / (nm.module-name-to-path ++ ".c").path
       val need-cfile = fl.target.is-c
       if need-cfile && !cfile.dir/is-file then Nothing
-      else Just(Load-req(nm, kki, at, if need-cfile then Just(cfile) else Nothing, rb-map/empty()))
+      else Just(LoadReq(nm, kki, at, if need-cfile then Just(cfile) else Nothing, rb-map/empty()))
   if reqs.is-nil then have0
   else
     val (got, n-workers) =
@@ -1281,7 +1281,7 @@ pub fun import-cycles(deps: list<(name, list<name>)>): div list<list<name>>
 
 // upstream `codeGen`'s `eimports`: the `library` declarations of a module and
 // of its direct imports (`bcore : importcores`)
-pub fun c-unit-eimports(mods: bmodules, c: core, bt: buildType): _ list<(string, maybe<string>, maybe<string>)>
+pub fun c-unit-eimports(mods: bmodules, c: core, bt: build-type): _ list<(string, maybe<string>, maybe<string>)>
   val cores = Cons(c, c.imports.filter-map(fn(i) mods.lookup(i.importName).map(fn(m) m.bmod/core)))
   nub-decls(cores.flatmap(fn(c2) clibs-of-core(c2, bt)))
 
@@ -1848,7 +1848,7 @@ pub fun compile-module(fl: flags, srcPath: path, outBase: path, isEntry: bool, m
       _ -> fl.typeCheckOnly && isEntry
     if stop-typed then
       return (Nothing, Just(ModTyped(core1, extract-gamma(data/is-value, False, core1),
-                                     Typed-module(progX, core1, gamma0, nt, kg, rmap, get-unique()))))
+                                     TypedModule(progX, core1, gamma0, nt, kg, rmap, get-unique()))))
     // `-l`/`--library`: compile only -- no entry point is created, linked, or
     // run (upstream: `mainEntries = if library flags then [] else ...`).
     // NOTE: `isEntry` still controls module NAMING and the show-info prints;
@@ -1925,7 +1925,7 @@ pub fun compile-module(fl: flags, srcPath: path, outBase: path, isEntry: bool, m
       // import names, so a module aliased under a second key appears once.
       val ordered = build-order(mods, coreForGen.imports.map(fn(i) i.importName))
       val cImports = ordered.filter-map fn((_, m))
-        m.bmod/cfile.map(fn(cf) C-unit(cf, c-unit-eimports(mods, m.bmod/core, fl.build-type)))
+        m.bmod/cfile.map(fn(cf) CUnit(cf, c-unit-eimports(mods, m.bmod/core, fl.build-type)))
       // ntFull, not nt: parc runs in the C backend and "analyzes types inside
       // abstract types" (upstream CodeGen comment) from INLINED imported code
       val tcg0 = cpu-ms()
@@ -1939,7 +1939,7 @@ pub fun compile-module(fl: flags, srcPath: path, outBase: path, isEntry: bool, m
         val docGamma = type/assumption/union(fullDefsGamma, extract-gamma(data/is-value, True, coreForGen))
         val md = with-pretty-env fn()
           colorize(srcPath, 1, read-source(srcPath, fl.includePath.map(path)),
-                   env = Html-env(progX.name, fl.htmlBases),
+                   env = HtmlEnv(progX.name, fl.htmlBases),
                    full-html = fl.outHtml > 1, gammas = Just((docGamma, kg)))
         write-text-file-atomic((outBase.string ++ ".md").path, md)
       elif fl.outHtml > 0 then
@@ -1949,7 +1949,7 @@ pub fun compile-module(fl: flags, srcPath: path, outBase: path, isEntry: bool, m
         val html = with-pretty-env fn()
           colorize(srcPath, 1, read-source(srcPath, fl.includePath.map(path)),
                    rmap = Just(rmap),
-                   env = Html-env(progX.name, fl.htmlBases),
+                   env = HtmlEnv(progX.name, fl.htmlBases),
                    full-html = fl.outHtml > 1,
                    css = fl.htmlCss.undelim-paths, js = fl.htmlJs)
         write-text-file-atomic((outBase.string ++ "-source.html").path, html)
@@ -1971,7 +1971,7 @@ pub fun compile-module(fl: flags, srcPath: path, outBase: path, isEntry: bool, m
         val docGamma = type/assumption/union(fullDefsGamma,
                                              extract-gamma(data/is-value, True, coreForGen))
         val xmp = with-pretty-env fn()
-          gen-doc(coreForGen, docKGamma, docGamma, env = Html-env(progX.name, fl.htmlBases),
+          gen-doc(coreForGen, docKGamma, docGamma, env = HtmlEnv(progX.name, fl.htmlBases),
                   // upstream writes each line with `writeLn`, so the document
                   // ends with a newline after `</html>`; Koka's `unlines` does not
                   css = fl.htmlCss.undelim-paths, js = fl.htmlJs).unlines ++ "\n"

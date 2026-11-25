@@ -118,7 +118,7 @@ pub struct flags
   heapSize: int = 0
   simplify: int = 5
   simplifyMaxDup: int = 10           // >= 10 to inline partial applications across binds
-  colorScheme: colorScheme = ColorScheme()
+  colorScheme: color-scheme = ColorScheme()
 
   buildDir: string = ""              // kkbuild
   buildTag: string = ""
@@ -238,7 +238,7 @@ pub fun flags/use-specialize(fl: flags): bool
   fl.optSpecialize && fl.optimize >= 1
 
 // Derived from optimize/debug, not stored
-pub fun flags/build-type(fl: flags): buildType
+pub fun flags/build-type(fl: flags): build-type
   if fl.optimize < 0 then DebugFull
   elif fl.optimize == 0 then Debug
   elif fl.debug then RelWithDebInfo
@@ -661,10 +661,10 @@ pub fun host-os-name(): ndet string
     "macos" -> "macos"
     _ -> "linux"
 
-// search `PATH` (with `extra` dirs prepended) for an executable literally
-// named `name` (upstream `searchPaths`/`findCC`/`findEditor`'s inner loop)
-pub fun search-path(name: string, extra: list<string> = []): <ndet,fsys> maybe<string>
-  val dirs = extra ++ get-env-value("PATH").default("").split(pathsep())
+// search `PATH` (with `extra` dirs prepended and `extra-after` dirs appended) for
+// an executable literally named `name` (upstream `searchPaths`/`findCC`/`findEditor`'s inner loop)
+pub fun search-path(name: string, extra: list<string> = [], extra-after: list<string> = []): <ndet,fsys> maybe<string>
+  val dirs = extra ++ get-env-value("PATH").default("").split(pathsep()) ++ extra-after
   fun try(ds: list<string>): <ndet,fsys> maybe<string>
     match ds
       Nil -> Nothing
@@ -677,6 +677,9 @@ pub fun search-path(name: string, extra: list<string> = []): <ndet,fsys> maybe<s
 // preferring `$CC`, then platform-appropriate defaults, then a generic
 // fallback list; "gcc" (unresolved) if nothing is found on PATH at all.
 pub fun detect-cc(t: target): <ndet,fsys> string
+  // find LLVM after an initial install, when its directory may not be on PATH yet
+  val has-llvm = get-env-value("PATH").default("").split(pathsep()).any(fn(d) d.to-lower.find("llvm").is-just)
+  val extra = if on-windows() && !has-llvm then ["C:\\Program Files\\LLVM\\bin"] else []
   val envCC = get-env-value("CC").default("")
   val candidates =
     (if t.is-target-wasm then ["emcc"] else []) ++
@@ -687,9 +690,11 @@ pub fun detect-cc(t: target): <ndet,fsys> string
   fun try(cs: list<string>): <ndet,fsys> string
     match cs
       Nil -> "gcc"
-      Cons(name, rest) -> match search-path(name)
-        Just(p) -> p
-        Nothing -> try(rest.pretend-decreasing)
+      Cons(name, rest) ->
+        val extra-after = if on-windows() && name.starts-with("clang").bool then ["C:/Program Files/LLVM/bin"] else []
+        match search-path(name, extra, extra-after)
+          Just(p) -> p
+          Nothing -> try(rest.pretend-decreasing)
   try(candidates)
 
 // Warn (not fail) when the resolved cc's path can't
@@ -723,9 +728,13 @@ pub fun cc-from-path(fl: flags, cmdPath: string): <ndet,console> (cc, bool)
       ccTargetObj = fn(fname) ["-o", fname.strip-ext ++ target-obj-extension(fl.target)],
       ccObjFile = fn(fname) fname ++ target-obj-extension(fl.target),
       ccLibFile = fn(fname) target-lib-file(fl.target, fname))
+  val macos = on-macos()
   val clang = gcc(ccFlagsWarn = gnu-warn ++
       ["-Wno-cast-qual","-Wno-undef","-Wno-reserved-id-macro","-Wno-unused-macros","-Wno-cast-align"] ++
-      (if on-macos() && fl.targetArch == "arm64" then ["-Wno-unknown-warning-option"] else []))
+      (if macos && fl.targetArch == "arm64" then ["-Wno-unknown-warning-option"] else []),
+    ccFlagsOpt = fn(opt, cpuArch) (gcc.ccFlagsOpt)(opt, cpuArch) ++
+      (if macos && opt >= 2 && cpuArch == "arm64" then ["-mno-outline","-Xclang","-fno-split-cold-code"] else []) ++
+      (if opt >= 2 && cpuArch == "arm64" then ["-falign-functions=64"] else []))
   // PORT-SPECIFIC: clang for a wasm target is wasi-sdk's (clang with wasi-libc).
   // Upstream only has emcc for wasm, but emscripten's standalone WASI output has
   // no file system (its `open` accepts only the standard streams), which a

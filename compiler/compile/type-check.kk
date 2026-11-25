@@ -56,7 +56,7 @@ import compiler/common/name-collections
 // also returns the gamma (upstream re-derives it in Build; the port's caller
 // needs it for inline parsing and optimize) and the extended newtypes.
 pub fun type-check(fl: flags, defs: definitions, coreImports: list<core/core/kimport>, program0: user-program)
-  : _ (core, gamma, newtypes, kGamma)
+  : _ (core, gamma, newtypes, k-gamma)
   val progName = program0.name
 
   // import map

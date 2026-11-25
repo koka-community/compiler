@@ -38,7 +38,7 @@ fun run-inline-defs(defs: def-groups, inline-max: int, inls0: inlines): _ def-gr
 // simplification (beta-reduction etc.) run between the two inlining passes so
 // that inlined applications can reduce and expose further inline candidates.
 fun local-simplify(defs1: def-groups): _ def-groups
-  with val simp-env = Simp-settings(False, True, 0)
+  with val simp-env = SimpSettings(False, True, 0)
   simplifyN(3, defs1)
 
 // transform definition groups

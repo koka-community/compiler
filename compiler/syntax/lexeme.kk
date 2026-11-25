@@ -222,7 +222,7 @@ pub struct lex-import
   is-open: bool
   name-range: range
 
-fun lex-import/show(Lex-import(nm, al, vis, open): lex-import): string
+fun lex-import/show(LexImport(nm, al, vis, open): lex-import): string
   (if vis.is-public then "pub " else "") ++
   (if open then "@open" else "") ++
   (if al.is-nil then "" else al.show ++ " = ") ++
@@ -239,7 +239,7 @@ fun lex-import-nub(l: list<lex-import>): list<lex-import>
       match lis.find(fn(i2) li == i2)
         Just(li') -> 
           val li2 =
-            Lex-import(
+            LexImport(
               li.name,
               if li.imp-alias.is-nil then li'.imp-alias else li.imp-alias,
               if li.vis.is-public || li'.vis.is-public then Public else Private,

@@ -1009,7 +1009,7 @@ pub fun pp-or(names : list<name>) : _ doc
 /////////////////////////////////////
 // Inference Effect
 /////////////////////////////////////
-pub struct inferEnv
+pub struct infer-type-env
   contxt: name // module name
   currentDefNames: list<name>
   namedLam: bool
@@ -1138,8 +1138,8 @@ pub fun with-def-name(nm: name, action: () -> _ a): _ a
   with override val infer-env = infer-env(currentDefNames = Cons(nm, infer-env.currentDefNames), namedLam = !(nm.is-nil || nm.is-wildcard) )
   action()
 
-pub effect val infer-env: inferEnv
-pub fun with-env(env: inferEnv, action: () -> _ a): _ a
+pub effect val infer-env: infer-type-env
+pub fun with-env(env: infer-type-env, action: () -> _ a): _ a
   with override val infer-env = env
   action()
 

@@ -31,7 +31,7 @@
 //  - `filterMaybe`/`whenJust` maybe-monad plumbing is inlined into direct
 //    `match`/early-`return` control flow.
 //  - `uniqueSimplify defaultEnv False False 1 10` maps to one pass of
-//    simplify.kk's `expr/simplify` under `Simp-settings(False, False, 10)`.
+//    simplify.kk's `expr/simplify` under `SimpSettings(False, False, 10)`.
 //  - `usedInThisDef` is defined-but-unused upstream and is ported as such.
 
 module compiler/core/specialize
@@ -225,12 +225,12 @@ fun good-arg(e: expr): _ bool
 //--------------------------------------------------------------------------
 
 struct sic
-  sic-from: tName
-  sic-to: tName
+  sic-from: t-name
+  sic-to: t-name
   sic-spec: list<bool>          // which params are specialized away
-  sic-spec-names: list<tName>   // the specialized parameter names
+  sic-spec-names: list<t-name>   // the specialized parameter names
 
-fun spec-inner-calls(from: tName, to: tName, isSpecParam: list<bool>, specParamNames: list<tName>, e: expr): _ expr
+fun spec-inner-calls(from: t-name, to: t-name, isSpecParam: list<bool>, specParamNames: list<t-name>, e: expr): _ expr
   sic-expr(Sic(from, to, isSpecParam, specParamNames), e)
 
 // `Var to (InfoArity 0 arityTo)` where arityTo counts the *kept* parameters
@@ -240,7 +240,7 @@ fun sic-var-to(s: sic): expr
 fun sic-match-spec-param-names(s: sic, args: list<expr>): _ bool
   args.length == s.sic-spec-names.length && s.sic-spec-names.zip(args).all(sic-eq-var)
 
-fun sic-eq-var(pa: (tName, expr)): _ bool
+fun sic-eq-var(pa: (t-name, expr)): _ bool
   val (nm, arg) = pa
   match arg
     Var(v, _) -> nm == v
@@ -403,7 +403,7 @@ fun has-spec-residual(nm: name, bools: list<bool>, e0: expr): pure bool
 // One simplification
 // pass, unsafe=False, ndebug=False, duplication max 10 (Pretty.Env dropped)
 fun spec-simplify(e: expr): <unique, pure, comp-flags> expr
-  with val simp-env = Simp-settings(False, False, 10)
+  with val simp-env = SimpSettings(False, False, 10)
   e.expr/simplify
 
 // Prefix every line with "// "
@@ -419,7 +419,7 @@ fun fn-type-params(e: expr): _ list<type-var>
     TypeLam(typeParams, _) -> typeParams
     _ -> failure/fail("core/specialize fn-type-params: not a function: " ++ e.show)
 
-fun fn-params(e: expr): _ list<tName>
+fun fn-params(e: expr): _ list<t-name>
   match e
     Lam(params, _, _) -> params
     TypeLam(_, Lam(params, _, _)) -> params
@@ -482,26 +482,26 @@ fun make-specialize(d: def): _ maybe<inline-def>
   if !specializableParams.any(is-just) then return Nothing
   Just(InlineDef(d.def-name, d.defExpr, True, InlineAuto, d.cost, d.sort, specializableParams.map(is-just)))
 
-fun keep-fun-param(mb: maybe<tName>): _ maybe<tName>
+fun keep-fun-param(mb: maybe<t-name>): _ maybe<t-name>
   match mb
     Just(tn) -> if tn.type-of.spec-is-fun then Just(tn) else Nothing
     Nothing -> Nothing
 
-fun all-passed-in-same-order(params: list<tName>, calls: list<list<expr>>): _ list<maybe<tName>>
+fun all-passed-in-same-order(params: list<t-name>, calls: list<list<expr>>): _ list<maybe<t-name>>
   calls.map(fn(c) passed-in-same-order(params, c)).spec-transpose.map(same-order-column)
 
 // `fmap head . sequence`: Just the (shared) param name when every call passes
 // it in place (head is safe upstream since transposed sublists are non-empty;
 // here the impossible empty case simply yields Nothing)
-fun same-order-column(col: list<maybe<tName>>): maybe<tName>
+fun same-order-column(col: list<maybe<t-name>>): maybe<t-name>
   match col.sequence-maybes
     Just(Cons(x, _)) -> Just(x)
     _ -> Nothing
 
-fun passed-in-same-order(params: list<tName>, args: list<expr>): list<maybe<tName>>
+fun passed-in-same-order(params: list<t-name>, args: list<expr>): list<maybe<t-name>>
   params.zipwith(args, same-order-arg)
 
-fun same-order-arg(param: tName, arg: expr): maybe<tName>
+fun same-order-arg(param: t-name, arg: expr): maybe<t-name>
   match arg
     Var(v, _) | v == param -> Just(v)
     _ -> Nothing
@@ -512,7 +512,7 @@ fun spec-is-fun(tp: ktype): bool
 fun used-in-this-def(d: def): _ name-set
   rb-set/from-list(d.defExpr.spec-fold-map(used-var).map(get-name))
 
-fun used-var(e: expr): list<tName>
+fun used-var(e: expr): list<t-name>
   match e
     Var(v, _) -> [v]
     _ -> []
@@ -573,19 +573,19 @@ fun calls-specializable(inls: inlines, d: def): _ maybe<list<bool>>
     TypeLam(_, Lam) -> calls-specializable-params(inls, d, fn-params(d.defExpr))
     _ -> Nothing
 
-fun calls-specializable-params(inls: inlines, d: def, params: list<tName>): _ maybe<list<bool>>
+fun calls-specializable-params(inls: inlines, d: def, params: list<t-name>): _ maybe<list<bool>>
   val hits = d.defExpr.spec-fold-map(fn(e) specializable-call(inls, d.def-name, params, e))
   match hits
     Cons(x, _) -> Just(x)
     Nil -> Nothing
 
-fun specializable-call(inls: inlines, dname: name, params: list<tName>, e: expr): _ list<list<bool>>
+fun specializable-call(inls: inlines, dname: name, params: list<t-name>, e: expr): _ list<list<bool>>
   match e
     App(Var(v, _), args) -> spec-call-overlap(inls, dname, params, v.get-name, args)
     App(TypeApp(Var(v, _), _), args) -> spec-call-overlap(inls, dname, params, v.get-name, args)
     _ -> []
 
-fun spec-call-overlap(inls: inlines, dname: name, params: list<tName>, nm: name, args: list<expr>): _ list<list<bool>>
+fun spec-call-overlap(inls: inlines, dname: name, params: list<t-name>, nm: name, args: list<expr>): _ list<list<bool>>
   match inls.lookup(nm)
     Nothing -> []
     Just(idef) ->
@@ -595,7 +595,7 @@ fun spec-call-overlap(inls: inlines, dname: name, params: list<tName>, nm: name,
       val overlap = params.map(fn(p) argVars.any(fn(v) v == p))
       if overlap.any(id) then [overlap] else []
 
-fun spec-vars(e: expr): _ list<tName>
+fun spec-vars(e: expr): _ list<t-name>
   e.spec-fold-map(used-var)
 
 //--------------------------------------------------------------------------

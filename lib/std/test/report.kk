@@ -96,7 +96,7 @@ pub fun color-reporter(action: () -> <test-report,io|e> ()): <io|e> ()
           println-colored(" - " ++ name, Red)
 
   with mask<printer>
-  with mask<coloredPrinter>
+  with mask<colored-printer>
   // see `plain-reporter`: `mask<local>` added `local<h>` to a row declared `<io|e>`
   action()
 

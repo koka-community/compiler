@@ -32,11 +32,11 @@ import std/os/env
 import std/core/debug
 import std/data/rb-set
 
-fun externalNames(): _ list<(tName, doc)>
+fun externalNames(): _ list<(t-name, doc)>
   [(exprTrue.con-name, "true".text), (exprFalse.con-name, "false".text)]
 
 // Generate C code from System-F core language
-pub fun cFromCore(cTarget: cTarget, b: buildType, sourceDir: path,
+pub fun cFromCore(cTarget: c-target, b: build-type, sourceDir: path,
               platform: platform, nt: newtypes, borrowed: borrowed, enableReuse: bool,
               enableSpecialize: bool, enableReuseSpecialize: bool, enableBorrowInference: bool,
               eagerPatBind: bool, stackSize: int, mbMain: maybe<(name, bool)>,
@@ -63,7 +63,7 @@ pub fun cFromCore(cTarget: cTarget, b: buildType, sourceDir: path,
       val res = rtdoc.reverse.vcat
       rtdoc := []
       res
-    fun addCanonical(c: canonicalLambda) 
+    fun addCanonical(c: canonical-lambda) 
       if canonicalLamTypes.any(fn(x) x == c) then False
       else
         canonicalLamTypes := Cons(c, canonicalLamTypes)

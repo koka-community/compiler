@@ -130,10 +130,10 @@ fun lift-branch(Branch(pat, guards): branch)
 fun lift-guard(Guard(test, expr): guard)
   Guard(test.lift-expr(False), expr.lift-expr(False))
 
-fun make-def(fvs: list<tName>, tvs: list<type-var>, pinfos: list<param-info>, origName: tName, (expr, doc): (expr, string))
+fun make-def(fvs: list<t-name>, tvs: list<type-var>, pinfos: list<param-info>, origName: t-name, (expr, doc): (expr, string))
   val dnames = current-def-names()
   val (name, inl) = unique-name-current-def()
-  fun unwild(TName(nm, tp): tName)
+  fun unwild(TName(nm, tp): t-name)
     TName(if nm.is-wildcard then nm.un-wildcard else nm, tp) 
   val (tpars, pars, eff, body) = match expr
     TypeLam(tpars, Lam(pars, eff, lbody)) -> (tpars, pars.map(unwild), eff, lbody)

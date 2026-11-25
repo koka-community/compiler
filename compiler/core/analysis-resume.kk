@@ -28,10 +28,10 @@ val resumeName = TName(new-name("resume"), typeVoid)
 val resumeShallowName = TName(new-name("resume-shallow"), typeVoid)
 val finalizeName = TName(new-name("finalize"), typeVoid)
 
-fun is-resuming-elem(s: rbset<tName>)
+fun is-resuming-elem(s: rbset<t-name>)
   s.member(resumeName) || s.member(finalizeName) || s.member(resumeShallowName)
 
-fun tname/is-resuming(t: tName)
+fun tname/is-resuming(t: t-name)
   t == resumeName || t == finalizeName || t == resumeShallowName
 
 fun name/is-resuming(t: name)

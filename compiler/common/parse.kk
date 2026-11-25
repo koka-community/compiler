@@ -638,11 +638,11 @@ fun parse-fip-alloc(): _ (fip-alloc, range)
    { (AllocAtMost(0), null) }
   ])
 
-pub fun parse-tail-fip(): _ (fipT, range)
+pub fun parse-tail-fip(): _ (fip-t, range)
   val (isTail, rng) = parse-choices("tail", [{(True, parse-special-id("tail"))}, {(False, null)}])
   parse-fip-ex(rng, isTail)
 
-fun parse-fip-ex(rng0: range, isTail: bool): _ (fipT, range)
+fun parse-fip-ex(rng0: range, isTail: bool): _ (fip-t, range)
   parse-choices("fip", [{
       val rng1 = parse-special-id("fip")
       val (alloc, rng2) = parse-fip-alloc()

@@ -28,7 +28,7 @@ pub fun recdef/unroll(d: def)
     _ -> []
   if dgs.is-nil then [DefRec([d])] else dgs
 
-pub fun body/unroll(d: def, tpars: list<type-var>, pars: list<tName>, eff: keffect, body: expr)
+pub fun body/unroll(d: def, tpars: list<type-var>, pars: list<t-name>, eff: keffect, body: expr)
   match body
     // `Case exprs (branches@((Branch pats _):(_:_)))`: at least TWO
     // branches. Matching one-or-more is NOT equivalent: with a single branch
@@ -60,7 +60,7 @@ pub fun body/unroll(d: def, tpars: list<type-var>, pars: list<tName>, eff: keffe
         _ -> []
     _ -> [] // TODO: small let bindings?
 
-fun extract-nonrec-branches(dname: tName, recs: list<branch>, bs: list<branch>): _ (list<branch>, list<branch>)
+fun extract-nonrec-branches(dname: t-name, recs: list<branch>, bs: list<branch>): _ (list<branch>, list<branch>)
   match bs
     // Stop on end
     Nil -> (Nil, recs)
@@ -112,5 +112,5 @@ fun dont-skip(Branch(pats, guards): branch)
   Branch(pats.map(no-skip), guards)
 
 // Don't call `std/core`'s `unique()`! That makes builds non-deterministic
-fun unique-tname-from(tn: tName): _ tName
+fun unique-tname-from(tn: t-name): _ t-name
   TName(to-hidden-unique-name(new-unique(), "unroll", tn.get-name), tn.type-of)

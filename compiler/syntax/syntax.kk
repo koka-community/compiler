@@ -66,7 +66,7 @@ pub type external
     range: range,
     inlineCall: external-call, // external (already resolved for the target platform)
     vis: visibility,
-    fipAnnot: fipT,
+    fipAnnot: fip-t,
     doc: string)
   ExternalImport(
     eImport: list<(string, string)>, // key/value pairs (already resolved for the target platform)
@@ -169,7 +169,7 @@ pub type user-con<t, u, k>
     existentials: list<type-binder<k>>,
     params: list<(visibility, value-binder<t, maybe<expr<u>>>)>,
     result: maybe<t>, // used internally for limited GADT's (for now)
-    mblazy: maybe<(fipT, expr<u>)>, // lazy constructor?
+    mblazy: maybe<(fip-t, expr<u>)>, // lazy constructor?
     name-range: range,
     range: range, // full range
     vis: visibility,

@@ -311,7 +311,7 @@ fun pDefDecl()
   parse-keyword(":")
   val (tp, pinfos) = parse-def-type()
   val sort = match sort0
-    DefFun(_, fipT) -> DefFun(pinfos, fipT)
+    DefFun(_, fip-t) -> DefFun(pinfos, fip-t)
     _ -> sort0
   Def(qualify(modname, name), tp, exprUnit, vis, sort, inl, range, doc)
 
@@ -320,10 +320,10 @@ fun pDefSort()
   val inl = parse-inline()
   parse-choices("fip info", [
     {
-      val (fipT, _) = parse-try(parse-tail-fip)
+      val (fip-t, _) = parse-try(parse-tail-fip)
       val (_, doc) = parse-doc-keyword("fun")
       parse-choices-nb("specialization", [{parse-special-op("**"); ()}, {parse-special-op("*"); ()}, {()}])
-      (def-fun-ex([], fipT), inl, isRec, doc)
+      (def-fun-ex([], fip-t), inl, isRec, doc)
     },
     {(DefVal, inl, False, parse-doc-keyword("val").snd)}
   ])
@@ -335,7 +335,7 @@ fun parse-inline-def()
   InlineDef(env-qualify(name), e, isRec, inl, if inl.is-inlineAlways then 0 else e.cost, sort, specArgs)
 
 fun parse-extern-decl()
-  val (vis, fipT, doc) = parse-try({(parse-visibility(), parse-tail-fip().fst, parse-doc-keyword("extern").snd)})
+  val (vis, fip-t, doc) = parse-try({(parse-visibility(), parse-tail-fip().fst, parse-doc-keyword("extern").snd)})
   val (name, _) = parse-fun-id()
   val rng = parse-range()
   parse-keyword(":")
@@ -347,7 +347,7 @@ fun parse-extern-decl()
       // (`pwarningMessage ("unsupported external " ++ show name) range`)
       pwarning-message("unsupported external " ++ name.show, rng)
       unsupported-external(name.show)
-  External(qualify(modname, name), tp, pinfos, format, vis, fipT, rng, doc)
+  External(qualify(modname, name), tp, pinfos, format, vis, fip-t, rng, doc)
 
 fun parse-external-body(): _ maybe<string>
   parse-choices("external body", [

@@ -31,7 +31,7 @@ pub linear effect printer
   fun flush(): ()
 
 // A colored printer has additional coloring and formatting options
-pub linear effect coloredPrinter
+pub linear effect colored-printer
   fun push-color-settings(s: print-color-settings): ()
   fun pop-color-settings(): ()
   fun update-push-color-settings(f: print-color-settings -> print-color-settings): ()
@@ -205,7 +205,7 @@ pub fun string-printer(action: () -> <printer|e> ()): e string
 // Use a color printer that uses ANSI escape sequences.
 
 pub fun ansi-color-settings(action)
-  var settings := [Print-color-settings()]
+  var settings := [PrintColorSettings()]
   with handler
     fun push-color-settings(s)
       match settings
@@ -312,7 +312,7 @@ pub fun html-color-string-printer(action)
 // closes exactly the spans its push opened, so the enclosing settings apply
 // again. `settings` holds each level's settings and its number of open spans.
 pub fun html-color-settings(action)
-  var settings := [(Print-color-settings(),0)]
+  var settings := [(PrintColorSettings(),0)]
   with handler
     fun push-color-settings(new)
       match settings

@@ -137,7 +137,7 @@ pub fun pp-error-severity(sev: error-severity, ekind: error-kind): _ doc
     ErrBuild -> "build "
     ErrInternal -> "internal "
     _ -> ""
-  fun header(clr: colorScheme -> color, txt: string)
+  fun header(clr: color-scheme -> color, txt: string)
     text(ekindTxt ++ txt ++ ":").color(clr(colors))
   match sev
     SevError -> header(colorError, "error")

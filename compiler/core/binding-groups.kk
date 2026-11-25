@@ -15,8 +15,8 @@ import compiler/common/name-collections
 // Re-analyze a recursive binding group just after type checking.
 // Due to overloading, functions that seem mutually recursive may not
 // actually be mutually recursive after the types are resolved.
-alias deps = rbmap<tName, rbset<tName>>
-alias freeVar = rbset<tName>
+alias deps = rbmap<t-name, rbset<t-name>>
+alias free-var = rbset<t-name>
 
 // Re-analyze a recursive binding group and return a list of new
 // definition groups. After type checking it is possible that definitions
@@ -49,8 +49,8 @@ pub fun regroup(dfs: list<def>): _ list<def-group>
           _ -> DefRec(names.map(defMap.get(_)))
       defOrder.map(makeGroup)
 
-fun find(nameMap: list<(tName, b)>, nm: tName): _ b
-  match find(nameMap, fn(n: (tName,b)) n.fst == nm)
+fun find(nameMap: list<(t-name, b)>, nm: t-name): _ b
+  match find(nameMap, fn(n: (t-name,b)) n.fst == nm)
     Just(x) -> x.snd
     _ -> failure/fail("core/binding-groups find: could not find: " ++ nm.show)
 

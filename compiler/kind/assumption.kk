@@ -12,7 +12,7 @@ import compiler/platform/config
 import std/data/sort
 import std/data/rb-map
 
-pub alias kGamma = qname-map<type-name-info>;
+pub alias k-gamma = qname-map<type-name-info>;
 
 pub type type-name-info
   TypeNameInfo(
@@ -20,15 +20,15 @@ pub type type-name-info
     doc: string
   )
 
-pub effect kGammaEff
+pub effect k-gamma-eff
   fun kgamma-extend(name: name, k: kind, d: string): ()
   fun kgamma-lookup(ctxt: name, name: name): lookup<(kind,string)>
   fun kgamma-lookupQ(name: name): maybe<type-name-info>
   fun kgamma-find(ctxt: name, name: name): (name, kind, string)
   fun kgamma-list(): list<(name, list<(name, type-name-info)>)>
-  fun kgamma-filter(modName: name): kGamma
+  fun kgamma-filter(modName: name): k-gamma
 
-fun withKGamma(kg0: kGamma, f: () -> _ a): _ a
+fun withKGamma(kg0: k-gamma, f: () -> _ a): _ a
   var kg := kg0
   with handler
     fun kgamma-extend(name: name, k: kind, d: string) kg := kg.extend(name, k, d)
@@ -43,26 +43,26 @@ fun withKGamma(kg0: kGamma, f: () -> _ a): _ a
     fun kgamma-filter(modName: name) kg.filter(modName)
   f()
 
-pub fun kgamma/new-nub(xs: list<(name,kind,string)>): _ kGamma
+pub fun kgamma/new-nub(xs: list<(name,kind,string)>): _ k-gamma
   xs.foldl(empty, fn(m,(n,k,d)) if m.contains-key(n) then m else m.insert(n,TypeNameInfo(k,d)))
-pub fun kgamma/extend(kg: kGamma, name: name, k: kind, doc: string)
+pub fun kgamma/extend(kg: k-gamma, name: name, k: kind, doc: string)
   kg.insert(name, TypeNameInfo(k, doc))
-pub fun kgamma/find(kg: kGamma, ctxt: name, name: name)
+pub fun kgamma/find(kg: k-gamma, ctxt: name, name: name)
   match kg.lookup(ctxt, name)
     Found((qn, TypeNameInfo(k, doc))) -> (qn, k, doc)
     _ -> failure/fail("kind lookup failed")
-pub fun kgamma/filter(kg: kGamma, modName: name)
+pub fun kgamma/filter(kg: k-gamma, modName: name)
   kg.filter-names(_ == modName)
 
-pub val kgamma/empty:kGamma = rb-map/empty()
+pub val kgamma/empty:k-gamma = rb-map/empty()
 
-pub fun core/extract-typedefs(c: core): _ kGamma
+pub fun core/extract-typedefs(c: core): _ k-gamma
   c.typedefs.map(extract-typedefs).qname-map/unions
 
-pub fun tdg/extract-typedefs(g: typedef-group): _ kGamma
+pub fun tdg/extract-typedefs(g: typedef-group): _ k-gamma
   g.map(extract-typedefs).qname-map/unions
 
-pub fun td/extract-typedefs(d: typedef): kGamma
+pub fun td/extract-typedefs(d: typedef): k-gamma
   match d
     Synonym(syn-info) | syn-info.vis.is-public -> single(syn-info.name, TypeNameInfo(syn-info.kind, syn-info.doc))
     Data(dataInfo) | dataInfo.vis.is-public && !dataInfo.is-extend -> single(dataInfo.name, TypeNameInfo(dataInfo.kind, dataInfo.doc))

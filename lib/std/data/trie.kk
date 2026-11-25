@@ -61,12 +61,12 @@ fun lookup-node(t: trie, k: sslice, kcount: int): maybe<string>
 pub fun add(t: trie, s: string): trie
   insert-loop(t, s.slice, s, s.slice.count, Done)
 
-type trieZipper
+type trie-zipper
   Done
-  Child(path: string, path-len: int, value: string, is-final: bool, children: list<(char,trie)>, key: char, up: trieZipper)
+  Child(path: string, path-len: int, value: string, is-final: bool, children: list<(char,trie)>, key: char, up: trie-zipper)
 
-fun insert-loop(t: trie, k: sslice, original: string, kcount: int, z: trieZipper): trie
-  tail fun zip-up(zipper: trieZipper, t': trie): trie
+fun insert-loop(t: trie, k: sslice, original: string, kcount: int, z: trie-zipper): trie
+  tail fun zip-up(zipper: trie-zipper, t': trie): trie
     match zipper
       Done -> t'
       Child(p, pl, v, f, m, k', up) -> zip-up(up, Trie(p, pl, v, f, m.child/set(k', t')))

@@ -83,11 +83,11 @@ pub fun defgroups/group-bindings(dgs: list<def-group<t>>): _ list<def-group<t>>
   val deps = deps1.map(fn(k, v) extend(k, v))
   group-bindings(defs, deps)
 
-alias extraDeps = name-map<list<name>>; // maps base names (`eq`) to internally qualified names (`int/eq`, `char/eq`)
+alias extra-deps = name-map<list<name>>; // maps base names (`eq`) to internally qualified names (`int/eq`, `char/eq`)
 
 // combine extra-dependency maps, concatenating the name lists on key collision
 // For example: `eq -> [int/eq, list/eq]` keeps both
-fun ed/unions(ms: list<extraDeps>): extraDeps
+fun ed/unions(ms: list<extra-deps>): extra-deps
   ms.foldl(rb-map/empty(), fn(acc, m) acc.union-with(m, fn(xs, ys) list/(++)(xs, ys)))
 
 // Combine dependency maps, taking the SET UNION of the free-var sets on key
@@ -97,15 +97,15 @@ fun ed/unions(ms: list<extraDeps>): extraDeps
 fun deps/unions(ms: list<deps>): deps
   ms.foldl(rb-map/empty(), fn(acc, m) acc.union-with(m, fn(s1 : name-set, s2 : name-set) s1.union(s2)))
 
-fun def-groups/extract(dgs: list<def-group<t>>): exn extraDeps
+fun def-groups/extract(dgs: list<def-group<t>>): exn extra-deps
   dgs.map(ee).ed/unions
 
-fun defgroup/ee(d0: def-group<t>): exn extraDeps
+fun defgroup/ee(d0: def-group<t>): exn extra-deps
   match d0
     DefNonRec(d) -> d.def/ee
     DefRec(defs) -> defs.map(def/ee).ed/unions
 
-fun def/ee(d: def<t>): extraDeps
+fun def/ee(d: def<t>): extra-deps
   val nm = d.binder.name
   if nm.is-locally-qualified then rb-map/from-list([(nm.unqualify-full, [nm])])
   else rb-map/empty()

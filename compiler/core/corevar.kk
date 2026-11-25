@@ -34,7 +34,7 @@ pub fun beta/add-type-apps(ts: list<type-var>, e: expr): total expr
     _ -> TypeApp(e, ts.map(TVar))
 
 // upstream `tnamesList` = `S.toList`: name order, which the set iterates in
-pub fun tnames-list(ts: rbset<tName>): list<tName>
+pub fun tnames-list(ts: rbset<t-name>): list<t-name>
   ts.list
 
 // Type-variable id order (`tvs` is an int-map whose `list`
@@ -54,10 +54,10 @@ pub fun expr/free-locals(e: expr)
 pub fun branch/free-locals(b: branch)
   b.free-vars.filter(fn(TName(nm)) !nm.is-qualified)
 
-pub fun list/free-vars(l: list<a>, ?free-vars: (a) -> _ rbset<tName>): _ rbset<tName>
+pub fun list/free-vars(l: list<a>, ?free-vars: (a) -> _ rbset<t-name>): _ rbset<t-name>
   l.map(free-vars).unions
 
-pub fun expr/free-vars(e0: expr): _ rbset<tName>
+pub fun expr/free-vars(e0: expr): _ rbset<t-name>
   match e0
     Lam(tnames, _, e) -> e.free-vars - tnames
     Var(tn) -> tnames/empty + tn
@@ -69,53 +69,53 @@ pub fun expr/free-vars(e0: expr): _ rbset<tName>
     Let(dfgps, e) -> free-vars(dfgps, e)
     Case(exprs, bs) -> exprs.free-vars + bs.map(free-vars).unions
 
-pub fun branch/free-vars(Branch(patterns, guards): branch): _ rbset<tName>
+pub fun branch/free-vars(Branch(patterns, guards): branch): _ rbset<t-name>
   guards.map(free-vars).unions - patterns.map(bound-vars).unions
 
-pub fun guard/free-vars(Guard(test, expr): guard): _ rbset<tName>
+pub fun guard/free-vars(Guard(test, expr): guard): _ rbset<t-name>
   test.free-vars + expr.free-vars
 
-pub fun pat/bound-vars(p: pattern): _ rbset<tName>
+pub fun pat/bound-vars(p: pattern): _ rbset<t-name>
   match p
     PatCon(_, args) -> args.map(bound-vars).unions
     PatVar(tn, subpat) -> (tnames/empty + tn) + subpat.bound-vars // also bind sub-pattern vars
     PatLit -> tnames/empty
     PatWild -> tnames/empty
 
-pub fun dgs/free-vars(def-groups: def-groups, e: expr): _ rbset<tName>
+pub fun dgs/free-vars(def-groups: def-groups, e: expr): _ rbset<t-name>
   match def-groups
     [] -> e.free-vars
     Cons(dg, dgs) -> 
-      val fv1: rbset<tName> = (free-vars(dgs, e) - dg.bound-vars)
+      val fv1: rbset<t-name> = (free-vars(dgs, e) - dg.bound-vars)
       dg.free-vars + fv1
 
 // A DefRec subtracts its OWN bound names (the recursive defs reference themselves/each other; those are not free).
-pub fun dg/free-vars(defg: def-group): _ rbset<tName>
+pub fun dg/free-vars(defg: def-group): _ rbset<t-name>
   match defg
     DefRec(defs) -> defs.map(free-vars).unions - defs.map(bound-vars).unions
     DefNonRec(d) -> d.free-vars
 
-pub fun dg/bound-vars(defg: def-group): _ rbset<tName>
+pub fun dg/bound-vars(defg: def-group): _ rbset<t-name>
   defg.flatten.map(bound-vars).unions
 
-pub fun def/bound-vars(Def(nm, tp): def): _ rbset<tName>
+pub fun def/bound-vars(Def(nm, tp): def): _ rbset<t-name>
   tnames/empty + TName(nm, tp)
 
-pub fun def/free-vars(Def(_, _, e): def): _ rbset<tName>
+pub fun def/free-vars(Def(_, _, e): def): _ rbset<t-name>
   e.free-vars
 
 // Term substitutions
 
 // A substitution that rewrites each occurrence of a variable: the replacement
 // for `x` gets the occurrence, `Var x`, or `TypeApp (Var x) targs` as a whole.
-pub alias occ-subst = list<(tName, (expr) -> div expr)>
+pub alias occ-subst = list<(t-name, (expr) -> div expr)>
 
 // `|->` substitutes variables; an occurrence keeps the type arguments it is
 // applied to. `subst-occurrences` is the substitution behind it. It stops at a
 // binder that rebinds a name: names are not always unique (a fresh name can
 // coincide with a binder minted by another counter), and substituting past a
 // rebinding captures its occurrences.
-fun keep-type-args(sub: list<(tName, expr)>): occ-subst
+fun keep-type-args(sub: list<(t-name, expr)>): occ-subst
   sub.map fn((nm, e))
     fun replace(occurrence: expr): div expr
       match occurrence
@@ -127,22 +127,22 @@ fun keep-type-args(sub: list<(tName, expr)>): occ-subst
 fun unbind-names(sub: occ-subst, names: list<name>): occ-subst
   sub.filter(fn((nm, _)) !names.any(_ == nm.get-name))
 
-pub noinline fun list/(|->)(sub: list<(tName, expr)>, l: list<a>, ?subst-occurrences: (occ-subst, a) -> div a): div list<a>
+pub noinline fun list/(|->)(sub: list<(t-name, expr)>, l: list<a>, ?subst-occurrences: (occ-subst, a) -> div a): div list<a>
   sub.keep-type-args.list/subst-occurrences(l)
 
-pub fun dg/(|->)(sub: list<(tName, expr)>, dg: def-group): div def-group
+pub fun dg/(|->)(sub: list<(t-name, expr)>, dg: def-group): div def-group
   sub.keep-type-args.dg/subst-occurrences(dg)
 
-pub fun def/(|->)(sub: list<(tName, expr)>, d: def): div def
+pub fun def/(|->)(sub: list<(t-name, expr)>, d: def): div def
   sub.keep-type-args.def/subst-occurrences(d)
 
-pub fun expr/(|->)(sub: list<(tName, expr)>, ex: expr): div expr
+pub fun expr/(|->)(sub: list<(t-name, expr)>, ex: expr): div expr
   sub.keep-type-args.expr/subst-occurrences(ex)
 
-pub noinline fun branch/(|->)(sub: list<(tName, expr)>, b: branch): div branch
+pub noinline fun branch/(|->)(sub: list<(t-name, expr)>, b: branch): div branch
   sub.keep-type-args.branch/subst-occurrences(b)
 
-pub noinline fun guard/(|->)(sub: list<(tName, expr)>, g: guard): div guard
+pub noinline fun guard/(|->)(sub: list<(t-name, expr)>, g: guard): div guard
   sub.keep-type-args.guard/subst-occurrences(g)
 
 pub noinline fun list/subst-occurrences(sub: occ-subst, l: list<a>, ?subst-occurrences: (occ-subst, a) -> div a): div list<a>

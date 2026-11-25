@@ -99,7 +99,7 @@ fun check-def(g: gamma, d: def): check-eff ()
   val tp = check(g, d.defExpr)
   match-sub("checking annotation on definition", {d.def/doc-default}, d.ktype, tp)
 
-fun core-name-info(tn: tName): _ (name, name-info)
+fun core-name-info(tn: t-name): _ (name, name-info)
   (tn.get-name, create-name-infoX(Public, tn.get-name, 0, DefVal, range/null, tn.type-of, ""))
 
 //----------------------------------------------------------------------

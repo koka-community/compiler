@@ -3,10 +3,12 @@ import Control.Monad.IO.Class
 import Data.Maybe
 import Data.Char
 import Data.Array ((!))
+import Data.IORef
 import Data.List
 import Data.List.Extra (replace, trim)
 import System.Directory
 import System.Environment
+import System.Exit
 import System.FilePath
 import System.IO
 import qualified System.Info as Sys
@@ -30,27 +32,29 @@ data Mode = Test | New | Update
   deriving (Eq, Ord, Show)
 
 
-data Options = Options{ mode :: Mode, cabal :: Bool, sysghc:: Bool, opt :: Int, target :: String, par :: Bool, rebuild :: Bool }
+data Options = Options{ mode :: Mode, cabal :: Bool, sysghc:: Bool, opt :: Int, target :: String, par :: Bool, rebuild :: Bool,
+                        quick :: Bool, shard :: (Int,Int) }
 
-optionsDefault = Options Test False False 0 "" True False
+optionsDefault = Options Test False False 0 "" True False False (1,1)
 
 data Cfg = Cfg{ flags   :: [String],
                 options :: Options,
-                exclude :: [String],
-                fexclude:: !(String -> Bool)
+                fexclude:: !(String -> Bool),
+                fslow   :: !(String -> Bool)   -- skipped with --quick
               }
 
-makeCfg :: [String] -> Options -> [String] -> Cfg
-makeCfg flags options []
-  = Cfg flags options [] (\s -> False)
-makeCfg flags options exclude
-  = Cfg flags options exclude fexclude
+makeCfg :: [String] -> Options -> [String] -> [String] -> Cfg
+makeCfg flags options exclude slow
+  = Cfg flags options (matchAny exclude) (matchAny slow)
+
+matchAny :: [String] -> String -> Bool
+matchAny []    = const False
+matchAny items = \s -> any (\m -> m s) matchers
   where
+    matchers = map matcher items
     matcher item | any (\c -> c `elem` "()[]+*?") item = let r = makeRegex item :: Regex
                                                          in (\s -> matchTest r s)
                  | otherwise = (\s -> s == item || s == (item ++ ".kk"))
-    matchers   = map matcher exclude
-    fexclude s = any (\m -> m s) matchers
 
 normalizePlatformKey :: String -> String
 normalizePlatformKey = map norm
@@ -69,6 +73,9 @@ instance JSON Cfg where
                  exclude = case valFromObj "exclude" obj of
                              Ok xs -> xs
                              _     -> []
+                 slow = case valFromObj "slow" obj of
+                          Ok xs -> xs
+                          _     -> []
                  pexclude = case valFromObj "exclude-platform" obj of
                               Ok v -> platformExcludes v
                               _    -> []
@@ -99,20 +106,20 @@ instance JSON Cfg where
                           "x86_64"  -> "x64"
                           "amd64"   -> "x64"
                           a          -> a
-               in Ok (makeCfg flags optionsDefault (exclude ++ pexclude))
-        JSNull     -> Ok (makeCfg [] optionsDefault [])
-        JSString s -> Ok (makeCfg (words (fromJSString s)) optionsDefault [])
+               in Ok (makeCfg flags optionsDefault (exclude ++ pexclude) slow)
+        JSNull     -> Ok (makeCfg [] optionsDefault [] [])
+        JSString s -> Ok (makeCfg (words (fromJSString s)) optionsDefault [] [])
         _          -> Error ("invalid JSON object")
 
 extendCfg :: Cfg -> Cfg -> Cfg
-extendCfg (Cfg flags1 opts1 exclude1 fexclude1) (Cfg flags2 opts2 exclude2 fexclude2)
+extendCfg (Cfg flags1 opts1 fexclude1 fslow1) (Cfg flags2 opts2 fexclude2 fslow2)
   = Cfg (flags1 ++ flags2) opts1
-        (exclude1 ++ exclude2) (\s -> fexclude1 s || fexclude2 s)
+        (\s -> fexclude1 s || fexclude2 s) (\s -> fslow1 s || fslow2 s)
 
 initialCfg :: Options -> Cfg
 initialCfg options
   = makeCfg (commonFlags ++ if (not (null (target options))) then ["--target=" ++ target options] else [])
-            options []
+            options [] []
 
 
 readFlagsFile :: FilePath -> IO [String]
@@ -185,30 +192,42 @@ expectedSanitize input
 
 runKoka :: Cfg -> FilePath -> FilePath -> IO String
 runKoka cfg kokaDir fp
+  = do (_, out, _) <- runKokaProcess cfg kokaDir fp
+       return (testSanitize kokaDir out)
+
+-- precompile and stop on failure (as parallel tests would otherwise race to build the same modules)
+precompile :: Cfg -> FilePath -> IO ()
+precompile cfg fp
+  = do (exitCode, out, err) <- runKokaProcess cfg "" fp
+       when (exitCode /= ExitSuccess) $
+         do hFlush stdout
+            hPutStrLn stderr ("error: failed to precompile " ++ fp ++ " (" ++ show exitCode ++ ")")
+            hPutStrLn stderr (out ++ err)
+            exitFailure
+
+runKokaProcess :: Cfg -> FilePath -> FilePath -> IO (ExitCode, String, String)
+runKokaProcess cfg kokaDir fp
   = do caseFlags <- readFlagsFile (fp ++ ".flags")
        let relTest = makeRelative kokaDir fp
            optFlag   = if (opt (options cfg) /= 0) then ["-O" ++ show (opt (options cfg))] else []
-           kokaFlags = optFlag ++ flags cfg ++ caseFlags           
+           kokaFlags = optFlag ++ flags cfg ++ caseFlags
        if (cabal (options cfg))
-         then do let argv = ["new-run", "koka", "--"] ++ kokaFlags ++ [relTest]
-                 (exitCode, stdout, stderr) <- readProcessWithExitCode "cabal" argv ""
-                 return (testSanitize kokaDir stdout)
+         then readProcessWithExitCode "cabal" (["new-run", "koka", "--"] ++ kokaFlags ++ [relTest]) ""
          else do let stackFlags = if (sysghc (options cfg)) then ["--system-ghc","--skip-ghc-check"] else []
-                     argv = ["exec","koka"] ++ stackFlags ++ ["--"] ++ kokaFlags ++ [relTest]
-                 -- hPutStrLn stderr (unwords argv) -- show koka command
-                 (exitCode, stdout, stderr) <- readProcessWithExitCode "stack" argv ""
-                 -- putStrLn stdout
-                 return (testSanitize kokaDir stdout)
+                 readProcessWithExitCode "stack" (["exec","koka"] ++ stackFlags ++ ["--"] ++ kokaFlags ++ [relTest]) ""
 
 
 
-makeTest :: Cfg -> FilePath -> Spec
-makeTest cfg fp
+-- `counter` numbers the tests in discovery order; with `--shard=i/n` we only run every n-th test
+makeTest :: IORef Int -> Cfg -> FilePath -> Spec
+makeTest counter cfg fp
   | takeExtension fp == ".kk" || ".kk.md" `isSuffixOf` fp
       = do let expectedFile = fp ++ ".out"
            isTest <- runIO $ doesFileExist expectedFile
            let shouldRun = not isTest && mode (options cfg) == New || isTest && mode (options cfg) /= New
-           when shouldRun $
+               (i,n)     = shard (options cfg)
+           idx <- if shouldRun then runIO (atomicModifyIORef' counter (\k -> (k+1,k))) else return 0
+           when (shouldRun && idx `mod` n == i - 1) $
              it (takeBaseName fp) $ do
                kokaDir <- getCurrentDirectory
                out <- runKoka cfg kokaDir fp
@@ -219,17 +238,19 @@ makeTest cfg fp
       = return ()
 
 discoverTests :: Cfg -> FilePath -> Spec
-discoverTests cfg0 p = discover cfg0 "" p
-  where discover cfg cat p
+discoverTests cfg0 p = do counter <- runIO (newIORef 0)
+                          discover counter cfg0 "" p
+  where discover counter cfg cat p
           = do isDirectory <- runIO $ doesDirectoryExist p
                if not isDirectory
-                 then makeTest cfg p
+                 then makeTest counter cfg p
                  else do
                    fs0  <- runIO (sort <$> listDirectory p)
                    cfg' <- runIO (readConfigFile cfg p)
-                   let fs   = filter (not . fexclude cfg') fs0  -- todo: make ignoring the failing optional
+                   let skip f = fexclude cfg' f || (quick (options cfg') && fslow cfg' f)
+                       fs   = filter (not . skip) fs0  -- todo: make ignoring the failing optional
                        with = if cat == "" then id else describe cat
-                   with $ mapM_ (\f -> discover cfg' f (p </> f)) fs
+                   with $ mapM_ (\f -> discover counter cfg' f (p </> f)) fs
 
 readConfigFile :: Cfg -> FilePath -> IO Cfg
 readConfigFile cfg dir
@@ -274,8 +295,18 @@ processOptions arg (options,hargs)
       then (options{par=False}, hargs)
     else if (arg == "--rebuild" || arg == "-r")
       then (options{rebuild=True}, hargs)
+    else if (arg == "--quick")
+      then (options{quick=True}, hargs)
+    else if (take 8 arg == "--shard=")
+      then (options{shard=parseShard (drop 8 arg)}, hargs)
       else (options, arg : hargs)
   where
+    parseShard :: String -> (Int,Int)
+    parseShard s = case break (=='/') s of
+                     (i,'/':n) | all isDigit i && all isDigit n && not (null i) && not (null n)
+                                 && read i >= 1 && read i <= (read n :: Int) -> (read i, read n)
+                     _ -> error $ "Invalid shard (expecting --shard=<i>/<n> with 1 <= i <= n): " ++ show s
+
     parseMode :: String -> Mode
     parseMode "new" = New
     parseMode "update" = Update
@@ -300,17 +331,19 @@ main = do
   -- compile all standard libraries before testing so we can run in parallel
   let cfg = initialCfg options
       stdcfg = if rebuild options then cfg{ flags = flags cfg ++ ["-r", "-l"]} else cfg
-  runKoka stdcfg{flags = "-e" : flags stdcfg} "" "util/link-test.kk"
+  precompile stdcfg{flags = "-e" : flags stdcfg} "util/link-test.kk"
   -- precompile bench by compiling a dependent file (ensures correct module name resolution)
-  runKoka stdcfg "" "test/lazy/queue/bankers.kk"
+  precompile stdcfg "test/lazy/queue/bankers.kk"
   -- precompile mpat-lib so test/cgen/mpat.kk loads it from the .kki
-  runKoka stdcfg "" "test/cgen/mpat-lib.kk"
+  precompile stdcfg "test/cgen/mpat-lib.kk"
+  -- precompile synpriv-lib so test/cgen/synpriv.kk loads it from the .kki
+  precompile stdcfg "test/cgen/synpriv-lib.kk"
   -- precompile specbox-lib so test/cgen/specbox.kk loads it from the .kki
   -- (both carry a -O2 .flags file so they share one build directory)
-  runKoka stdcfg "" "test/cgen/specbox-lib.kk"
+  precompile stdcfg "test/cgen/specbox-lib.kk"
   -- precompile the syn-nested chain so syn-nested1 emits only its own core
-  runKoka stdcfg "" "test/parc/syn-nested1c.kk"
-  runKoka stdcfg{flags = "--target=js":(flags stdcfg)} "" "util/link-test.kk" -- precompiled js libraries as well
+  precompile stdcfg{flags = flags stdcfg ++ ["-l"]} "test/parc/syn-nested1c.kk"
+  precompile stdcfg{flags = "--target=js":(flags stdcfg)} "util/link-test.kk" -- precompiled js libraries as well
   putStrLn "ok."
   let spec = if target options == "names"
                then NameSpec.spec

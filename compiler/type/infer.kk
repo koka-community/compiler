@@ -1206,7 +1206,7 @@ fun infer-branch(pat-kind, prop, match-type, match-range, matched-names, branch)
             val free = rb-set/from-list(gcores.free-vars.list.map(get-name))
             // upstream reports only the FIRST unused name (in sorted
             // `tnamesList` order), with singular wording
-            match defined.filter(fn(tn) !free.member(tn.get-name)).list.sort(?(<) = fn(a: tName, b: tName) a.get-name.name/cmp(b.get-name).is-lt)
+            match defined.filter(fn(tn) !free.member(tn.get-name)).list.sort(?(<) = fn(a: t-name, b: t-name) a.get-name.name/cmp(b.get-name).is-lt)
               [] -> ()
               Cons(name, _) ->
                 inf-warning(pattern.range, "pattern variable".text |+| name.get-name.pp-name |+| "is unused (or a wrongly spelled constructor?)".text |-|
@@ -1240,7 +1240,7 @@ fun infer-binders(inf-gamma, binders: list<value-binder<_, _>>)
 
 // infer implicit parameter declaration:
 // check if the expression is a single identifier and possibly generate unpacking of fields
-fun infer-optionals(allow-implicit-mask: bool, eff : keffect, inf-gamma: list<(name, assumption/name-info)>, params: list<value-binder<ktype, maybe<syntax/syntax/expr<ktype>>>>): _ (list<(name, assumption/name-info)>, list<(tName, core/core/expr)>, list<core/core/def>)
+fun infer-optionals(allow-implicit-mask: bool, eff : keffect, inf-gamma: list<(name, assumption/name-info)>, params: list<value-binder<ktype, maybe<syntax/syntax/expr<ktype>>>>): _ (list<(name, assumption/name-info)>, list<(t-name, core/core/expr)>, list<core/core/def>)
   match params 
     [] -> (inf-gamma, [], [])
     Cons(par: value-binder<ktype, maybe<syntax/syntax/expr<ktype>>>, pars) -> 
@@ -1383,7 +1383,7 @@ pub fun run-infer(tpl: target-platform, uniq0: int, imports: import-map, gamma0:
       set-range-map(subst |-> get-range-map())
       subst := sub/null
     fun set-subst(s) subst := s
-  with val infer-env = InferEnv(modName, [], False, False, False, Nothing, 0, False, rb-map/empty(), imports, inf-gamma/empty, gamma0, tpl)
+  with val infer-env = InferTypeEnv(modName, [], False, False, False, Nothing, 0, False, rb-map/empty(), imports, inf-gamma/empty, gamma0, tpl)
   with val ctxt = Infer(range/null)
   with val scope-depth = 0
   with val local-depth = 0

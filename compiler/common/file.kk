@@ -33,17 +33,17 @@ pub fun source-files(dir: path, stem: string): list<path>
 // -------------------------
 // File names
 // -------------------------
-pub alias fileName = path
+pub alias file-name = path
 
 // Remove the extension and directory part.
 // Private: a public `basename` would be ambiguous with `std/os/path`'s at every call on a `path`.
-fun basename(p: fileName): fileName
+fun basename(p: file-name): file-name
   p.stemname.path
 
 // extname - Get the file extension (already part of std/os/path)
 
 // Append `ext` unless the path already ends in it: `ensure-ext("a.c", ".kk")` is `a.c.kk`.
-pub fun ensure-ext(p: fileName, ext: string): fileName
+pub fun ensure-ext(p: file-name, ext: string): file-name
   val e = p.extname
   if (if e.is-empty then "" else "." ++ e) == ext then p
   else (p.string ++ ext).path
@@ -76,7 +76,7 @@ pub fun string/normalize-with(s: string, sep: char): string
       Cons(c, rest) -> norm(rest, Cons(if c.config/is-path-sep then sep else c, acc))
   norm(s.list, []).string
 
-pub fun path/normalize-with(p: fileName, sep: char): string
+pub fun path/normalize-with(p: file-name, sep: char): string
   p.string.normalize-with(sep)
 
 // Is this a file separator? Both are, regardless of host OS.
@@ -190,7 +190,7 @@ pub fun write-text-file-atomic( p : path, content : string ) : io ()
   else write-text-file(p, content)
 
 // Not ported yet:
-// fun file-time-compare(p1: fileName, p2: fileName): io order
+// fun file-time-compare(p1: file-name, p2: file-name): io order
 // fun max-file-time
 // fun max-file-times
 // fun does-file-exist-and-not-empty

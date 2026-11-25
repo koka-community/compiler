@@ -189,7 +189,7 @@ fun pad-to-column(input: string, rest: string): string
 
 //----------------------------------------------------------------------
 
-pub fun command-help(colors: colorScheme): doc
+pub fun command-help(colors: color-scheme): doc
   fun infotext(s: string): doc
     s.text.color(colors.colorInterpreter)
   fun cmd(c: string, arg: string, explain: string): doc
