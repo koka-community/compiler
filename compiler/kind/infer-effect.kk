@@ -149,10 +149,6 @@ pub fun extend-kgamma(rngs: list<range>, dg: compiler/core/core/typedef-group, f
       newtypesExtended = old-env.newtypesExtended.compose(kNewtypes))  
   f()
 
-fun member-doc(doc: string, header: string, members: list<string>): string
-  val mdoc = "// " ++ header ++ ":\n// ```koka\n" ++ members.map("//" ++ _).join("\n") ++ "// ```\n"
-  if doc == "" then mdoc else doc ++ "\n// * * *\n" ++ mdoc
-
 pub fun check-external(name: name, range: range)
   val mbres = lookup-external(name)
   match mbres

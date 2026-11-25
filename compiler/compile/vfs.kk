@@ -1,3 +1,10 @@
+//---------------------------------------------------------------------------
+// Copyright 2026, Tim Whiting.
+//
+// This is free software; you can redistribute it and/or modify it under the
+// terms of the Apache License, Version 2.0. A copy of the License can be
+// found in the LICENSE file at the root of this distribution.
+//---------------------------------------------------------------------------
 // In-memory overlay over the filesystem, for sources that have no file on disk.
 //
 // Two consumers want this:
@@ -37,10 +44,10 @@ pub struct vfile
 // Takes the path AS WRITTEN, not a canonicalized key. Canonicalizing costs a
 // `realpath` -- an `open`/`getattrlist`/`stat` round trip per call -- and only
 // the handler that actually holds an overlay can use it, so only that handler
-// pays for it. Asking the caller to canonicalize made every `is-file` and
+// pays for it. Canonicalizing in the caller would make every `is-file` and
 // `file-mtime` in a batch build (where the overlay is `no-vfs`, always
-// `Nothing`) pay syscalls to build a key for a map that was never consulted:
-// 74ms of `xrealpath` on a ~1.0s warm rebuild, all of it serial syscall time.
+// `Nothing`) pay for a key that is never used: MEASURED 74ms of `xrealpath`
+// on a ~1.0s warm rebuild, all of it serial syscall time.
 pub effect vfs-lookup
   fun vfs-find(p: path): maybe<vfile>
 

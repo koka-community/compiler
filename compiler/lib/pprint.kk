@@ -1,11 +1,12 @@
 /*----------------------------------------------------------------------------
-   Copyright 2024, Koka-Community Authors
+   Copyright 2024-2026, Tim Whiting.
 
-   Licensed under the Apache License, Version 2.0 ("The License"). You may not
-   use this file except in compliance with the License. A copy of the License
-   can be found in the LICENSE file at the root of this distribution.
+   This is free software; you can redistribute it and/or modify it under the
+   terms of the Apache License, Version 2.0. A copy of the License can be
+   found in the LICENSE file at the root of this distribution.
 ----------------------------------------------------------------------------*/
-// Translated from koka/src/Lib/PPrint.hs, but using different printers // Updated 2/10/25 Commit d7b02a2
+// Translated from koka/src/Lib/PPrint.hs, but using different printers
+// Updated 2/10/25 Commit d7b02a2
 // Pretty printing via the effect handlers doesn't allow for as much control
 // of indentation and alignment as the original implementation.
 // We use effects on the printer layer though, which allows for the backend to be configured separately
@@ -466,6 +467,8 @@ pub fun display-string(simple: simpleDoc): string
   go(simple, []).reverse.join
 
 pub fun skip-spaces(simple: simpleDoc): simpleDoc
+  fun is-space(c : char) : bool
+    c == ' ' || c == '\t'
   match simple
     SChar(_, c, x) | c.is-space -> skip-spaces(x)
     SText(i, s, x) ->

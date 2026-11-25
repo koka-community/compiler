@@ -11,27 +11,31 @@ module compiler/lib/trace
 
 import std/core/unsafe
 pub import std/pretty/printer
+import compiler/lib/pprint
 
-fun color/trace(s: string, a: a, ?kk-file-line: string): a
+pub fun color/trace(s: string, a: a, ?kk-file-line: string): a
   ctrace(DarkGray, s, a)
 
-fun unit/trace(s: string, ?kk-file-line: string): ()
+pub fun unit/trace(s: string, ?kk-file-line: string): ()
   trace(s, ())
 
-fun trace-id(s: string, ?kk-file-line: string): string
+pub fun trace-id(s: string, ?kk-file-line: string): string
   trace(s, s)
-  
-fun unit/trace-show(a: a, ?show: a -> e string, ?kk-file-line: string): e ()
+
+pub fun trace-doc(d: doc, a: a, ?kk-file-line: string): div a
+  trace(d.show, a)
+
+pub fun unit/trace-show(a: a, ?show: a -> e string, ?kk-file-line: string): e ()
   color/trace(a.show, ())
 
-fun id/trace-show(a: a, ?show: a -> e string, ?kk-file-line: string): e a
+pub fun id/trace-show(a: a, ?show: a -> e string, ?kk-file-line: string): e a
   color/trace(a.show, a)
 
-fun trace-eq(s: string, a: a, ?show: (a) -> string, ?kk-file-line: string): a
+pub fun trace-eq(s: string, a: a, ?show: (a) -> string, ?kk-file-line: string): a
   trace(s ++ " = " ++ a.show, a)
 
-fun ctrace(c: color, message: string, a: a, ?kk-file-line: string): a
-  // trace to stderr without color: the language server must not print to stdout
-  // since stdout is used for the jsonrpc protocol (the color argument is kept for API compatibility)
+// Traces go to stderr and without color: the language server uses stdout for its JSON-RPC protocol.
+// `c` is accepted so call sites can keep naming the color they would like.
+pub fun ctrace(c: color, message: string, a: a, ?kk-file-line: string): a
   std/core/debug/trace(?kk-file-line ++ ": " ++ message)
   a

@@ -35,14 +35,18 @@ pub fun source-files(dir: path, stem: string): list<path>
 // -------------------------
 pub alias fileName = path
 
-// Remove the extension and directory part
+// Remove the extension and directory part.
+// Private: a public `basename` would be ambiguous with `std/os/path`'s at every call on a `path`.
 fun basename(p: fileName): fileName
-  p.nodir.noext
+  p.stemname.path
 
 // extname - Get the file extension (already part of std/os/path)
 
-fun ensure-ext(p: fileName, ext: string): fileName
-  p.change-ext(ext)
+// Append `ext` unless the path already ends in it: `ensure-ext("a.c", ".kk")` is `a.c.kk`.
+pub fun ensure-ext(p: fileName, ext: string): fileName
+  val e = p.extname
+  if (if e.is-empty then "" else "." ++ e) == ext then p
+  else (p.string ++ ext).path
 
 // dirname - Return the directory prefix (including last separator if present) (already part of std/os/path)
 
@@ -62,53 +66,66 @@ fun on-windows(): bool
 
 // normalize - Normalize path separators (.path on string already does this)
 
-// normalize-with 
-pub fun normalize-with(p: fileName, sep: char): string
-  p.dirparts.join(sep.string)
+// Replace every path separator in `s` with `sep`, keeping a backslash-escaped space (a unix shell escape).
+// Works on any string, such as a whole command line, without parsing it as a path.
+pub fun string/normalize-with(s: string, sep: char): string
+  fun norm(cs: list<char>, acc: list<char>): list<char>
+    match cs
+      Nil -> acc.reverse
+      Cons('\\', Cons(c, rest)) | c.is-white -> norm(rest, Cons(c, Cons('\\', acc)))
+      Cons(c, rest) -> norm(rest, Cons(if c.config/is-path-sep then sep else c, acc))
+  norm(s.list, []).string
 
-// is-path-sep - Is this a file separator? - regardless of host OS 
+pub fun path/normalize-with(p: fileName, sep: char): string
+  p.string.normalize-with(sep)
+
+// Is this a file separator? Both are, regardless of host OS.
 pub fun is-path-sep(c: char): bool
   c == '/' || c == '\\'
 
-// is-path-delimiter - Is this a path delimiter? - regardless of host OS
-fun is-path-delimiter(c: char): bool
-  c == ':' || c == ';'
+// Is this a delimiter in a list of paths? `;` always, and `:` except on Windows, where it follows a drive letter.
+pub fun is-path-delimiter(c: char): bool
+  c == ';' || (c == ':' && !on-windows())
 
-// run-system-raw 
+// `run-system-raw` and `run-system` are private: public, they would be ambiguous with `std/os/process`'s `run-system`.
 fun run-system-raw(cmd: string): _ ()
   val res = process/run-system(cmd)
   if res == 0 then ()
   else
-    throw("Command failed: " ++ cmd)
+    throw("raw command failed:\n " ++ cmd)
 
+// Run a shell command with its path separators made native.
 fun run-system(cmd: string): _ ()
-  val res = run-system-ex(cmd)
+  val ncmd = cmd.normalize-with(partsep().head-char.default('/'))
+  val res = process/run-system(ncmd)
   if res == 0 then ()
   else
-    throw("Command failed: " ++ cmd)
+    throw("command failed:\n " ++ ncmd)
 
-fun run-system-ex(cmd: string): _ int
-  cmd.path.normalize-with(pathsep().head-char.default('/')).process/run-system
+// Quote one argument for the shell, so an argument with spaces or quotes reaches the program unchanged.
+// Upstream's `runCmd` passes its arguments directly (`rawSystem`); `std/os/process` only runs a command line through the shell.
+fun shell-arg(arg: string): ndet string
+  if on-windows() then "\"" ++ arg.replace-all("\"", "\\\"") ++ "\""
+  else "'" ++ arg.replace-all("'", "'\\''") ++ "'"
 
-fun run-cmd(cmd: string, args: list<string>): _ ()
-  val res = process/run-system(cmd ++ " " ++ args.join(" "))
+fun command-line(cmd: string, args: list<string>): ndet string
+  Cons(cmd, args).map(shell-arg).join(" ")
+
+pub fun run-cmd(cmd: string, args: list<string>): _ ()
+  val res = process/run-system(command-line(cmd, args))
   if res == 0 then ()
   else
-    throw("Command failed: (exit code " ++ res.show ++ ")")
+    throw("command failed (exit code " ++ res.show ++ ")")
 
-// TODO: Need stderr in the output, and setting the child processes environment - not supported by the koka std libraries yet
-fun run-cmd-read(env: env, cmd: string, args: list<string>): _ string
-  val res = process/run-system-read(cmd ++ " " ++ args.join(" "))
-  match res
-    Ok(s) -> s 
-    Error(s) -> throw("Command failed: (exit code " ++ s.show ++ ")")
+// TODO: `env` is ignored and only stdout is returned: `std/os/process` cannot set a child's environment or capture its stderr.
+pub fun run-cmd-read(env: env, cmd: string, args: list<string>): _ string
+  match process/run-system-read(command-line(cmd, args))
+    Ok(s) -> s
+    Error(s) -> throw("command failed (exit code " ++ s.show ++ ")")
 
-// TODO: Need setting the child processes environment - not supported by the koka std libraries yet
-fun run-cmd-env(env: env, cmd: string, args: list<string>): _ ()
-  val res = process/run-system(cmd ++ " " ++ args.join(" "))
-  if res == 0 then ()
-  else
-    throw("Command failed: (exit code " ++ res.show ++ ")")
+// TODO: `env` is ignored: `std/os/process` cannot set a child's environment.
+pub fun run-cmd-env(env: env, cmd: string, args: list<string>): _ ()
+  run-cmd(cmd, args)
 
 fun build-env(env: env): _ maybe<env>
   if env.is-empty then return Nothing
@@ -117,11 +134,10 @@ fun build-env(env: env): _ maybe<env>
 
 // File modification time, in nanoseconds since the epoch.
 //
-// A direct `stat(2)`, not a shell `stat`: a fork+exec per query MEASURED AT
-// 8ms EACH, and the rebuild walk asks per module AND per dependency, so a warm
-// build would spend seconds doing nothing but asking the shell for timestamps.
-// Cheap mtimes are also what makes it viable to check interface freshness
-// before deciding whether a source needs scanning at all.
+// A syscall, because a process spawn MEASURED 8ms and the rebuild walk asks
+// per module AND per dependency. Cheap mtimes are also what makes it viable
+// to check interface freshness before deciding whether a source needs
+// scanning at all.
 //
 // A missing or unreadable file reports 0, which makes a missing artifact
 // infinitely stale without needing a special case at the call sites.
@@ -159,28 +175,21 @@ pub extern epoch-nanos(): ndet int
   c "kk_compiler_epoch_nanos"
 
 // Atomic text-file write: write to a unique temp file in the target
-// directory, then rename over the destination. `rename(2)` within one
-// filesystem is atomic, so concurrent koka processes sharing a build cache
-// never observe a half-written interface or C file (8 sweep workers do exactly
-// this).
-//
-// One `mkstemp`+`rename` syscall pair, not `mktemp` and `mv -f`. The shell
-// version cost TWO fork+execs per file -- ~8ms each -- and this runs three
-// times per compiled module (.kki, .c, .h), so it was six spawns per module
-// sitting inside the codegen phase. It also built its command lines by
-// pasting paths into single quotes, which a path containing a quote would
-// have broken.
+// directory, then rename over the destination. A rename within one file
+// system is atomic, so concurrent koka processes sharing a build cache never
+// observe a half-written interface or C file (8 sweep workers do exactly
+// this). It runs three times per compiled module (.kki, .c, .h), inside the
+// codegen phase, so it is a syscall pair rather than shell commands.
 extern write-atomic-prim( p : string, content : string ) : ioc bool
   c "kk_compiler_write_atomic"
 
 pub fun write-text-file-atomic( p : path, content : string ) : io ()
-  // false on any failure; fall back to a direct (non-atomic) write, as the
-  // shell version did when `mktemp` was unavailable
+  // false on any failure (or on WASI, which has no temp files); a direct
+  // write is still correct for a single writer
   if write-atomic-prim(p.string, content) then ()
   else write-text-file(p, content)
 
-// TODO: Missing file time and exists functions - in koka std core - though the libuv branch would have it
-// Compare to file modification times (uses 0 for non-existing files)
+// Not ported yet:
 // fun file-time-compare(p1: fileName, p2: fileName): io order
 // fun max-file-time
 // fun max-file-times
@@ -189,56 +198,57 @@ pub fun write-text-file-atomic( p : path, content : string ) : io ()
 // read-text-file (already part of std/os/file)
 // write-text-file (already part of std/os/file)
 
-fun copy-text-file(src: path, dest: path): _ ()
+pub fun copy-text-file(src: path, dest: path): _ ()
   file/write-text-file(dest, file/read-text-file(src))
 
-fun copy-text-file-with(src: path, dest: path, transform: (string) -> _ string): _ ()
+pub fun copy-text-file-with(src: path, dest: path, transform: (string) -> _ string): _ ()
   file/write-text-file(dest, transform(file/read-text-file(src)))
 
-// binary modes are not supported in koka std lib yet - but are in libuv branch
+// Not ported yet (`std/os/file` has no binary file I/O):
 // copy-binary-file
 // copy-binary-if-newer
 
-// Don't have file times / file exists except in libuv branch
+// Not ported yet:
 // fun copy-text-if-newer
 // fun copy-text-if-newer-with
 // fun remove-file-if-exists
 
 // get-program-path (already in std/os/path as app-path())
 
-fun common-path-prefix(p1: path, p2: path): _ string
-  p1.dirparts.zip(p2.dirparts).take-while(fn((a,b)) a == b).map(fst).join(pathsep())
+// Path parts are joined with `/`, which every OS accepts, as upstream's `joinPaths` does.
+pub fun common-path-prefix(p1: path, p2: path): string
+  p1.dirparts.zip(p2.dirparts).take-while(fn((a,b)) a == b).map(fst).join("/")
 
-fun default/relative-to-path(pprefix: path, p: path): ndet path
+pub fun default/relative-to-path(pprefix: path, p: path): path
   match maybe/relative-to-path(pprefix, p)
     Just(r) -> r
     Nothing -> p
 
-fun maybe/relative-to-path(pprefix: path, p: path): ndet maybe<path>
+pub fun maybe/relative-to-path(pprefix: path, p: path): maybe<path>
   if pprefix.string == "" then Just(p)
   else
     val prefs = pprefix.dirparts
     val ps = p.dirparts
     if prefs.is-prefix-of(ps) then
-      Just(ps.drop(prefs.length).join(pathsep()).path)
+      Just(ps.drop(prefs.length).join("/").path)
     else
       Nothing
 
 // is-absolute (already part of std/os/path)
 
 // Find a maximal prefix path given a path and a list of root paths. Returns the root path and relative path.
-fun find-maximal-prefix-path(p: path, roots: list<path>): ndet maybe<(path, path)>
-  val rels = roots.map(fn(r) 
+pub fun find-maximal-prefix-path(p: path, roots: list<path>): maybe<(path, path)>
+  val rels = roots.map(fn(r)
         match r.maybe/relative-to-path(p)
           Just(rel) -> [(r, rel)]
           Nothing -> []
       ).concat
   match rels
-    [] -> Nothing
-    xs -> xs.maximum-by(fn((r1, _), (r2, _)) r1.path/show.cmp(r2.path/show))
+    Nil -> Nothing
+    Cons(x, xx) -> Just(xx.maximum(x, ?cmp = fn((r1, _), (r2, _)) r1.string.cmp(r2.string)))
 
 // Get the maximal relative path
-fun get-maximal-prefix-path(p: path, roots: list<path>): ndet (path, path)
+pub fun get-maximal-prefix-path(p: path, roots: list<path>): (path, path)
   match find-maximal-prefix-path(p, roots)
     Just(rel) -> rel
     Nothing -> ("".path,p)
@@ -253,14 +263,13 @@ fun get-maximal-prefix-path(p: path, roots: list<path>): ndet (path, path)
 
 // Make a file path relative to a set of given paths: return the (maximal) root and stem
 // if it is not relative to the paths, return dirname/notdir 
-fun make-relative-to-paths(p: path, roots: list<path>): ndet (path, path)
+pub fun make-relative-to-paths(p: path, roots: list<path>): (path, path)
   match find-maximal-prefix-path(p, roots)
     Just(rel) -> rel
     Nothing -> (p.dirname.path, p.nodir)
 
 
-// TODO: More
-fun get-env-paths(n: string): _ list<path>
+pub fun get-env-paths(n: string): ndet list<path>
   get-env-value(n).default("").paths
 
 // get-env-var (already part of std/os/env as get-env-value)

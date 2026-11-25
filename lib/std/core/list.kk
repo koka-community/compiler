@@ -565,6 +565,13 @@ pub fun maximum( xs : list<int>, default : int = 0 ) : int
     Nil -> default
     Cons(x,xx) -> xx.foldl( x, max )
 
+// Returns the largest element of a list under `?cmp` (or `default` for the empty list).
+// Of equal largest elements, the first is returned.
+pub fun default/maximum( xs : list<a>, default : a, ?cmp : (a,a) -> e order ) : e a
+  match xs
+    Nil -> default
+    Cons(x,xx) -> xx.foldl(x) fn(m,y) if cmp(y,m).is-gt then y else m
+
 
 // Check if the list has a particular element `y`
 pub fun contains( xs : list<a>, y : a, ?(==) : (a,a) -> bool) : bool
@@ -604,19 +611,6 @@ pub fun is-prefix-of( xs : list<a>, ys : list<a>, ?(==) : (a,a) -> e bool ) : e 
     (Nil, _) -> True
     (_, Nil) -> False
     (Cons(x,xx), Cons(y,yy)) -> x == y && xx.pretend-decreasing.is-prefix-of(yy)
-
-// The largest element under `cmp`, or `Nothing` for the empty list.
-// Ties keep the EARLIER element.
-pub fun maximum-by( xs : list<a>, cmp : (a,a) -> e order ) : e maybe<a>
-  fun loop( ys, acc )
-    match ys
-      Nil -> acc
-      Cons(y,yy) -> match acc
-        Nothing -> loop(yy, Just(y))
-        Just(mx) -> match cmp(y, mx)
-          Gt -> loop(yy, Just(y))
-          _  -> loop(yy, acc)
-  loop(xs, Nothing)
 
 // Remove duplicates under an arbitrary equivalence, keeping the FIRST
 // occurrence. Quadratic, like `nub`.

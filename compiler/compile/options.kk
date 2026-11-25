@@ -43,6 +43,7 @@ import std/os/path
 import std/os/dir
 import std/core/undiv
 import std/core/exn
+import std/core/unsafe
 import compiler/common/syntax
 import compiler/common/color-scheme
 import compiler/platform/config
@@ -367,15 +368,22 @@ pub fun unquote(s: string): list<string>
       Nil -> [acc.reverse.string]
   pretend-no-div({scan([], Nothing, s.list)}).filter(fn(x) x != "")
 
-// Split a `;`-or-`,`-delimited path
-// list, trimming whitespace around each entry
+// Split a list of paths delimited by `;`, and by `:` except on Windows, as
+// upstream `undelimPaths`. Leading spaces of an entry are dropped, and a drive
+// letter (`c:`) at the start of an entry is not a delimiter.
 pub fun undelim-paths(s: string): list<string>
-  fun split-on(c: char, xs: list<char>): list<list<char>>
-    val (pre, ys) = xs.span(fn(x) x != c)
-    match ys
-      Cons(_, post) -> Cons(pre, split-on(c, post.pretend-decreasing))
-      Nil -> [pre]
-  split-on(';', s.list).flatmap(fn(part) split-on(',', part)).map(fn(cs) cs.string.trim).filter(fn(x) x != "")
+  val colon-delimits = unsafe-total{ get-os-name() != "windows" }
+  fun is-delim(c: char): bool
+    c == ';' || (c == ':' && colon-delimits)
+  // `p` is the current entry, reversed
+  fun split(cs: list<char>, p: list<char>): list<string>
+    match cs
+      Cons(c, rest) | p.is-nil && c.is-white -> split(rest, p)
+      Cons(d, Cons(':', rest)) | p.is-nil -> split(rest, [':', d])
+      Cons(c, rest) | c.is-delim -> Cons(p.reverse.string, split(rest, []))
+      Cons(c, rest) -> split(rest, Cons(c, p))
+      Nil -> [p.reverse.string]
+  split(s.list, []).filter(fn(x) x != "")
 
 // An integer optionally suffixed with k/kb/m/mb/g/gb
 pub fun parse-size(s0: string): maybe<int>
@@ -489,7 +497,7 @@ pub val koka-flags-visible: list<flag<flags>> = [
   Flag("", ["language-server"], Bool(fn(fl, b) fl(wantLanguageServer = b)), "language server mode"),
   bflag("e", ["execute"], fn(fl, b) fl(evaluate = b), "compile and execute"),
   bflag("c", ["compile"], fn(fl, b) fl(evaluate = !b), "only compile, do not execute (default)"),
-] ++ num-option(16, "j", ["jobs"], fn(fl, i) fl, "maximum concurrency (16)") ++ [
+] ++ num-option(16, "j", ["jobs"], fn(fl, i) fl(maxConcurrency = max(i, 1)), "maximum concurrency (16)") ++ [
   // OptArg, resets the path when given without a value
   Flag("i", ["include"], Opt(opt-append(fn(fl) fl.includePath, fn(fl, v) fl(includePath = v), undelim-paths), "dirs"),
     "add <dirs> to module search path (empty resets)"),
@@ -950,15 +958,6 @@ fun triplet-os-name(osName: string): string
     "macos" -> "osx"
     os -> os
 
-// Fields purely DERIVED
-// from the already-resolved flags -- asan-implies-stdalloc, the vcpkg
-// triplet, and the optimize-level-driven inline/unroll/specialize knobs.
-// `baseFlags` snapshots the flags this was derived from (upstream: consulted
-// by `processExtraOptions` for incremental REPL-style re-parsing; not
-// otherwise used by this port yet).
-// `ccompDefs` is what every C compile passes (link.kk `ccompile-args`, as
-// upstream `ccompile`), kklib's included -- so all translation units agree on
-// `KK_MIMALLOC`/`KK_DEBUG_FULL`, which gate the layout of `kk_context_t`.
 // Apply a further command line (the language
 // server's clients send one as a single string) on top of the flags this
 // session started with. It re-derives from `baseFlags` -- the PRE-derived
@@ -970,6 +969,14 @@ pub fun process-extra-options(flags0: flags, args: string): ndet either<string, 
     Left(err) -> Left(err)
     Right((flags1, mode)) -> Right((process-derived-options(defaultFlags, flags1), mode))
 
+// Fields purely DERIVED
+// from the already-resolved flags -- asan-implies-stdalloc, the vcpkg
+// triplet, and the optimize-level-driven inline/unroll/specialize knobs.
+// `baseFlags` snapshots the flags this was derived from, for
+// `process-extra-options`.
+// `ccompDefs` is what every C compile passes (link.kk `ccompile-args`, as
+// upstream `ccompile`), kklib's included -- so all translation units agree on
+// `KK_MIMALLOC`/`KK_DEBUG_FULL`, which gate the layout of `kk_context_t`.
 pub fun process-derived-options(defaultFlags: flags, fl: flags): ndet flags
   val stdAlloc = if fl.asan then True else fl.useStdAlloc
   val cdefs: list<(string,string)> =

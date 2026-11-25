@@ -23,7 +23,7 @@ pub effect val colors: colorScheme;
 
 pub fun color-scheme-default(f)
   handle(f)
-    val colors = ColorScheme()
+    val colors = dark-color-scheme
 
 pub struct colorScheme
   colorInterpreter: color = DarkGreen
@@ -54,7 +54,7 @@ pub struct colorScheme
   colorTypeKeywordOp: color = colorType
   colorTypeSpecial: color = colorType
   colorTypeParam: color = colorParameter
-  colorNameQual: color = ColorDefault
+  colorNameQual: color = DarkGray
   colorImplicitParameter: color = Gray
   colorImplicitExpr: color = colorSource
 
@@ -68,21 +68,21 @@ pub fun cs/(==)(c1: colorScheme, c2: colorScheme): bool
   && c1.colorTypeSpecial == c2.colorTypeSpecial && c1.colorTypeParam == c2.colorTypeParam 
   && c1.colorNameQual == c2.colorNameQual && c1.colorImplicitParameter == c2.colorImplicitParameter && c1.colorImplicitExpr == c2.colorImplicitExpr
 
-pub val dark-color-scheme = ColorScheme()
-pub val light-color-scheme = ColorScheme(
+// The struct's field defaults are the dark theme before its remaining defaults become white.
+pub val dark-color-scheme = ColorScheme().scheme/default(White)
+pub val light-color-scheme = dark-color-scheme(
   colorNumber = DarkGray,
   colorSource = ColorDefault,
-  colorCommand = Black,
   colorSep = ColorDefault,
   colorSpecial = ColorDefault,
-//  colorInterpreter = Black,
+  colorCommand = Black,
   colorError = Red,
   colorWarning = DarkYellow,
   colorNameQual = DarkGray,
-  colorRange = DarkRed,
-  colorMarker = DarkRed,
+  colorRange = dark-color-scheme.colorInterpreter,
+  colorMarker = dark-color-scheme.colorInterpreter,
   colorString = DarkRed
-)
+).scheme/default(Black)
 
 pub val color-themes = [("dark", dark-color-scheme), ("light", light-color-scheme)]
 
@@ -90,39 +90,40 @@ pub val color-themes = [("dark", dark-color-scheme), ("light", light-color-schem
 pub fun color/default(c: color, clr: color): color
   if clr == ColorDefault then c else clr
 
+// Replace every `ColorDefault` of the scheme with `clr`
 pub fun scheme/default(cs: colorScheme, clr: color): colorScheme
   cs(
-    colorType = color/default(cs.colorType, clr),
-    colorParameter = color/default(cs.colorParameter, clr),
-    colorKind = color/default(cs.colorKind, clr),
-    colorMarker = color/default(cs.colorMarker, clr),
-    colorWarning = color/default(cs.colorWarning, clr),
-    colorError = color/default(cs.colorError, clr),
-    colorSource = color/default(cs.colorSource, clr),
-    colorInterpreter = color/default(cs.colorInterpreter, clr),
-    colorCommand = color/default(cs.colorCommand, clr),
-    colorKeyword = color/default(cs.colorKeyword, clr),
-    colorEffect = color/default(cs.colorEffect, clr),
-    colorRange = color/default(cs.colorRange, clr),
-    colorSep = color/default(cs.colorSep, clr),
+    colorType = clr.color/default(cs.colorType),
+    colorParameter = clr.color/default(cs.colorParameter),
+    colorKind = clr.color/default(cs.colorKind),
+    colorMarker = clr.color/default(cs.colorMarker),
+    colorWarning = clr.color/default(cs.colorWarning),
+    colorError = clr.color/default(cs.colorError),
+    colorSource = clr.color/default(cs.colorSource),
+    colorInterpreter = clr.color/default(cs.colorInterpreter),
+    colorCommand = clr.color/default(cs.colorCommand),
+    colorKeyword = clr.color/default(cs.colorKeyword),
+    colorEffect = clr.color/default(cs.colorEffect),
+    colorRange = clr.color/default(cs.colorRange),
+    colorSep = clr.color/default(cs.colorSep),
     // syntax coloring
-    colorComment = color/default(cs.colorComment, clr),
-    colorReserved = color/default(cs.colorReserved, clr),
-    colorReservedOp = color/default(cs.colorReservedOp, clr),
-    colorSpecial = color/default(cs.colorSpecial, clr),
-    colorString = color/default(cs.colorString, clr),
-    colorNumber = color/default(cs.colorNumber, clr),
-    colorModule = color/default(cs.colorModule, clr),
-    colorCons = color/default(cs.colorCons, clr),    
-    colorTypeCon = color/default(cs.colorTypeCon, clr),
-    colorTypeVar = color/default(cs.colorTypeVar, clr),
-    colorTypeKeyword = color/default(cs.colorTypeKeyword, clr),
-    colorTypeKeywordOp = color/default(cs.colorTypeKeywordOp, clr),
-    colorTypeSpecial = color/default(cs.colorTypeSpecial, clr),
-    colorTypeParam = color/default(cs.colorTypeParam, clr),
-    colorNameQual = color/default(cs.colorNameQual, clr),
-    colorImplicitParameter = color/default(cs.colorImplicitParameter, clr),
-    colorImplicitExpr = color/default(cs.colorImplicitExpr, clr)
+    colorComment = clr.color/default(cs.colorComment),
+    colorReserved = clr.color/default(cs.colorReserved),
+    colorReservedOp = clr.color/default(cs.colorReservedOp),
+    colorSpecial = clr.color/default(cs.colorSpecial),
+    colorString = clr.color/default(cs.colorString),
+    colorNumber = clr.color/default(cs.colorNumber),
+    colorModule = clr.color/default(cs.colorModule),
+    colorCons = clr.color/default(cs.colorCons),    
+    colorTypeCon = clr.color/default(cs.colorTypeCon),
+    colorTypeVar = clr.color/default(cs.colorTypeVar),
+    colorTypeKeyword = clr.color/default(cs.colorTypeKeyword),
+    colorTypeKeywordOp = clr.color/default(cs.colorTypeKeywordOp),
+    colorTypeSpecial = clr.color/default(cs.colorTypeSpecial),
+    colorTypeParam = clr.color/default(cs.colorTypeParam),
+    colorNameQual = clr.color/default(cs.colorNameQual),
+    colorImplicitParameter = clr.color/default(cs.colorImplicitParameter),
+    colorImplicitExpr = clr.color/default(cs.colorImplicitExpr)
   )
 
 pub val empty = make-color-scheme(ColorDefault)
@@ -146,77 +147,89 @@ pub fun read-color-flags(scheme: colorScheme, s: string)
 
   s.list.split.foldl(scheme, fn(sc, s') sc.read-color-flag(s'))
 
-// Read a name=color flag.
+// Read a name=color flag. An unknown name or color leaves the scheme as it is.
 pub fun read-color-flag(scheme: colorScheme, s: string)
   val (name, xs) = s.list.span(fn(c) c != '=' && c != ':')
   match xs
-    Cons(c, clr) | c == '=' || c == ':' -> scheme.update(name.string, clr.string)
-    _ -> 
+    Cons(c, clr) | c == '=' || c == ':' ->
+      match (read-update(name.string), read-color(clr.string))
+        (Just(update), Just(color)) -> update(color, scheme)
+        _ -> scheme
+    _ ->
       match color-themes.find(fn((n,_)) n == name.string)
         Just((_, theme)) -> theme
-        _ -> scheme.update(name.string, "default")
+        _ -> match read-update(name.string)
+          Just(update) -> update(ColorDefault, scheme)
+          Nothing -> scheme
 
-fun update(scheme: colorScheme, name: string, color: string)
-  val clr = match color
-    "black" -> Black
-    "darkred" -> DarkRed
-    "darkgreen" -> DarkGreen
-    "darkyellow" -> DarkYellow
-    "darkblue" -> DarkBlue
-    "darkmagenta" -> DarkMagenta
-    "darkcyan" -> DarkCyan
-    "lightgray" -> Gray
-    "gray" -> DarkGray
-    "red" -> Red
-    "green" -> Green
-    "yellow" -> Yellow
-    "blue" -> Blue
-    "cyan" -> Cyan
-    "white" -> White
-    "default" -> ColorDefault
+fun norm(s: string): string
+  s.trim.to-lower
+
+fun read-color(s: string): maybe<color>
+  match s.norm
+    "black" -> Just(Black)
+    "darkred" -> Just(DarkRed)
+    "darkgreen" -> Just(DarkGreen)
+    "darkyellow" -> Just(DarkYellow)
+    "darkblue" -> Just(DarkBlue)
+    "darkmagenta" -> Just(DarkMagenta)
+    "darkcyan" -> Just(DarkCyan)
+    "lightgray" -> Just(Gray)
+    "gray" -> Just(DarkGray)
+    "red" -> Just(Red)
+    "green" -> Just(Green)
+    "yellow" -> Just(Yellow)
+    "blue" -> Just(Blue)
+    "magenta" -> Just(Magenta)
+    "cyan" -> Just(Cyan)
+    "white" -> Just(White)
+    "default" -> Just(ColorDefault)
     // other spellings
-    "lightgrey" -> Gray
-    "grey" -> DarkGray
-    "darkgrey" -> DarkGray
+    "lightgrey" -> Just(Gray)
+    "grey" -> Just(DarkGray)
+    "darkgrey" -> Just(DarkGray)
     // other words
-    "navy" -> DarkBlue
-    "teal" -> DarkCyan
-    "maroon" -> DarkRed
-    "purple" -> DarkMagenta
-    "olive" -> DarkYellow
-    "silver" -> Gray
-    "lime" -> Green
-    "aqua" -> Cyan
-    "fuchsia" -> Magenta
-    "darkgray" -> DarkGray
-    _ -> ColorDefault
-  match name.trim.to-lower
-    "type" -> scheme(colorType=clr, colorTypeCon=clr, colorTypeVar=clr, colorTypeKeyword=clr, colorEffect=clr)
-    "kind" -> scheme(colorKind=clr)
-    "marker" -> scheme(colorMarker=clr)
-    "warning" -> scheme(colorWarning=clr)
-    "error" -> scheme(colorError=clr)
-    "source" -> scheme(colorSource=clr)
-    "interpreter" -> scheme(colorInterpreter=clr)
-    "command" -> scheme(colorCommand=clr)
-    "keyword" -> scheme(colorKeyword=clr, colorTypeKeyword=clr)
-    "typecon" -> scheme(colorTypeCon=clr)
-    "typevar" -> scheme(colorTypeVar=clr)
-    "typekeyword" -> scheme(colorTypeKeyword=clr)
-    "range" -> scheme(colorRange=clr)
-    "sep" -> scheme(colorSep=clr)
-    "comment" -> scheme(colorComment=clr)
-    "reserved" -> scheme(colorReserved=clr)
-    "reservedop" -> scheme(colorReservedOp=clr)
-    "special" -> scheme(colorSpecial=clr)
-    "string" -> scheme(colorString=clr)
-    "number" -> scheme(colorNumber=clr)
-    "module" -> scheme(colorModule=clr)
-    "effect" -> scheme(colorEffect=clr)
-    "parameter" -> scheme(colorParameter=clr)
-    "cons" -> scheme(colorCons=clr)
-    "constructor" -> scheme(colorCons=clr)
-    "none" -> color-scheme/empty
-    "all" -> make-color-scheme(clr)
-    "implicitparameter" -> scheme(colorImplicitParameter=clr)
-    "implicitexpr" -> scheme(colorImplicitExpr=clr)
+    "navy" -> Just(DarkBlue)
+    "teal" -> Just(DarkCyan)
+    "maroon" -> Just(DarkRed)
+    "purple" -> Just(DarkMagenta)
+    "olive" -> Just(DarkYellow)
+    "silver" -> Just(Gray)
+    "lime" -> Just(Green)
+    "aqua" -> Just(Cyan)
+    "fuchsia" -> Just(Magenta)
+    "darkgray" -> Just(DarkGray)
+    _ -> Nothing
+
+fun read-update(name: string): maybe<(color, colorScheme) -> colorScheme>
+  match name.norm
+    "type" -> Just(fn(clr, scheme) scheme(colorType=clr, colorTypeCon=clr, colorTypeVar=clr, colorTypeKeyword=clr, colorEffect=clr))
+    "kind" -> Just(fn(clr, scheme) scheme(colorKind=clr))
+    "marker" -> Just(fn(clr, scheme) scheme(colorMarker=clr))
+    "warning" -> Just(fn(clr, scheme) scheme(colorWarning=clr))
+    "error" -> Just(fn(clr, scheme) scheme(colorError=clr))
+    "source" -> Just(fn(clr, scheme) scheme(colorSource=clr))
+    "interpreter" -> Just(fn(clr, scheme) scheme(colorInterpreter=clr))
+    "command" -> Just(fn(clr, scheme) scheme(colorCommand=clr))
+    "keyword" -> Just(fn(clr, scheme) scheme(colorKeyword=clr, colorTypeKeyword=clr))
+    "typecon" -> Just(fn(clr, scheme) scheme(colorTypeCon=clr))
+    "typevar" -> Just(fn(clr, scheme) scheme(colorTypeVar=clr))
+    "typekeyword" -> Just(fn(clr, scheme) scheme(colorTypeKeyword=clr))
+    "range" -> Just(fn(clr, scheme) scheme(colorRange=clr))
+    "sep" -> Just(fn(clr, scheme) scheme(colorSep=clr))
+    "comment" -> Just(fn(clr, scheme) scheme(colorComment=clr))
+    "reserved" -> Just(fn(clr, scheme) scheme(colorReserved=clr))
+    "reservedop" -> Just(fn(clr, scheme) scheme(colorReservedOp=clr))
+    "special" -> Just(fn(clr, scheme) scheme(colorSpecial=clr))
+    "string" -> Just(fn(clr, scheme) scheme(colorString=clr))
+    "number" -> Just(fn(clr, scheme) scheme(colorNumber=clr))
+    "module" -> Just(fn(clr, scheme) scheme(colorModule=clr))
+    "effect" -> Just(fn(clr, scheme) scheme(colorEffect=clr))
+    "parameter" -> Just(fn(clr, scheme) scheme(colorParameter=clr))
+    "cons" -> Just(fn(clr, scheme) scheme(colorCons=clr))
+    "constructor" -> Just(fn(clr, scheme) scheme(colorCons=clr))
+    "none" -> Just(fn(clr, _) make-color-scheme(clr))
+    "all" -> Just(fn(clr, _) make-color-scheme(clr))
+    "implicitparameter" -> Just(fn(clr, scheme) scheme(colorImplicitParameter=clr))
+    "implicitexpr" -> Just(fn(clr, scheme) scheme(colorImplicitExpr=clr))
+    _ -> Nothing

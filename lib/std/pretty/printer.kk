@@ -1,11 +1,12 @@
 /*----------------------------------------------------------------------------
-   Copyright 2024, Koka-Community Authors
+   Copyright 2024-2026, Tim Whiting.
 
-   Licensed under the Apache License, Version 2.0 ("The License"). You may not
-   use this file except in compliance with the License. A copy of the License
-   can be found in the LICENSE file at the root of this distribution.
+   This is free software; you can redistribute it and/or modify it under the
+   terms of the Apache License, Version 2.0. A copy of the License can be
+   found in the LICENSE file at the root of this distribution.
 ----------------------------------------------------------------------------*/
-// Translated from koka/src/Lib/Printer.hs, but using effects all over // Updated 7/23/24 Commit 32ada87
+// Translated from koka/src/Lib/Printer.hs, but using effects all over
+// Updated 7/23/24 Commit 32ada87
 
 // Module for portable control of colors in a console
 // only the color of 'stdout' is influenced by these functions, (except for the string / file variants of printers)
@@ -143,7 +144,7 @@ fun color/cmp(a: color, b: color): order
 
 //--------------------------------------------------------------------------
 //  Simple monochrome printer
-//--------------------------------------------------------------------------}
+//--------------------------------------------------------------------------
 pub val no-color-printer = 
   handler
     fun push-color-settings(s: print-color-settings) ()
@@ -166,10 +167,10 @@ pub val mono-printer = handler
 
 //--------------------------------------------------------------------------
 //  Simple File printer
-//--------------------------------------------------------------------------}
+//--------------------------------------------------------------------------
 // Use a file printer that ignores colors. Appends, or creates the file
 pub fun file-printer(file-path: string, action)
-  var f := read-text-file(file-path.path)
+  var f := try{ read-text-file(file-path.path) }.default("")
   handle action
     fun write(s) f := f ++ s
     fun write-ln(s) f := f ++ s ++ "\n"
@@ -200,7 +201,7 @@ pub fun string-printer(action: () -> <printer|e> ()): e string
 
 // --------------------------------------------------------------------------
 //  Standard ANSI escape sequences
-// --------------------------------------------------------------------------}
+// --------------------------------------------------------------------------
 // Use a color printer that uses ANSI escape sequences.
 
 pub fun ansi-color-settings(action)
@@ -307,29 +308,30 @@ pub fun html-color-string-printer(action)
   with html-color-settings
   action()
 
+// Each push opens spans nested inside the enclosing ones, and each pop
+// closes exactly the spans its push opened, so the enclosing settings apply
+// again. `settings` holds each level's settings and its number of open spans.
 pub fun html-color-settings(action)
   var settings := [(Print-color-settings(),0)]
   with handler
-    fun push-color-settings(new) 
+    fun push-color-settings(new)
       match settings
-        Cons((old,n), rest) ->
-          span-reset(n)
-          val n' = html-set-color(old, new)
-          settings := Cons((new,n'), Cons((old,0), rest))
+        Cons((old,_), _) ->
+          val n = html-set-color(old, new)
+          settings := Cons((new,n), settings)
         Nil -> ()
-    fun update-push-color-settings(f) 
+    fun update-push-color-settings(f)
       match settings
-        Cons((old,n), rest) ->
+        Cons((old,_), _) ->
           val new = f(old)
-          span-reset(n)
-          val n' = html-set-color(old, new)
-          settings := Cons((new,n'), Cons((old,0), rest))
+          val n = html-set-color(old, new)
+          settings := Cons((new,n), settings)
         Nil -> ()
     fun pop-color-settings()
       match settings
-        Cons((_,n'), Cons((old,n), rest)) ->
-          span-reset(n')
-          settings := Cons((old,n), rest)
+        Cons((_,n), rest) | rest.is-cons ->
+          span-reset(n)
+          settings := rest
         _ -> ()
   action()
 
@@ -384,44 +386,3 @@ pub fun html-escape(s: string): string
       '_'  -> "&#95;"
       _ -> c.string
   r.join
-
-/// Test of printer features
-fun example(): <console, exn, fsys, ndet> ()
-  with console-printer
-  "hi\xFF".write-ln() // Will not print unicode on Windows
-  with mono-printer
-  "hi\xAA".write-ln() // Also will get rid of unicode on Windows
-  with new-file-printer("/tmp/tmp1.txt")
-  "new".write()
-  " file".write-ln()
-  flush()
-  with file-printer("/tmp/tmp1.txt")
-  "hi".write()
-  " there".write-ln()
-  flush()
-  with ansi-printer
-  with color-settings(Print-color-settings(invert=True))
-  with color-settings(Print-color-settings(invert=True))
-  "hello".println-colored(Red)
-  "world".println-colored(Blue)
-  with color-settings(Print-color-settings(underline=True))
-  "hello".println-colored(Red)
-  "world".println-colored(Blue)
-  with color-settings(Print-color-settings())
-  "hello".println-colored(Red)
-  "world".println-colored(Blue)
-  color-settings(Print-color-settings(fcolor=Green))
-    "hello ".write()
-    "world!".write-ln()
-  color-settings(Print-color-settings(fcolor=DarkYellow, invert=True))
-    "This is crazy, ".write()
-    color-settings(Print-color-settings(fcolor=DarkCyan, underline=True))
-      "but it's ok".write-ln()
-  val res = 
-    with html-color-string-printer
-    "hello".println-colored(Red)
-  res.println
-
-
-
-

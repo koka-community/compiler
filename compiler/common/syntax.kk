@@ -5,9 +5,8 @@
 // terms of the Apache License, Version 2.0. A copy of the License can be
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
+// Updated as of 8/3/26: Commit eb98b61d
 module compiler/common/syntax
-// Updated as of 8/3/26: Commit eb98b61d (content-verified identical to
-// src/Common/Syntax.hs at this commit, not just commit-count-based)
 
 pub type jsTarget
   JsDefault
@@ -444,8 +443,8 @@ pub fun datadef/(==)(d1: data-def, d2: data-def): bool
     (DataDefValue(r1), DataDefValue(r2)) -> r1 == r2
     (DataDefNormal, DataDefNormal) -> True
     (DataDefLazy(f1), DataDefLazy(f2)) -> f1 == f2
-    (DataDefOpen, DataDefOpen) -> True
-    (DataDefAuto, DataDefAuto) -> True
+    (DataDefOpen(e1), DataDefOpen(e2)) -> e1 == e2
+    (DataDefAuto(s1), DataDefAuto(s2)) -> s1 == s2
     _ -> False
 
 pub fun datadef/show(d: data-def): string
@@ -739,5 +738,5 @@ pub fun fipa/max(a1: fip-alloc, a2: fip-alloc)
 pub fun member-doc(doc: string, header: string, members: list<string>): string
   if members.is-empty then doc 
   else 
-    val mdoc = "// " ++ header ++ ":\n// ```koka\n" ++ members.map("// " ++ _).join("\n") ++ "// ```\n"
+    val mdoc = "// " ++ header ++ ":\n// ```koka\n" ++ members.map(fn(m) "// " ++ m ++ "\n").join ++ "// ```\n"
     if doc == "" then mdoc else doc ++ "\n// * * *\n" ++ mdoc
