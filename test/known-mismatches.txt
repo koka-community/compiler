@@ -3,3 +3,5 @@
 cgen/specialize/maptwice.kk # expects koka-lang/koka#989 (keep `.open` in Core, erase it in the backends), not ported yet
 cgen/specialize/fold1.kk # expects koka-lang/koka#989 (keep `.open` in Core, erase it in the backends), not ported yet
 parc/parc18.kk # expects koka-lang/koka#984 (Parc: primitives), not ported yet
+type/rec-group1.kk # expects koka-lang/koka#977 (generalize recursive groups jointly), not ported yet
+cgen/rec-group-wildcard.kk # expects koka-lang/koka#977 (generalize recursive groups jointly), not ported yet

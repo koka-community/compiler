@@ -320,7 +320,15 @@ fun sic-def(s: sic, d: def): _ def
 //--------------------------------------------------------------------------
 
 fun replace-call(nm: name, expr0: expr, dsort: def-sort, bools: list<bool>, args: list<expr>, mb-type-args: maybe<list<ktype>>): spec-eff maybe<expr>
-  val (uexpr, _) = uniquefyExprU(expr0)
+  val (uexpr0, _) = uniquefyExprU(expr0)
+  // the type arguments can mention bound type variables of the caller with the same ids as the
+  // callee's type parameters (e.g. when both are compiled in this session), and a substitution
+  // must not map a variable that occurs in its range: rename the parameters apart first
+  val uexpr = match (mb-type-args, uexpr0)
+    (Just, TypeLam(tparams, body)) ->
+      val fresh = tparams.map(fn(tv) fresh-typevar(tv.kind, Bound))
+      TypeLam(fresh, new/sub(tparams.zip(fresh.map(TVar))).expr/substitute(body))
+    _ -> uexpr0
 
   // extract the specialized parameters
   val (newPairs, speccedPairs) = partition-bools(bools, fn-params(uexpr).zip(args))
