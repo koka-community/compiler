@@ -5,3 +5,5 @@ cgen/specialize/fold1.kk # expects koka-lang/koka#989 (keep `.open` in Core, era
 parc/parc18.kk # expects koka-lang/koka#984 (Parc: primitives), not ported yet
 type/rec-group1.kk # expects koka-lang/koka#977 (generalize recursive groups jointly), not ported yet
 cgen/rec-group-wildcard.kk # expects koka-lang/koka#977 (generalize recursive groups jointly), not ported yet
+finally/resume-escape-fatal.kk # the port's `-e` skips --showtypesigs when the program fails, and reports the failure on stdout
+finally/resume-escape-fatal-resumed.kk # the port's `-e` skips --showtypesigs when the program fails, and reports the failure on stdout
