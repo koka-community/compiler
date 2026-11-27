@@ -7,11 +7,11 @@ import compiler/common/unique
 import compiler/core/core
 import compiler/core/corevar
 import compiler/type/type
-import std/data/rb-set
+import std/data/set
 import std/data/int-map
 import std/num/int64
 import std/data/hash
-import std/data/rb-map
+import std/data/map
 
 // PERFORMANCE: locals/renaming were a LinearSet/LinearMap -- association
 // lists with O(n) member/lookup/insert -- inside the optimizer's hottest
@@ -100,7 +100,7 @@ fun fun/run-unique(f: () -> _ a): _ a
 pub fun expr/uniquefy(e: expr): _ expr
   uniquefy(e, tnames/empty)
 
-pub fun free/uniquefy(e: expr, free: rbset<t-name>): _ expr
+pub fun free/uniquefy(e: expr, free: set<t-name>): _ expr
   val locals = uq-from-names(free.union(e.free-locals).list.map(get-name))
   with start/run-unique(0)
   set-locals(locals)

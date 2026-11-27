@@ -59,7 +59,7 @@ import std/os/dir
 import compiler/common/file
 import compiler/static/binding-groups
 import pretty/pprint
-import std/data/rb-map
+import std/data/map
 import compiler/common/name-collections
 import compiler/compile/rpc
 import compiler/lib/log
@@ -320,7 +320,7 @@ pub fun compile-graph-rpc(fl: flags, out-dir: path, search-dirs: list<path>,
                       // for a file whose modules had not changed. The caller is
                       // responsible for only passing entries that are still valid
                       // (see `check-file-ex`).
-                      preloaded: bmodules = rb-map/empty(),
+                      preloaded: bmodules = map/empty(),
                       // Modules that are ROOTS of this build rather than
                       // dependencies: compiled as ENTRIES (their own `main`,
                       // their own executable).
@@ -338,7 +338,7 @@ pub fun compile-graph-rpc(fl: flags, out-dir: path, search-dirs: list<path>,
   val adj = dcache.list.map(fn((nm, (_, _, ds, _))) (nm, ds.map(fst)))
   val cycle = import-cycles(adj).head.default([])
   if !cycle.is-nil then
-    (rb-map/empty(),
+    (map/empty(),
      [(cycle.head.default(name/nil),
        ModOutcome(Left("recursive imports: " ++ cycle.map(show-plain).join(" -> ")), []))])
   else
@@ -444,11 +444,11 @@ pub fun compile-graph-rpc(fl: flags, out-dir: path, search-dirs: list<path>,
       // Roots (entries) still compile in one stage: they come last anyway, and
       // their `@expr` wrapper pass re-type-checks.
       var ready-mods : bmodules := preloaded           // interface or COMPILED
-      var typed : bmodules := rb-map/empty()          // `ModTyped`: checked, not yet finished
+      var typed : bmodules := map/empty()          // `ModTyped`: checked, not yet finished
       var pending-tc := todo0.filter(fn((nm, _, _, _)) !roots.any(fn(r) r == nm))
       var pending-roots := todo0.filter(fn((nm, _, _, _)) roots.any(fn(r) r == nm))
       var pending-finish := []                         // type checked, waiting for a compiled closure
-      var tc-outcomes : name-map<mod-outcome> := rb-map/empty()
+      var tc-outcomes : name-map<mod-outcome> := map/empty()
       var in-flight := 0
       var waiting : list<xsender<orch-reply>> := []
       var collected : list<(name, mod-outcome)> := []

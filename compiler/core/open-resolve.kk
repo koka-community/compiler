@@ -17,7 +17,7 @@ import compiler/type/pretty
 import compiler/type/kind
 import compiler/kind/kind
 import pretty/pprint
-import std/data/rb-map
+import std/data/map
 import std/core/undiv
 import compiler/common/name-collections
 

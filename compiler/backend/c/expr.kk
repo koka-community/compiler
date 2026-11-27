@@ -15,7 +15,7 @@ import compiler/backend/c/dup-drops
 import compiler/common/failure
 import compiler/platform/config
 import compiler/common/syntax
-import std/data/rb-set
+import std/data/set
 import compiler/common/color-scheme
 import compiler/common/nice
 import std/core/undiv

@@ -13,7 +13,6 @@ import compiler/common/range
 import compiler/common/color-scheme
 import pretty/printer
 import std/os/path
-import std/test
 // Updated as of 7/23/24: Commit: c7c0ac6
 
 // Pretty print helpers

@@ -16,7 +16,7 @@ import pretty/printer
 import pretty/pprint
 import std/core/undiv
 import std/num/int32
-import std/data/rb-map
+import std/data/map
 
 
 // | Names defined by the user.

@@ -34,7 +34,7 @@ import compiler/common/file
 import compiler/lib/log
 import compiler/compile/link
 import std/os/env
-import std/data/rb-map
+import std/data/map
 import compiler/common/name-collections
 
 // The pretty-environment fields that come

@@ -28,7 +28,7 @@ import compiler/common/syntax
 import compiler/common/unique
 import compiler/common/nice
 import compiler/kind/kind
-import std/data/rb-map
+import std/data/map
 import compiler/kind/newtypes
 import compiler/type/type
 import compiler/type/typevar
@@ -511,7 +511,7 @@ pub fun syn-order2(info: data-info): _ user-def
 // The data type whose declaration contains either end of
 // the requested range -- i.e. the one the cursor is in.
 fun find-type(nts: newtypes, r: range): _ maybe<data-info>
-  nts.rb-map/list.map(snd).find fn(di)
+  nts.map/list.map(snd).find fn(di)
     di.range.range/contains(r.end) || di.range.range/contains(r.start)
 
 pub fun code-actions(st: server-state, ps: json): _ json

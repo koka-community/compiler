@@ -52,7 +52,7 @@ import std/os/dir
 import compiler/common/file
 import compiler/static/binding-groups
 import pretty/pprint
-import std/data/rb-map
+import std/data/map
 import compiler/common/name-collections
 import compiler/compile/rpc
 import compiler/lib/log
@@ -126,8 +126,8 @@ pub fun build-roots-isolated(fl: flags, fnames: list<string>, sess: session = Se
 // both. Entries are revalidated by timestamp (`session-revalidate`) so an
 // interface that changed underneath us is dropped rather than trusted.
 pub struct session
-  mods: bmodules = rb-map/empty()
-  deps: dep-cache = rb-map/empty()
+  mods: bmodules = map/empty()
+  deps: dep-cache = map/empty()
   // The module names this context was built FOR. A
   // context can hold many (a language server tracks every open document; a
   // test runner one per test file), and each may carry its own `main`.
@@ -147,7 +147,7 @@ pub fun session-revalidate(s: session, fl: flags): _ session
     val kki = odir / (nm.module-name-to-path ++ ".kki").path
     val t = file/file-mtime(kki)
     t <= 0 || t <= m.bmod/at
-  s(mods = rb-map/empty().add-all(kept))
+  s(mods = map/empty().add-all(kept))
 
 // Drop the cached module(s) whose SOURCE is `p`, so the next check reloads them
 // from the overlay. This is what a buffer edit needs: the file on disk has not
@@ -164,7 +164,7 @@ pub fun paths/session-invalidate(s: session, ps: list<path>): _ session
   val names = s.deps.list.filter-map fn((nm, (src, _, _, _)))
     if ps.any(fn(p) src.string == p.string) then Just(nm) else Nothing
   if names.is-nil then s
-  else s(mods = rb-map/empty().add-all(s.mods.list.filter(fn((k, _)) !names.any(fn(n) n == k))))
+  else s(mods = map/empty().add-all(s.mods.list.filter(fn((k, _)) !names.any(fn(n) n == k))))
 
 // upstream `buildcClearRoots` / `buildcRemoveRootModule`
 pub fun session-clear-roots(s: session): session
@@ -417,7 +417,7 @@ fun check-file-ex(fl: flags, fnames: list<string>, isEntry: bool,
   // Decide what this round compiles (see `walk-rebuild`). The walk records each
   // decision here, dependencies first, so `stale-set` is already a valid
   // compile order.
-  var decisions : name-map<rebuild-decision> := rb-map/empty()
+  var decisions : name-map<rebuild-decision> := map/empty()
   var stale-rev : list<name> := []
   with handler
     fun decided(nm) decisions.lookup(nm)
@@ -455,7 +455,7 @@ fun check-file-ex(fl: flags, fnames: list<string>, isEntry: bool,
     else
       val kki-t = file/file-mtime(odir / (nm.module-name-to-path ++ ".kki").path)
       kki-t <= 0 || kki-t <= m.bmod/at
-  val preloaded0 = rb-map/empty().add-all(sess.mods.list.filter(still-valid))
+  val preloaded0 = map/empty().add-all(sess.mods.list.filter(still-valid))
   if timing-on() then println("PRELOAD reused: " ++ preloaded0.list.length.show ++ " of " ++ sess.mods.list.length.show)
   // Load every FRESH interface concurrently before the build proper. The
   // orchestrator below only schedules stale modules, so on a warm rebuild it has

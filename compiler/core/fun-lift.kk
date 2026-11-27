@@ -16,7 +16,7 @@ import compiler/type/assumption
 import compiler/core/core
 import compiler/core/corevar
 import compiler/platform/config
-import std/data/rb-set
+import std/data/set
 
 pub fun lift-functions()
   with handle-fun-lift()

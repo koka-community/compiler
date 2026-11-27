@@ -27,7 +27,7 @@ import compiler/common/name-prim
 import compiler/common/name-collections
 import compiler/common/syntax
 import compiler/syntax/syntax
-import std/data/rb-set
+import std/data/set
 import std/data/sort
 
 // upstream uses `S.toList` on a `Data.Set Name` everywhere free variables are

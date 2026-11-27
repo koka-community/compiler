@@ -22,7 +22,7 @@ import compiler/type/assumption
 import compiler/platform/config
 import compiler/core/core
 import compiler/type/typevar
-import std/data/rb-map
+import std/data/map
 
 // BACKTRACKING, and how much of it: upstream's `Core/Parse.hs` uses Parsec,
 // where `<|>` does NOT backtrack and `try` is the explicit opt-in. It reaches
@@ -885,14 +885,14 @@ struct envv
 
 fun with-env-initial(modName: name, srcPath: path, imports0, syns0: synonyms = synonyms/empty, f: () -> _ a): _ a
   with with-synonyms(syns0)
-  var bound := rb-map/empty()
+  var bound := map/empty()
   var imports := imports0
   var unique := 1000
   var gamma := assumption/empty
-  var locals := rb-map/empty()
+  var locals := map/empty()
   // from the interface's `local kind` section; consulted when a type
   // constructor occurrence carries no `:: kind` annotation
-  var declared-kinds : name-map<kind> := rb-map/empty()
+  var declared-kinds : name-map<kind> := map/empty()
   fun qualify(n: name)
     if n.is-qualified then
       match imports.expand(n)

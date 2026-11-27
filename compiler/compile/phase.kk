@@ -29,7 +29,7 @@
 module compiler/compile/phase
 import compiler/common/name
 import std/os/path
-import std/data/rb-map
+import std/data/map
 import compiler/common/name-collections
 
 // Epoch seconds, as produced by `compiler/common/file/file-mtime`. koka's std

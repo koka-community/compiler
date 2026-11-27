@@ -11,7 +11,7 @@ import compiler/kind/kind
 import compiler/core/core
 import compiler/core/corevar
 import compiler/type/typevar
-import std/data/rb-set
+import std/data/set
 import compiler/platform/config
 import compiler/common/unique
 

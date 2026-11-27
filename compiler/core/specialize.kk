@@ -37,7 +37,7 @@
 module compiler/core/specialize
 
 import compiler/common/failure
-import std/data/rb-map
+import std/data/map
 import compiler/common/name
 import compiler/common/name-collections
 import compiler/common/range
@@ -53,7 +53,7 @@ import compiler/core/inlines
 import compiler/core/simplify
 import compiler/core/uniquefy
 import std/core/undiv
-import std/data/rb-set
+import std/data/set
 
 //--------------------------------------------------------------------------
 // Specialization "monad": reader-only inlines + ambient unique
@@ -83,7 +83,7 @@ alias spec-eff = <spec-inlines, spec-stack, spec-provenance, unique, pure, comp-
 pub fun specialize(spec-env: inlines, provenance: bool = False): _ ()
   with val spec-inlines = spec-env
   with val spec-provenance = provenance
-  with val spec-stack = rb-map/empty()
+  with val spec-stack = map/empty()
   // upstream: runSpecM (uniq+100) ... TODO (also upstream): use the unique int
   // to generate names and remove the call to uniquefyDefGroups?
   set-unique(get-unique() + 100)
@@ -518,7 +518,7 @@ fun spec-is-fun(tp: ktype): bool
   tp.split-fun-scheme.is-just
 
 fun used-in-this-def(d: def): _ name-set
-  rb-set/from-list(d.defExpr.spec-fold-map(used-var).map(get-name))
+  set/from-list(d.defExpr.spec-fold-map(used-var).map(get-name))
 
 fun used-var(e: expr): list<t-name>
   match e

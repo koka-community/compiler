@@ -41,9 +41,9 @@ import compiler/compile/module
 import compiler/compile/vfs
 import compiler/compile/phase
 import compiler/common/file
-import std/data/rb-map
+import std/data/map
 import compiler/lib/scc
-import std/data/rb-set
+import std/data/set
 import compiler/common/name-collections
 import std/async
 import std/async/thread
@@ -316,7 +316,7 @@ pub fun resolve-module(mods0: bmodules, nm: name, out-dir: path, need-cfile: boo
                        // because a module's SOURCE may come from the in-memory
                        // overlay rather than disk (compiler/compile/vfs.kk).
                        compile-source: (path, name, bmodules) -> <io,comp-error,parse-error,vfs-lookup,log|e> bmodule,
-                       deps-cache: dep-cache = rb-map/empty(),
+                       deps-cache: dep-cache = map/empty(),
                        in-progress: list<name> = [], irange: range = range/null,
                        // see `resolve-module-name`'s doc comment: callers
                        // canonicalize via `canonicalize-deps` before this is
@@ -618,7 +618,7 @@ pub fun discover-deps(roots: list<name>, source-dirs: module-dirs, tpl: target-p
                       // a previous run's cache to start from: a language server
                       // re-checks the same graph on every keystroke, and rescanning
                       // it dominates the cost of the edit itself
-                      cache0: dep-cache = rb-map/empty()): _ dep-cache
+                      cache0: dep-cache = map/empty()): _ dep-cache
   fun locate(nm: name): _ maybe<path>
     source-dirs.search.flatmap(fn(d) source-files(d, nm.show-plain)).find(vfs/is-file)
   fun waves(cache: dep-cache, frontier: list<name>): _ dep-cache
@@ -771,7 +771,7 @@ pub fun restrict-to-closure(mods: bmodules, direct: list<name>): div bmodules
   // dropping the alias key here -- keeping only "std/async/internal" -- means
   // that second lookup misses, silently omitting the module from `tcMods`
   // even though it's genuinely in the closure.
-  rb-map/empty().add-all(mods.list.filter(fn((n, m)) keep.any(fn(k) k == n) || keep.any(fn(k) k == m.bmod/core.coreName)))
+  map/empty().add-all(mods.list.filter(fn((n, m)) keep.any(fn(k) k == n) || keep.any(fn(k) k == m.bmod/core.coreName)))
 
 // Synonyms of every module loaded so far. Seeds the interface parser so a
 // synonym the emitter did not re-declare in the `local alias` section (e.g.
@@ -919,7 +919,7 @@ fun load-unordered(fl: flags, out-dir: path, cands: list<name>, have0: bmodules)
       val cfile = out-dir / (nm.module-name-to-path ++ ".c").path
       val need-cfile = fl.target.is-c
       if need-cfile && !cfile.dir/is-file then Nothing
-      else Just(LoadReq(nm, kki, at, if need-cfile then Just(cfile) else Nothing, rb-map/empty()))
+      else Just(LoadReq(nm, kki, at, if need-cfile then Just(cfile) else Nothing, map/empty()))
   if reqs.is-nil then have0
   else
     val (got, n-workers) =
@@ -1255,7 +1255,7 @@ pub fun build-order(mods: bmodules, roots: list<name>): _ list<(name, bmodule)>
   // the closure: `roots` and everything they import
   fun visit(acc: (name-set, list<(name, bmodule)>), nm: name): div (name-set, list<(name, bmodule)>)
     val (seen, out) = acc
-    if rb-set/member(seen, nm) then acc
+    if set/member(seen, nm) then acc
     else match mods.lookup(nm)
       Nothing -> (seen + nm, out)
       Just(m) ->
@@ -1263,7 +1263,7 @@ pub fun build-order(mods: bmodules, roots: list<name>): _ list<(name, bmodule)>
         (seen1, Cons((nm, m), out1))
   val (inClosure, closure) = roots.foldl((names/empty, []), visit)
   val deps = closure.map fn((nm, m))
-    (nm, m.bmod/core.imports.map(fn(i) i.importName).filter(fn(d) rb-set/member(inClosure, d) && mods.contains-key(d)))
+    (nm, m.bmod/core.imports.map(fn(i) i.importName).filter(fn(d) set/member(inClosure, d) && mods.contains-key(d)))
   scc(deps).concat.filter-map(fn(nm) mods.lookup(nm).map(fn(m) (nm, m)))
 
 // The import cycles in `deps` (module, its direct imports), one list of
@@ -1273,7 +1273,7 @@ pub fun build-order(mods: bmodules, roots: list<name>): _ list<(name, bmodule)>
 // modules outside `deps` (interface-only) cannot close a cycle and are ignored.
 pub fun import-cycles(deps: list<(name, list<name>)>): div list<list<name>>
   val keys = deps.foldl(names/empty) fn(s, (nm, _)) s + nm
-  val adj = deps.map(fn((nm, ds)) (nm, ds.filter(fn(d) rb-set/member(keys, d))))
+  val adj = deps.map(fn((nm, ds)) (nm, ds.filter(fn(d) set/member(keys, d))))
   scc(adj).filter fn(grp)
     match grp
       [nm] -> adj.any(fn((k, ds)) k == nm && ds.any(fn(d) d == nm))

@@ -8,7 +8,7 @@ import compiler/common/syntax
 import compiler/common/unique
 import compiler/core/corevar
 import std/core/undiv
-import std/data/rb-set
+import std/data/set
 
 pub fun defs/unroll(unrollMax: int)
   set-core-defs(unroll(get-core-defs()))

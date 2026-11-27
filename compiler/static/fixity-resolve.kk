@@ -2,7 +2,7 @@
 module compiler/static/fixity-resolve
 
 import compiler/common/name
-import std/data/rb-map
+import std/data/map
 import compiler/common/name-prim
 import compiler/common/name-collections
 import compiler/common/failure
@@ -122,7 +122,7 @@ fun handlerbranch/resolve(hb: handler-branch<user-type>)
 
 // Fixity map for all operators
 pub alias fixities = name-map<fixity>
-val fixitiesEmpty: fixities = rb-map/empty()
+val fixitiesEmpty: fixities = map/empty()
 
 fun find-fixity(fixities: fixities, name: name): fixity
   fixities.lookup(name).default(FixInfix(50, AssocNone))
@@ -130,8 +130,8 @@ fun find-fixity(fixities: fixities, name: name): fixity
 pub fun fixities-compose(fix1: fixities, fix2: fixities): fixities
   fix2.list.foldl(fix1) fn(acc, (name, fixity))
     match fix1.lookup(name)
-      Just(x as FixInfix) -> rb-map/set(acc, name, x)
-      _ -> rb-map/set(acc, name, fixity) // upstream compose: fix2's infix wins when fix1's entry is not infix
+      Just(x as FixInfix) -> map/set(acc, name, x)
+      _ -> map/set(acc, name, fixity) // upstream compose: fix2's infix wins when fix1's entry is not infix
 
 pub fun fixities-new(fs: list<(name, fixity)>): fixities
   fixitiesEmpty + fs.filter(_.snd.is-fixInfix)

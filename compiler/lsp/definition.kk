@@ -5,7 +5,7 @@
 module compiler/lsp/definition
 
 import std/os/path
-import std/data/rb-map
+import std/data/map
 import std/core/undiv
 import compiler/common/name
 import compiler/common/range

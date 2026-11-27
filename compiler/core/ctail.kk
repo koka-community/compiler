@@ -29,7 +29,7 @@ import compiler/type/assumption
 import compiler/core/core
 import compiler/core/corevar
 import compiler/core/analysis-cctx
-import std/data/rb-set
+import std/data/set
 
 //--------------------------------------------------------------------------
 // Entry point

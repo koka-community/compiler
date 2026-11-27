@@ -29,10 +29,10 @@ import compiler/common/syntax
 import compiler/common/failure
 import compiler/type/type
 import compiler/kind/newtypes
-import std/data/rb-set
+import std/data/set
 import std/data/sort
 import std/core/undiv
-import std/data/rb-map
+import std/data/map
 import compiler/common/name-collections
 
 //--------------------------------------------------------------------------
@@ -42,12 +42,12 @@ import compiler/common/name-collections
 
 // Iterates in name order, which decides the
 // emitted dup/drop order and which drop `optimize-disjoint` specializes first
-alias tnameset = rbset<t-name>
+alias tnameset = set<t-name>
 alias tnamedups = tnameset
 alias tnamedrops = tnameset
 
 // maps a name to its (known) children/constructor-repr/scan-field-count
-alias shape-map = rbmap<t-name, shape-info>
+alias shape-map = map<t-name, shape-info>
 struct shape-info
   m-children: maybe<tnameset>          // if known, Just of children
   m-con-repr: maybe<(con-repr, name)>  // if known, conRepr; may be Just while m-children is Nothing in case there is just one constructor (like a tuple)
@@ -87,7 +87,7 @@ alias guard-fn = (tnameset) -> parc-effs guard
 
 pub fun parc-core(platform: platform, newtypes: newtypes, borrowed: borrowed, enable-specialize: bool, c: core): <unique,exn,div> core
   var owned-v := tnames/empty
-  var shapes-v := rb-map/empty()
+  var shapes-v := map/empty()
   var live-v := tnames/empty
   var pending-v := tnames/empty
   with handler
@@ -578,7 +578,7 @@ fun no-dup(s1: shape-info, s2: shape-info): exn shape-info
   failure/fail("Backend.C.Parc.aliasMap.noDup: duplicate pattern names")
 
 fun unions-nodup(ms: list<shape-map>): <exn,div> shape-map
-  ms.foldl(rb-map/empty(), fn(acc: shape-map, m: shape-map) acc.union-with(m, no-dup))
+  ms.foldl(map/empty(), fn(acc: shape-map, m: shape-map) acc.union-with(m, no-dup))
 
 fun shapes-of(parent: t-name, pat: pattern): <exn,div> shape-map
   match pat
@@ -592,14 +592,14 @@ fun shapes-of(parent: t-name, pat: pattern): <exn,div> shape-map
       match child-map.lookup(patname)
         Just(shape) -> child-map.set(parent, shape)   // same children as parent == patname
         Nothing -> failure/fail("Backend.C.Parc.aliasMap: unbound alias: " ++ patname.show)
-    PatLit(_) -> rb-map/from-list([(parent, ShapeInfo(Nothing, Nothing, Just(0)))])
-    PatWild -> rb-map/from-list([(parent, ShapeInfo(Nothing, Nothing, Nothing))])
+    PatLit(_) -> map/from-list([(parent, ShapeInfo(Nothing, Nothing, Just(0)))])
+    PatWild -> map/from-list([(parent, ShapeInfo(Nothing, Nothing, Nothing))])
 
 fun shapes-child(pat: pattern): <exn,div> shape-map
   match pat
     PatVar(patname, patpattern) -> shapes-of(patname, patpattern)
     PatCon -> failure/fail("Backend.C.Parc.aliasMap: unnamed nested pattern")
-    _ -> rb-map/empty()
+    _ -> map/empty()
 
 fun pat-var-name(p: pattern): <exn> t-name
   match p

@@ -21,7 +21,7 @@ import compiler/common/range
 import compiler/common/syntax
 import compiler/common/unique
 import compiler/kind/kind
-import std/data/rb-map
+import std/data/map
 import compiler/common/name-collections
 import compiler/kind/newtypes
 import compiler/kind/synonyms
@@ -223,11 +223,11 @@ fun value-completions(g: gamma, ci: completion-info, modname: name): _ list<json
             Just(item(modname, n, if cinfo.params.is-nil then ciEnumMember else ciConstructor, detail))
 
 fun datatype-completions(nts: newtypes, modname: name): _ list<json>
-  nts.rb-map/list.map fn((_, di))
+  nts.map/list.map fn((_, di))
     item(modname, di.name, ciInterface, di.name.show-plain)
 
 fun synonym-completions(sy: synonyms, ci: completion-info, modname: name): _ list<json>
-  sy.rb-map/list.filter-map fn((_, si))
+  sy.map/list.filter-map fn((_, si))
     if !si.name.matches(ci.search) then Nothing
     else Just(item(modname, si.name, ciInterface, si.tp.ktp/pretty-string))
 

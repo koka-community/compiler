@@ -38,9 +38,9 @@ import compiler/type/type
 import compiler/kind/newtypes
 import compiler/core/core
 import compiler/backend/c/parc-reuse-spec
-import std/data/rb-set
+import std/data/set
 import std/core/undiv
-import std/data/rb-map
+import std/data/map
 import std/data/int-map
 import std/num/int64
 
@@ -292,10 +292,10 @@ fun rux-branches(scrutinees: list<t-name>, branches: list<branch>): reuse-eff li
   set-available-intersect(avs)
   val rus = rs.reused-union
   set-reused(rus)
-  val reuse-drops: rbmap<t-name,expr> = rb-map/from-list(rus.list.map(fn(tn) (tn, gen-reuse-drop(tn))))
+  val reuse-drops: map<t-name,expr> = map/from-list(rus.list.map(fn(tn) (tn, gen-reuse-drop(tn))))
   branch-fns.map(fn(bf) bf(reuse-drops))
 
-fun rux-branch(b: branch, scrutinees: list<t-name>): reuse-eff ((rbmap<t-name,expr>) -> pure branch, reused, available)
+fun rux-branch(b: branch, scrutinees: list<t-name>): reuse-eff ((map<t-name,expr>) -> pure branch, reused, available)
   val ((bf, rd), av) = isolate-get-available fn()
     isolate-deconstructed fn()
       isolate-get-reused fn()
@@ -304,14 +304,14 @@ fun rux-branch(b: branch, scrutinees: list<t-name>): reuse-eff ((rbmap<t-name,ex
         val gs = b.guards.map(rux-guard)
         val (guards1, avs) = gs.unzip
         set-available-intersect(avs)
-        fn(reuse-drops: rbmap<t-name,expr>): pure branch
+        fn(reuse-drops: map<t-name,expr>): pure branch
           Branch(b.patterns, guards1.map(fn(gf) gf(reuse-drops)))
   (bf, rd, av)
 
 fun add-deconstructed(entry: (t-name, maybe<pattern>, int, int)): reuse-eff ()
   val (tn, pat, size, scan) = entry
   if size > 0 then
-    set-deconstructed(rb-map/set(get-deconstructed(), tn.get-name, (pat, size, scan)))
+    set-deconstructed(map/set(get-deconstructed(), tn.get-name, (pat, size, scan)))
 
 fun ru-pattern(scrutinee: t-name, pat: pattern): reuse-eff list<(t-name, maybe<pattern>, int, int)>
   match pat
@@ -333,12 +333,12 @@ fun ru-pattern(scrutinee: t-name, pat: pattern): reuse-eff list<(t-name, maybe<p
         Just((size, scan)) -> [(scrutinee, Nothing, size, scan)]
         Nothing -> []
 
-fun rux-guard(g: guard): reuse-eff ((rbmap<t-name,expr>) -> pure guard, available)
+fun rux-guard(g: guard): reuse-eff ((map<t-name,expr>) -> pure guard, available)
   isolate-get-available fn()
     val test1 = with-none( fn() g.test.rux-expr )
     val expr1 = g.body.rux-expr
     val reused-here = get-reused()
-    fn(reuse-drops: rbmap<t-name,expr>): pure guard
+    fn(reuse-drops: map<t-name,expr>): pure guard
       val drops-here = reuse-drops.filter(fn(k, _v) !reused-here.member(k)).values
       Guard(test1, make-stats(drops-here ++ [expr1]))
 
@@ -534,7 +534,7 @@ fun unique-tname(pre: string, tp: ktype): reuse-eff t-name
 // Patricia tree keyed by byte size.
 alias available = int-map<list<reuse-info>>
 alias deconstructed = name-map<(maybe<pattern>, int, int)>
-alias reused = rbset<t-name>
+alias reused = set<t-name>
 
 struct reuse-info
   reuse-name: t-name
@@ -568,8 +568,8 @@ alias reuse-eff = <reuse, unique, ru-platform, ru-newtypes, ru-enable-reuse, ru-
 fun with-reuse(enable-reuse: bool, platform: platform, newtypes: newtypes,
                 f: () -> <reuse, unique, ru-platform, ru-newtypes, ru-enable-reuse, ru-encl-def|e> a): <unique|e> a
   var available := (int-map/empty() : available)
-  var deconstructed := (rb-map/empty() : deconstructed)
-  var reused := (rb-set/empty() : reused)
+  var deconstructed := (map/empty() : deconstructed)
+  var reused := (set/empty() : reused)
   var lazy-con := NoLazyCon
   with handler
     fun get-available() available
@@ -650,7 +650,7 @@ fun with-none(f: () -> reuse-eff a): reuse-eff a
   val av0 = get-available()
   val ds0 = get-deconstructed()
   set-available(int-map/empty())
-  set-deconstructed(rb-map/empty())
+  set-deconstructed(map/empty())
   val x = f()
   set-available(av0)
   set-deconstructed(ds0)

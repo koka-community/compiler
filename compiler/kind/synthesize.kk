@@ -31,9 +31,9 @@ import compiler/kind/infer-kind
 import compiler/kind/infer-effect
 import compiler/kind/unify
 import compiler/static/binding-groups
-import std/data/rb-set
+import std/data/set
 import std/data/sort
-import std/data/rb-map
+import std/data/map
 // Synthesized definitions for data types: copy/accessors/testers/tags and lazy machinery.
 // Split out of kind/infer.kk (upstream this all lives in Kind/Infer.hs) to speed up type checking.
 // Ported as of 2026-01-29; approx upstream baseline commit 486ef0d of Kind/Infer.hs (backfilled 2026-07-23; synced 2026-07-23)

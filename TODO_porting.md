@@ -849,7 +849,7 @@ Remaining perf headroom (time4 10.5s vs upstream ~2s), profiled:
   parser's backtracking combinators over the big std/time interfaces.
 - ktype/substitute traversal/rebuild churn (~17%) + allocator traffic.
 - name-keyed maps (gamma etc.) no longer dominate but are still assoc lists;
-  swap candidates: std/data rb-map or hash-map keyed by name hash.
+  swap candidates: std/data/map or hash-map keyed by name hash.
 
 Remaining 16 MISMATCH (all previously triaged): jsgen 5, specialize 3, parc 4,
 static/wrong 2, eta-expand, lib/dir. COMPILEFAIL 18 (parse-error texts etc.).

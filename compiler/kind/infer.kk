@@ -40,10 +40,10 @@ import compiler/kind/infer-kind
 import compiler/kind/infer-effect
 import compiler/kind/unify
 import compiler/static/binding-groups
-import std/data/rb-set
+import std/data/set
 import std/data/sort
 import compiler/kind/synthesize
-import std/data/rb-map
+import std/data/map
 
 // Kindcheck a program and calculate types
 // Also group recursive type and expressing bindings in order
@@ -166,7 +166,7 @@ fun tdl/kinfer(isRec: bool, tdefs0: list<syntax/syntax/typedef<user-type, user-t
   val tdefs = tdefs0.map(add-lazy-indirect)
   val xinfgamma = tdefs.map(bind-typedef) // set up recursion
   val infgamma = xinfgamma.filter(snd).map(fst)
-  with with-data-effects(rb-map/empty() + infgamma.zip(tdefs).flatmap(get-data-effect)) // make effect types visible for lifting to handled
+  with with-data-effects(map/empty() + infgamma.zip(tdefs).flatmap(get-data-effect)) // make effect types visible for lifting to handled
   val ctdefs' =   
     with extend-infgamma(infgamma) // extend inference gamma, also checks for duplicates
     val names = infgamma.map(name)
@@ -612,7 +612,7 @@ fun resolve-typedef(isRec: bool, recNames: list<name>, td: syntax/syntax/typedef
       val syn' = syn.resolve-typebinder-def(doc)
       val params' = params.map(_.resolve-typebinder(""))
       val type-vars = params'.map(_.fresh-typevar(Bound))
-      val tvarMap = rb-map/empty() + params'.map(name).zip(type-vars)
+      val tvarMap = map/empty() + params'.map(name).zip(type-vars)
       val tp' = resolve-type(tvarMap, True, tp)
       // eta-expand type synonyms
       val kind = syn'.tb/kind
@@ -644,7 +644,7 @@ fun resolve-typedef(isRec: bool, recNames: list<name>, td: syntax/syntax/typedef
           kargs.map(TypeVar(unique-id("k"), _, Bound)) // invent parameters if they are not given (and it has an arrow kind)
         else
           params'.map(_.fresh-typevar(Bound))
-      val tvarMap = rb-map/empty() + params'.map(name).zip(type-vars)
+      val tvarMap = map/empty() + params'.map(name).zip(type-vars)
       val qname = newtp'.name
       val fname = qname.unqualify
       val name = fname
@@ -727,7 +727,7 @@ fun resolve-kind(infkind: inf-kind)
       KIApp(k1, k2) -> KApp(k1.resolve, k2.resolve)
   skind.resolve
 
-val nameTVMapEmpty: name-map<type-var> = rb-map/empty()
+val nameTVMapEmpty: name-map<type-var> = map/empty()
 
 fun resolve-constructor(typeName: name, typeSort: data-kind, isSingleton: bool, typeResult: ktype, typeParams: list<type-var>,
   idmap: name-map<type-var>, UserCon(cname, exists0, params, mbResult, mblazy, rngName, rng, vis, doc): user-con<kuser-type<inf-kind>, user-type, inf-kind>, tag)
@@ -735,7 +735,7 @@ fun resolve-constructor(typeName: name, typeSort: data-kind, isSingleton: bool, 
   val exists' = exists0.map(_.resolve-typebinder(""))
   val existsVars = exists'.map(fresh-typevar(_, Bound))
   // the datatype parameters stay in scope; existentials shadow them
-  val idmap' = exists'.map(name).zip(existsVars).foldl(idmap, fn(m, (k, v)) rb-map/set(m, k, v))
+  val idmap' = exists'.map(name).zip(existsVars).foldl(idmap, fn(m, (k, v)) map/set(m, k, v))
   val params' = params.map(resolve-con-param(idmap', _))
   val result = match mbResult
     Nothing -> type-app(typeResult, typeParams.map(TVar))
@@ -781,7 +781,7 @@ fun resolve-type(idmap: name-map<type-var>, partialSyn: bool, user-type: kuser-t
     TpQuan(QForall, tname, tp) ->
       val tname' = tname.resolve-typebinder("")
       val tvar = fresh-typevar(tname', Bound)
-      val tp' = resolve-type(rb-map/set(idmap, tname.name, tvar), False, tp)
+      val tp' = resolve-type(map/set(idmap, tname.name, tvar), False, tp)
       quantify-type([tvar], tp')
     TpQuan(QSome, tname, tp) ->
       val tname' = tname.resolve-typebinder("")

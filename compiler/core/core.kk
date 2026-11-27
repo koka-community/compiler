@@ -10,7 +10,7 @@ import compiler/common/range
 import compiler/type/type
 import compiler/type/kind
 import compiler/kind/kind
-import std/data/rb-set
+import std/data/set
 import compiler/common/name-collections
 
 pub fun is-unit(e: expr): bool
@@ -795,10 +795,10 @@ pub fun any-sub-expr(e: expr, f: expr -> pure bool): pure bool
 
 // Type variables
 
-pub val tnames/empty: rbset<t-name> = rb-set/empty()
+pub val tnames/empty: set<t-name> = set/empty()
 
-pub fun tnames(l: list<t-name>): rbset<t-name>
-  rb-set/from-list(l)
+pub fun tnames(l: list<t-name>): set<t-name>
+  set/from-list(l)
 
 // Compares the NAMES only
 pub fun cmp(t1: t-name, t2: t-name): order
@@ -991,11 +991,11 @@ fun split-tforall(tp: ktype): _ (list<type-var>, ktype)
 
 pub alias deps = name-set
 pub fun deps/unions(l: list<deps>): deps
-  l.foldl(rb-set/empty(), fn(s: deps, a: deps) s + a)
+  l.foldl(set/empty(), fn(s: deps, a: deps) s + a)
 pub fun tname/dep(t: t-name): deps
   dep(t.get-name)
 pub fun name/dep(n: name): deps
-  if n.is-qualified then rb-set/empty() + n.qualifier else rb-set/empty()
+  if n.is-qualified then set/empty() + n.qualifier else set/empty()
 
 pub fun idefscore/deps(l: list<inline-def>, c: core): _ deps
   deps/unions(l.map(_.expr.dep)) + c.deps
@@ -1005,7 +1005,7 @@ pub fun idefs/deps(l: list<inline-def>): _ deps
 
 pub fun core/deps(c: core): _ deps
   val x0 : deps = deps/unions(c.defs.flatten.map(dep)) + deps/unions(c.typedefs.flatten.map(dep))
-  val x1 : deps = rb-set/from-list(c.imports.filter(_.visibility.is-public).map(importName))
+  val x1 : deps = set/from-list(c.imports.filter(_.visibility.is-public).map(importName))
   x0 + x1 - c.coreName
 
 pub fun td/dep(td: typedef): _ deps
@@ -1018,7 +1018,7 @@ pub fun ktype/dep(t: ktype): _ deps
     TForAll(_, rho) -> rho.dep
     TFun(args, eff, res) -> deps/unions(Cons(eff.dep, args.map(fn((_, t')) t'.dep))) + res.dep
     TCon(tc) -> tc.name.dep
-    TVar -> rb-set/empty()
+    TVar -> set/empty()
     TApp(tp, tps) -> tp.dep + deps/unions(tps.map(dep))
     TSyn(_, args, tp) -> tp.dep + deps/unions(args.map(dep))
 
@@ -1033,7 +1033,7 @@ pub fun expr/dep(e: expr): _ deps
     TypeLam(_, body) -> body.dep
     TypeApp(e, tps) -> e.dep + deps/unions(tps.map(dep))
     Con(tn) -> tn.dep
-    ELit(_) -> rb-set/empty()
+    ELit(_) -> set/empty()
     Let(defs, body) -> deps/unions(Cons(body.dep, defs.flatten.map(dep)))
     Case(exprs, branches) -> deps/unions(exprs.map(dep) ++ branches.map(dep))
 
@@ -1047,4 +1047,4 @@ pub fun pattern/dep(p: pattern): _ deps
   match p
     PatCon(tn, pats) -> tn.dep + deps/unions(pats.map(dep))
     PatVar(_, p) -> p.dep
-    _ -> rb-set/empty()
+    _ -> set/empty()

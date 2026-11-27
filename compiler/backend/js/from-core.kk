@@ -2,7 +2,7 @@
 // Ported as of 2026-07-25; upstream baseline commit dd91082 of Backend/JavaScript/FromCore.hs
 module compiler/backend/js/from-core
 
-import std/data/rb-set
+import std/data/set
 import std/core/undiv
 import std/num/float64
 import pretty/pprint
@@ -279,7 +279,7 @@ fun tail-call-arg(ex: expr): asm-eff expr
     val sub = captured.zip(cnames.map(fn(cn) Var(cn, InfoNone)))
     App(Lam(cnames, typeTotal, sub |-> ex), captured.map(fn(arg) Var(arg, InfoNone)))
 
-fun captured-var(ex: expr): div rbset<t-name>
+fun captured-var(ex: expr): div set<t-name>
   match ex
     Lam -> ex.free-vars // we only care about captures inside a lambda
     Let(bgs, body) -> Cons(body.captured-var, bgs.map(captured-def-group)).unions
@@ -289,15 +289,15 @@ fun captured-var(ex: expr): div rbset<t-name>
     TypeApp(e) -> e.captured-var
     _ -> tnames/empty
 
-fun captured-def-group(bg: def-group): div rbset<t-name>
+fun captured-def-group(bg: def-group): div set<t-name>
   match bg
     DefRec(defs) -> defs.map(fn(d) d.defExpr.captured-var).unions - defs.map(dg/bound-vars-def).unions
     DefNonRec(def) -> def.defExpr.captured-var
 
-fun dg/bound-vars-def(d: def): rbset<t-name>
+fun dg/bound-vars-def(d: def): set<t-name>
   tnames/empty + TName(d.def-name, d.ktype)
 
-fun captured-branch(Branch(pat, grds): branch): div rbset<t-name>
+fun captured-branch(Branch(pat, grds): branch): div set<t-name>
   grds.map(fn(Guard(test, e)) test.captured-var.union(e.captured-var)).unions - pat.map(pat/bound-vars).unions
 
 // Generates a statement from an expression by applying a return context (deeply) inside

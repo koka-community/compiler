@@ -7,16 +7,16 @@ import compiler/core/corevar
 import compiler/common/name
 import compiler/common/failure
 import compiler/platform/config
-import std/data/rb-set
+import std/data/set
 import std/data/sort
-import std/data/rb-map
+import std/data/map
 import compiler/common/name-collections
 
 // Re-analyze a recursive binding group just after type checking.
 // Due to overloading, functions that seem mutually recursive may not
 // actually be mutually recursive after the types are resolved.
-alias deps = rbmap<t-name, rbset<t-name>>
-alias free-var = rbset<t-name>
+alias deps = map<t-name, set<t-name>>
+alias free-var = set<t-name>
 
 // Re-analyze a recursive binding group and return a list of new
 // definition groups. After type checking it is possible that definitions
@@ -34,10 +34,10 @@ pub fun regroup(dfs: list<def>): _ list<def-group>
         [DefNonRec(d)]
     defs ->
       val def-names = defs.map(fn(d) TName(d.def-name, d.ktype))
-      val defMap = rb-map/from-list(def-names.zip(defs))
+      val defMap = map/from-list(def-names.zip(defs))
       // The elements come
       // from the FIRST set, i.e. the definitions' own TNames
-      val deps = rb-map/from-list(def-names.zip(defs.map(fn(d) rb-set/from-list(def-names).intersection(d.free-vars))))
+      val deps = map/from-list(def-names.zip(defs.map(fn(d) set/from-list(def-names).intersection(d.free-vars))))
       // determine strongly connected components
       val defOrder = deps.list.map(fn((nm, fvs)) (nm, fvs.list)).scc
       // create a definition group

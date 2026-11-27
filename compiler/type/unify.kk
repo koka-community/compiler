@@ -17,8 +17,8 @@ import compiler/type/pretty
 import compiler/type/operations
 import compiler/core/core
 import compiler/core/corevar
-import std/data/rb-set
-import std/data/rb-map
+import std/data/set
+import std/data/map
 import compiler/common/name-collections
 // Updated 12/19/25 to commit #f2a9c90
 

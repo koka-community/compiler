@@ -21,7 +21,7 @@ import compiler/syntax/range-map
 import compiler/syntax/syntax
 import compiler/core/core
 import compiler/common/error
-import std/data/rb-map
+import std/data/map
 
 pub type infer-kind-env
   InferKindEnv(
@@ -63,10 +63,10 @@ pub fun run-kind-infer(tplatform: target-platform, moduleName: name, imports: im
     Just(imp) -> imp
     Nothing -> imports // ignore
   with handler
-    val inf-kind-env = InferKindEnv(imports', kgamma, rb-map/empty(), syns, datas, newtypes/empty, rb-map/empty())
+    val inf-kind-env = InferKindEnv(imports', kgamma, map/empty(), syns, datas, newtypes/empty, map/empty())
   var local-syns := synonyms/empty
   var ksub := ksubEmpty
-  var externals: name-map<range> := rb-map/empty()
+  var externals: name-map<range> := map/empty()
   var kerrs : errors := []
   with handler
     // All phases run collecting errors (kind-add-error below); 
@@ -84,7 +84,7 @@ pub fun run-kind-infer(tplatform: target-platform, moduleName: name, imports: im
     fun get-syns() inf-kind-env.synonyms.compose(local-syns)
     fun add-synonym(syn) local-syns := local-syns.extend(syn)
     fun lookup-external(nm) externals.lookup(nm)
-    fun add-external(nm, rng) externals := rb-map/set(externals, nm, rng) // upstream M.insert overwrites
+    fun add-external(nm, rng) externals := map/set(externals, nm, rng) // upstream M.insert overwrites
     fun kind-add-error(rng, msg) kerrs := kerrs ++ [msg.error-message(rng)]
     fun kind-flush-errors()
       if !kerrs.is-nil then add-errors(kerrs) else ()

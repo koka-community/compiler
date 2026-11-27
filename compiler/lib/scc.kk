@@ -8,20 +8,20 @@
 // Updated as of 7/23/24: Commit b8074c2
 //
 // Upstream `Lib/Scc.hs`. Its `Ord v` constraint is the `?cmp` the
-// key-ordered containers take: `Graph v = Map.Map v [v]` is an `rbmap`,
-// and the visited sets are `rbset`s. Their iteration order is OBSERVABLE -- it
+// key-ordered containers take: `Graph v = Map.Map v [v]` is an `map`,
+// and the visited sets are `set`s. Their iteration order is OBSERVABLE -- it
 // decides component emission order and the member order inside a component --
 // and it follows whatever order a caller builds its input in.
 
 module compiler/lib/scc
 
-import std/data/rb-map
-import std/data/rb-set
+import std/data/map
+import std/data/set
 pub import compiler/common/name-collections
 import std/core/undiv
 import std/core/unsafe
 
-alias graph<v> = rbmap<v, list<v>>;
+alias graph<v> = map<v, list<v>>;
 alias edge<v> = (v,v)
 pub alias node<v> = (v,list<v>)
 
@@ -30,7 +30,7 @@ fun nodes(g: graph<v>): list<node<v>>
 
 // A repeated node's successors combine NEW ++ OLD
 fun graph(es: list<node<v>>, ?cmp: (v,v) -> order): graph<v>
-  es.foldl(rb-map/empty()) fn(m, (v, ws))
+  es.foldl(map/empty()) fn(m, (v, ws))
     m.update(v, ws, fn(old, nw) nw ++ old)
 
 fun edges(g: graph<v>): list<edge<v>>
@@ -71,7 +71,7 @@ fun dff(g: graph<v>, ?cmp: (v,v) -> order): forest<v>
 // nodes of an earlier component, corrupting scc membership/order)
 pub fun dfs(g: graph<v>, vs: list<v>, ?cmp: (v,v) -> order): forest<v>
   with unsafe-total
-  val visited = ref(rb-set/empty())
+  val visited = ref(set/empty())
   val ts = vs.flatmap fn(v)
     if (!visited).member(v) then []
     else
@@ -79,7 +79,7 @@ pub fun dfs(g: graph<v>, vs: list<v>, ?cmp: (v,v) -> order): forest<v>
       [g.tree(v, visited)]
   Forest(ts)
 
-fun tree(g: graph<v>, v: v, visited: ref<h, rbset<v>>, ?cmp: (v,v) -> order): <div,read<h>,write<h>> tree<v>
+fun tree(g: graph<v>, v: v, visited: ref<h, set<v>>, ?cmp: (v,v) -> order): <div,read<h>,write<h>> tree<v>
   val f = g.successors(v).flatmap fn(v')
     if (!visited).member(v') then []
     else
@@ -87,7 +87,7 @@ fun tree(g: graph<v>, v: v, visited: ref<h, rbset<v>>, ?cmp: (v,v) -> order): <d
       [g.tree(v'.pretend-decreasing, visited)]
   Tree(v, Forest(f))
 
-alias vset<v> = rbset<v>;
+alias vset<v> = set<v>;
 
 pub fun prune(fs: forest<v>, ?cmp: (v,v) -> order): forest<v>
   fun chop(ms: vset<v>, fs1: forest<v>, ?cmp: (v,v) -> order): (vset<v>, forest<v>)
@@ -100,7 +100,7 @@ pub fun prune(fs: forest<v>, ?cmp: (v,v) -> order): forest<v>
           val (ms1, vs') = chop(ms0.pretend-decreasing, vs.pretend-decreasing)
           val (ms2, fs2') = chop(ms1.pretend-decreasing, Forest(fs2).pretend-decreasing)
           (ms2, Forest(Cons(Tree(v, vs'), fs2'.list)))
-  rb-set/empty().chop(fs).snd
+  set/empty().chop(fs).snd
 
 fun preorder(g: graph<v>, ?cmp: (v,v) -> order): list<v>
   with unsafe-total

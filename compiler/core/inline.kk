@@ -6,7 +6,7 @@
 module compiler/core/inline
 
 import compiler/core/core
-import std/data/rb-map
+import std/data/map
 import compiler/common/name-collections
 import compiler/core/corevar
 import compiler/core/inlines
@@ -16,7 +16,7 @@ import compiler/common/name
 import compiler/common/name-prim
 import compiler/common/syntax
 import compiler/platform/config
-import std/data/rb-set
+import std/data/set
 
 // The public entry point.
 // Operates on the current core-phase definitions, replacing call sites of
@@ -150,7 +150,7 @@ fun inl-guard(g: guard, inline-max: int, inls: inlines): _ guard
 // inline expression together with its type/value arity, skipping
 // specialize-only definitions.
 fun inl-lookup(nm: name, inls: inlines): _ maybe<(inline-def, int, int)>
-  match rb-map/lookup(inls, nm)
+  match map/lookup(inls, nm)
     Just(idef) ->
       if idef.isSpecialize then Nothing
       else

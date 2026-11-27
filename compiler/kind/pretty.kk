@@ -11,7 +11,7 @@ import compiler/common/failure
 import compiler/platform/config
 import std/core/undiv
 import std/data/sort
-import std/data/rb-map
+import std/data/map
 import compiler/common/name-collections
 
 fun kind-colon()

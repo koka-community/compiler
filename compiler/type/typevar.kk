@@ -9,11 +9,11 @@ import compiler/common/syntax
 import compiler/common/name
 import compiler/common/range
 import compiler/common/unique
-import std/data/rb-set
+import std/data/set
 import std/data/int-map
 import std/num/int64
 import std/core/undiv
-import std/data/rb-map
+import std/data/map
 import compiler/common/name-collections
 
 pub infixr 5 (|->)
@@ -238,7 +238,7 @@ pub fun oftv(x: a, ?odftv: (a) -> _ list<type-var>): _ list<type-var>
   ws ++ es
 
 // upstream `S.Set TypeCon`, ordered by the constructor name
-pub alias type-cons = rbset<type-con>
+pub alias type-cons = set<type-con>
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 // Utilities for types and expressions
@@ -312,8 +312,8 @@ pub fun ktype/free-type-constructors(tp: ktype): _ type-cons
   match tp
     TForAll(_, t) -> t.free-type-constructors
     TFun(args, eff, res) -> (args.map(_.snd) ++ [res, eff]).free-type-constructors
-    TCon(c) -> rb-set/empty() + c
-    TVar(_) -> rb-set/empty()
+    TCon(c) -> set/empty() + c
+    TVar(_) -> set/empty()
     TApp(t, args) -> t.free-type-constructors + args.free-type-constructors
     // the synonym's OWN constructor counts too, not just its expansion's: a
     // consumer deriving which modules a type mentions (`deps-from-expr`, for

@@ -16,7 +16,7 @@
 module compiler/lsp/commands
 
 import std/os/path
-import std/data/rb-map
+import std/data/map
 import std/async
 import compiler/common/name
 import compiler/common/range

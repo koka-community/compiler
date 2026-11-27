@@ -11,7 +11,7 @@
 module compiler/lsp/server
 
 import std/os/path
-import std/data/rb-map
+import std/data/map
 import std/async
 import std/core/undiv
 import compiler/common/name

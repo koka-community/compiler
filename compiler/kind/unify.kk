@@ -12,7 +12,7 @@ import compiler/platform/config
 import compiler/kind/kind
 import compiler/kind/infer-kind
 import compiler/kind/infer-effect
-import std/data/rb-set
+import std/data/set
 import std/data/int-set
 
 // Unify

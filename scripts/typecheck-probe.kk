@@ -12,7 +12,7 @@ module typecheck-probe
 import std/os/path
 import std/os/env
 import std/core/undiv
-import std/data/rb-map
+import std/data/map
 import compiler/common/range
 import compiler/common/error
 import compiler/common/parse

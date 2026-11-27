@@ -30,7 +30,7 @@ import compiler/backend/c/parc-reuse-spec
 import std/os/path
 import std/os/env
 import std/core/debug
-import std/data/rb-set
+import std/data/set
 
 fun externalNames(): _ list<(t-name, doc)>
   [(exprTrue.con-name, "true".text), (exprFalse.con-name, "false".text)]

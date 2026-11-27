@@ -19,7 +19,7 @@
 // dependency on `instantiateNoEx`.
 module compiler/core/check
 
-import std/data/rb-set
+import std/data/set
 import compiler/common/name
 import compiler/common/range
 import compiler/common/error

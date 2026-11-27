@@ -29,11 +29,11 @@ import compiler/syntax/syntax
 import compiler/syntax/range-map
 import compiler/core/core
 import pretty/pprint
-import std/data/rb-set
+import std/data/set
 import std/data/sort
 import std/core/undiv
 import std/core/unsafe
-import std/data/rb-map
+import std/data/map
 
 pub type variance
   Negative
@@ -980,7 +980,7 @@ pub fun pp-implicits-hint(nameInfos: list<(name, assumption/name-info)>): _ list
     info.scheme.requires-implicits.map(fst)
   
   // upstream `S.fromList (concat ..)` then `S.toList`: key order, not first-seen order
-  val allMissingImplicits = rb-set/from-list(candidateMissingImplicits.concat)
+  val allMissingImplicits = set/from-list(candidateMissingImplicits.concat)
   val allRequiredMissingImplicits = allMissingImplicits.list.filter fn(imp)
     candidateMissingImplicits.all(fn(missing) missing.any(fn(m) m == imp))
   
@@ -1041,7 +1041,7 @@ pub fun with-nice-names(create: (name, int) -> doc, names: list<name>, finf: (li
   val env = infer-env
   val n = env.niceNames.list.length
   val nms = names.map-indexed(fn(i, nm) (nm, create(nm, n + i)))
-  with override val infer-env = env(niceNames = nms.foldl(env.niceNames, fn(m, (nm, d)) rb-map/set(m, nm, d)))
+  with override val infer-env = env(niceNames = nms.foldl(env.niceNames, fn(m, (nm, d)) map/set(m, nm, d)))
   finf(nms.map(snd))
 
 pub fun current-def-name()

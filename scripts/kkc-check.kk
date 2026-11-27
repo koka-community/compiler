@@ -21,7 +21,7 @@ import compiler/common/range
 import compiler/common/name
 import compiler/type/type
 import compiler/type/assumption
-import std/data/rb-map    // `list` on a name-map (extract-synonyms returns one)
+import std/data/map    // `list` on a name-map (extract-synonyms returns one)
 import compiler/kind/synonyms
 import compiler/compile/build
 import compiler/compile/module
@@ -49,7 +49,7 @@ pub fun main()
     match try({parse-iface(k)})
       Error(_) -> ()   // reported in round 2
       Ok((c, _)) -> harvest := harvest.synonyms/compose(c.core/extract-synonyms)
-  var mods : bmodules := rb-map/empty()
+  var mods : bmodules := map/empty()
   // Inline sections are resolved eagerly at load time now, so ModIface carries a
   // plain list. Keep the unresolved closures aside: build's force-inlines
   // deliberately swallows parse failures (self-healing recompile), which would

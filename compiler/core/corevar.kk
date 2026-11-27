@@ -7,11 +7,11 @@ import std/core/unsafe
 import compiler/common/syntax
 import compiler/common/range
 import compiler/core/core
-import std/data/rb-set
+import std/data/set
 import std/data/sort
 import compiler/common/name
 import compiler/type/typevar
-import std/data/rb-map
+import std/data/map
 import compiler/common/name-collections
 
 pub infixr 5 (|->)
@@ -34,7 +34,7 @@ pub fun beta/add-type-apps(ts: list<type-var>, e: expr): total expr
     _ -> TypeApp(e, ts.map(TVar))
 
 // upstream `tnamesList` = `S.toList`: name order, which the set iterates in
-pub fun tnames-list(ts: rbset<t-name>): list<t-name>
+pub fun tnames-list(ts: set<t-name>): list<t-name>
   ts.list
 
 // Type-variable id order (`tvs` is an int-map whose `list`
@@ -54,10 +54,10 @@ pub fun expr/free-locals(e: expr)
 pub fun branch/free-locals(b: branch)
   b.free-vars.filter(fn(TName(nm)) !nm.is-qualified)
 
-pub fun list/free-vars(l: list<a>, ?free-vars: (a) -> _ rbset<t-name>): _ rbset<t-name>
+pub fun list/free-vars(l: list<a>, ?free-vars: (a) -> _ set<t-name>): _ set<t-name>
   l.map(free-vars).unions
 
-pub fun expr/free-vars(e0: expr): _ rbset<t-name>
+pub fun expr/free-vars(e0: expr): _ set<t-name>
   match e0
     Lam(tnames, _, e) -> e.free-vars - tnames
     Var(tn) -> tnames/empty + tn
@@ -69,39 +69,39 @@ pub fun expr/free-vars(e0: expr): _ rbset<t-name>
     Let(dfgps, e) -> free-vars(dfgps, e)
     Case(exprs, bs) -> exprs.free-vars + bs.map(free-vars).unions
 
-pub fun branch/free-vars(Branch(patterns, guards): branch): _ rbset<t-name>
+pub fun branch/free-vars(Branch(patterns, guards): branch): _ set<t-name>
   guards.map(free-vars).unions - patterns.map(bound-vars).unions
 
-pub fun guard/free-vars(Guard(test, expr): guard): _ rbset<t-name>
+pub fun guard/free-vars(Guard(test, expr): guard): _ set<t-name>
   test.free-vars + expr.free-vars
 
-pub fun pat/bound-vars(p: pattern): _ rbset<t-name>
+pub fun pat/bound-vars(p: pattern): _ set<t-name>
   match p
     PatCon(_, args) -> args.map(bound-vars).unions
     PatVar(tn, subpat) -> (tnames/empty + tn) + subpat.bound-vars // also bind sub-pattern vars
     PatLit -> tnames/empty
     PatWild -> tnames/empty
 
-pub fun dgs/free-vars(def-groups: def-groups, e: expr): _ rbset<t-name>
+pub fun dgs/free-vars(def-groups: def-groups, e: expr): _ set<t-name>
   match def-groups
     [] -> e.free-vars
     Cons(dg, dgs) -> 
-      val fv1: rbset<t-name> = (free-vars(dgs, e) - dg.bound-vars)
+      val fv1: set<t-name> = (free-vars(dgs, e) - dg.bound-vars)
       dg.free-vars + fv1
 
 // A DefRec subtracts its OWN bound names (the recursive defs reference themselves/each other; those are not free).
-pub fun dg/free-vars(defg: def-group): _ rbset<t-name>
+pub fun dg/free-vars(defg: def-group): _ set<t-name>
   match defg
     DefRec(defs) -> defs.map(free-vars).unions - defs.map(bound-vars).unions
     DefNonRec(d) -> d.free-vars
 
-pub fun dg/bound-vars(defg: def-group): _ rbset<t-name>
+pub fun dg/bound-vars(defg: def-group): _ set<t-name>
   defg.flatten.map(bound-vars).unions
 
-pub fun def/bound-vars(Def(nm, tp): def): _ rbset<t-name>
+pub fun def/bound-vars(Def(nm, tp): def): _ set<t-name>
   tnames/empty + TName(nm, tp)
 
-pub fun def/free-vars(Def(_, _, e): def): _ rbset<t-name>
+pub fun def/free-vars(Def(_, _, e): def): _ set<t-name>
   e.free-vars
 
 // Term substitutions
@@ -213,7 +213,7 @@ pub fun expr/free-type-constructors(ex: expr): pure type-cons
     App(f, args) -> Cons(f, args).map(fn(e) e.pretend-decreasing.expr/free-type-constructors).unions
     TypeLam(_, e) -> e.pretend-decreasing.free-type-constructors
     TypeApp(e, tps) -> e.pretend-decreasing.expr/free-type-constructors.union(tps.free-type-constructors)
-    ELit -> rb-set/empty()
+    ELit -> set/empty()
     Let(dgs, e) ->
       dgs.flatten.map(fn(d) d.ktype.free-type-constructors.union(d.defExpr.pretend-decreasing.expr/free-type-constructors)).unions
         .union(e.pretend-decreasing.free-type-constructors)
@@ -232,8 +232,8 @@ fun pattern/free-type-constructors(pat: pattern): pure type-cons
         .union((targs ++ [tres]).free-type-constructors)
         .union(pats.map(fn(p) p.pretend-decreasing.pattern/free-type-constructors).unions)
     PatVar(tname, p) -> tname.type-of.free-type-constructors.union(p.pretend-decreasing.pattern/free-type-constructors)
-    PatWild -> rb-set/empty()
-    PatLit -> rb-set/empty()
+    PatWild -> set/empty()
+    PatLit -> set/empty()
 
 fun deps-from-expr(e: expr): pure list<name>
   val varmods = e.free-vars.list.map(fn(tn) tn.get-name.qualifier)

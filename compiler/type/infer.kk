@@ -36,14 +36,14 @@ import compiler/core/binding-groups
 import compiler/core/divergent
 import pretty/pprint
 import std/num/float64
-import std/data/rb-set
+import std/data/set
 import std/data/sort
 import std/core/undiv
 import std/core/unsafe
 import compiler/type/infer-effect
 import compiler/type/infer-support
 import compiler/type/infer-helpers
-import std/data/rb-map
+import std/data/map
 
 fun infer-assign(prop, expect, assign: syntax/syntax/expr<ktype>, arng: range, lhs: (maybe<(name, range)>, syntax/syntax/expr<ktype>), rhs: (maybe<(name, range)>, syntax/syntax/expr<ktype>), rng: range): _ (ktype, keffect, core/core/expr)
   fun fresh-ref-type()
@@ -1203,7 +1203,7 @@ fun infer-branch(pat-kind, prop, match-type, match-range, matched-names, branch)
           if pattern.range != range/null then  
             // check for unused pattern bindings 
             val defined = pcore.pat/bound-vars
-            val free = rb-set/from-list(gcores.free-vars.list.map(get-name))
+            val free = set/from-list(gcores.free-vars.list.map(get-name))
             // upstream reports only the FIRST unused name (in sorted
             // `tnamesList` order), with singular wording
             match defined.filter(fn(tn) !free.member(tn.get-name)).list.sort(?(<) = fn(a: t-name, b: t-name) a.get-name.name/cmp(b.get-name).is-lt)
@@ -1383,7 +1383,7 @@ pub fun run-infer(tpl: target-platform, uniq0: int, imports: import-map, gamma0:
       set-range-map(subst |-> get-range-map())
       subst := sub/null
     fun set-subst(s) subst := s
-  with val infer-env = InferTypeEnv(modName, [], False, False, False, Nothing, 0, False, rb-map/empty(), imports, inf-gamma/empty, gamma0, tpl)
+  with val infer-env = InferTypeEnv(modName, [], False, False, False, Nothing, 0, False, map/empty(), imports, inf-gamma/empty, gamma0, tpl)
   with val ctxt = Infer(range/null)
   with val scope-depth = 0
   with val local-depth = 0

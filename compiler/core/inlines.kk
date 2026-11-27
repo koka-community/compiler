@@ -2,14 +2,14 @@
 module compiler/core/inlines
 
 import compiler/core/core
-import std/data/rb-map
+import std/data/map
 import compiler/common/name
 import compiler/common/name-prim
 import compiler/common/name-collections
 
 pub alias inlines = name-map<inline-def>
 
-val empty:inlines = rb-map/empty()
+val empty:inlines = map/empty()
 
 pub fun inlines(xs: list<inline-def>)
   empty.extends(xs)
@@ -20,14 +20,14 @@ pub fun extends(inls: inlines, xs: list<inline-def>)
   xs.foldr(inls, fn(inl, acc) acc.extend(inl))
 
 pub fun extend(inls: inlines, inl: inline-def)
-  rb-map/set(inls, inl.def-name, inl) // upstream M.insert: the new definition overwrites
+  map/set(inls, inl.def-name, inl) // upstream M.insert: the new definition overwrites
 
 pub fun merge(inls1: inlines, inls2: inlines)
   inls1.union(inls2)
 
 // keep only inline defs whose name satisfies `p`
 pub fun inlines-filter(inls: inlines, p: (name) -> e bool): e inlines
-  rb-map/from-list(inls.entries.filter(fn((k, _)) p(k)))
+  map/from-list(inls.entries.filter(fn((k, _)) p(k)))
 
 pub fun defs/extract-inlines(dgs: def-groups, costMax: int)
   dgs.map(_.extract-inlines(costMax)).concat

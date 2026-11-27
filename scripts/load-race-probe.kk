@@ -14,7 +14,7 @@
 // Given a DIRECTORY it loads every .kki in it across N workers (round-robin,
 // the same static slicing the pre-load uses) and prints one combined
 // fingerprint, so repeated runs can be compared without rebuilding the driver.
-import std/data/rb-map
+import std/data/map
 import std/os/path
 import std/os/dir
 import std/os/env
@@ -97,7 +97,7 @@ pub fun main()
     val srcdirs = ModuleDirs([".".path, "lib".path], [".".path, "lib".path].map(fn(d) d.realpath))
     val prog = parse-program-from-file(kki, False)
     val dcache = discover-deps(prog.imports.map(fn(i) i.fullName), srcdirs, target-platform-default, out-dir)
-    val mods = preload-ifaces(flags-default(target = C(LibC)), out-dir, srcdirs, dcache, [], rb-map/empty())
+    val mods = preload-ifaces(flags-default(target = C(LibC)), out-dir, srcdirs, dcache, [], map/empty())
     val per = mods.list.map(fn((nm, m)) nm.show-plain ++ "=" ++ m.hash-of.show)
     println("modules   : " ++ per.length.show)
     println("combined  : " ++ per.join(",").checksum.show)
@@ -115,7 +115,7 @@ pub fun main()
       val mine = idx.filter-map(fn((i, f)) if i % n == w then Just(f) else Nothing)
       spawn-thread fn()
         mine.foreach fn(f)
-          val h = match try({ load-iface(f, rb-map/empty(), 1, Nothing) })
+          val h = match try({ load-iface(f, map/empty(), 1, Nothing) })
             Ok(Just(m)) -> m.hash-of
             _           -> -1
           ch.xemit((f.string, h))
@@ -133,7 +133,7 @@ pub fun main()
     val ch = xchannel()
     list(1, n).foreach fn(_)
       spawn-thread fn()
-        val h = match try({ load-iface(kki, rb-map/empty(), 1, Nothing) })
+        val h = match try({ load-iface(kki, map/empty(), 1, Nothing) })
           Ok(Just(m)) -> m.hash-of
           _           -> -1
         ch.xemit(h)

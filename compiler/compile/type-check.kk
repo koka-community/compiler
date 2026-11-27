@@ -48,7 +48,7 @@ import compiler/common/nice
 import compiler/core/pretty
 import pretty/pprint
 import compiler/type/pretty
-import std/data/rb-map
+import std/data/map
 import compiler/common/name-collections
 
 // upstream `typeCheck :: Flags -> Definitions -> [Core.Import] -> UserProgram

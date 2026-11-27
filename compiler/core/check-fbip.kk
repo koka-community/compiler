@@ -31,10 +31,10 @@ import compiler/core/borrowed
 import compiler/backend/c/parc
 import compiler/backend/c/parc-reuse
 import pretty/pprint
-import std/data/rb-set
+import std/data/set
 import std/data/sort
 import std/core/undiv
-import std/data/rb-map
+import std/data/map
 import std/data/int-map
 import std/data/int-set
 import std/num/int64
@@ -80,11 +80,11 @@ type alloc-tree
 alias dia-entry = (ratio, list<(t-name, int)>)
 
 struct chk-output
-  gamma-nm: rbmap<t-name, int>               // variable -> number of uses
+  gamma-nm: map<t-name, int>               // variable -> number of uses
   gamma-dia: int-map<list<dia-entry>>
   alloc-tree: alloc-tree
 
-val output/empty: chk-output = ChkOutput(rb-map/empty(), int-map/empty(), ATLeaf)
+val output/empty: chk-output = ChkOutput(map/empty(), int-map/empty(), ATLeaf)
 
 fun dia/merge(xs: list<dia-entry>, ys: list<dia-entry>): list<dia-entry>
   // upstream: `sortOn (Down . fst) (x ++ y)`
@@ -135,7 +135,7 @@ pub fun check-fbip(platform: platform, newtypes: newtypes, borrowed: borrowed, g
   with val chk-ctx = ChkContext(platform, newtypes, borrowed, gamma, prog-name)
   with val chk-fip = noFip
   with val chk-current = []
-  with val chk-delta = rb-set/empty()
+  with val chk-delta = set/empty()
   with val chk-dg-names = []
   with val chk-tail = True
   dgs.foreach(chk-def-group)
@@ -153,7 +153,7 @@ fun chk-top-level-def(def-group-names: list<name>, d: def)
     DefFun(borrows, fip) | !fip.is-fip-top ->
       with override val chk-fip = fip
       val out =
-        with override val chk-delta = rb-set/empty()
+        with override val chk-delta = set/empty()
         with override val chk-dg-names = def-group-names
         with override val chk-tail = True
         extract-output({ chk-top-level-expr(borrows, d.defExpr) })
@@ -178,7 +178,7 @@ fun chk-top-level-expr(borrows: list<param-info>, ex: expr): _ ()
       chk-effect(eff)
       val bpars = zip-param-info(borrows, pars).filter(fn((pi, _)) pi == Borrow).map(snd)
       val opars = zip-param-info(borrows, pars).filter(fn((pi, _)) pi == Own).map(snd)
-      with-borrowed(rb-set/from-list(bpars.map(get-name))) fn()
+      with-borrowed(set/from-list(bpars.map(get-name))) fn()
         val out = extract-output({ chk-expr(body) })
         emit-out(opars.foldl(out, fn(o, nm) bind-name(nm, NotReusable, o)))
     TypeLam(_, body) -> chk-top-level-expr(borrows, body)
@@ -205,7 +205,7 @@ fun chk-expr(ex: expr): _ ()
       val out = extract-output({ chk-expr(Let(dgs, body)) })
       val gamma2 = bind-name(d.defTName, NotReusable, out)
       emit-out(gamma2)
-      with-borrowed(rb-set/from-list(gamma2.gamma-nm.keys.map(get-name))) fn()
+      with-borrowed(set/from-list(gamma2.gamma-nm.keys.map(get-name))) fn()
         with-tail-mod([Let(dgs, body)]) fn()
           chk-expr(d.defExpr)
     Let(_, _) ->
@@ -234,7 +234,7 @@ fun chk-branches(scrutinees: list<expr>, branches: list<branch>)
   val outs = branches'.map(fn(b) extract-output({ chk-branch(which-borrowed, stypes, b) }))
   val gamma2 = join-contexts(branches'.map(patterns), outs)
   emit-out(gamma2)
-  with-borrowed(rb-set/from-list(gamma2.gamma-nm.keys.map(get-name))) fn()
+  with-borrowed(set/from-list(gamma2.gamma-nm.keys.map(get-name))) fn()
     with-tail-mod-product(branches') fn()
       which-borrowed.zip(scrutinees).foreach(chk-scrutinee)
 
@@ -253,14 +253,14 @@ fun chk-branch(which-borrowed: list<param-info>, stypes: list<ktype>, Branch(pat
   val bor-pats = tagged.filter(fn((pi, _)) pi == Borrow).map(snd)
   val own-pats = tagged.filter(fn((pi, _)) pi != Borrow).map(snd)
   val outs =
-    with-borrowed(rb-set/from-list(bor-pats.map(fst).map(pat/bound-vars).unions.list.map(get-name))) fn()
+    with-borrowed(set/from-list(bor-pats.map(fst).map(pat/bound-vars).unions.list.map(get-name))) fn()
       guards.map(fn(g) extract-output({ chk-guard(g) }))
   val out = join-contexts(guards.map(fn(_) pats), outs)
   emit-out(own-pats.foldl(out, fn(o, p) bind-pattern(p, o)))
 
 fun chk-guard(Guard(test, ex): guard)
   val out = extract-output({ chk-expr(ex) })
-  with-borrowed(rb-set/from-list(out.gamma-nm.keys.map(get-name))) fn()
+  with-borrowed(set/from-list(out.gamma-nm.keys.map(get-name))) fn()
     with-non-tail(fn() chk-expr(test))
   emit-out(out)
 
@@ -443,7 +443,7 @@ fun chk-is-borrowed(nm: t-name): _ bool
 fun mark-seen(tname: t-name, info: var-info): _ ()
   if info.isRefCounted then // is locally defined?
     if needs-dup-drop(tname) then
-      emit-out(ChkOutput(rb-map/from-list([(tname, 1)]), int-map/empty(), ATLeaf))
+      emit-out(ChkOutput(map/from-list([(tname, 1)]), int-map/empty(), ATLeaf))
   else chk-wrap(tname, info) // wrap rule
 
 fun mark-borrowed(nm: t-name, info: var-info): _ ()
@@ -500,8 +500,8 @@ fun write-call-allocation(nm: name, fip: fip-t): _ ()
   val defs = chk-current.map(def-name)
   val isSelf = defs.any(fn(d) d == nm)
   match fip
-    Fip(n) -> emit-out(ChkOutput(rb-map/empty(), int-map/empty(), if isSelf then ATCallSelf(n) else ATCall(n)))
-    Fbip(n) -> emit-out(ChkOutput(rb-map/empty(), int-map/empty(), if isSelf then ATCallSelf(n) else ATCall(n)))
+    Fip(n) -> emit-out(ChkOutput(map/empty(), int-map/empty(), if isSelf then ATCallSelf(n) else ATCall(n)))
+    Fbip(n) -> emit-out(ChkOutput(map/empty(), int-map/empty(), if isSelf then ATCallSelf(n) else ATCall(n)))
     NoFip -> ()
 
 fun chk-lazy-con(cname: t-name, repr: con-repr): _ ()
@@ -536,7 +536,7 @@ fun get-allocation(nm: t-name, size: reusable): _ ()
     NotReusable -> ()
     ReusableWithSize(sz) ->
       val id = unique-id("alloc")
-      emit-out(ChkOutput(rb-map/empty(), int-map/from-list([(sz.int64, [(ratio/one, [(nm, id)])])]), ATAlloc(id)))
+      emit-out(ChkOutput(map/empty(), int-map/from-list([(sz.int64, [(ratio/one, [(nm, id)])])]), ATAlloc(id)))
 
 fun pretty-con(tname: t-name, sz: int): string
   tname.get-name.unqualify.show ++ "/" ++ sz.show

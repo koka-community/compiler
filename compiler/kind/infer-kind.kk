@@ -15,9 +15,9 @@ import compiler/kind/pretty
 import std/data/int-map
 import std/data/int-set
 import std/num/int64
-import std/data/rb-set
+import std/data/set
 import std/data/sort
-import std/data/rb-map
+import std/data/map
 
 pub infixr 5 (|->)
 // Inference Kind: These kinds contain meta kind variables

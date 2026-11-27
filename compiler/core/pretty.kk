@@ -21,7 +21,7 @@ import compiler/type/pretty
 import compiler/platform/config
 import std/num/float64
 import std/core/undiv
-import std/data/rb-map
+import std/data/map
 
 // Show pretty names rather than numbers
 
@@ -449,7 +449,7 @@ fun extract-synonym(tp: ktype): _ name-map<syn-info>
     TSyn(syn, args, body) ->
       val syns = Cons(body, args).extract-synonyms
       match syn.info
-        Just(i) -> rb-map/set(syns, i.name, i)
+        Just(i) -> map/set(syns, i.name, i)
         Nothing -> syns
     TApp(c, args) -> Cons(c, args).extract-synonyms
     TFun(args, eff, res) -> Cons(res, Cons(eff, args.map(snd))).extract-synonyms
