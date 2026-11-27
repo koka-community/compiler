@@ -1,6 +1,6 @@
 module compiler/type/unify
 
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/common/range
 import compiler/common/failure
 import compiler/common/name

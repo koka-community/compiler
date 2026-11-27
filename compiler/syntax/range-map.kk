@@ -10,7 +10,7 @@
 module compiler/syntax/range-map
 
 import compiler/common/failure
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/common/range
 import compiler/common/name
 import compiler/common/name-prim

@@ -12,7 +12,7 @@ import compiler/type/type
 import compiler/type/pretty
 import compiler/kind/newtypes
 import compiler/core/core
-import compiler/lib/pprint
+import pretty/pprint
 import std/core/undiv
 
 //--------------------------------------------------------------------------

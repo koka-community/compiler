@@ -28,7 +28,7 @@ import compiler/syntax/range-map
 import compiler/core/core
 import compiler/core/corevar
 import compiler/core/analysis-match
-import compiler/lib/pprint
+import pretty/pprint
 import std/data/rb-set
 import std/data/sort
 import std/core/undiv

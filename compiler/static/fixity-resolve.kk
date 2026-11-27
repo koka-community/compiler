@@ -11,7 +11,7 @@ import compiler/common/range
 import compiler/syntax/syntax
 import compiler/common/syntax
 import compiler/common/color-scheme
-import compiler/lib/pprint
+import pretty/pprint
 // Updated to 7eb71dc on 2/10/25
 
 pub fun fixity-resolve(fixMap: fixities, program: user-program)

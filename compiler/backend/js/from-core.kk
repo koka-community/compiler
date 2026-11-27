@@ -5,7 +5,7 @@ module compiler/backend/js/from-core
 import std/data/rb-set
 import std/core/undiv
 import std/num/float64
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/common/failure
 import compiler/common/name
 import compiler/common/name-prim

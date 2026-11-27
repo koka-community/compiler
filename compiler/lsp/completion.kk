@@ -35,7 +35,7 @@ import compiler/syntax/range-map
 import compiler/syntax/lexer
 import compiler/syntax/lexeme
 import compiler/syntax/lex
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/lib/json
 import compiler/lsp/jsonrpc
 import compiler/lsp/conversions

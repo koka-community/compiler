@@ -1,7 +1,7 @@
 // Updated as of 7/23/26: Commit dd91082
 module compiler/core/fun-lift
 
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/common/failure
 import compiler/common/name
 import compiler/common/range

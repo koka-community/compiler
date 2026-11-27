@@ -35,7 +35,7 @@ import compiler/core/core
 import compiler/syntax/highlight
 import compiler/syntax/range-map
 import compiler/syntax/colorize
-import compiler/lib/pprint
+import pretty/pprint
 
 //----------------------------------------------------------------------
 // small helpers

@@ -11,7 +11,7 @@ module compiler/common/nice
 
 import compiler/common/id
 import compiler/type/type
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/kind/kind
 import compiler/common/syntax
 import std/data/rb-map

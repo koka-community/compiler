@@ -14,7 +14,7 @@ import compiler/core/core
 import compiler/core/corevar
 import compiler/type/pretty
 import compiler/common/nice
-import compiler/lib/pprint
+import pretty/pprint
 import std/data/rb-set
 import std/os/path
 import std/data/sort

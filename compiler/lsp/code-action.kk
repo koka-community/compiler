@@ -35,7 +35,7 @@ import compiler/type/typevar
 import compiler/type/pretty
 import compiler/syntax/syntax
 import compiler/syntax/pretty
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/lib/json
 import compiler/lsp/jsonrpc
 import compiler/lsp/conversions

@@ -46,7 +46,7 @@ import compiler/compile/module
 import std/os/env
 import compiler/common/nice
 import compiler/core/pretty
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/type/pretty
 import std/data/rb-map
 import compiler/common/name-collections

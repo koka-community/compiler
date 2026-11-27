@@ -34,7 +34,7 @@ import compiler/core/analysis-match
 import compiler/core/analysis-cctx
 import compiler/core/binding-groups
 import compiler/core/divergent
-import compiler/lib/pprint
+import pretty/pprint
 import std/num/float64
 import std/data/rb-set
 import std/data/sort

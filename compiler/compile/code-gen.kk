@@ -28,7 +28,7 @@ import compiler/core/borrowed
 import compiler/core/pretty
 import compiler/backend/js/from-core
 import compiler/backend/c/from-core
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/compile/options
 import compiler/common/file
 import compiler/lib/log

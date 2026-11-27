@@ -25,7 +25,7 @@
 // rather than interleaved from several threads at once.
 module compiler/lib/log
 
-import std/pretty/printer
+import pretty/printer
 import compiler/common/color-scheme
 
 // Compiler OUTPUT that is part of the observable RESULT rather than commentary

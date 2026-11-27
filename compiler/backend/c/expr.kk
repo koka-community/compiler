@@ -3,7 +3,7 @@ module compiler/backend/c/expr
 
 import compiler/core/core
 import compiler/core/corevar
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/type/type
 import compiler/kind/newtypes
 import compiler/kind/repr

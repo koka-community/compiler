@@ -9,8 +9,8 @@ import compiler/common/name-prim
 import compiler/common/nice
 import compiler/common/syntax
 import compiler/common/color-scheme
-import compiler/lib/pprint
-import std/pretty/printer
+import pretty/pprint
+import pretty/printer
 import compiler/type/type
 import compiler/type/typevar
 import compiler/kind/import-map

@@ -15,10 +15,10 @@ import compiler/type/pretty
 import compiler/type/typevar
 import compiler/kind/kind
 import compiler/kind/newtypes
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/platform/config
 import compiler/common/file
-import std/pretty/printer
+import pretty/printer
 import compiler/common/color-scheme
 import std/os/path
 import std/num/float64

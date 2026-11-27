@@ -9,7 +9,7 @@ import compiler/common/name-collections
 import compiler/common/failure
 import compiler/common/unique
 import compiler/platform/config
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/kind/kind
 import compiler/kind/infer-kind
 import compiler/kind/assumption

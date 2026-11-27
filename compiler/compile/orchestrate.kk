@@ -58,7 +58,7 @@ import compiler/compile/link
 import std/os/dir
 import compiler/common/file
 import compiler/static/binding-groups
-import compiler/lib/pprint
+import pretty/pprint
 import std/data/rb-map
 import compiler/common/name-collections
 import compiler/compile/rpc

@@ -14,7 +14,7 @@
 module compiler/interpreter/command
 
 import compiler/common/color-scheme
-import compiler/lib/pprint
+import pretty/pprint
 
 pub type command
   Quit

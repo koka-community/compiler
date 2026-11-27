@@ -27,7 +27,7 @@ import compiler/common/color-scheme
 import compiler/common/unique
 import compiler/platform/config
 import compiler/common/syntax
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/kind/kind
 import compiler/type/type
 import compiler/type/typevar

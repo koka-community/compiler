@@ -1,7 +1,7 @@
 import compiler/syntax/parse
 import compiler/syntax/syntax
 import compiler/syntax/pretty
-import compiler/lib/pprint
+import pretty/pprint
 import std/os/path
 import std/os/dir
 import std/os/task

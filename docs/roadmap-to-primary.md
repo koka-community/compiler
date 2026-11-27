@@ -27,7 +27,7 @@ The repository now builds itself with no other checkout on the machine: `lib` (t
 What each item became:
 
 1. **Standard library**: `lib/`, and the default share dir is this repository -- derived from the compiler's own location, so an installed compiler (`util/bundle.kk`'s `<prefix>/share/koka/v<version>`) works the same way. This also fixed the cwd-relative `kklib` path: linking now works from any directory.
-2. **The `koka-community/std` modules**: the containers, `sort`, `json` and `std/test` graduated into `lib/std`; the assoc-list and list/char/vector helpers went into the `std/core` modules that own them (`core-extras` is gone, not moved); `pprint` stayed compiler-internal. `linear-map`, `intern` and `word-set` were NOT brought in -- `trie` (the lexer's keyword set) now keys its children off a plain association list.
+2. **The `koka-community/std` modules**: the containers, `sort`, `json` and `std/test` graduated into `lib/std`; the assoc-list and list/char/vector helpers went into the `std/core` modules that own them (`core-extras` is gone, not moved); `pprint` and `printer` form the `pretty/` library beside `compiler/`. `linear-map`, `intern` and `word-set` were NOT brought in -- `trie` (the lexer's keyword set) now keys its children off a plain association list.
 3. **`-i../parsing`**: gone from every script.
 4. **Test corpus**: `test/`, found relative to the repository root (`KOKA_TEST_ROOT` overrides). The runner compiles with the port, not the reference compiler.
 

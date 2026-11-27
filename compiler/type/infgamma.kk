@@ -10,7 +10,7 @@ import compiler/common/color-scheme
 import compiler/common/syntax
 import compiler/common/failure
 import compiler/platform/config
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/type/type
 import compiler/type/typevar
 import compiler/type/pretty

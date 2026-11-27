@@ -3,7 +3,7 @@ import compiler/syntax/syntax
 import compiler/common/name
 import compiler/common/range
 import compiler/common/syntax
-import compiler/lib/pprint
+import pretty/pprint
 import std/test
 
 pub fun suite()

@@ -11,7 +11,7 @@
 // Module for portable control of colors in a console
 // only the color of 'stdout' is influenced by these functions, (except for the string / file variants of printers)
 
-module std/pretty/printer
+module pretty/printer
 
 import std/os/path
 import std/os/file

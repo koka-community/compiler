@@ -15,10 +15,10 @@ import compiler/type/pretty
 import compiler/kind/kind
 import compiler/kind/newtypes
 import compiler/kind/repr
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/platform/config
 import compiler/common/file
-import std/pretty/printer
+import pretty/printer
 import compiler/backend/c/helpers
 import compiler/backend/c/dup-drops
 import compiler/backend/c/constructors

@@ -92,7 +92,7 @@ means a recorded baseline commit is often not an ancestor of current HEAD) -- it
 superseded/unrelated commits as "behind" even when file CONTENT was byte-identical. Of 87
 tracked entries, 70 were falsely flagged this way (several-to-dozens of commits behind) but
 are in fact content-identical, including everything previously listed here except the two
-rows below -- `lib/trace.kk`, `lib/{pprint,printer}.kk`, and `syntax/lexer.kk` are all
+rows below -- `lib/trace.kk`, `pretty/{pprint,printer}.kk`, and `syntax/lexer.kk` are all
 confirmed identical now and have been dropped from this table. The script now uses
 `git diff --shortstat base..HEAD -- file` instead; baselines were bumped to `eb98b61d` for
 every file confirmed content-identical. Two NEW real divergences turned up in the process
@@ -175,7 +175,7 @@ labeled break), externals with #1 argument splicing + exn try-wrapping, list lit
 vlist, reserved-word name encoding, string/char escaping). The driver now also emits `.mjs`;
 `test/driver/smoke.mjs` passes `node --check` and runs: `id(42) == 42`, `apply_id() == 1`.
 Fixed on the way:
-- std/pretty/pprint rendered `Char` docs with `show-char` (and one path `Text` with `show`),
+- pretty/pprint rendered `Char` docs with `show-char` (and one path `Text` with `show`),
   so dquote-enclosed strings emitted `\"` — now renders verbatim (std@compiler-js 6237bca).
 - `brk` is a Koka keyword (final-ctl alias) — cannot be used as a binder.
 Note: effectful functions reference `$std_core_hnd.yield_bind` from the monadic transform;
@@ -430,7 +430,7 @@ line. `check-upstream-sync.sh` covers all 85 entries now; run it for the current
 Only `lib/core.kk`, `syntax/format.kk`, and `syntax/original/*` remain untracked (Koka-native, no upstream
 counterpart).
 
-## `compiler/lib/printer.kk` (via `std/pretty/printer`)
+## `pretty/printer.kk`
 - [ ] **File Buffering Performance**: The current `file-printer` reads the entire file into a string, appends to it, and writes it back on every flush. This is `O(N)` per write. 
     - **Fix**: Use append-mode file handles or proper buffered IO to achieve `O(1)` performance.
 
@@ -947,7 +947,7 @@ struct-heavy module are pre-existing range-map issues listed in
 
 `Core/CTail`->`ctail.kk`, `Core/CheckFBIP`->`check-fbip.kk`, `Core/CoreVar`->`corevar.kk`,
 `Core/UnReturn`->`unreturn.kk`, `Core/AnalysisCCtx`->`analysis-cctx.kk`,
-`Kind/Synonym`->`kind/synonyms.kk`, `Lib/PPrint`->`lib/pprint.kk`, `Lib/JSON`->`lib/json.kk`,
+`Kind/Synonym`->`kind/synonyms.kk`, `Lib/PPrint`->`pretty/pprint.kk`, `Lib/JSON`->`lib/json.kk`,
 `Type/TypeVar`->`type/typevar.kk`, `Type/InfGamma`->`type/infgamma.kk`,
 `Common/{IdMap,IdSet,NameMap,NameSet,QNameMap}`->`common/name-collections.kk`+`common/id.kk`,
 `Common/IdNice`->`common/nice.kk`, `Main/Run`->`main/driver.kk`,

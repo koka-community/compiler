@@ -11,11 +11,10 @@
 // of indentation and alignment as the original implementation.
 // We use effects on the printer layer though, which allows for the backend to be configured separately
 
-// Pretty printing (Wadler/Leijen). Compiler-INTERNAL: the standard library
-// exposes no pretty printer, and this one's API follows upstream's
-// `Lib/PPrint.hs` because the whole compiler prints through it.
-module compiler/lib/pprint
-import std/pretty/printer
+// Pretty printing (Wadler/Leijen).
+// Not part of the standard library: its API follows upstream's `Lib/PPrint.hs` because the whole compiler prints through it.
+module pretty/pprint
+import pretty/printer
 import std/core/undiv
 import std/os/path
 import std/os/file

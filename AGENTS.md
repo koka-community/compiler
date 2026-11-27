@@ -4,7 +4,7 @@ Rules for anyone — human or agent — working on this port. Short on purpose.
 
 ## 1. Coding standards
 
-- Markdown docs should not line-wrap unnecessarily. Only break at periods in paragraphs, and never in a bullet pointed list - bullet points should be kept brief.
+- There is no line-length limit, in Koka or in Markdown. Break comments and Markdown paragraphs naturally at sentence punctuation, never at a fixed column, and keep bullet points short and on one line.
 - Match the surrounding code: naming, comment density, layout. A diff should be hard to pick out of the file it lands in.
 - Names are `kebab-case`. Qualify a name (`local-var/update`, `dir/is-file`) when it is ambiguous; the compiler will tell you when it is.
 - Comments say WHY, not what. A comment that restates the code is noise; a comment recording a measurement, or a non-obvious constraint is the most valuable thing in the file.

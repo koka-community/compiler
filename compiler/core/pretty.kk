@@ -9,7 +9,7 @@ import compiler/common/color-scheme
 import compiler/common/syntax
 import compiler/common/nice
 import compiler/common/name-collections
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/core/core
 import compiler/kind/kind
 import compiler/kind/pretty

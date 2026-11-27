@@ -10,7 +10,7 @@ import compiler/syntax/lexer
 
 import compiler/syntax/lexeme
 
-import compiler/lib/pprint
+import pretty/pprint
 
 import std/os/file
 

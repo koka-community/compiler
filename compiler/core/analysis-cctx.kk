@@ -1,7 +1,7 @@
 // Updated as of 7/23/26: Commit 9bc234e
 module compiler/core/analysis-cctx
 
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/common/name
 import compiler/common/name-prim
 import compiler/common/range

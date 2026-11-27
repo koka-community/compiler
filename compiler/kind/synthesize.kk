@@ -1,6 +1,6 @@
 module compiler/kind/synthesize
 
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/common/failure
 import compiler/common/color-scheme
 import compiler/common/range

@@ -1,7 +1,7 @@
 // Ported as of 2026-01-18; approx upstream baseline commit bc34c8e of Kind/InferKind.hs (backfilled 2026-07-23)
 module compiler/kind/infer-kind
 
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/common/failure
 import compiler/common/id
 import compiler/common/nice

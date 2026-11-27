@@ -28,7 +28,7 @@ import compiler/common/nice
 import compiler/syntax/syntax
 import compiler/syntax/range-map
 import compiler/core/core
-import compiler/lib/pprint
+import pretty/pprint
 import std/data/rb-set
 import std/data/sort
 import std/core/undiv

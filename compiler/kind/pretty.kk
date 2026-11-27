@@ -2,8 +2,8 @@
 module compiler/kind/pretty
 
 import compiler/common/color-scheme
-import compiler/lib/pprint
-import std/pretty/printer
+import pretty/pprint
+import pretty/printer
 import compiler/kind/kind
 import compiler/kind/assumption
 import compiler/common/name

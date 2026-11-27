@@ -11,7 +11,7 @@ module compiler/lib/trace
 
 import std/core/unsafe
 pub import pretty/printer
-import compiler/lib/pprint
+import pretty/pprint
 
 pub fun color/trace(s: string, a: a, ?kk-file-line: string): a
   ctrace(DarkGray, s, a)

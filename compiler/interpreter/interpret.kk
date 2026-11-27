@@ -25,7 +25,7 @@ import compiler/common/error
 import compiler/common/parse
 import std/core/undiv
 import compiler/common/color-scheme
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/lib/isocline
 import compiler/platform/config
 import compiler/compile/options

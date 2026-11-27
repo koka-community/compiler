@@ -9,7 +9,7 @@
 module compiler/common/range
 
 import std/os/path
-import compiler/lib/pprint
+import pretty/pprint
 
 pub value struct source 
   name: string

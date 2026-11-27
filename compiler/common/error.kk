@@ -10,8 +10,8 @@ module compiler/common/error
 import compiler/common/range
 import compiler/common/message
 import compiler/common/color-scheme
-import compiler/lib/pprint
-import std/pretty/printer
+import pretty/pprint
+import pretty/printer
 import std/os/path
 
 //------------------------------

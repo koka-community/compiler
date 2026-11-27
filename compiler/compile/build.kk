@@ -29,7 +29,7 @@ import compiler/syntax/colorize
 import compiler/syntax/gen-doc
 import compiler/syntax/parse
 import compiler/common/parse
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/type/assumption
 import compiler/core/core
 import compiler/core/parse

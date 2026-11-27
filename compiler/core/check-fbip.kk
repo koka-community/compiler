@@ -30,7 +30,7 @@ import compiler/core/corevar
 import compiler/core/borrowed
 import compiler/backend/c/parc
 import compiler/backend/c/parc-reuse
-import compiler/lib/pprint
+import pretty/pprint
 import std/data/rb-set
 import std/data/sort
 import std/core/undiv

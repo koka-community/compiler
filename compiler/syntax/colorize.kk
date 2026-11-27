@@ -31,7 +31,7 @@ import compiler/common/name-collections
 import compiler/kind/assumption
 import compiler/type/assumption
 import compiler/syntax/range-map
-import compiler/lib/pprint
+import pretty/pprint
 
 //----------------------------------------------------------------------
 // HTML primitives (upstream's `tag`/`span`/`escape` family)
