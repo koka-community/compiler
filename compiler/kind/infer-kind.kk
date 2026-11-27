@@ -1,7 +1,7 @@
 // Ported as of 2026-01-18; approx upstream baseline commit bc34c8e of Kind/InferKind.hs (backfilled 2026-07-23)
 module compiler/kind/infer-kind
 
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/common/failure
 import compiler/common/id
 import compiler/common/nice
@@ -15,9 +15,9 @@ import compiler/kind/pretty
 import std/data/int-map
 import std/data/int-set
 import std/num/int64
-import std/data/rb-set
+import std/data/set
 import std/data/sort
-import std/data/rb-map
+import std/data/map
 
 pub infixr 5 (|->)
 // Inference Kind: These kinds contain meta kind variables

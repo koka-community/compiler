@@ -1,7 +1,7 @@
 module compiler/type/pretty
 
 import compiler/common/id
-import std/data/rb-map
+import std/data/map
 import compiler/common/name-collections
 import compiler/common/range
 import compiler/common/name
@@ -9,8 +9,8 @@ import compiler/common/name-prim
 import compiler/common/nice
 import compiler/common/syntax
 import compiler/common/color-scheme
-import compiler/lib/pprint
-import std/pretty/printer
+import pretty/pprint
+import pretty/printer
 import compiler/type/type
 import compiler/type/typevar
 import compiler/kind/import-map
@@ -19,7 +19,7 @@ import compiler/type/kind
 import compiler/kind/kind
 import compiler/kind/pretty
 import compiler/kind/synonyms
-import std/data/rb-set
+import std/data/set
 import std/data/sort
 import std/core/undiv
 // Updated 7/23/26 to commit #045e2dc, not fully visually second checked otherwise.
@@ -33,9 +33,9 @@ pub val precTypeApp = 3
 pub val precTypeAtom = 4
 pub val precPred = 5
 
-pub alias tv-scheme = rbmap<type-var, (prec -> doc)>;
+pub alias tv-scheme = map<type-var, (prec -> doc)>;
 
-pub val rankedDefault:tv-scheme = rb-map/empty()
+pub val rankedDefault:tv-scheme = map/empty()
 
 pub fun keyword(s: string)
   s.text.color(colors.colorTypeKeyword)
@@ -371,7 +371,7 @@ pub noinline fun pp-synonyms(syns: synonyms): _ doc
   fun pp-one(s: syn-info): _ doc
     with nice-env
     pp-syn-info(s)
-  vcat(rb-map/list(syns).sort(fn((n1: name, _), (n2: name, _)) n1.show < n2.show).map(fn((_, s)) pp-one(s)))
+  vcat(map/list(syns).sort(fn((n1: name, _), (n2: name, _)) n1.show < n2.show).map(fn((_, s)) pp-one(s)))
 
 pub fun range/pretty-range(r: range)
   if pp-env.coreIface then r.pretty else pprint/empty
@@ -553,7 +553,7 @@ pub fun pp-typesyn(ts: type-syn)
     then ts.name.pp-name-plain.color-by-kind-def(ts.kind, colorTypeCon)
     else ts.name.pp-name-plain.wrap-kind(ts.kind).color-by-kind-def(ts.kind, colorTypeCon)
 
-fun color-by-kind-def(d: doc, k: kind, defcolor: (colorScheme -> _ color))
+fun color-by-kind-def(d: doc, k: kind, defcolor: (color-scheme -> _ color))
   d.color-by-kind(k, fn(d') d'.color(defcolor(colors)))
 
 fun color-by-kind(d: doc, k: kind, defcolor: (doc -> _ doc))

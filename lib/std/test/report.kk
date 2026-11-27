@@ -1,6 +1,24 @@
 module std/test/report
 import std/test/test
-import std/pretty/printer
+
+// ANSI foreground colors, written out here because a standard-library module cannot import `pretty/printer`.
+type color
+  Red
+  Green
+  Yellow
+  Cyan
+
+fun color/code(c: color): string
+  match c
+    Red -> "91"
+    Green -> "92"
+    Yellow -> "93"
+    Cyan -> "96"
+
+fun println-colored(s: string, c: color): console ()
+  print("\x1B[" ++ c.code ++ "m")
+  println(s)
+  print("\x1B[39m")
 
 pub fun report-scope-once(reported-scopes: ref<global, list<int>>, scope: maybe<test-scope>, report: (test-scope) -> <st<global>,div|e> ()): <st<global>,div|e> ()
   match scope
@@ -52,7 +70,6 @@ pub fun color-reporter(action: () -> <test-report,io|e> ()): <io|e> ()
   var failed-test-names := []
   var hint-buffer-rev := []
 
-  with ansi-printer
   with handler <test-report>
     fun report-skipped(test)
       ()
@@ -95,8 +112,6 @@ pub fun color-reporter(action: () -> <test-report,io|e> ()): <io|e> ()
         failed-test-names.foreach fn(name)
           println-colored(" - " ++ name, Red)
 
-  with mask<printer>
-  with mask<coloredPrinter>
   // see `plain-reporter`: `mask<local>` added `local<h>` to a row declared `<io|e>`
   action()
 

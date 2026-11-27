@@ -152,7 +152,7 @@ pub fun tp-var(tb: type-binder<k>)
 pub fun tp-con(tb: type-binder<k>)
   TpCon(tb.name, tb.range)
 
-pub fun make-user-constructor(const: name, foralls: list<user-type-binder>, resTp: user-type, exists0: list<user-type-binder>, pars: list<(visibility, value-binder<user-type, maybe<user-expr>>)>, mbLazyExpr : maybe<(fipT, user-expr)>, nameRng: range, rng: range, vis: visibility, doc: string)
+pub fun make-user-constructor(const: name, foralls: list<user-type-binder>, resTp: user-type, exists0: list<user-type-binder>, pars: list<(visibility, value-binder<user-type, maybe<user-expr>>)>, mbLazyExpr : maybe<(fip-t, user-expr)>, nameRng: range, rng: range, vis: visibility, doc: string)
   val conParams = pars.map(fn((v, p)) (v, p(expr=Nothing)))
   val cName = const.new-creator-name
   val params = pars.map(fn((_, p)) p(binderType=if p.expr.is-just then make-optional(p.binderType) else p.binderType))

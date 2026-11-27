@@ -64,7 +64,7 @@ pub struct test-identity
   location: location
   
 pub fun test-identity/show(t: test-identity): div string
-  "Test-identity("++t.test-id.show ++", "++t.scope.show ++ ", " ++ t.name ++ ")"
+  "TestIdentity("++t.test-id.show ++", "++t.scope.show ++ ", " ++ t.name ++ ")"
 
 pub value struct suite-summary
   failures: int
@@ -72,7 +72,7 @@ pub value struct suite-summary
   skipped: int
 
 pub fun suite-summary(): suite-summary
-  Suite-summary(0, 0, 0)
+  SuiteSummary(0, 0, 0)
 
 pub fun summary/any-failures(summary: suite-summary): bool
   summary.failures > 0
@@ -145,7 +145,7 @@ pub fun expect-that(predicate: (a) -> <exn,div|e> bool, run: () -> <exn,div,expe
 
 // group of tests, requires (and overrides) test-scope
 pub fun group(name: string, f: () -> <test<e>|e> (), ?kk-module: string, ?kk-line: int): <test<e>|e> ()
-  val scope = Test-scope(
+  val scope = TestScope(
     scope-id = gen-test-id(),
     parent = current-scope,
     scope-name = name,
@@ -168,7 +168,7 @@ pub fun hint(value: string): expect ()
 //
 // Use `test` function where possible, as it ensures that the test body doesn't accidentally make use of an inherited effect.
 pub fun effectful-test<e>(name: string, f: () -> <expect,random,io|e> (), ?kk-module: string, ?kk-line: int): <test<<io|e>>|e> ()
-  register-test(Test-identity(gen-test-id(), current-scope, name, Location(?kk-module, ?kk-line)), f)
+  register-test(TestIdentity(gen-test-id(), current-scope, name, Location(?kk-module, ?kk-line)), f)
 
 pub fun test(name: string, f: () -> <expect,io,random> (), ?kk-module: string, ?kk-line: int): test<io> ()
   effectful-test(name, f)
@@ -211,7 +211,7 @@ pub fun collect-tests(default-sample-count: int, f: () -> <test<<io|e>>,io|e> ()
 
     fun gen-test-id() unique()
     fun register-test(test, body) {
-      tests-rev := Cons(Test-case(test, body), tests-rev)
+      tests-rev := Cons(TestCase(test, body), tests-rev)
     }
   }
   tests-rev.reverse

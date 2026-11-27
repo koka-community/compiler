@@ -6,14 +6,13 @@
 // found in the LICENSE file at the root of this distribution.
 //----------------------------------------------------------------------------
 module compiler/common/message
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/common/failure
 import compiler/platform/config
 import compiler/common/range
 import compiler/common/color-scheme
-import std/pretty/printer
+import pretty/printer
 import std/os/path
-import std/test
 // Updated as of 7/23/24: Commit: c7c0ac6
 
 // Pretty print helpers

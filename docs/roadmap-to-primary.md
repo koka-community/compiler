@@ -27,7 +27,7 @@ The repository now builds itself with no other checkout on the machine: `lib` (t
 What each item became:
 
 1. **Standard library**: `lib/`, and the default share dir is this repository -- derived from the compiler's own location, so an installed compiler (`util/bundle.kk`'s `<prefix>/share/koka/v<version>`) works the same way. This also fixed the cwd-relative `kklib` path: linking now works from any directory.
-2. **The `koka-community/std` modules**: the containers, `sort`, `json` and `std/test` graduated into `lib/std`; the assoc-list and list/char/vector helpers went into the `std/core` modules that own them (`core-extras` is gone, not moved); `pprint` stayed compiler-internal. `linear-map`, `intern` and `word-set` were NOT brought in -- `trie` (the lexer's keyword set) now keys its children off a plain association list.
+2. **The `koka-community/std` modules**: the containers, `sort`, `json` and `std/test` graduated into `lib/std`; the assoc-list and list/char/vector helpers went into the `std/core` modules that own them (`core-extras` is gone, not moved); `pprint` and `printer` form the `pretty/` library beside `compiler/`. `linear-map`, `intern` and `word-set` were NOT brought in -- `trie` (the lexer's keyword set) now keys its children off a plain association list.
 3. **`-i../parsing`**: gone from every script.
 4. **Test corpus**: `test/`, found relative to the repository root (`KOKA_TEST_ROOT` overrides). The runner compiles with the port, not the reference compiler.
 
@@ -38,7 +38,7 @@ The rest of this roadmap stands as written.
 This was the blocking work: a working checkout needed two sibling repos and a Haskell worktree.
 
 1. **Bring the standard library in.** `vendor/koka/lib` (a submodule of `TimWhiting/koka`, branch `dev-compiler`) is the std library the driver searches by default. Move it to a first-class `lib/` in this repo and make `--sharedir` default there. The submodule stays only for `kklib` (C runtime headers) until that moves too.
-2. **Absorb the 15 `koka-community/std` modules the compiler imports.** They are `std/core-extras`, `std/data/{hash,int-map,int-set,json,rb-map,rb-set,rbtree,rbtree-bu,sort,trie,word-set}`, `std/pretty/{pprint,printer}` and `std/test`. Each one needs a decision: **graduate** into the std library (the containers and `sort` have earned it — the compiler is their stress test), or move under `compiler/lib/` as compiler-internal and unexported. `std/test` belongs in the repo either way, since the std library's own tests need it.
+2. **Absorb the 15 `koka-community/std` modules the compiler imports.** They are `std/core-extras`, `std/data/{hash,int-map,int-set,json,map,rbtree,set,sort,trie,word-set}`, `std/pretty/{pprint,printer}` and `std/test`. Each one needs a decision: **graduate** into the std library (the containers and `sort` have earned it — the compiler is their stress test), or move under `compiler/lib/` as compiler-internal and unexported. `std/test` belongs in the repo either way, since the std library's own tests need it.
 3. **Delete the `-i../parsing` include path.** Nothing in `compiler/` imports anything from `koka-community/parsing`; a probe build with the path removed succeeds. It appears in five scripts. Verify on a full driver build, then drop it.
 4. **Bring the test corpus in.** `scripts/test-runner.kk` hardcodes `/Users/timwhiting/koka/.worktrees/dev-compiler/test`. `vendor/koka/test` already holds 443 of those 444 cases at the pinned commit. Point the runner at the submodule (or at a copied-in `test/corpus/`), and make the path a flag rather than a constant.
 
@@ -60,7 +60,7 @@ Today the port is validated entirely against someone else's fixtures. That is th
 
 As of 2026-10-05, CI (`.github/workflows/stage2.yml`) builds the port on four platforms and runs the corpus and the unit tests (`run-tests.kk`) with stage 2 on every push and pull request.
 
-- **Tests for the std library, in this repo.** `std/data/rb-map`, `rb-set`, `int-map`, `sort` and `trie` have tests in `koka-community/std/test`; they come along in Phase 1.2. Everything else in `lib/` has none here.
+- **Tests for the std library, in this repo.** `std/data/map`, `set`, `int-map`, `sort` and `trie` have tests in `koka-community/std/test`; they come along in Phase 1.2. Everything else in `lib/` has none here.
 - **Unit tests for compiler internals.** `test/tests/{lex,parse}` is the whole of it. The passes with the most porting risk and no direct test are specialize, parc/reuse, monadic lifting and the interface round-trip (`kkc-check.kk` covers the last one as a script, not as a test).
 - **A regression test per fixed bug.** The specialize borrow/TRMC fix went upstream with a test; several earlier fixes (evidence-vector scramble, unroll unique counter, interface qualified wildcards) have none here.
 - **Keep the upstream corpus as a parity gate**, pinned via the submodule, run before releases rather than on every change.

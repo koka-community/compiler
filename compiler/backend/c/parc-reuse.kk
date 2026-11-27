@@ -38,9 +38,9 @@ import compiler/type/type
 import compiler/kind/newtypes
 import compiler/core/core
 import compiler/backend/c/parc-reuse-spec
-import std/data/rb-set
+import std/data/set
 import std/core/undiv
-import std/data/rb-map
+import std/data/map
 import std/data/int-map
 import std/num/int64
 
@@ -106,7 +106,7 @@ fun rux-to-assign(m: ru-match): reuse-eff (list<def-group>, (expr, bool /* is ma
         val v = Var(TName(nm, e.type-of), InfoNone)
         ([d], (v, False))
 
-fun ru-spec-con(reuse-name: tName, con-name: tName, con-repr: con-repr, con-info: con-info,
+fun ru-spec-con(reuse-name: t-name, con-name: t-name, con-repr: con-repr, con-info: con-info,
                  mb-tag-scan: maybe<(int, maybe<int>)>, matches: list<ru-match>): reuse-eff expr
   val assign-results = matches.map(rux-to-assign)
   val (defss, assigns) = assign-results.unzip
@@ -167,7 +167,7 @@ fun rux-expr(e: expr): reuse-eff expr
     // Var, Lit, Con
     _ -> e
 
-fun ru-lam(pars: list<tName>, eff: ktype, body: expr): reuse-eff expr
+fun ru-lam(pars: list<t-name>, eff: ktype, body: expr): reuse-eff expr
   val body1 = with-none fn()
     pars.foreach fn(p)
       match p.type-of.get-ru-fixed-data-alloc-size
@@ -183,7 +183,7 @@ fun ru-lam(pars: list<tName>, eff: ktype, body: expr): reuse-eff expr
 // (by a later `App(Con ..)` matching their size). It is not state-threading: the mutable
 // `reused` effect state is queried once (`get-reused()`, after `expr` has been processed) and
 // handed to this pure closure, exactly mirroring upstream's `Reused -> (...)`.
-alias let-step = (reused) -> pure (list<tName>, expr -> pure expr)
+alias let-step = (reused) -> pure (list<t-name>, expr -> pure expr)
 
 // identity continuation, typed exactly at `let-step`'s (pure) continuation effect so it
 // unifies with the other `let-step`-producing match branches below (which go through
@@ -271,31 +271,31 @@ fun ru-let-prime(def: def): reuse-eff let-step
       val de = def.defExpr.rux-expr
       fn(_: reused) ([], let-step-prepend([def(defExpr=de)]))
 
-fun ru-make-available(tname: tName): reuse-eff maybe<tName>
+fun ru-make-available(tname: t-name): reuse-eff maybe<t-name>
   val ds = get-deconstructed()
   match (ru-enable-reuse, ds.lookup(tname.get-name))
     (True, Just((pat, size, _scan))) ->
       val rname = unique-reuse-name(typeReuse)
       // `insert-with` combines as (new, old), so this prepends the fresh credit
-      set-available(get-available().insert-with(size.int64, [Reuse-info(rname, pat)], fn(nw: list<reuse-info>, old: list<reuse-info>) nw.list/(++)(old)))
+      set-available(get-available().insert-with(size.int64, [ReuseInfo(rname, pat)], fn(nw: list<reuse-info>, old: list<reuse-info>) nw.list/(++)(old)))
       Just(rname)
     _ -> Nothing
 
-fun ru-get-scan(tname: tName): reuse-eff maybe<int>
+fun ru-get-scan(tname: t-name): reuse-eff maybe<int>
   match get-deconstructed().lookup(tname.get-name)
     Just((_, _, scan)) -> Just(scan)
     _ -> Nothing
 
-fun rux-branches(scrutinees: list<tName>, branches: list<branch>): reuse-eff list<branch>
+fun rux-branches(scrutinees: list<t-name>, branches: list<branch>): reuse-eff list<branch>
   val results = branches.map(fn(b) b.rux-branch(scrutinees))
   val (branch-fns, rs, avs) = results.unzip3
   set-available-intersect(avs)
   val rus = rs.reused-union
   set-reused(rus)
-  val reuse-drops: rbmap<tName,expr> = rb-map/from-list(rus.list.map(fn(tn) (tn, gen-reuse-drop(tn))))
+  val reuse-drops: map<t-name,expr> = map/from-list(rus.list.map(fn(tn) (tn, gen-reuse-drop(tn))))
   branch-fns.map(fn(bf) bf(reuse-drops))
 
-fun rux-branch(b: branch, scrutinees: list<tName>): reuse-eff ((rbmap<tName,expr>) -> pure branch, reused, available)
+fun rux-branch(b: branch, scrutinees: list<t-name>): reuse-eff ((map<t-name,expr>) -> pure branch, reused, available)
   val ((bf, rd), av) = isolate-get-available fn()
     isolate-deconstructed fn()
       isolate-get-reused fn()
@@ -304,16 +304,16 @@ fun rux-branch(b: branch, scrutinees: list<tName>): reuse-eff ((rbmap<tName,expr
         val gs = b.guards.map(rux-guard)
         val (guards1, avs) = gs.unzip
         set-available-intersect(avs)
-        fn(reuse-drops: rbmap<tName,expr>): pure branch
+        fn(reuse-drops: map<t-name,expr>): pure branch
           Branch(b.patterns, guards1.map(fn(gf) gf(reuse-drops)))
   (bf, rd, av)
 
-fun add-deconstructed(entry: (tName, maybe<pattern>, int, int)): reuse-eff ()
+fun add-deconstructed(entry: (t-name, maybe<pattern>, int, int)): reuse-eff ()
   val (tn, pat, size, scan) = entry
   if size > 0 then
-    set-deconstructed(rb-map/set(get-deconstructed(), tn.get-name, (pat, size, scan)))
+    set-deconstructed(map/set(get-deconstructed(), tn.get-name, (pat, size, scan)))
 
-fun ru-pattern(scrutinee: tName, pat: pattern): reuse-eff list<(tName, maybe<pattern>, int, int)>
+fun ru-pattern(scrutinee: t-name, pat: pattern): reuse-eff list<(t-name, maybe<pattern>, int, int)>
   match pat
     PatVar(tname, p) -> ru-pattern(tname, p)
     PatCon(pat-con-name, pat-con-patterns, pat-con-repr, _typeArgs, _kexists, _typeRes, _info, _skip) ->
@@ -333,12 +333,12 @@ fun ru-pattern(scrutinee: tName, pat: pattern): reuse-eff list<(tName, maybe<pat
         Just((size, scan)) -> [(scrutinee, Nothing, size, scan)]
         Nothing -> []
 
-fun rux-guard(g: guard): reuse-eff ((rbmap<tName,expr>) -> pure guard, available)
+fun rux-guard(g: guard): reuse-eff ((map<t-name,expr>) -> pure guard, available)
   isolate-get-available fn()
     val test1 = with-none( fn() g.test.rux-expr )
     val expr1 = g.body.rux-expr
     val reused-here = get-reused()
-    fn(reuse-drops: rbmap<tName,expr>): pure guard
+    fn(reuse-drops: map<t-name,expr>): pure guard
       val drops-here = reuse-drops.filter(fn(k, _v) !reused-here.member(k)).values
       Guard(test1, make-stats(drops-here ++ [expr1]))
 
@@ -359,7 +359,7 @@ fun is-con-as-just(repr: con-repr): bool
     ConAsJust -> True
     _ -> False
 
-fun ru-try-reuse-con(cname: tName, repr: con-repr, con-app: expr): reuse-eff expr
+fun ru-try-reuse-con(cname: t-name, repr: con-repr, con-app: expr): reuse-eff expr
   match ru-is-reusable(repr, ru-platform)
     NotReusable -> con-app
     ReusableWithSize(size) ->
@@ -374,7 +374,7 @@ fun ru-try-reuse-con(cname: tName, repr: con-repr, con-app: expr): reuse-eff exp
   // constructor), but it is commented out / disabled there too ("Picking can prevent
   // reuse in FIP programs, disabled for now") -- not ported.
 
-fun ru-lazy-memoize(lazy-tname: tName, arg: expr): reuse-eff expr
+fun ru-lazy-memoize(lazy-tname: t-name, arg: expr): reuse-eff expr
   val ds = get-deconstructed()
   lazy-tname.maybe-mark-deconstructed-lazy-con-as-reused
   val reuse-name = unique-reuse-name(typeReuse)
@@ -386,7 +386,7 @@ fun ru-lazy-memoize(lazy-tname: tName, arg: expr): reuse-eff expr
   // lazy-indirect, update-con.
 
   // specialized reuse, or a fallback that overwrites all fields
-  fun lazy-reuse(lazy-info: (maybe<pattern>, int, int), mci: maybe<con-info>, cname: tName, crepr: con-repr, conx: expr, args1: list<expr>): reuse-eff expr
+  fun lazy-reuse(lazy-info: (maybe<pattern>, int, int), mci: maybe<con-info>, cname: t-name, crepr: con-repr, conx: expr, args1: list<expr>): reuse-eff expr
     match (lazy-info, mci)
       ((Just(PatCon(pat-con-name, pat-con-patterns, _, _, _, _, _, _)), _size, scan), Just(ci)) ->
         val matches = args1.zipwith(pat-con-patterns, try-match)
@@ -427,7 +427,7 @@ fun ru-lazy-memoize(lazy-tname: tName, arg: expr): reuse-eff expr
       make-stats(Cons(ind-con, (if is-singleton then [] else [gen-dup(arg-name)]) ++ [gen-dec-ref(lazy-tname), arg-var])))
     make-defs-let([make-def(arg-name.get-name, arg1)], ind-expr)
 
-  fun update-con(lazy-info: (maybe<pattern>, int, int), cname: tName, crepr: con-repr, conx: expr, args: list<expr>): reuse-eff expr
+  fun update-con(lazy-info: (maybe<pattern>, int, int), cname: t-name, crepr: con-repr, conx: expr, args: list<expr>): reuse-eff expr
     val (_pat, lazy-size, _scan) = lazy-info
     val size = crepr.alloc-size(ru-platform)
     if lazy-size < size then
@@ -461,17 +461,17 @@ fun ru-lazy-memoize(lazy-tname: tName, arg: expr): reuse-eff expr
 // Codegen helpers for reuse-related primitives
 //--------------------------------------------------------------------------
 
-fun gen-dec-ref(tname: tName): expr
+fun gen-dec-ref(tname: t-name): expr
   val fun-tp = TFun([(name/nil, tname.type-of)], typeTotal, typeUnit)
   App(Var(TName(nameDecRef, fun-tp), InfoExternal("decref(#1,current_context())")), [Var(tname, InfoNone)])
 
-fun gen-dup(nm: tName): expr
+fun gen-dup(nm: t-name): expr
   val tp = nm.type-of
   val coerce-tp = TFun([(name/nil, tp)], typeTotal, tp)
   App(Var(TName(nameDup, coerce-tp), InfoExternal("dup(#1)")), [Var(nm, InfoNone)])
 
 // Generate a reuse-drop of a constructor
-fun gen-drop-reuse(tname: tName, scan: expr /* : int32 */): expr
+fun gen-drop-reuse(tname: t-name, scan: expr /* : int32 */): expr
   val fun-tp = TFun([(name/nil, tname.type-of), (name/nil, typeInt32)], typeTotal, typeReuse)
   App(Var(TName(nameDropReuse, fun-tp), InfoExternal("drop_reuse(#1,#2,kk_context())")), [Var(tname, InfoNone), scan])
 
@@ -485,17 +485,17 @@ fun gen-alloc-at(ri: reuse-info, con-app: expr, con-tp: ktype): expr
   App(Var(TName(nameAllocAt, type-alloc-at), InfoArity(0, 2)), [Var(ri.reuse-name, info), con-app])
 
 // Generate a test if a (locally bound) name is unique
-fun gen-is-unique(tname: tName): expr
+fun gen-is-unique(tname: t-name): expr
   val fun-tp = TFun([(name/nil, tname.type-of)], typeTotal, typeBool)
   App(Var(TName(nameIsUnique, fun-tp), InfoExternal("is_unique(#1)")), [Var(tname, InfoNone)])
 
 // Generate a free of a constructor
-fun gen-free(tname: tName): expr
+fun gen-free(tname: t-name): expr
   val fun-tp = TFun([(name/nil, tname.type-of)], typeTotal, typeUnit)
   App(Var(TName(nameFree, fun-tp), InfoExternal("kk_constructor_free(#1,kk_context())")), [Var(tname, InfoNone)])
 
 // Generate a drop of a reuse token
-fun gen-reuse-drop(tname: tName): expr
+fun gen-reuse-drop(tname: t-name): expr
   val fun-tp = TFun([(name/nil, tname.type-of)], typeTotal, typeReuse)
   App(Var(TName(nameReuseDrop, fun-tp), InfoExternal("kk_reuse_drop(#1,kk_context())")), [Var(tname, InfoNone)])
 
@@ -505,11 +505,11 @@ fun gen-reuse-null(): expr
   App(Var(TName(nameReuseNull, fun-tp), InfoExternal("kk_reuse_null")), [])
 
 // Generate a reuse of a block
-fun gen-reuse-address(tname: tName): expr
+fun gen-reuse-address(tname: t-name): expr
   val fun-tp = TFun([(name/nil, tname.type-of)], typeTotal, typeReuse)
   App(Var(TName(nameReuse, fun-tp), InfoExternal("reuse_datatype(#1,kk_context())")), [Var(tname, InfoNone)])
 
-fun gen-reuse-assign-with(reuse-name: tName, arg: expr): expr
+fun gen-reuse-assign-with(reuse-name: t-name, arg: expr): expr
   val assign = TName(nameAssignReuse, TFun([(name/nil, typeReuse), (name/nil, typeReuse)], typeTotal, typeUnit))
   App(Var(assign, InfoExternal("#1 = #2")), [Var(reuse-name, InfoNone), arg])
 
@@ -518,10 +518,10 @@ fun gen-reuse-assign-with(reuse-name: tName, arg: expr): expr
 //--------------------------------------------------------------------------
 
 // create a unique name specific to this module
-fun unique-reuse-name(tp: ktype): reuse-eff tName
+fun unique-reuse-name(tp: ktype): reuse-eff t-name
   unique-tname("ru", tp)
 
-fun unique-tname(pre: string, tp: ktype): reuse-eff tName
+fun unique-tname(pre: string, tp: ktype): reuse-eff t-name
   TName(unique-name(pre), tp)
 
 // `unzip3` is provided by std (`list/unzip3`); no local definition needed.
@@ -534,16 +534,16 @@ fun unique-tname(pre: string, tp: ktype): reuse-eff tName
 // Patricia tree keyed by byte size.
 alias available = int-map<list<reuse-info>>
 alias deconstructed = name-map<(maybe<pattern>, int, int)>
-alias reused = rbset<tName>
+alias reused = set<t-name>
 
 struct reuse-info
-  reuse-name: tName
+  reuse-name: t-name
   ru-pat: maybe<pattern>
 
 type lazy-con
   NoLazyCon
-  KnownLazyCon(tname: tName)
-  DeconstructedLazyCon(tname: tName, rname: tName)
+  KnownLazyCon(tname: t-name)
+  DeconstructedLazyCon(tname: t-name, rname: t-name)
 
 // mutable analysis state, installed once at the pass entry (`with-reuse`)
 effect reuse
@@ -568,8 +568,8 @@ alias reuse-eff = <reuse, unique, ru-platform, ru-newtypes, ru-enable-reuse, ru-
 fun with-reuse(enable-reuse: bool, platform: platform, newtypes: newtypes,
                 f: () -> <reuse, unique, ru-platform, ru-newtypes, ru-enable-reuse, ru-encl-def|e> a): <unique|e> a
   var available := (int-map/empty() : available)
-  var deconstructed := (rb-map/empty() : deconstructed)
-  var reused := (rb-set/empty() : reused)
+  var deconstructed := (map/empty() : deconstructed)
+  var reused := (set/empty() : reused)
   var lazy-con := NoLazyCon
   with handler
     fun get-available() available
@@ -591,7 +591,7 @@ fun with-current-def(d: def, f)
     val ru-encl-def = Cons(d, ru-encl-def)
   f()
 
-fun mark-reused(tn: tName): reuse-eff ()
+fun mark-reused(tn: t-name): reuse-eff ()
   set-reused(get-reused() + tn)
 
 fun reused-union(rs: list<reused>): reused
@@ -617,29 +617,29 @@ fun available-intersect(a: available, b: available): available
   intersection-with(a, b) fn(xs: list<reuse-info>, ys: list<reuse-info>)
     xs.filter(fn(ri) ys.any(fn(ri2) ri2.reuse-name == ri.reuse-name))
 
-fun register-lazy-con(tname: tName): reuse-eff ()
+fun register-lazy-con(tname: t-name): reuse-eff ()
   set-lazy-con(KnownLazyCon(tname))
 
-fun get-registered-lazy-con(): reuse-eff maybe<tName>
+fun get-registered-lazy-con(): reuse-eff maybe<t-name>
   match get-lazy-con()
     KnownLazyCon(tname) -> Just(tname)
     DeconstructedLazyCon(tname, _) -> Just(tname)
     _ -> Nothing
 
-fun deconstruct-lazy-con(rname: tName): reuse-eff ()
+fun deconstruct-lazy-con(rname: t-name): reuse-eff ()
   match get-lazy-con()
     KnownLazyCon(tname) -> set-lazy-con(DeconstructedLazyCon(tname, rname))
     DeconstructedLazyCon(tname, _) -> set-lazy-con(DeconstructedLazyCon(tname, rname))
     NoLazyCon -> ru-error("deconstructLazyCon: not a known lazy con")
 
 // unused upstream too (dead code, kept for parity with the lazy-con state machine)
-fun get-deconstructed-lazy-con(): reuse-eff (tName, tName)
+fun get-deconstructed-lazy-con(): reuse-eff (t-name, t-name)
   match get-lazy-con()
     DeconstructedLazyCon(tname, rname) -> (tname, rname)
     KnownLazyCon(tname) -> ru-error("getDeconstructedLazyCon: " ++ tname.show ++ " was not deconstructed")
     NoLazyCon -> ru-error("getDeconstructedLazyCon: no known lazy con")
 
-fun maybe-mark-deconstructed-lazy-con-as-reused(_lazy-tname: tName): reuse-eff ()
+fun maybe-mark-deconstructed-lazy-con-as-reused(_lazy-tname: t-name): reuse-eff ()
   match get-lazy-con()
     DeconstructedLazyCon(_, rname) | !rname.get-name.is-nil -> mark-reused(rname)
     _ -> ()
@@ -650,7 +650,7 @@ fun with-none(f: () -> reuse-eff a): reuse-eff a
   val av0 = get-available()
   val ds0 = get-deconstructed()
   set-available(int-map/empty())
-  set-deconstructed(rb-map/empty())
+  set-deconstructed(map/empty())
   val x = f()
   set-available(av0)
   set-deconstructed(ds0)
@@ -714,7 +714,7 @@ pub fun get-fixed-data-alloc-size(platform: platform, newtypes: newtypes, data-t
             Cons(ss, rest) | rest.all(fn(s) s.fst == ss.fst && s.snd == ss.snd) -> Just(ss)
             _ -> Nothing
 
-fun get-lazy-indirect-con(lazy-tname: tName): reuse-eff maybe<(con-info, con-repr)>
+fun get-lazy-indirect-con(lazy-tname: t-name): reuse-eff maybe<(con-info, con-repr)>
   match get-data-info(ru-newtypes, lazy-tname.type-of)
     Nothing -> Nothing
     Just((_, data-info)) ->

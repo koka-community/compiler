@@ -1,6 +1,6 @@
 import compiler/common/error
 import compiler/common/range
-import compiler/lib/pprint
+import pretty/pprint
 import std/test
 
 // Common test data

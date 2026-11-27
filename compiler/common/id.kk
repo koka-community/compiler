@@ -7,9 +7,9 @@
 //----------------------------------------------------------------------------
 // Updated as of 7/23/24: Commits b8074c2 (IdSet) e914563 (IdMap) b8074c2 (Id)
 module compiler/common/id
-import std/data/rb-set
-import compiler/lib/pprint
-import std/data/rb-map
+import std/data/set
+import pretty/pprint
+import std/data/map
 import std/data/int-map
 import std/data/int-set
 import compiler/common/name-collections

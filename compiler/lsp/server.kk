@@ -11,7 +11,7 @@
 module compiler/lsp/server
 
 import std/os/path
-import std/data/rb-map
+import std/data/map
 import std/async
 import std/core/undiv
 import compiler/common/name
@@ -32,7 +32,7 @@ import compiler/syntax/lexeme
 import compiler/type/pretty
 import compiler/kind/pretty
 import compiler/kind/kind
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/lib/json
 import compiler/lib/log
 import compiler/lsp/jsonrpc

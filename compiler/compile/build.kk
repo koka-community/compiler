@@ -29,7 +29,7 @@ import compiler/syntax/colorize
 import compiler/syntax/gen-doc
 import compiler/syntax/parse
 import compiler/common/parse
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/type/assumption
 import compiler/core/core
 import compiler/core/parse
@@ -41,9 +41,9 @@ import compiler/compile/module
 import compiler/compile/vfs
 import compiler/compile/phase
 import compiler/common/file
-import std/data/rb-map
+import std/data/map
 import compiler/lib/scc
-import std/data/rb-set
+import std/data/set
 import compiler/common/name-collections
 import std/async
 import std/async/thread
@@ -87,7 +87,7 @@ pub type module-check
     // alongside the data types (`synonymCompletions`)
     syns: synonyms,
     // for the REPL's `:k` listing
-    kgam: kGamma)
+    kgam: k-gamma)
 
 // `@`-identifiers are permitted when lexing ANY module, not only primitive
 // ones and the synthesized `@main` module.
@@ -151,7 +151,7 @@ pub struct typed-module
   tcore: core
   gamma0: gamma
   newtypes: newtypes
-  kgamma: kGamma
+  kgamma: k-gamma
   rmap: range-map
   unique: int
 
@@ -316,7 +316,7 @@ pub fun resolve-module(mods0: bmodules, nm: name, out-dir: path, need-cfile: boo
                        // because a module's SOURCE may come from the in-memory
                        // overlay rather than disk (compiler/compile/vfs.kk).
                        compile-source: (path, name, bmodules) -> <io,comp-error,parse-error,vfs-lookup,log|e> bmodule,
-                       deps-cache: dep-cache = rb-map/empty(),
+                       deps-cache: dep-cache = map/empty(),
                        in-progress: list<name> = [], irange: range = range/null,
                        // see `resolve-module-name`'s doc comment: callers
                        // canonicalize via `canonicalize-deps` before this is
@@ -618,7 +618,7 @@ pub fun discover-deps(roots: list<name>, source-dirs: module-dirs, tpl: target-p
                       // a previous run's cache to start from: a language server
                       // re-checks the same graph on every keystroke, and rescanning
                       // it dominates the cost of the edit itself
-                      cache0: dep-cache = rb-map/empty()): _ dep-cache
+                      cache0: dep-cache = map/empty()): _ dep-cache
   fun locate(nm: name): _ maybe<path>
     source-dirs.search.flatmap(fn(d) source-files(d, nm.show-plain)).find(vfs/is-file)
   fun waves(cache: dep-cache, frontier: list<name>): _ dep-cache
@@ -771,7 +771,7 @@ pub fun restrict-to-closure(mods: bmodules, direct: list<name>): div bmodules
   // dropping the alias key here -- keeping only "std/async/internal" -- means
   // that second lookup misses, silently omitting the module from `tcMods`
   // even though it's genuinely in the closure.
-  rb-map/empty().add-all(mods.list.filter(fn((n, m)) keep.any(fn(k) k == n) || keep.any(fn(k) k == m.bmod/core.coreName)))
+  map/empty().add-all(mods.list.filter(fn((n, m)) keep.any(fn(k) k == n) || keep.any(fn(k) k == m.bmod/core.coreName)))
 
 // Synonyms of every module loaded so far. Seeds the interface parser so a
 // synonym the emitter did not re-declare in the `local alias` section (e.g.
@@ -919,7 +919,7 @@ fun load-unordered(fl: flags, out-dir: path, cands: list<name>, have0: bmodules)
       val cfile = out-dir / (nm.module-name-to-path ++ ".c").path
       val need-cfile = fl.target.is-c
       if need-cfile && !cfile.dir/is-file then Nothing
-      else Just(Load-req(nm, kki, at, if need-cfile then Just(cfile) else Nothing, rb-map/empty()))
+      else Just(LoadReq(nm, kki, at, if need-cfile then Just(cfile) else Nothing, map/empty()))
   if reqs.is-nil then have0
   else
     val (got, n-workers) =
@@ -1255,7 +1255,7 @@ pub fun build-order(mods: bmodules, roots: list<name>): _ list<(name, bmodule)>
   // the closure: `roots` and everything they import
   fun visit(acc: (name-set, list<(name, bmodule)>), nm: name): div (name-set, list<(name, bmodule)>)
     val (seen, out) = acc
-    if rb-set/member(seen, nm) then acc
+    if set/member(seen, nm) then acc
     else match mods.lookup(nm)
       Nothing -> (seen + nm, out)
       Just(m) ->
@@ -1263,7 +1263,7 @@ pub fun build-order(mods: bmodules, roots: list<name>): _ list<(name, bmodule)>
         (seen1, Cons((nm, m), out1))
   val (inClosure, closure) = roots.foldl((names/empty, []), visit)
   val deps = closure.map fn((nm, m))
-    (nm, m.bmod/core.imports.map(fn(i) i.importName).filter(fn(d) rb-set/member(inClosure, d) && mods.contains-key(d)))
+    (nm, m.bmod/core.imports.map(fn(i) i.importName).filter(fn(d) set/member(inClosure, d) && mods.contains-key(d)))
   scc(deps).concat.filter-map(fn(nm) mods.lookup(nm).map(fn(m) (nm, m)))
 
 // The import cycles in `deps` (module, its direct imports), one list of
@@ -1273,7 +1273,7 @@ pub fun build-order(mods: bmodules, roots: list<name>): _ list<(name, bmodule)>
 // modules outside `deps` (interface-only) cannot close a cycle and are ignored.
 pub fun import-cycles(deps: list<(name, list<name>)>): div list<list<name>>
   val keys = deps.foldl(names/empty) fn(s, (nm, _)) s + nm
-  val adj = deps.map(fn((nm, ds)) (nm, ds.filter(fn(d) rb-set/member(keys, d))))
+  val adj = deps.map(fn((nm, ds)) (nm, ds.filter(fn(d) set/member(keys, d))))
   scc(adj).filter fn(grp)
     match grp
       [nm] -> adj.any(fn((k, ds)) k == nm && ds.any(fn(d) d == nm))
@@ -1281,7 +1281,7 @@ pub fun import-cycles(deps: list<(name, list<name>)>): div list<list<name>>
 
 // upstream `codeGen`'s `eimports`: the `library` declarations of a module and
 // of its direct imports (`bcore : importcores`)
-pub fun c-unit-eimports(mods: bmodules, c: core, bt: buildType): _ list<(string, maybe<string>, maybe<string>)>
+pub fun c-unit-eimports(mods: bmodules, c: core, bt: build-type): _ list<(string, maybe<string>, maybe<string>)>
   val cores = Cons(c, c.imports.filter-map(fn(i) mods.lookup(i.importName).map(fn(m) m.bmod/core)))
   nub-decls(cores.flatmap(fn(c2) clibs-of-core(c2, bt)))
 
@@ -1848,7 +1848,7 @@ pub fun compile-module(fl: flags, srcPath: path, outBase: path, isEntry: bool, m
       _ -> fl.typeCheckOnly && isEntry
     if stop-typed then
       return (Nothing, Just(ModTyped(core1, extract-gamma(data/is-value, False, core1),
-                                     Typed-module(progX, core1, gamma0, nt, kg, rmap, get-unique()))))
+                                     TypedModule(progX, core1, gamma0, nt, kg, rmap, get-unique()))))
     // `-l`/`--library`: compile only -- no entry point is created, linked, or
     // run (upstream: `mainEntries = if library flags then [] else ...`).
     // NOTE: `isEntry` still controls module NAMING and the show-info prints;
@@ -1925,7 +1925,7 @@ pub fun compile-module(fl: flags, srcPath: path, outBase: path, isEntry: bool, m
       // import names, so a module aliased under a second key appears once.
       val ordered = build-order(mods, coreForGen.imports.map(fn(i) i.importName))
       val cImports = ordered.filter-map fn((_, m))
-        m.bmod/cfile.map(fn(cf) C-unit(cf, c-unit-eimports(mods, m.bmod/core, fl.build-type)))
+        m.bmod/cfile.map(fn(cf) CUnit(cf, c-unit-eimports(mods, m.bmod/core, fl.build-type)))
       // ntFull, not nt: parc runs in the C backend and "analyzes types inside
       // abstract types" (upstream CodeGen comment) from INLINED imported code
       val tcg0 = cpu-ms()
@@ -1939,7 +1939,7 @@ pub fun compile-module(fl: flags, srcPath: path, outBase: path, isEntry: bool, m
         val docGamma = type/assumption/union(fullDefsGamma, extract-gamma(data/is-value, True, coreForGen))
         val md = with-pretty-env fn()
           colorize(srcPath, 1, read-source(srcPath, fl.includePath.map(path)),
-                   env = Html-env(progX.name, fl.htmlBases),
+                   env = HtmlEnv(progX.name, fl.htmlBases),
                    full-html = fl.outHtml > 1, gammas = Just((docGamma, kg)))
         write-text-file-atomic((outBase.string ++ ".md").path, md)
       elif fl.outHtml > 0 then
@@ -1949,7 +1949,7 @@ pub fun compile-module(fl: flags, srcPath: path, outBase: path, isEntry: bool, m
         val html = with-pretty-env fn()
           colorize(srcPath, 1, read-source(srcPath, fl.includePath.map(path)),
                    rmap = Just(rmap),
-                   env = Html-env(progX.name, fl.htmlBases),
+                   env = HtmlEnv(progX.name, fl.htmlBases),
                    full-html = fl.outHtml > 1,
                    css = fl.htmlCss.undelim-paths, js = fl.htmlJs)
         write-text-file-atomic((outBase.string ++ "-source.html").path, html)
@@ -1971,7 +1971,7 @@ pub fun compile-module(fl: flags, srcPath: path, outBase: path, isEntry: bool, m
         val docGamma = type/assumption/union(fullDefsGamma,
                                              extract-gamma(data/is-value, True, coreForGen))
         val xmp = with-pretty-env fn()
-          gen-doc(coreForGen, docKGamma, docGamma, env = Html-env(progX.name, fl.htmlBases),
+          gen-doc(coreForGen, docKGamma, docGamma, env = HtmlEnv(progX.name, fl.htmlBases),
                   // upstream writes each line with `writeLn`, so the document
                   // ends with a newline after `</html>`; Koka's `unlines` does not
                   css = fl.htmlCss.undelim-paths, js = fl.htmlJs).unlines ++ "\n"

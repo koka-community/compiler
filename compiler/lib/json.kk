@@ -25,7 +25,7 @@
 module compiler/lib/json
 
 pub import std/data/json
-pub import compiler/lib/pprint
+pub import pretty/pprint
 import std/num/float64
 
 pub fun parse-json(s: string): <exn,div> json

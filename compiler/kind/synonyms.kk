@@ -2,7 +2,7 @@
 module compiler/kind/synonyms
 
 import compiler/common/name
-import std/data/rb-map
+import std/data/map
 import compiler/common/name-collections
 import compiler/core/core
 import compiler/type/type
@@ -39,9 +39,9 @@ pub fun with-synonyms(synonyms0: synonyms, f: () -> _ a): _ a
   f()
 
 pub fun new(ls: list<syn-info>)
-  rb-map/from-list(ls.map(fn(si) (si.name, si)))
+  map/from-list(ls.map(fn(si) (si.name, si)))
 pub fun extend(synonyms: synonyms, k: syn-info)
-  rb-map/set(synonyms, k.name, k)
+  map/set(synonyms, k.name, k)
 // fun lookup(synonyms: synonyms, name: name)
 //   synonyms.map/lookup(name)
 fun find(synonyms: synonyms, name: name)
@@ -54,17 +54,17 @@ fun synonyms/filter(synonyms: synonyms, modName: name)
   synonyms.filter(fn(k, v) (k.qualifier) == modName)
 
 pub fun compose(syns1: synonyms, syns2: synonyms)
-  rb-map/unions([syns2, syns1])
+  map/unions([syns2, syns1])
 
 fun single(name: name, s: syn-info): synonyms
-  rb-map/from-list([(name, s)])
-pub val empty:synonyms = rb-map/empty()
+  map/from-list([(name, s)])
+pub val empty:synonyms = map/empty()
 
 pub fun core/extract-synonyms(c: core): _ synonyms
-  rb-map/unions(c.typedefs.map(extract-synonyms))
+  map/unions(c.typedefs.map(extract-synonyms))
 
 fun tdg/extract-synonyms(g: typedef-group): _ synonyms
-  rb-map/unions(g.map(extract-synonyms))
+  map/unions(g.map(extract-synonyms))
 
 fun td/extract-synonyms(d: typedef): _ synonyms
   match d

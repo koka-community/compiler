@@ -304,8 +304,7 @@ fun precompile(bin: string, common: list<string>, tests: list<path>): io ()
   warm.file/write-text-file(body)
   println("pre-compiling " ++ mods.length.show ++ " std modules...")
   val argv = [bin] ++ common ++ [warm.string]
-  // std's own build warnings (e.g. rbtree-bu's fip notes) are not this
-  // runner's business; a real failure still surfaces via the Error branch
+  // std's own build warnings are not this runner's business; a real failure still surfaces via the Error branch
   val cmd = argv.map(fn(a) if a.contains(" ") then "\"" ++ a ++ "\"" else a).join(" ") ++ " 2>/dev/null"
   match run-system-read(cmd)
     Ok(_)    -> println("ok.")

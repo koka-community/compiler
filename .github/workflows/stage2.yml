@@ -41,7 +41,7 @@ permissions:
 env:
   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
   # the reference compiler: a commit, so that a build is reproducible
-  KOKA_REF: ${{ github.event.inputs.koka-ref || '6c6aa5f255dcadc1839ecddfd9989672f28727f7' }}
+  KOKA_REF: ${{ github.event.inputs.koka-ref || '6763897906195475e09e4feb08ede524b55491fb' }}
 
 jobs:
   build:

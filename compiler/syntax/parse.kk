@@ -642,7 +642,7 @@ fun parse-val-decl(rng: range, doc: string, vis: visibility, inl: def-inline): _
   val body = parse-block-expr()
   Def(bind(body), rng.combine(body.range), vis, DefVal, inl, doc)
 
-fun parse-fun-decl(toplevel: bool, rng: range, doc: string, vis: visibility, inl: def-inline, f: fipT): _ user-def
+fun parse-fun-decl(toplevel: bool, rng: range, doc: string, vis: visibility, inl: def-inline, f: fip-t): _ user-def
   val spars = parse-s-quantifier()
   // trace("parsing function " ++ toplevel.show ++ "\n" ++ doc ++ "\n")
   val (name, nameRng) = parse-fun-id()

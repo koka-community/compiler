@@ -43,6 +43,7 @@ import std/os/path
 import std/os/dir
 import std/core/undiv
 import std/core/exn
+import std/core/unsafe
 import compiler/common/syntax
 import compiler/common/color-scheme
 import compiler/platform/config
@@ -117,7 +118,7 @@ pub struct flags
   heapSize: int = 0
   simplify: int = 5
   simplifyMaxDup: int = 10           // >= 10 to inline partial applications across binds
-  colorScheme: colorScheme = ColorScheme()
+  colorScheme: color-scheme = ColorScheme()
 
   buildDir: string = ""              // kkbuild
   buildTag: string = ""
@@ -237,7 +238,7 @@ pub fun flags/use-specialize(fl: flags): bool
   fl.optSpecialize && fl.optimize >= 1
 
 // Derived from optimize/debug, not stored
-pub fun flags/build-type(fl: flags): buildType
+pub fun flags/build-type(fl: flags): build-type
   if fl.optimize < 0 then DebugFull
   elif fl.optimize == 0 then Debug
   elif fl.debug then RelWithDebInfo
@@ -367,15 +368,22 @@ pub fun unquote(s: string): list<string>
       Nil -> [acc.reverse.string]
   pretend-no-div({scan([], Nothing, s.list)}).filter(fn(x) x != "")
 
-// Split a `;`-or-`,`-delimited path
-// list, trimming whitespace around each entry
+// Split a list of paths delimited by `;`, and by `:` except on Windows, as
+// upstream `undelimPaths`. Leading spaces of an entry are dropped, and a drive
+// letter (`c:`) at the start of an entry is not a delimiter.
 pub fun undelim-paths(s: string): list<string>
-  fun split-on(c: char, xs: list<char>): list<list<char>>
-    val (pre, ys) = xs.span(fn(x) x != c)
-    match ys
-      Cons(_, post) -> Cons(pre, split-on(c, post.pretend-decreasing))
-      Nil -> [pre]
-  split-on(';', s.list).flatmap(fn(part) split-on(',', part)).map(fn(cs) cs.string.trim).filter(fn(x) x != "")
+  val colon-delimits = unsafe-total{ get-os-name() != "windows" }
+  fun is-delim(c: char): bool
+    c == ';' || (c == ':' && colon-delimits)
+  // `p` is the current entry, reversed
+  fun split(cs: list<char>, p: list<char>): list<string>
+    match cs
+      Cons(c, rest) | p.is-nil && c.is-white -> split(rest, p)
+      Cons(d, Cons(':', rest)) | p.is-nil -> split(rest, [':', d])
+      Cons(c, rest) | c.is-delim -> Cons(p.reverse.string, split(rest, []))
+      Cons(c, rest) -> split(rest, Cons(c, p))
+      Nil -> [p.reverse.string]
+  split(s.list, []).filter(fn(x) x != "")
 
 // An integer optionally suffixed with k/kb/m/mb/g/gb
 pub fun parse-size(s0: string): maybe<int>
@@ -489,7 +497,7 @@ pub val koka-flags-visible: list<flag<flags>> = [
   Flag("", ["language-server"], Bool(fn(fl, b) fl(wantLanguageServer = b)), "language server mode"),
   bflag("e", ["execute"], fn(fl, b) fl(evaluate = b), "compile and execute"),
   bflag("c", ["compile"], fn(fl, b) fl(evaluate = !b), "only compile, do not execute (default)"),
-] ++ num-option(16, "j", ["jobs"], fn(fl, i) fl, "maximum concurrency (16)") ++ [
+] ++ num-option(16, "j", ["jobs"], fn(fl, i) fl(maxConcurrency = max(i, 1)), "maximum concurrency (16)") ++ [
   // OptArg, resets the path when given without a value
   Flag("i", ["include"], Opt(opt-append(fn(fl) fl.includePath, fn(fl, v) fl(includePath = v), undelim-paths), "dirs"),
     "add <dirs> to module search path (empty resets)"),
@@ -653,10 +661,10 @@ pub fun host-os-name(): ndet string
     "macos" -> "macos"
     _ -> "linux"
 
-// search `PATH` (with `extra` dirs prepended) for an executable literally
-// named `name` (upstream `searchPaths`/`findCC`/`findEditor`'s inner loop)
-pub fun search-path(name: string, extra: list<string> = []): <ndet,fsys> maybe<string>
-  val dirs = extra ++ get-env-value("PATH").default("").split(pathsep())
+// search `PATH` (with `extra` dirs prepended and `extra-after` dirs appended) for
+// an executable literally named `name` (upstream `searchPaths`/`findCC`/`findEditor`'s inner loop)
+pub fun search-path(name: string, extra: list<string> = [], extra-after: list<string> = []): <ndet,fsys> maybe<string>
+  val dirs = extra ++ get-env-value("PATH").default("").split(pathsep()) ++ extra-after
   fun try(ds: list<string>): <ndet,fsys> maybe<string>
     match ds
       Nil -> Nothing
@@ -669,6 +677,9 @@ pub fun search-path(name: string, extra: list<string> = []): <ndet,fsys> maybe<s
 // preferring `$CC`, then platform-appropriate defaults, then a generic
 // fallback list; "gcc" (unresolved) if nothing is found on PATH at all.
 pub fun detect-cc(t: target): <ndet,fsys> string
+  // find LLVM after an initial install, when its directory may not be on PATH yet
+  val has-llvm = get-env-value("PATH").default("").split(pathsep()).any(fn(d) d.to-lower.find("llvm").is-just)
+  val extra = if on-windows() && !has-llvm then ["C:\\Program Files\\LLVM\\bin"] else []
   val envCC = get-env-value("CC").default("")
   val candidates =
     (if t.is-target-wasm then ["emcc"] else []) ++
@@ -679,9 +690,11 @@ pub fun detect-cc(t: target): <ndet,fsys> string
   fun try(cs: list<string>): <ndet,fsys> string
     match cs
       Nil -> "gcc"
-      Cons(name, rest) -> match search-path(name)
-        Just(p) -> p
-        Nothing -> try(rest.pretend-decreasing)
+      Cons(name, rest) ->
+        val extra-after = if on-windows() && name.starts-with("clang").bool then ["C:/Program Files/LLVM/bin"] else []
+        match search-path(name, extra, extra-after)
+          Just(p) -> p
+          Nothing -> try(rest.pretend-decreasing)
   try(candidates)
 
 // Warn (not fail) when the resolved cc's path can't
@@ -715,9 +728,13 @@ pub fun cc-from-path(fl: flags, cmdPath: string): <ndet,console> (cc, bool)
       ccTargetObj = fn(fname) ["-o", fname.strip-ext ++ target-obj-extension(fl.target)],
       ccObjFile = fn(fname) fname ++ target-obj-extension(fl.target),
       ccLibFile = fn(fname) target-lib-file(fl.target, fname))
+  val macos = on-macos()
   val clang = gcc(ccFlagsWarn = gnu-warn ++
       ["-Wno-cast-qual","-Wno-undef","-Wno-reserved-id-macro","-Wno-unused-macros","-Wno-cast-align"] ++
-      (if on-macos() && fl.targetArch == "arm64" then ["-Wno-unknown-warning-option"] else []))
+      (if macos && fl.targetArch == "arm64" then ["-Wno-unknown-warning-option"] else []),
+    ccFlagsOpt = fn(opt, cpuArch) (gcc.ccFlagsOpt)(opt, cpuArch) ++
+      (if macos && opt >= 2 && cpuArch == "arm64" then ["-mno-outline","-Xclang","-fno-split-cold-code"] else []) ++
+      (if opt >= 2 && cpuArch == "arm64" then ["-falign-functions=64"] else []))
   // PORT-SPECIFIC: clang for a wasm target is wasi-sdk's (clang with wasi-libc).
   // Upstream only has emcc for wasm, but emscripten's standalone WASI output has
   // no file system (its `open` accepts only the standard streams), which a
@@ -950,15 +967,6 @@ fun triplet-os-name(osName: string): string
     "macos" -> "osx"
     os -> os
 
-// Fields purely DERIVED
-// from the already-resolved flags -- asan-implies-stdalloc, the vcpkg
-// triplet, and the optimize-level-driven inline/unroll/specialize knobs.
-// `baseFlags` snapshots the flags this was derived from (upstream: consulted
-// by `processExtraOptions` for incremental REPL-style re-parsing; not
-// otherwise used by this port yet).
-// `ccompDefs` is what every C compile passes (link.kk `ccompile-args`, as
-// upstream `ccompile`), kklib's included -- so all translation units agree on
-// `KK_MIMALLOC`/`KK_DEBUG_FULL`, which gate the layout of `kk_context_t`.
 // Apply a further command line (the language
 // server's clients send one as a single string) on top of the flags this
 // session started with. It re-derives from `baseFlags` -- the PRE-derived
@@ -970,6 +978,14 @@ pub fun process-extra-options(flags0: flags, args: string): ndet either<string, 
     Left(err) -> Left(err)
     Right((flags1, mode)) -> Right((process-derived-options(defaultFlags, flags1), mode))
 
+// Fields purely DERIVED
+// from the already-resolved flags -- asan-implies-stdalloc, the vcpkg
+// triplet, and the optimize-level-driven inline/unroll/specialize knobs.
+// `baseFlags` snapshots the flags this was derived from, for
+// `process-extra-options`.
+// `ccompDefs` is what every C compile passes (link.kk `ccompile-args`, as
+// upstream `ccompile`), kklib's included -- so all translation units agree on
+// `KK_MIMALLOC`/`KK_DEBUG_FULL`, which gate the layout of `kk_context_t`.
 pub fun process-derived-options(defaultFlags: flags, fl: flags): ndet flags
   val stdAlloc = if fl.asan then True else fl.useStdAlloc
   val cdefs: list<(string,string)> =

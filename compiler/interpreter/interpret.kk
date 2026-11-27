@@ -25,7 +25,7 @@ import compiler/common/error
 import compiler/common/parse
 import std/core/undiv
 import compiler/common/color-scheme
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/lib/isocline
 import compiler/platform/config
 import compiler/compile/options
@@ -58,7 +58,7 @@ struct istate
   // out of its build context via `buildcGetDefinitions`)
   gam: gamma = gamma/new([])
   syns: synonyms = synonyms/empty
-  kgam: kGamma = kgamma/empty
+  kgam: k-gamma = kgamma/empty
 
 pub fun interpret(fl0: flags, files: list<string>): _ ()
   val bdir = fl0.buildDir
@@ -177,7 +177,7 @@ fun load-modules(st: istate, files: list<string>, force: bool): _ istate
     // remember what was loaded so an expression can import it
     val mods : ref<global,list<name>> = ref([])
     val sess : ref<global,session> = ref(st.sess)
-    val defs : ref<global,maybe<(gamma, synonyms, kGamma)>> = ref(Nothing)
+    val defs : ref<global,maybe<(gamma, synonyms, k-gamma)>> = ref(Nothing)
     files.foreach fn(f)
       println("loading: " ++ f)
       compile-one(fl, f, mods, sess, defs)
@@ -194,7 +194,7 @@ fun load-modules(st: istate, files: list<string>, force: bool): _ istate
 // the same error/warning plumbing driver.kk's `compile-files` installs around
 // a single compile, so a REPL load reports exactly like a batch compile
 fun compile-one(fl: flags, fname: string, mods: ref<global,list<name>>, sess: ref<global,session>,
-                defs: ref<global,maybe<(gamma, synonyms, kGamma)>>): _ ()
+                defs: ref<global,maybe<(gamma, synonyms, k-gamma)>>): _ ()
   var warnings : warnings := []
   fun flush-warnings()
     warnings.foreach fn(e) println(e.err/show)
@@ -287,7 +287,7 @@ fun with-expr(st: istate, line: string, check-only: bool): _ (istate, maybe<ktyp
         fun add-infos(w: warnings) w.foreach(fn(e) println(e.err/show))
       match try({ compile-expr(fl, st.sess, line, st.roots, st.last-load.head.default(""), type-check-only = check-only) })
         Error(exn) -> println(exn.message)
-        Ok(Expr-result(s2, tp, exe)) -> out := (st(sess = s2), tp, exe)
+        Ok(ExprResult(s2, tp, exe)) -> out := (st(sess = s2), tp, exe)
     go()
     out
 

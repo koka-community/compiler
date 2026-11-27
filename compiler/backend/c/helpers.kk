@@ -15,10 +15,10 @@ import compiler/type/pretty
 import compiler/type/typevar
 import compiler/kind/kind
 import compiler/kind/newtypes
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/platform/config
 import compiler/common/file
-import std/pretty/printer
+import pretty/printer
 import compiler/common/color-scheme
 import std/os/path
 import std/num/float64
@@ -26,7 +26,7 @@ import std/core/undiv
 
 // Put the things that need overriding in here
 pub effect subst
-  val substEnv: list<(tName, doc)> // substituting names
+  val substEnv: list<(t-name, doc)> // substituting names
   val cdef-name: name // current definition
   val cdefToHeader: bool // emit current def to header?
 
@@ -39,7 +39,7 @@ pub effect casm
   fun getInit(): doc
   fun getDone(): doc
   fun getTop(): doc
-  fun addCanonical(lam: canonicalLambda): bool // true if first instance, otherwise false
+  fun addCanonical(lam: canonical-lambda): bool // true if first instance, otherwise false
   // TODO: Canonical lambda
   val modName: name // current module
   val prettyModName: doc // pretty printed module name
@@ -50,21 +50,21 @@ pub effect casm
   val enableSpecialize: bool
   val enableReuseSpecialize: bool
   val enableBorrowInference: bool
-  val cTarget: cTarget
+  val cTarget: c-target
   val borrowed: borrowed
   val stackSize: int
-  val buildType: buildType
+  val buildType: build-type
   val sourceDir: path
   val debug: bool;
 
-pub value struct canonicalLambda
+pub value struct canonical-lambda
   canonicalName : name
   fieldNames: list<(name, bool)>
 
-pub fun can/(==)(c1: canonicalLambda, c2: canonicalLambda): pure bool
+pub fun can/(==)(c1: canonical-lambda, c2: canonical-lambda): pure bool
   c1.canonicalName == c2.canonicalName && c1.fieldNames == c2.fieldNames
 
-fun can/show(c: canonicalLambda): string
+fun can/show(c: canonical-lambda): string
   c.canonicalName.show ++ "(" ++ c.fieldNames.map(fn(n) n.fst.show ++ " " ++ n.snd.show).join(", ") ++ ")"
 
 // Effect helpers
@@ -117,14 +117,14 @@ pub fun con-name(e: expr)
       trace("Failed in top level extracting con name of " ++ e.show)
       TName("error".new-name, typeAny)
 
-fun get-format(tname: tName, formats: list<(target, string)>)
+fun get-format(tname: t-name, formats: list<(target, string)>)
   match formats.find(fn((t, _)) t == C(cTarget))
     Nothing -> 
       trace("warning: C backend does not support external in " ++ tname.show)
       "kk_unsuported_external(\"" ++ tname.show ++ "\")"
     Just(x) -> x.snd
 
-pub fun gen-def-name(tname: tName)
+pub fun gen-def-name(tname: t-name)
   tname.get-name.unqualify.cpp-name
 
 pub fun gen-var-name(s: string)
@@ -133,7 +133,7 @@ pub fun gen-var-name(s: string)
 fun gen-var-names(i: int)
   new-var-names(i).map(cpp-name)
 
-fun gen-comment-tname(tname: tName)
+fun gen-comment-tname(tname: t-name)
   tname.get-name.cpp-name |+| comment(tname.tNameType.pp-type)
 
 // Classification
@@ -162,7 +162,7 @@ fun is-pat(q: pattern, b: bool): bool
     PatVar(_, q') -> q'.is-pat(b)
     PatCon(tn) -> tn.get-name == (if b then nameTrue else nameFalse)
 
-fun extract-external(e: expr): _ maybe<(tName, string, list<expr>)>
+fun extract-external(e: expr): _ maybe<(t-name, string, list<expr>)>
   match e
     App(TypeApp(Var(tname, InfoExternal(format)), _), args) ->
       Just((tname, format, args))
@@ -238,18 +238,18 @@ pub fun is-tail-calling(ex: expr, n: name): bool
     Case(_, bs) -> bs.any(f1)
 
 pub type c-result
-  ResultReturn(tn: maybe<tName>, args: list<tName>) // first field carries function name if not anonymous and second the arguments which are always known
-  ResultAssign(tn: tName, label: maybe<name>) // variable name nad optional label to break
+  ResultReturn(tn: maybe<t-name>, args: list<t-name>) // first field carries function name if not anonymous and second the arguments which are always known
+  ResultAssign(tn: t-name, label: maybe<name>) // variable name nad optional label to break
 
 // Pretty printing
 
-pub type cType
+pub type c-type
   CBox
-  CFun(args: list<cType>, res: cType)
+  CFun(args: list<c-type>, res: c-type)
   CData(nm: name)
   CPrim(prim: string)
 
-pub fun c-type(tp: ktype): cType
+pub fun c-type(tp: ktype): c-type
   match tp
     TForAll(_, t) -> t.c-type
     TFun(pars, _, res) -> CFun(pars.map(_.snd.pretend-decreasing.c-type), res.c-type)
@@ -258,7 +258,7 @@ pub fun c-type(tp: ktype): cType
     TVar -> CBox
     TSyn(_, _, t) -> t.c-type
 
-fun c-type-con(tp: type-con): cType
+fun c-type-con(tp: type-con): c-type
   val nm = tp.name
   if nm == nameTpInt then CPrim("kk_integer_t")
   elif nm == nameTpString then CPrim("kk_string_t")
@@ -303,7 +303,7 @@ pub fun cpp-type(tp: ktype): doc
     CData(nm) -> cpp-name(nm)
     CPrim(prim) -> prim.text
 
-pub fun ppVarDecl(TName(nm, tp): tName): doc
+pub fun ppVarDecl(TName(nm, tp): t-name): doc
   tp.cpp-type |+| nm.cpp-name
 
 pub fun ppDefName(n: name)
@@ -589,7 +589,7 @@ fun debug-wrap(d: doc, s: string)
 val tagField = "_tag".text
 val constdecl = "const".text
 
-pub fun t-parameters(tns: list<tName>): doc
+pub fun t-parameters(tns: list<t-name>): doc
   nt-parameters(tns.map(fn(tn) (tn.get-name, tn.tNameType)))
 
 pub fun result-type(tp: ktype): _ ktype

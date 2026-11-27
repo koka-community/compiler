@@ -17,7 +17,7 @@ import compiler/common/name-collections
 import compiler/common/syntax
 import compiler/common/failure
 import compiler/platform/config
-import std/data/rb-set
+import std/data/set
 import std/core/undiv
 
 pub effect val current-program : program<user-type, user-kind>
@@ -66,7 +66,7 @@ pub type external
     range: range,
     inlineCall: external-call, // external (already resolved for the target platform)
     vis: visibility,
-    fipAnnot: fipT,
+    fipAnnot: fip-t,
     doc: string)
   ExternalImport(
     eImport: list<(string, string)>, // key/value pairs (already resolved for the target platform)
@@ -169,7 +169,7 @@ pub type user-con<t, u, k>
     existentials: list<type-binder<k>>,
     params: list<(visibility, value-binder<t, maybe<expr<u>>>)>,
     result: maybe<t>, // used internally for limited GADT's (for now)
-    mblazy: maybe<(fipT, expr<u>)>, // lazy constructor?
+    mblazy: maybe<(fip-t, expr<u>)>, // lazy constructor?
     name-range: range,
     range: range, // full range
     vis: visibility,
@@ -505,19 +505,19 @@ pub fun uhb/range(uhb: user-handler-branch): range
 // free type variables
 pub fun maybe/free-type-vars(m: maybe<a>, ?free-type-vars: (a) -> _ name-set): _ name-set
   match m
-    Nothing -> rb-set/empty()
+    Nothing -> set/empty()
     Just(x) -> ?free-type-vars(x)
 
 pub fun list/free-type-vars(l: list<a>, ?free-type-vars: (a) -> _ name-set): _ name-set
-  l.foldl(rb-set/empty(), fn(s:name-set, x) s + ?free-type-vars(x))
+  l.foldl(set/empty(), fn(s:name-set, x) s + ?free-type-vars(x))
 
 pub fun kut/free-type-vars(tp: kuser-type<k>): _ name-set
   match tp
     TpQuan(_, TypeBinder(name), tp, _) -> tp.free-type-vars - name
     TpFun(args, eff, tp) -> free-type-vars(Cons(tp,Cons(eff,args.map(snd))))
     TpApp(tp, args) -> tp.free-type-vars + args.free-type-vars
-    TpVar(name) -> rb-set/empty() + name
-    TpCon -> rb-set/empty()
+    TpVar(name) -> set/empty() + name
+    TpCon -> set/empty()
     TpParens(tp) -> tp.free-type-vars
     TpAnn(tp) -> tp.free-type-vars
 

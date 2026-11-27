@@ -10,12 +10,12 @@ import compiler/common/color-scheme
 import compiler/common/syntax
 import compiler/common/failure
 import compiler/platform/config
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/type/type
 import compiler/type/typevar
 import compiler/type/pretty
 import compiler/type/assumption
-import std/data/rb-map
+import std/data/map
 // Updated to #cf4024e on 7/13/25
 
 pub infixr 5 (|->)
@@ -63,7 +63,7 @@ pub fun inf-gamma/lookup(ig: inf-gamma, name: name): _ either<list<(name, name-i
 
 // lookup a local name: return either a list of possibly matching (locally qualified) names, or an exact match
 pub fun inf-gamma/lookup-ex(ig: inf-gamma, guard: (name-info) -> bool, name: name): _ either<list<(name, name-info)>, (name, name-info)>
-  val mbinfos = rb-map/lookup(ig, name.unqualify-full)
+  val mbinfos = map/lookup(ig, name.unqualify-full)
   match mbinfos
     Nothing -> Left([])
     Just(infos) ->
@@ -84,7 +84,7 @@ fun inf-gamma/unions(igs: list<inf-gamma>): _ inf-gamma
   igs.foldr(inf-gamma/empty, inf-gamma/union)
 
 fun inf-gamma/is-empty(ig: inf-gamma): bool
-  rb-map/list(ig).is-nil
+  map/list(ig).is-nil
 
 fun inf-gamma/single(name: name, tp: ktype, scope-depth: int, doc: string): _ inf-gamma
   inf-gamma/empty.extend-tp(name, name, tp, scope-depth, doc)
@@ -93,9 +93,9 @@ fun inf-gamma/new(tnames: list<(name,ktype,int,string)>): _ inf-gamma
   inf-gamma/empty.extends(tnames)
 
 pub fun inf-gamma/list(ig: inf-gamma): _ list<(name, ktype)>
-  rb-map/list(ig).flatmap(fn((_, infos)) infos.map(fn(info) (info.cname, info.typ)))
+  map/list(ig).flatmap(fn((_, infos)) infos.map(fn(info) (info.cname, info.typ)))
 
-pub val inf-gamma/empty: inf-gamma = rb-map/empty()
+pub val inf-gamma/empty: inf-gamma = map/empty()
 
 fun pp-inf-gamma(ig: inf-gamma)
   val name-schemes = ig.inf-gamma/list()

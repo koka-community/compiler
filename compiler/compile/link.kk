@@ -253,14 +253,14 @@ fun vcpkg-c-library(fl: flags, cc: cc, clib: string, pkg: string): <io,log> eith
 // upstream `externalImportsFromCore` / `clibsFromCore`: every `library`
 // declaration of a core (resolved for the build type), with its own
 // `vcpkg`/`conan` package hints.
-pub fun clibs-of-core(c: core, bt: buildType): _ list<(string, maybe<string>, maybe<string>)>
+pub fun clibs-of-core(c: core, bt: build-type): _ list<(string, maybe<string>, maybe<string>)>
   c.externals.filter-map fn(e)
     match external-import-lookup(bt, "library", e)
       Nothing -> Nothing
       Just(lib) -> Just((lib, external-import-lookup(bt, "vcpkg", e), external-import-lookup(bt, "conan", e)))
 
 // The `syslib` declarations, split on `;`
-pub fun csyslibs-of-core(c: core, bt: buildType): _ list<string>
+pub fun csyslibs-of-core(c: core, bt: build-type): _ list<string>
   c.externals.filter-map(fn(e) external-import-lookup(bt, "syslib", e)).flatmap(fn(s) s.split(";"))
 
 // A C translation unit plus the `extern import` library declarations it is

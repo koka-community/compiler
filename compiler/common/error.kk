@@ -10,8 +10,8 @@ module compiler/common/error
 import compiler/common/range
 import compiler/common/message
 import compiler/common/color-scheme
-import compiler/lib/pprint
-import std/pretty/printer
+import pretty/pprint
+import pretty/printer
 import std/os/path
 
 //------------------------------
@@ -137,7 +137,7 @@ pub fun pp-error-severity(sev: error-severity, ekind: error-kind): _ doc
     ErrBuild -> "build "
     ErrInternal -> "internal "
     _ -> ""
-  fun header(clr: colorScheme -> color, txt: string)
+  fun header(clr: color-scheme -> color, txt: string)
     text(ekindTxt ++ txt ++ ":").color(clr(colors))
   match sev
     SevError -> header(colorError, "error")

@@ -1,20 +1,20 @@
 /*----------------------------------------------------------------------------
-   Copyright 2024, Koka-Community Authors
+   Copyright 2024-2026, Tim Whiting.
 
-   Licensed under the Apache License, Version 2.0 ("The License"). You may not
-   use this file except in compliance with the License. A copy of the License
-   can be found in the LICENSE file at the root of this distribution.
+   This is free software; you can redistribute it and/or modify it under the
+   terms of the Apache License, Version 2.0. A copy of the License can be
+   found in the LICENSE file at the root of this distribution.
 ----------------------------------------------------------------------------*/
-// Translated from koka/src/Lib/PPrint.hs, but using different printers // Updated 2/10/25 Commit d7b02a2
+// Translated from koka/src/Lib/PPrint.hs, but using different printers
+// Updated 2/10/25 Commit d7b02a2
 // Pretty printing via the effect handlers doesn't allow for as much control
 // of indentation and alignment as the original implementation.
 // We use effects on the printer layer though, which allows for the backend to be configured separately
 
-// Pretty printing (Wadler/Leijen). Compiler-INTERNAL: the standard library
-// exposes no pretty printer, and this one's API follows upstream's
-// `Lib/PPrint.hs` because the whole compiler prints through it.
-module compiler/lib/pprint
-import std/pretty/printer
+// Pretty printing (Wadler/Leijen).
+// Not part of the standard library: its API follows upstream's `Lib/PPrint.hs` because the whole compiler prints through it.
+module pretty/pprint
+import pretty/printer
 import std/core/undiv
 import std/os/path
 import std/os/file
@@ -219,13 +219,13 @@ pub type doc
   Colored(b: bool, c: color, d: doc)
   ColoredEnd
 
-pub type simpleDoc
+pub type simple-doc
   SEmpty
-  SChar(i: int, c: char, d: simpleDoc)
-  SText(i: int, s: string, d: simpleDoc)
-  SLine(i: int, d: simpleDoc)
-  SColorOpen(b: bool, c: color, d: simpleDoc)
-  SColorClose(d: simpleDoc)
+  SChar(i: int, c: char, d: simple-doc)
+  SText(i: int, s: string, d: simple-doc)
+  SLine(i: int, d: simple-doc)
+  SColorOpen(b: bool, c: color, d: simple-doc)
+  SColorClose(d: simple-doc)
 
 pub fun make-markdown(d: doc): doc
   match d
@@ -346,9 +346,9 @@ pub fun doc/(==)(d1: doc, d2: doc): bool
 // render-pretty: the default pretty printing algorithm
 
 // list of indentation/document pairs; saves an indirection over list<(int, doc)>
-type docList
+type doc-list
   DocNil
-  DocCons(i: int, d: doc, dl: docList)
+  DocCons(i: int, d: doc, dl: doc-list)
 
 pub fun render-pretty-b(rfrac: float64, w: int, xdoc: doc): div string
   // r - the ribbon width in characters
@@ -382,7 +382,7 @@ pub fun render-pretty-b(rfrac: float64, w: int, xdoc: doc): div string
           ColoredEnd -> best(b, n, k, ds)
   best(0, 0, 0, [(0, xdoc)])
 
-pub fun render-pretty(rfrac: float64, w: int, xdoc: doc): div simpleDoc
+pub fun render-pretty(rfrac: float64, w: int, xdoc: doc): div simple-doc
   // r - the ribbon width in characters
   val r = max(0, min(w, (w.float64 * rfrac).int))
 
@@ -415,7 +415,7 @@ pub fun render-pretty(rfrac: float64, w: int, xdoc: doc): div simpleDoc
           ColoredEnd -> SColorClose(best(b, n, k, ds))
   best(0, 0, 0, [(0, xdoc)])
 
-pub fun fits(w: int, x: simpleDoc)
+pub fun fits(w: int, x: simple-doc)
   if w < 0 then False
   else match x
     SEmpty -> True
@@ -427,7 +427,7 @@ pub fun fits(w: int, x: simpleDoc)
 
 // render-compact: renders documents without indentation
 // fast and fewer characters output, good for machines
-pub fun render-compact(xdoc: doc): simpleDoc
+pub fun render-compact(xdoc: doc): simple-doc
   fun scan(k, l)
     match l
       Nil -> SEmpty
@@ -451,11 +451,11 @@ pub fun as-string(d: doc)
 
 // Displayers: displayS and displayIO
 
-pub fun display-string(simple: simpleDoc): string
+pub fun display-string(simple: simple-doc): string
   // accumulator style: the naive right-recursive `s ++ x.display-string`
   // overflows the C stack on very large documents (e.g. a compiler emitting
   // a large module interface as one doc)
-  fun go(s: simpleDoc, acc: list<string>): list<string>
+  fun go(s: simple-doc, acc: list<string>): list<string>
     match s
       SEmpty -> acc
       SChar(_, c, x) -> go(x, Cons(c.string, acc))
@@ -465,7 +465,9 @@ pub fun display-string(simple: simpleDoc): string
       SColorClose(x) -> go(x, acc)
   go(simple, []).reverse.join
 
-pub fun skip-spaces(simple: simpleDoc): simpleDoc
+pub fun skip-spaces(simple: simple-doc): simple-doc
+  fun is-space(c : char) : bool
+    c == ' ' || c == '\t'
   match simple
     SChar(_, c, x) | c.is-space -> skip-spaces(x)
     SText(i, s, x) ->
@@ -476,7 +478,7 @@ pub fun skip-spaces(simple: simpleDoc): simpleDoc
         SText(i, noSpaces, x)
     _ -> simple 
 
-pub fun display-pretty(w: int, simple: simpleDoc): <coloredPrinter,printer,div> ()
+pub fun display-pretty(w: int, simple: simple-doc): <colored-printer,printer,div> ()
   fun display(curCol, simp)
     match simp
       SEmpty -> ()

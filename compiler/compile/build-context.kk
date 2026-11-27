@@ -51,8 +51,8 @@ import compiler/compile/link
 import std/os/dir
 import compiler/common/file
 import compiler/static/binding-groups
-import compiler/lib/pprint
-import std/data/rb-map
+import pretty/pprint
+import std/data/map
 import compiler/common/name-collections
 import compiler/compile/rpc
 import compiler/lib/log
@@ -126,8 +126,8 @@ pub fun build-roots-isolated(fl: flags, fnames: list<string>, sess: session = Se
 // both. Entries are revalidated by timestamp (`session-revalidate`) so an
 // interface that changed underneath us is dropped rather than trusted.
 pub struct session
-  mods: bmodules = rb-map/empty()
-  deps: dep-cache = rb-map/empty()
+  mods: bmodules = map/empty()
+  deps: dep-cache = map/empty()
   // The module names this context was built FOR. A
   // context can hold many (a language server tracks every open document; a
   // test runner one per test file), and each may carry its own `main`.
@@ -147,7 +147,7 @@ pub fun session-revalidate(s: session, fl: flags): _ session
     val kki = odir / (nm.module-name-to-path ++ ".kki").path
     val t = file/file-mtime(kki)
     t <= 0 || t <= m.bmod/at
-  s(mods = rb-map/empty().add-all(kept))
+  s(mods = map/empty().add-all(kept))
 
 // Drop the cached module(s) whose SOURCE is `p`, so the next check reloads them
 // from the overlay. This is what a buffer edit needs: the file on disk has not
@@ -164,7 +164,7 @@ pub fun paths/session-invalidate(s: session, ps: list<path>): _ session
   val names = s.deps.list.filter-map fn((nm, (src, _, _, _)))
     if ps.any(fn(p) src.string == p.string) then Just(nm) else Nothing
   if names.is-nil then s
-  else s(mods = rb-map/empty().add-all(s.mods.list.filter(fn((k, _)) !names.any(fn(n) n == k))))
+  else s(mods = map/empty().add-all(s.mods.list.filter(fn((k, _)) !names.any(fn(n) n == k))))
 
 // upstream `buildcClearRoots` / `buildcRemoveRootModule`
 pub fun session-clear-roots(s: session): session
@@ -243,14 +243,14 @@ pub fun compile-expr(fl: flags, sess: session, expr: string, roots: list<name>,
                 val body1 = imports ++ ["pub fun @expr()", "  " ++ expr]
                 check(body1.unlines, fl(library = True, evaluate = False), fn(_p) ())
   match (if want-type then !tpref else Just(typeUnit))
-    Nothing -> Expr-result(sess1, Nothing, Nothing)
+    Nothing -> ExprResult(sess1, Nothing, Nothing)
     Just(tp) ->
       // `@expr` is a nullary function wrapping the expression; the type the user
       // asked about is its RESULT.
       val user-tp = match tp.split-fun-scheme
         Just((_, _, _, r)) -> r
         Nothing -> tp
-      if type-check-only then Expr-result(sess1, Just(user-tp), Nothing)
+      if type-check-only then ExprResult(sess1, Just(user-tp), Nothing)
       else
         // pass 2: wrap the result for display and build an entry point
         val res-tp = match tp.split-fun-scheme
@@ -266,7 +266,7 @@ pub fun compile-expr(fl: flags, sess: session, expr: string, roots: list<name>,
         // `evaluate = True` in place made `code-gen` run it too, printing every
         // result twice.
         val sess2 = check(body2.unlines, fl(library = False, evaluate = False), fn(p) exe.set(Just(p)))
-        Expr-result(sess2, Just(user-tp), !exe)
+        ExprResult(sess2, Just(user-tp), !exe)
 
 // Build a program's entry module, `<root>@main` (see `entry-module-source`),
 // and run it under `-e`. A library, a type check, and the entry module itself
@@ -352,7 +352,7 @@ fun check-file-ex(fl: flags, fnames: list<string>, isEntry: bool,
     if acc.any(fn(x) x.string == d.string) then acc else acc ++ [d]
   val maindirs = rootPaths.map(fn(p) p.dirname.path).foldl([], add-dir)
   val sdirs = Cons(odir, maindirs)
-  val srcdirs = Module-dirs(maindirs ++ fl.includePath.map(path), fl.includePath.map(path))
+  val srcdirs = ModuleDirs(maindirs ++ fl.includePath.map(path), fl.includePath.map(path))
   // scan each root's direct imports so the dependency closure can be resolved
   // (siblings preferred over the search path, recursing transitively)
   // A root's PARSE is isolated too, not just its compile. Parse errors are
@@ -387,7 +387,7 @@ fun check-file-ex(fl: flags, fnames: list<string>, isEntry: bool,
         match e
           Right(_) -> ()
           Left((srcPath, msg)) ->
-            sink(Root-result(srcPath, srcPath.stemname.new-name, Left(msg), [msg], [], [], Nothing))
+            sink(RootResult(srcPath, srcPath.stemname.new-name, Left(msg), [msg], [], [], Nothing))
   val tparse = tlog("parse", tstart)
   // INFERRED, written out (inference gave `<io,pure,...>`; `pure` is redundant with
   // `io` -- `io = <exn,ioc>`, `pure = <exn,div>`, `ioc = <div,ioc-total>` -- and writing
@@ -417,7 +417,7 @@ fun check-file-ex(fl: flags, fnames: list<string>, isEntry: bool,
   // Decide what this round compiles (see `walk-rebuild`). The walk records each
   // decision here, dependencies first, so `stale-set` is already a valid
   // compile order.
-  var decisions : name-map<rebuild-decision> := rb-map/empty()
+  var decisions : name-map<rebuild-decision> := map/empty()
   var stale-rev : list<name> := []
   with handler
     fun decided(nm) decisions.lookup(nm)
@@ -455,7 +455,7 @@ fun check-file-ex(fl: flags, fnames: list<string>, isEntry: bool,
     else
       val kki-t = file/file-mtime(odir / (nm.module-name-to-path ++ ".kki").path)
       kki-t <= 0 || kki-t <= m.bmod/at
-  val preloaded0 = rb-map/empty().add-all(sess.mods.list.filter(still-valid))
+  val preloaded0 = map/empty().add-all(sess.mods.list.filter(still-valid))
   if timing-on() then println("PRELOAD reused: " ++ preloaded0.list.length.show ++ " of " ++ sess.mods.list.length.show)
   // Load every FRESH interface concurrently before the build proper. The
   // orchestrator below only schedules stale modules, so on a warm rebuild it has
@@ -616,8 +616,8 @@ fun check-file-ex(fl: flags, fnames: list<string>, isEntry: bool,
               bm
           val o = match try(compile-root)
             Ok(o0)     -> o0
-            Error(exn) -> Mod-outcome(Left(exn.message), [])
-          sink(Root-result(srcPath, prog1.name, o.outcome, o.messages, o.warn-messages, o.emitted, !rexe))
+            Error(exn) -> ModOutcome(Left(exn.message), [])
+          sink(RootResult(srcPath, prog1.name, o.outcome, o.messages, o.warn-messages, o.emitted, !rexe))
           match o.outcome
             Right(bm) -> (!rmods).set(prog1.name, bm)
             Left(_)   -> !rmods
@@ -642,7 +642,7 @@ fun check-file-ex(fl: flags, fnames: list<string>, isEntry: bool,
   if fl.target.is-c && fl.kklibIncludeDir != "" && !fl.typeCheckOnly then
     val closureC = modsFinal.list.flatmap fn((_, m))
       match m.bmod/cfile
-        Just(cf) -> [C-unit(cf, c-unit-eimports(modsFinal, m.bmod/core, fl.build-type))]
+        Just(cf) -> [CUnit(cf, c-unit-eimports(modsFinal, m.bmod/core, fl.build-type))]
         Nothing  -> []
     c-compile-objects(fl, closureC, fl.kklibIncludeDir.path)
   if timing-on() then println("WALL c-objects: " ++ (wall-ms() - wall-before-objs).show ++ "ms")

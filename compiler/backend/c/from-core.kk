@@ -15,10 +15,10 @@ import compiler/type/pretty
 import compiler/kind/kind
 import compiler/kind/newtypes
 import compiler/kind/repr
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/platform/config
 import compiler/common/file
-import std/pretty/printer
+import pretty/printer
 import compiler/backend/c/helpers
 import compiler/backend/c/dup-drops
 import compiler/backend/c/constructors
@@ -30,13 +30,13 @@ import compiler/backend/c/parc-reuse-spec
 import std/os/path
 import std/os/env
 import std/core/debug
-import std/data/rb-set
+import std/data/set
 
-fun externalNames(): _ list<(tName, doc)>
+fun externalNames(): _ list<(t-name, doc)>
   [(exprTrue.con-name, "true".text), (exprFalse.con-name, "false".text)]
 
 // Generate C code from System-F core language
-pub fun cFromCore(cTarget: cTarget, b: buildType, sourceDir: path,
+pub fun cFromCore(cTarget: c-target, b: build-type, sourceDir: path,
               platform: platform, nt: newtypes, borrowed: borrowed, enableReuse: bool,
               enableSpecialize: bool, enableReuseSpecialize: bool, enableBorrowInference: bool,
               eagerPatBind: bool, stackSize: int, mbMain: maybe<(name, bool)>,
@@ -63,7 +63,7 @@ pub fun cFromCore(cTarget: cTarget, b: buildType, sourceDir: path,
       val res = rtdoc.reverse.vcat
       rtdoc := []
       res
-    fun addCanonical(c: canonicalLambda) 
+    fun addCanonical(c: canonical-lambda) 
       if canonicalLamTypes.any(fn(x) x == c) then False
       else
         canonicalLamTypes := Cons(c, canonicalLamTypes)

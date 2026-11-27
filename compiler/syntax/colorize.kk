@@ -31,7 +31,7 @@ import compiler/common/name-collections
 import compiler/kind/assumption
 import compiler/type/assumption
 import compiler/syntax/range-map
-import compiler/lib/pprint
+import pretty/pprint
 
 //----------------------------------------------------------------------
 // HTML primitives (upstream's `tag`/`span`/`escape` family)
@@ -241,7 +241,7 @@ pub fun signature(env: html-env, to-lit: bool, is-literate: bool, knd: string, q
 // It is what `--html` uses for the text INSIDE a rendered type, where there is
 // no range map to consult -- the type was printed from `core`, not lexed from
 // the file, so the only way to know what `int` refers to is to look it up.
-pub fun fmt-literate(env: html-env, gam: gamma, kgam: kGamma,
+pub fun fmt-literate(env: html-env, gam: gamma, kgam: k-gamma,
                      token: token<lexeme>, s: string): _ string
   val f = fmt-html(token, s)
   match token
@@ -262,7 +262,7 @@ fun link-from-type-name(env: html-env, qname: name): string
 fun link-from-id-name(env: html-env, qname: name): string
   env.link-from-type-name-x(if qname.is-constructor-name then qname.mangle-con-name else qname)
 
-pub fun link-from-type-id(env: html-env, kgam: kGamma, nm: name, content: string): _ string
+pub fun link-from-type-id(env: html-env, kgam: k-gamma, nm: name, content: string): _ string
   match kgam.qname-map/lookup(env.ctx-module, nm)
     Found((qname, TypeNameInfo(k, _doc))) ->
       env.signature(True, True, "kind", qname, qname.mangle-type-name, show-kind(k), content)
@@ -299,7 +299,7 @@ pub fun link-from-id(env: html-env, gam: gamma, nm: name, tp: string): _ string
         _ -> unresolved()
 
 // `highlight-fragment`, but with names resolved to links.
-pub fun highlight-fragment-literate(env: html-env, gam: gamma, kgam: kGamma,
+pub fun highlight-fragment-literate(env: html-env, gam: gamma, kgam: k-gamma,
                                     hctx: highlight-ctx, str: string): _ string
   var out := ""
   with handler
@@ -501,7 +501,7 @@ fun prefix-block-tag(t: string, cls: string, content: string): _ string
 // AUTHOR typed them, so `` `fun ask` `` carries a bare `ask`. `fmt-literate`
 // only links a name it can resolve, so each identifier is first looked up and
 // replaced by its qualified form.
-fun fmt-qualify(env: html-env, gam: gamma, kgam: kGamma, lexs: list<lexeme>): _ list<lexeme>
+fun fmt-qualify(env: html-env, gam: gamma, kgam: k-gamma, lexs: list<lexeme>): _ list<lexeme>
   fun try-qualify-type(mk: (name) -> lex, nm: name): _ lex
     match kgam.qname-map/lookup(env.ctx-module, nm)
       Found((qname, _)) -> mk(qname)
@@ -533,7 +533,7 @@ fun fmt-qualify(env: html-env, gam: gamma, kgam: kGamma, lexs: list<lexeme>): _ 
       [Lexeme(r1, LexTypedId(nm, rest.map(highlight/show).join))]
     _ -> lexs.map(qualify-id)
 
-fun fmt-lexs(lexs: list<lexeme>, lit: maybe<(html-env, gamma, kGamma)>): _ string
+fun fmt-lexs(lexs: list<lexeme>, lit: maybe<(html-env, gamma, k-gamma)>): _ string
   val qlexs = match lit
     Just((env, gam, kgam)) -> fmt-qualify(env, gam, kgam, lexs)
     Nothing -> lexs
@@ -564,7 +564,7 @@ fun is-drop-colon-keyword(lx: lex): bool
 // A doc comment is not plain text -- it carries urls,
 // emphasis, inline code and code blocks, and the code parts are highlighted
 // like any other Koka.
-pub fun fmt-comment(com: token-comment<lexeme>, lit: maybe<(html-env, gamma, kGamma)> = Nothing): _ string
+pub fun fmt-comment(com: token-comment<lexeme>, lit: maybe<(html-env, gamma, k-gamma)> = Nothing): _ string
   match com
     ComText(f) -> f
     ComUrl(url) -> "<a href=\"" ++ url ++ "\">" ++ url.escapes ++ "</a>"
@@ -602,7 +602,7 @@ fun lex-literate(source: string, line-no: int, input: string): _ list<token-comm
 // `lit` carries what a name inside an inline code span needs to become a
 // link (upstream's `fmtComment env kgamma gamma`). Omitting it renders the
 // comment without links, which is what a caller with no gamma in hand wants.
-pub fun show-doc(doc: string, lit: maybe<(html-env, gamma, kGamma)> = Nothing): _ string
+pub fun show-doc(doc: string, lit: maybe<(html-env, gamma, k-gamma)> = Nothing): _ string
   if doc.is-empty then ""
   else
     doctag("div", class-prefix() ++ "comment",
@@ -660,9 +660,9 @@ pub val html-footer: list<string> = ["</body>", "</html>"]
 // gets type popups from `gammas` but no definition links, as `fmt-comment`
 // takes no range map.
 pub fun colorize(source-name: path, line-no: int, input: string,
-                 rmap: maybe<range-map> = Nothing, env: html-env = Html-env(name/nil),
+                 rmap: maybe<range-map> = Nothing, env: html-env = HtmlEnv(name/nil),
                  full-html: bool = False, css: list<string> = [], js: string = "",
-                 gammas: maybe<(gamma, kGamma)> = Nothing): _ string
+                 gammas: maybe<(gamma, k-gamma)> = Nothing): _ string
   if source-name.string.ends-with(".kk.md").bool then
     return lex-literate(source-name.string, line-no, input).map(fn(c) fmt-comment(c, gammas.map(fn((g, kg)) (env, g, kg)))).join
   var out := ""

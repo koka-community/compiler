@@ -83,7 +83,7 @@ pub struct server-state
   dirty: list<string> = []
 
 pub fun new-state(fl: flags): server-state
-  Server-state(fl, [])
+  ServerState(fl, [])
 
 //----------------------------------------------------------------------
 // the document table

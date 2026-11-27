@@ -9,7 +9,7 @@ import compiler/common/name-collections
 import compiler/common/failure
 import compiler/common/unique
 import compiler/platform/config
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/kind/kind
 import compiler/kind/infer-kind
 import compiler/kind/assumption
@@ -21,12 +21,12 @@ import compiler/syntax/range-map
 import compiler/syntax/syntax
 import compiler/core/core
 import compiler/common/error
-import std/data/rb-map
+import std/data/map
 
 pub type infer-kind-env
   InferKindEnv(
     imports: import-map,
-    kGamma: kGamma,
+    kGamma: k-gamma,
     infgamma: inf-kgamma,
     synonyms: synonyms,
     newtypesImported: newtypes,
@@ -57,16 +57,16 @@ pub fun allnewtypes(env: infer-kind-env)
 pub fun get-platform(): _ platform
   target-platform.tpl-platform
 
-pub fun run-kind-infer(tplatform: target-platform, moduleName: name, imports: import-map, kgamma: kGamma, syns: synonyms, datas: newtypes, f: () -> _ a): _ a
+pub fun run-kind-infer(tplatform: target-platform, moduleName: name, imports: import-map, kgamma: k-gamma, syns: synonyms, datas: newtypes, f: () -> _ a): _ a
   with val current-error-kind = ErrKind
   val imports' = match imports.extend(moduleName, moduleName)
     Just(imp) -> imp
     Nothing -> imports // ignore
   with handler
-    val inf-kind-env = InferKindEnv(imports', kgamma, rb-map/empty(), syns, datas, newtypes/empty, rb-map/empty())
+    val inf-kind-env = InferKindEnv(imports', kgamma, map/empty(), syns, datas, newtypes/empty, map/empty())
   var local-syns := synonyms/empty
   var ksub := ksubEmpty
-  var externals: name-map<range> := rb-map/empty()
+  var externals: name-map<range> := map/empty()
   var kerrs : errors := []
   with handler
     // All phases run collecting errors (kind-add-error below); 
@@ -84,7 +84,7 @@ pub fun run-kind-infer(tplatform: target-platform, moduleName: name, imports: im
     fun get-syns() inf-kind-env.synonyms.compose(local-syns)
     fun add-synonym(syn) local-syns := local-syns.extend(syn)
     fun lookup-external(nm) externals.lookup(nm)
-    fun add-external(nm, rng) externals := rb-map/set(externals, nm, rng) // upstream M.insert overwrites
+    fun add-external(nm, rng) externals := map/set(externals, nm, rng) // upstream M.insert overwrites
     fun kind-add-error(rng, msg) kerrs := kerrs ++ [msg.error-message(rng)]
     fun kind-flush-errors()
       if !kerrs.is-nil then add-errors(kerrs) else ()
@@ -119,7 +119,7 @@ pub fun extend-kgamma(rngs: list<range>, dg: compiler/core/core/typedef-group, f
     match tdef
       core/Synonym(syn-info) -> (syn-info.name, syn-info.kind, syn-info.doc)
       core/Data(ntInfo) -> (ntInfo.name, ntInfo.kind, ntInfo.doc)
-  fun check((kgamma: kGamma, tdefs: list<compiler/core/core/typedef>), (rng: range, tdef: compiler/core/core/typedef))
+  fun check((kgamma: k-gamma, tdefs: list<compiler/core/core/typedef>), (rng: range, tdef: compiler/core/core/typedef))
     if tdef.is-extension then (kgamma, tdefs)
     else
       val (nm, knd, doc) = nameKind(tdef)
@@ -148,10 +148,6 @@ pub fun extend-kgamma(rngs: list<range>, dg: compiler/core/core/typedef-group, f
       synonyms = old-env.synonyms.compose(kSyns), 
       newtypesExtended = old-env.newtypesExtended.compose(kNewtypes))  
   f()
-
-fun member-doc(doc: string, header: string, members: list<string>): string
-  val mdoc = "// " ++ header ++ ":\n// ```koka\n" ++ members.map("//" ++ _).join("\n") ++ "// ```\n"
-  if doc == "" then mdoc else doc ++ "\n// * * *\n" ++ mdoc
 
 pub fun check-external(name: name, range: range)
   val mbres = lookup-external(name)

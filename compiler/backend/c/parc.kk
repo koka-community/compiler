@@ -29,10 +29,10 @@ import compiler/common/syntax
 import compiler/common/failure
 import compiler/type/type
 import compiler/kind/newtypes
-import std/data/rb-set
+import std/data/set
 import std/data/sort
 import std/core/undiv
-import std/data/rb-map
+import std/data/map
 import compiler/common/name-collections
 
 //--------------------------------------------------------------------------
@@ -42,18 +42,18 @@ import compiler/common/name-collections
 
 // Iterates in name order, which decides the
 // emitted dup/drop order and which drop `optimize-disjoint` specializes first
-alias tnameset = rbset<tName>
+alias tnameset = set<t-name>
 alias tnamedups = tnameset
 alias tnamedrops = tnameset
 
 // maps a name to its (known) children/constructor-repr/scan-field-count
-alias shape-map = rbmap<tName, shape-info>
+alias shape-map = map<t-name, shape-info>
 struct shape-info
   m-children: maybe<tnameset>          // if known, Just of children
   m-con-repr: maybe<(con-repr, name)>  // if known, conRepr; may be Just while m-children is Nothing in case there is just one constructor (like a tuple)
   scan-fields: maybe<int>
 
-val shape-info/empty: shape-info = Shape-info(Nothing, Nothing, Nothing)
+val shape-info/empty: shape-info = ShapeInfo(Nothing, Nothing, Nothing)
 
 struct parc-settings
   platform: platform
@@ -87,11 +87,11 @@ alias guard-fn = (tnameset) -> parc-effs guard
 
 pub fun parc-core(platform: platform, newtypes: newtypes, borrowed: borrowed, enable-specialize: bool, c: core): <unique,exn,div> core
   var owned-v := tnames/empty
-  var shapes-v := rb-map/empty()
+  var shapes-v := map/empty()
   var live-v := tnames/empty
   var pending-v := tnames/empty
   with handler
-    val parc-config = Parc-settings(platform, newtypes, borrowed, enable-specialize)
+    val parc-config = ParcSettings(platform, newtypes, borrowed, enable-specialize)
     fun get-owned() owned-v
     fun set-owned(o) owned-v := o
     fun get-shapes() shapes-v
@@ -223,7 +223,7 @@ fun parc-lam(expr: expr, pars-set: tnameset, body: expr): parc-effs (list<maybe<
   val dups = caps.list.map(use-tname)
   (dups, body')
 
-fun parc-borrow-app(tname: tName, args: list<expr>, expr: expr): parc-effs expr
+fun parc-borrow-app(tname: t-name, args: list<expr>, expr: expr): parc-effs expr
   val bs = get-param-infos(tname.get-name)
   if !bs.any(fn(b) b == Borrow) then App(expr, args.reverse-map(parc-expr))
   else
@@ -268,13 +268,13 @@ fun parc-borrow-arg(expr: expr, par-info: param-info): parc-effs (list<def-group
         val drop = extend-owned(tnames([def.defTName]), fn() def.defTName.gen-drop)
         ([DefNonRec(def)], drop, Var(def.defTName, InfoNone))
 
-fun var-names(exprs: list<expr>): list<tName>
+fun var-names(exprs: list<expr>): list<t-name>
   match exprs
     Cons(Var(tn, _), rest) -> Cons(tn, var-names(rest))
     Cons(_, rest) -> var-names(rest)
     Nil -> Nil
 
-fun parc-branches(scrutinees: list<tName>, brs: list<branch>): parc-effs list<branch>
+fun parc-branches(scrutinees: list<t-name>, brs: list<branch>): parc-effs list<branch>
   val live = get-live()
   val branch-fns = brs.reverse-map(fn(b) parc-branch(scrutinees, live, b))
   val owned-scrutinees = scrutinees.filter(is-owned)
@@ -282,13 +282,13 @@ fun parc-branches(scrutinees: list<tName>, brs: list<branch>): parc-effs list<br
   val live' = get-live()
   branch-fns.map(fn(bf) bf(live'))
 
-fun parc-branch(scrutinees: list<tName>, live: tnameset, b: branch): parc-effs branch-fn
+fun parc-branch(scrutinees: list<t-name>, live: tnameset, b: branch): parc-effs branch-fn
   match b
     Branch(pats, guards) ->
       val guard-fns = guards.reverse-map(fn(g) parc-guard(scrutinees, pats, live, g))
       fn(c: tnameset) Branch(pats, guard-fns.map(fn(gf) gf(c)))
 
-fun parc-guard(scrutinees: list<tName>, pats: list<pattern>, live: tnameset, g: guard): parc-effs guard-fn
+fun parc-guard(scrutinees: list<t-name>, pats: list<pattern>, live: tnameset, g: guard): parc-effs guard-fn
   match g
     Guard(test, body) ->
       val owned-pats = scrutinees.zip(pats).filter(fn((s, _)) is-owned(s)).map(snd)
@@ -392,7 +392,7 @@ fun parc-guard(scrutinees: list<tName>, pats: list<pattern>, live: tnameset, g: 
 //    of a lazy match's children, so dups deferred into one would be silently
 //    lost (a use-after-free), and dups deferred out of one would start dupping
 //    children the lazy protocol requires we do not.
-fun deferrable-into(scrutinees: list<tName>, pats: list<pattern>, body: expr): parc-effs tnameset
+fun deferrable-into(scrutinees: list<t-name>, pats: list<pattern>, body: expr): parc-effs tnameset
   if scrutinees.any(is-lazy-match-name) then tnames/empty
   else match body.strip-lets
     Just((defs, cscruts, brs)) | !brs.is-nil && brs.all(trivial-guards) && !cscruts.any(is-lazy-match-expr) ->
@@ -405,7 +405,7 @@ fun deferrable-into(scrutinees: list<tName>, pats: list<pattern>, body: expr): p
       bv(keep.map(snd)).set/(-)(used-early)
     _ -> tnames/empty
 
-fun is-lazy-match-name(tn: tName): bool
+fun is-lazy-match-name(tn: t-name): bool
   tn.get-name.hidden/starts-with("lazy")
 
 fun is-lazy-match-expr(e: expr): bool
@@ -441,17 +441,17 @@ fun parc-guard-rc(dps: tnamedups, drops: tnamedrops, body: expr): parc-effs expr
   val rc-stats = optimize-guard(parc-config.enable-specialize, dps, drops)
   maybe-stats(rc-stats, body)
 
-fun mchildren-of(shapes: shape-map, x: tName): maybe<tnameset>
+fun mchildren-of(shapes: shape-map, x: t-name): maybe<tnameset>
   match shapes.lookup(x)
-    Just(Shape-info(Just(mc), _, _)) | !mc.is-empty -> Just(mc)
+    Just(ShapeInfo(Just(mc), _, _)) | !mc.is-empty -> Just(mc)
     _ -> Nothing
 
-fun children-of(shapes: shape-map, x: tName): tnameset
+fun children-of(shapes: shape-map, x: t-name): tnameset
   mchildren-of(shapes, x).default(tnames/empty)
 
-fun con-name-of(shapes: shape-map, x: tName): maybe<name>
+fun con-name-of(shapes: shape-map, x: t-name): maybe<name>
   match shapes.lookup(x)
-    Just(Shape-info(_, Just((_, cname)), _)) -> Just(cname)
+    Just(ShapeInfo(_, Just((_, cname)), _)) -> Just(cname)
     _ -> Nothing
 
 // TODO: interaction with borrowed names
@@ -474,11 +474,11 @@ fun optimize-dup-drops(shapes: shape-map, dups0: tnamedups, drops0: tnamedrops):
     fdups.intersection(fdrops).is-empty,
     optimize-disjoint(shapes, fdups, fdrops.list))
 
-fun is-descendent-of(shapes: shape-map, parent: tName, x: tName): div bool
+fun is-descendent-of(shapes: shape-map, parent: t-name, x: t-name): div bool
   val ys = children-of(shapes, parent)
   ys.member(x) || ys.list.any(fn(c) is-descendent-of(shapes, c, x).pretend-decreasing)
 
-fun optimize-disjoint(shapes: shape-map, dps: tnamedups, drops: list<tName>): parc-effs list<maybe<expr>>
+fun optimize-disjoint(shapes: shape-map, dps: tnamedups, drops: list<t-name>): parc-effs list<maybe<expr>>
   match drops
     [] -> dps.list.map(gen-dup)
     Cons(y, rest) ->
@@ -489,7 +489,7 @@ fun optimize-disjoint(shapes: shape-map, dps: tnamedups, drops: list<tName>): pa
       val spec = specialize-drop(shapes, tnames(y-dups), y)          // specialize the y tree
       r ++ pfx ++ spec
 
-fun specialize-drop(shapes: shape-map, dps: tnamedups, v: tName): parc-effs list<maybe<expr>>  // dups are descendents of v
+fun specialize-drop(shapes: shape-map, dps: tnamedups, v: t-name): parc-effs list<maybe<expr>>  // dups are descendents of v
   val x-shared = dps.list.map(gen-dup)                                  // for the non-unique branch
   val x-unique = optimize-dup-drops(shapes, dps, children-of(shapes, v))  // drop direct children in unique branch (note: v is not in drops)
   val tp = v.type-of
@@ -498,7 +498,7 @@ fun specialize-drop(shapes: shape-map, dps: tnamedups, v: tName): parc-effs list
   val has-known-children = mchildren-of(shapes, v).is-just
   val dont-specialize = !has-known-children ||   // or otherwise x-unique is wrong!
                         is-value || tp.is-box-type || tp.is-fun || tp.is-type-int || is-data-as-maybe
-  fun no-specialize(y: tName): parc-effs list<maybe<expr>>
+  fun no-specialize(y: t-name): parc-effs list<maybe<expr>>
     val x-drop = y.gen-drop
     x-shared ++ [x-drop]
   if is-value && children-of(shapes, v).list.all(fn(child) dps.member(child)) then
@@ -527,7 +527,7 @@ fun fuse-dup-drops(shapes: shape-map, dps: tnamedups, drops: tnamedrops): parc-e
 fun fuse-aliases(shapes: shape-map, dps: tnamedups, drops: tnamedrops): parc-effs (tnamedups, tnamedrops)
   val newtypes = parc-config.newtypes
   val platform = parc-config.platform
-  fun fuse-alias((dps1, drops1): (tnamedups, tnamedrops), y: tName): <exn,div> (tnamedups, tnamedrops)
+  fun fuse-alias((dps1, drops1): (tnamedups, tnamedrops), y: t-name): <exn,div> (tnamedups, tnamedrops)
     match forwarding-child(platform, newtypes, shapes, dps1, y)
       Just(child) ->
         if dps1.member(child)
@@ -539,8 +539,8 @@ fun fuse-aliases(shapes: shape-map, dps: tnamedups, drops: tnamedrops): parc-eff
 // Return a dupped name which is a child of the given name if the given name
 // will always forward a drop directly to the child (e.g. because the given
 // name is a box or a newtype).
-fun forwarding-child(platform: platform, newtypes: newtypes, shapes: shape-map, dps: tnamedups, y: tName): <exn,div> maybe<tName>
-  fun find-child(x: tName): maybe<tName>
+fun forwarding-child(platform: platform, newtypes: newtypes, shapes: shape-map, dps: tnamedups, y: t-name): <exn,div> maybe<t-name>
+  fun find-child(x: t-name): maybe<t-name>
     if dps.member(x) then Just(x) else Nothing
   match children-of(shapes, y).list
     [x] ->
@@ -571,20 +571,20 @@ fun forwarding-child(platform: platform, newtypes: newtypes, shapes: shape-map, 
           else Nothing
     _ -> Nothing
 
-fun infer-shapes(scrutinees: list<tName>, pats: list<pattern>): <exn,div> shape-map
+fun infer-shapes(scrutinees: list<t-name>, pats: list<pattern>): <exn,div> shape-map
   scrutinees.zip(pats).map(fn((s, p)) shapes-of(s, p)).unions-nodup
 
 fun no-dup(s1: shape-info, s2: shape-info): exn shape-info
   failure/fail("Backend.C.Parc.aliasMap.noDup: duplicate pattern names")
 
 fun unions-nodup(ms: list<shape-map>): <exn,div> shape-map
-  ms.foldl(rb-map/empty(), fn(acc: shape-map, m: shape-map) acc.union-with(m, no-dup))
+  ms.foldl(map/empty(), fn(acc: shape-map, m: shape-map) acc.union-with(m, no-dup))
 
-fun shapes-of(parent: tName, pat: pattern): <exn,div> shape-map
+fun shapes-of(parent: t-name, pat: pattern): <exn,div> shape-map
   match pat
     PatCon(conname, subpats, repr, _, _, _, _, _) ->
       val scan = scan-count(repr)
-      val shape = Shape-info(Just(tnames(subpats.map(pat-var-name))), Just((repr, conname.get-name)), Just(scan))
+      val shape = ShapeInfo(Just(tnames(subpats.map(pat-var-name))), Just((repr, conname.get-name)), Just(scan))
       val child-map = subpats.map(shapes-child).unions-nodup
       child-map.set(parent, shape)
     PatVar(patname, patpattern) ->
@@ -592,16 +592,16 @@ fun shapes-of(parent: tName, pat: pattern): <exn,div> shape-map
       match child-map.lookup(patname)
         Just(shape) -> child-map.set(parent, shape)   // same children as parent == patname
         Nothing -> failure/fail("Backend.C.Parc.aliasMap: unbound alias: " ++ patname.show)
-    PatLit(_) -> rb-map/from-list([(parent, Shape-info(Nothing, Nothing, Just(0)))])
-    PatWild -> rb-map/from-list([(parent, Shape-info(Nothing, Nothing, Nothing))])
+    PatLit(_) -> map/from-list([(parent, ShapeInfo(Nothing, Nothing, Just(0)))])
+    PatWild -> map/from-list([(parent, ShapeInfo(Nothing, Nothing, Nothing))])
 
 fun shapes-child(pat: pattern): <exn,div> shape-map
   match pat
     PatVar(patname, patpattern) -> shapes-of(patname, patpattern)
     PatCon -> failure/fail("Backend.C.Parc.aliasMap: unnamed nested pattern")
-    _ -> rb-map/empty()
+    _ -> map/empty()
 
-fun pat-var-name(p: pattern): <exn> tName
+fun pat-var-name(p: pattern): <exn> t-name
   match p
     PatVar(tn, _) -> tn
     _ -> failure/fail("Backend.C.Parc.aliasMap: unbound alias")
@@ -611,7 +611,7 @@ fun merge-shape-info(s1: shape-info, s2: shape-info): shape-info   // prefer mos
     match x
       Nothing -> y
       _ -> x
-  Shape-info(merge-maybe(s1.m-children, s2.m-children), merge-maybe(s1.m-con-repr, s2.m-con-repr), merge-maybe(s1.scan-fields, s2.scan-fields))
+  ShapeInfo(merge-maybe(s1.m-children, s2.m-children), merge-maybe(s1.m-con-repr, s2.m-con-repr), merge-maybe(s1.scan-fields, s2.scan-fields))
 
 //--------------------------------------------------------------------------
 // Case normalization
@@ -650,7 +650,7 @@ fun case-expand-expr(ex: expr): parc-effs (expr, maybe<def-group>)
 fun normalize-branch(vexprs: list<expr>, b: branch): div branch
   match b
     Branch(branch-patterns, branch-guards) ->
-      fun name-mapping(pat: pattern, new: expr): (maybe<(tName, expr)>, pattern)
+      fun name-mapping(pat: pattern, new: expr): (maybe<(t-name, expr)>, pattern)
         match pat
           PatVar(old, pat') -> (Just((old, new)), pat')
           _ -> (Nothing, pat)
@@ -664,13 +664,13 @@ fun normalize-branch(vexprs: list<expr>, b: branch): div branch
 // Convenience methods for inserting PARC ops
 //--------------------------------------------------------------------------
 
-fun use-tname(tname: tName): parc-effs maybe<expr>
+fun use-tname(tname: t-name): parc-effs maybe<expr>
   val live = is-live(tname)
   val is-borr = is-borrowed(tname)
   mark-live(tname)
   if live || is-borr then gen-dup(tname) else Nothing
 
-fun use-tname-borrowed(tname: tName): parc-effs maybe<expr>
+fun use-tname-borrowed(tname: t-name): parc-effs maybe<expr>
   val live = is-live(tname)
   val is-borr = is-borrowed(tname)
   mark-live(tname)
@@ -713,7 +713,7 @@ fun get-box-form(tp: ktype): parc-effs box-form
 //-----------------------------------------------------------
 
 // Generate a ref-count drop of a constructor
-fun gen-dec-ref(tname: tName): parc-effs maybe<expr>
+fun gen-dec-ref(tname: t-name): parc-effs maybe<expr>
   if !tname.type-of.needs-dup-drop then Nothing
   else
     val fun-tp = TFun([(name/nil, tname.type-of)], typeTotal, typeUnit)
@@ -762,7 +762,7 @@ fun get-field-types(tp: ktype, mb-con-name: maybe<name>): parc-effs maybe<list<k
 
 // Generate a dup/drop over a given (locally bound) name.
 // May return Nothing if the type never needs a dup/drop (like an `int32` or `bool`)
-fun gen-dup-drop(is-dup: bool, tname: tName, mb-con-repr: maybe<(con-repr, name)>, mb-scan-count: maybe<int>): parc-effs maybe<expr>
+fun gen-dup-drop(is-dup: bool, tname: t-name, mb-con-repr: maybe<(con-repr, name)>, mb-scan-count: maybe<int>): parc-effs maybe<expr>
   match (mb-con-repr, mb-scan-count)
     (Just((cr, _)), Just(0)) | cr.is-conSingleton -> Nothing
     _ ->
@@ -782,10 +782,10 @@ fun gen-dup-drop(is-dup: bool, tname: tName, mb-con-repr: maybe<(con-repr, name)
               _ -> normal
           Nothing -> normal
 
-fun gen-dup(tname: tName): parc-effs maybe<expr>
+fun gen-dup(tname: t-name): parc-effs maybe<expr>
   gen-dup-drop(True, tname, Nothing, Nothing)
 
-fun gen-drop(tname: tName): parc-effs maybe<expr>
+fun gen-drop(tname: t-name): parc-effs maybe<expr>
   val shape = get-shape-info(tname)
   gen-dup-drop(False, tname, shape.m-con-repr, shape.scan-fields)
 
@@ -823,7 +823,7 @@ fun zip-own(xs: list<a>, bs: list<param-info>): <exn,div> list<(a, param-info)>
 fun bv(pats: list<pattern>): div tnameset
   pats.map(bound-vars).unions
 
-fun mark-lives(tns: list<tName>): parc-effs ()
+fun mark-lives(tns: list<t-name>): parc-effs ()
   tns.foreach(mark-live)
 
 fun maybe-stats(xs: list<maybe<expr>>, expr: expr): <exn,div> expr
@@ -857,10 +857,10 @@ fun get-param-infos(nm: name): parc-effs list<param-info>
 // owned name abstractions
 //-------------------------------
 
-fun is-owned(tn: tName): parc-effs bool
+fun is-owned(tn: t-name): parc-effs bool
   get-owned().member(tn)
 
-fun is-borrowed(tn: tName): parc-effs bool
+fun is-borrowed(tn: t-name): parc-effs bool
   if tn.get-name.is-nil then False
   else !is-owned(tn)
 
@@ -890,7 +890,7 @@ fun extend-shapes(extend: shape-map, f: () -> parc-effs a): parc-effs a
   set-shapes(saved)
   r
 
-fun get-shape-info(tname: tName): parc-effs shape-info
+fun get-shape-info(tname: t-name): parc-effs shape-info
   get-shapes().lookup(tname).default(shape-info/empty)
 
 //-------------------------------
@@ -898,13 +898,13 @@ fun get-shape-info(tname: tName): parc-effs shape-info
 //-------------------------------
 
 // Mark a local variable as live.
-fun mark-live(tname: tName): parc-effs ()
+fun mark-live(tname: t-name): parc-effs ()
   if !tname.get-name.is-qualified then set-live(get-live() + tname)
 
 fun forget(tns: tnameset): parc-effs ()
   set-live(get-live().set/(-)(tns))
 
-fun is-live(name: tName): parc-effs bool
+fun is-live(name: t-name): parc-effs bool
   get-live().member(name)
 
 fun isolated(f: () -> parc-effs a): parc-effs (a, tnameset)

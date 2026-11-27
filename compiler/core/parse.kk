@@ -22,7 +22,7 @@ import compiler/type/assumption
 import compiler/platform/config
 import compiler/core/core
 import compiler/type/typevar
-import std/data/rb-map
+import std/data/map
 
 // BACKTRACKING, and how much of it: upstream's `Core/Parse.hs` uses Parsec,
 // where `<|>` does NOT backtrack and `try` is the explicit opt-in. It reaches
@@ -311,7 +311,7 @@ fun pDefDecl()
   parse-keyword(":")
   val (tp, pinfos) = parse-def-type()
   val sort = match sort0
-    DefFun(_, fipT) -> DefFun(pinfos, fipT)
+    DefFun(_, fip-t) -> DefFun(pinfos, fip-t)
     _ -> sort0
   Def(qualify(modname, name), tp, exprUnit, vis, sort, inl, range, doc)
 
@@ -320,10 +320,10 @@ fun pDefSort()
   val inl = parse-inline()
   parse-choices("fip info", [
     {
-      val (fipT, _) = parse-try(parse-tail-fip)
+      val (fip-t, _) = parse-try(parse-tail-fip)
       val (_, doc) = parse-doc-keyword("fun")
       parse-choices-nb("specialization", [{parse-special-op("**"); ()}, {parse-special-op("*"); ()}, {()}])
-      (def-fun-ex([], fipT), inl, isRec, doc)
+      (def-fun-ex([], fip-t), inl, isRec, doc)
     },
     {(DefVal, inl, False, parse-doc-keyword("val").snd)}
   ])
@@ -335,7 +335,7 @@ fun parse-inline-def()
   InlineDef(env-qualify(name), e, isRec, inl, if inl.is-inlineAlways then 0 else e.cost, sort, specArgs)
 
 fun parse-extern-decl()
-  val (vis, fipT, doc) = parse-try({(parse-visibility(), parse-tail-fip().fst, parse-doc-keyword("extern").snd)})
+  val (vis, fip-t, doc) = parse-try({(parse-visibility(), parse-tail-fip().fst, parse-doc-keyword("extern").snd)})
   val (name, _) = parse-fun-id()
   val rng = parse-range()
   parse-keyword(":")
@@ -347,7 +347,7 @@ fun parse-extern-decl()
       // (`pwarningMessage ("unsupported external " ++ show name) range`)
       pwarning-message("unsupported external " ++ name.show, rng)
       unsupported-external(name.show)
-  External(qualify(modname, name), tp, pinfos, format, vis, fipT, rng, doc)
+  External(qualify(modname, name), tp, pinfos, format, vis, fip-t, rng, doc)
 
 fun parse-external-body(): _ maybe<string>
   parse-choices("external body", [
@@ -885,14 +885,14 @@ struct envv
 
 fun with-env-initial(modName: name, srcPath: path, imports0, syns0: synonyms = synonyms/empty, f: () -> _ a): _ a
   with with-synonyms(syns0)
-  var bound := rb-map/empty()
+  var bound := map/empty()
   var imports := imports0
   var unique := 1000
   var gamma := assumption/empty
-  var locals := rb-map/empty()
+  var locals := map/empty()
   // from the interface's `local kind` section; consulted when a type
   // constructor occurrence carries no `:: kind` annotation
-  var declared-kinds : name-map<kind> := rb-map/empty()
+  var declared-kinds : name-map<kind> := map/empty()
   fun qualify(n: name)
     if n.is-qualified then
       match imports.expand(n)

@@ -1,6 +1,6 @@
 import compiler/common/name
 import std/pretty/pprint
-import std/pretty/printer
+import pretty/printer
 import std/test
 
 // Common test names

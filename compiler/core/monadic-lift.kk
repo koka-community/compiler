@@ -11,7 +11,7 @@ import compiler/kind/kind
 import compiler/core/core
 import compiler/core/corevar
 import compiler/type/typevar
-import std/data/rb-set
+import std/data/set
 import compiler/platform/config
 import compiler/common/unique
 
@@ -168,9 +168,9 @@ fun lift-local-fun(e: expr, eff: keffect)
   emit(DefNonRec(lift-def))
   expr2
 
-fun make-def(e: expr, fvs: list<tName>, tvs: list<type-var>)
+fun make-def(e: expr, fvs: list<t-name>, tvs: list<type-var>)
     
-  fun unwild(TName(name, tp): tName)
+  fun unwild(TName(name, tp): t-name)
     TName(if name.nameStem == "" || name.is-wildcard then name.un-wildcard else name, tp)
   val (tpars, pars, eff, body) = match e
     TypeLam(tpars, Lam(pars, eff, lbody)) -> (tpars, pars.map(unwild), eff, lbody)

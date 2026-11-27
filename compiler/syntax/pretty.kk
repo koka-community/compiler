@@ -1,7 +1,7 @@
 module compiler/syntax/pretty
 
 import compiler/syntax/syntax
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/common/name
 import compiler/common/name-prim
 import compiler/common/syntax

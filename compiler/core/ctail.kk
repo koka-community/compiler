@@ -29,7 +29,7 @@ import compiler/type/assumption
 import compiler/core/core
 import compiler/core/corevar
 import compiler/core/analysis-cctx
-import std/data/rb-set
+import std/data/set
 
 //--------------------------------------------------------------------------
 // Entry point
@@ -120,14 +120,14 @@ fun ctail-def(d: def, top-level: bool): ctail-eff list<def-group>
         val cdefMulti = d(def-name = ctailMultiName, ktype = ctailMultiType, defExpr = cdefMultiExpr)
         [DefRec([cdef, cdefMulti, d(defExpr = wrapExpr)])]
 
-fun ctail-make-cdef-expr(e: expr, mbRoot: maybe<type-var>, slot: tName): exn expr
+fun ctail-make-cdef-expr(e: expr, mbRoot: maybe<type-var>, slot: t-name): exn expr
   match e
     TypeLam(targs, body) -> TypeLam(targs ++ mbRoot.list, body.ctail-make-cdef-expr(Nothing, slot))
     Lam(args, eff, body) -> Lam(args ++ [slot], eff, body)
     _ -> failure/fail("core/ctail: illegal ctail function shape")
 
 // Is there a recursive call at other type arguments than the type parameters of the definition?
-fun has-polymorphic-recursion(defName: tName, e: expr): pure bool
+fun has-polymorphic-recursion(defName: t-name, e: expr): pure bool
   match e
     TypeLam(tpars, body) ->
       body.any-sub-expr fn(x)
@@ -171,7 +171,7 @@ fun ctail-forall(vars: list<type-var>, rho: ktype): ktype
 // Create a wrapper: this costs one allocation but prevents code duplication
 //--------------------------------------------------------------------------
 
-fun ctail-wrapper(hasRoot: bool, slot: tName, mbMulti: maybe<expr>, e: expr): ctail-eff expr
+fun ctail-wrapper(hasRoot: bool, slot: t-name, mbMulti: maybe<expr>, e: expr): ctail-eff expr
   match e
     TypeLam(targs, Lam(args, eff, body)) ->
       val body' = ctail-wrapper-body(hasRoot, body.type-of, slot, mbMulti, targs, args)
@@ -182,7 +182,7 @@ fun ctail-wrapper(hasRoot: bool, slot: tName, mbMulti: maybe<expr>, e: expr): ct
     _ -> failure/fail("core/ctail ctail-wrapper: illegal ctail function shape")
 
 // if the trmc function is polymorphic in the root of the context, the root is the result type
-fun ctail-wrapper-body(hasRoot: bool, resTp: ktype, slot: tName, mbMulti: maybe<expr>, targs0: list<type-var>, args: list<tName>): ctail-eff expr
+fun ctail-wrapper-body(hasRoot: bool, resTp: ktype, slot: t-name, mbMulti: maybe<expr>, targs0: list<type-var>, args: list<t-name>): ctail-eff expr
   val tailVar = ctail-fun-expr()
   val tpl = ctail-target-platform
   val targs = targs0.map(TVar) ++ (if hasRoot then [resTp] else [])
@@ -204,7 +204,7 @@ fun ctail-make-if-is-affine(onTrue: expr, onFalse: expr): expr
 // Does there exist a tail call definition?
 //--------------------------------------------------------------------------
 
-fun ctail-has-tail-call(defName: tName, top: bool, e: expr): <div,exn> bool
+fun ctail-has-tail-call(defName: t-name, top: bool, e: expr): <div,exn> bool
   match e
     TypeLam(_, body) -> ctail-has-tail-call(defName, top, body)
     TypeApp(body, _) -> ctail-has-tail-call(defName, top, body)
@@ -215,13 +215,13 @@ fun ctail-has-tail-call(defName: tName, top: bool, e: expr): <div,exn> bool
     App(Con, args)              -> ctail-has-tail-call-arg(defName, args.reverse)
     _ -> False
 
-fun ctail-has-tail-call-branch(defName: tName, b: branch): <div,exn> bool
+fun ctail-has-tail-call-branch(defName: t-name, b: branch): <div,exn> bool
   b.guards.any(fn(g) ctail-has-tail-call-guard(defName, g))
 
-fun ctail-has-tail-call-guard(defName: tName, g: guard): <div,exn> bool
+fun ctail-has-tail-call-guard(defName: t-name, g: guard): <div,exn> bool
   ctail-has-tail-call(defName, False, g.body)
 
-fun ctail-has-tail-call-arg(defName: tName, rargs: list<expr>): <div,exn> bool
+fun ctail-has-tail-call-arg(defName: t-name, rargs: list<expr>): <div,exn> bool
   match rargs
     Nil -> False
     Cons(rarg, rargs') ->
@@ -239,7 +239,7 @@ fun ctail-has-tail-call-arg(defName: tName, rargs: list<expr>): <div,exn> bool
         // todo: emit warning that TRMC does not apply?
         _ -> fallback()
 
-fun free-in(nm: tName, es: list<expr>): <div,exn> bool
+fun free-in(nm: t-name, es: list<expr>): <div,exn> bool
   es.free-vars.member(nm)
 
 //--------------------------------------------------------------------------
@@ -252,7 +252,7 @@ fun ctail-expr(e: expr, top: bool): ctail-eff expr
     match ctail-slot
       Nothing   -> body
       Just(slot) -> ctail-make-cctx-apply(ctail-gamma, ctail-target-platform, ctail-is-multi, ctail-always-affine, slot, body)
-  fun handle-con-app(cname: tName, fcon: expr, fargs: list<expr>): ctail-eff expr
+  fun handle-con-app(cname: t-name, fcon: expr, fargs: list<expr>): ctail-eff expr
     fun mk-cons(cpath: ctx-path, args: list<expr>): ctail-eff (list<def-group>, expr)
       ctail-bind-args(args) fn(xs) ([], fcon.ctail-mk-con-app(cpath, xs))
     val useCtx = !ctail-is-multi && ctail-use-context-path && !ctail-always-affine
@@ -313,7 +313,7 @@ fun ctail-guard(g: guard): ctail-eff guard
 // See if the tailcall is inside a (nested) constructor application
 //--------------------------------------------------------------------------
 
-fun ctail-try-arg(useCtxPath: bool, dname: tName, cname: tName, mbC: maybe<tName>,
+fun ctail-try-arg(useCtxPath: bool, dname: t-name, cname: t-name, mbC: maybe<t-name>,
                    mkApp: (ctx-path, list<expr>) -> ctail-eff (list<def-group>, expr),
                    field: int, rargs: list<expr>): ctail-eff maybe<(list<def-group>, expr)>
   match rargs
@@ -324,7 +324,7 @@ fun ctail-try-arg(useCtxPath: bool, dname: tName, cname: tName, mbC: maybe<tName
         mkApp(cpath, rargs'.reverse ++ args)
       // returns a (ctx-path, args) -> ... closure: the context path and the
       // remaining arguments arrive at different points in the walk
-      fun mkAppNested(x: tName, fcon: expr)
+      fun mkAppNested(x: t-name, fcon: expr)
         fn(fcpath: ctx-path, args: list<expr>) : ctail-eff (list<def-group>, expr)
           val cpath = useCtxPath.ctail-get-ctx-path(cname, field)
           val (defs, e) = ctail-bind-args(rargs'.reverse) fn(xs) mkApp(cpath, xs ++ [Var(x, InfoNone)])
@@ -336,7 +336,7 @@ fun ctail-try-arg(useCtxPath: bool, dname: tName, cname: tName, mbC: maybe<tName
         if rarg.is-total
           then ctail-try-arg(useCtxPath, dname, cname, mbC, fn(cpath, args) mkApp(cpath, args ++ [rarg]), field - 1, rargs')
           else Nothing
-      fun recurse-into(cname2: tName, f: expr, fargs: list<expr>): ctail-eff maybe<(list<def-group>, expr)>
+      fun recurse-into(cname2: t-name, f: expr, fargs: list<expr>): ctail-eff maybe<(list<def-group>, expr)>
         val x = rarg.type-of.ctail-unique-tname
         ctail-try-arg(useCtxPath, dname, cname2, Just(x), mkAppNested(x, f), fargs.length, fargs.reverse)
       match rarg
@@ -351,7 +351,7 @@ fun ctail-try-arg(useCtxPath: bool, dname: tName, cname: tName, mbC: maybe<tName
           if dname.free-in(fargs) then recurse-into(cname2, f, fargs) else fallback()
         _ -> fallback()
 
-fun ctail-get-ctx-path(useContextPath: bool, cname: tName, fieldIdx: int): <newtypes-eff,exn,div> ctx-path
+fun ctail-get-ctx-path(useContextPath: bool, cname: t-name, fieldIdx: int): <newtypes-eff,exn,div> ctx-path
   if !useContextPath then CtxNone
   else match cname.lookup(fieldIdx)
     Left(msg)      -> failure/fail(msg)  // todo: allow this? see test/cgen/ctail7
@@ -361,7 +361,7 @@ fun ctail-get-ctx-path(useContextPath: bool, cname: tName, fieldIdx: int): <newt
 // Found a tail call inside a constructor application
 //--------------------------------------------------------------------------
 
-fun ctail-found-arg(cname: tName, mbC: maybe<tName>,
+fun ctail-found-arg(cname: t-name, mbC: maybe<t-name>,
                      mkConsApp: (list<expr>) -> ctail-eff (list<def-group>, expr),
                      field: int, mkTailApp: ((list<ktype>) -> expr, expr) -> expr, resTp: ktype): ctail-eff (list<def-group>, expr)
   match ctail-slot
@@ -387,7 +387,7 @@ fun ctail-found-arg(cname: tName, mbC: maybe<tName>,
 //--------------------------------------------------------------------------
 
 // Extend a context with a non-empty context
-fun ctail-make-cctx-extend(gamma: gamma, tpl: target-platform, slot: tName, resName: tName, objName: tName, conName: tName,
+fun ctail-make-cctx-extend(gamma: gamma, tpl: target-platform, slot: t-name, resName: t-name, objName: t-name, conName: t-name,
                             fieldName: name, tp: ktype, alwaysAffine: bool)
   val fieldOf = make-field-addr-of(gamma, Var(objName, InfoNone), conName, fieldName, tp)
   val (rootTp, holeTp) = slot.type-of.cctx-type-args
@@ -398,7 +398,7 @@ fun ctail-make-cctx-extend(gamma: gamma, tpl: target-platform, slot: tName, resN
   make-cctx-prim(gamma, nameCCtxExtend, external, [rootTp, holeTp, tp], [Var(slot, InfoNone), Var(resName, InfoNone), fieldOf])
 
 // Apply a context to its final value.
-fun ctail-make-cctx-apply(gamma: gamma, tpl: target-platform, isMulti: bool, alwaysAffine: bool, slot: tName, e: expr)
+fun ctail-make-cctx-apply(gamma: gamma, tpl: target-platform, isMulti: bool, alwaysAffine: bool, slot: t-name, e: expr)
   if isMulti then
     App(Var(slot, InfoNone), [e])  // slot `a -> a` is an accumulating function; apply to resolve
   else
@@ -421,7 +421,7 @@ fun cctx-type-args(tp: ktype): pure (ktype, ktype)
 //--------------------------------------------------------------------------
 
 // create a unique name specific to this pass
-fun ctail-unique-tname(tp: ktype): <unique> tName
+fun ctail-unique-tname(tp: ktype): <unique> t-name
   TName("trmc".unique-name, tp)
 
 //--------------------------------------------------------------------------
@@ -441,9 +441,9 @@ alias ctail-eff = <ctail-target-platform,ctail-gamma,ctail-use-context-path,ctai
 effect val ctail-target-platform: target-platform
 effect val ctail-gamma: gamma
 effect val ctail-use-context-path: bool
-effect val ctail-fn-name: tName          // TName of the ctail (trmc-suffixed) variant currently being built
+effect val ctail-fn-name: t-name          // TName of the ctail (trmc-suffixed) variant currently being built
 effect val ctail-root-args: list<ktype>  // the root type argument of the current ctail variant, if it is polymorphic in it
-effect val ctail-slot: maybe<tName>      // current accumulator/context slot, if any
+effect val ctail-slot: maybe<t-name>      // current accumulator/context slot, if any
 effect val ctail-is-multi: bool
 effect val ctail-always-affine: bool
 effect val ctail-current-def: list<def>  // stack of original (pre-ctail) defs being processed
@@ -464,7 +464,7 @@ fun ctail-fun-at(): <ctail-fn-name,ctail-root-args> ((list<ktype>) -> expr)
   val rootArgs = ctail-root-args
   fn(targs) make-type-app(ctailVar, targs ++ rootArgs)
 
-fun ctail-current-def-name(): <ctail-current-def,exn> tName
+fun ctail-current-def-name(): <ctail-current-def,exn> t-name
   match ctail-current-def
     Cons(d, _) -> defTName(d)
     Nil -> failure/fail("core/ctail: no current definition")
@@ -475,7 +475,7 @@ fun ctail-with-current-def(d: def, action: () -> ctail-eff a): ctail-eff a
 
 // Overrides the context fields together (they
 // always change as one unit at every upstream `withContext` call site)
-fun ctail-with-context(name: tName, rootArgs: list<ktype>, isMulti: bool, alwaysAffine: bool, mbSlot: maybe<tName>, action: () -> ctail-eff a): ctail-eff a
+fun ctail-with-context(name: t-name, rootArgs: list<ktype>, isMulti: bool, alwaysAffine: bool, mbSlot: maybe<t-name>, action: () -> ctail-eff a): ctail-eff a
   with override val ctail-fn-name = name
   with override val ctail-root-args = rootArgs
   with override val ctail-slot = mbSlot

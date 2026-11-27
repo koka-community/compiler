@@ -9,40 +9,23 @@
 
 module compiler/common/name-collections
 
-import std/data/rb-map
-import std/data/rb-set
-import std/data/rbtree
-import std/data/rbtree-bu
+import std/data/map
+import std/data/set
 import compiler/common/name
 import compiler/common/failure
 import compiler/platform/config
-import std/test
 
-// name-map is a BOTTOM-UP red-black tree
-//
-// Upstream's gamma is `Data.Map.Strict Name [(Name,NameInfo)]` -- a balanced
-// tree ordered by `Ord Name`. 
-//
-// Bottom-up (not top-down) because that is where the PLDI'24 artifact's
-// `fbip(1)` coverage is: `bu/set`, `bu/add`, `bu/insert` and the balance
-// helpers are all verified fully-in-place, so they reuse nodes rather than
-// reallocating the spine. Top-down has one such function.
-//
-// Iteration order becomes key order.
-pub alias name-map<a> = rbmap<name, a>;
+// Upstream's gamma is `Data.Map.Strict Name [(Name,NameInfo)]`, a balanced tree ordered by `Ord Name`; `std/data/map` is a red-black tree, so iteration is in key order too.
+pub alias name-map<a> = map<name, a>;
 
-// Every map operation (`update`, `union-with`, `unions-with`, ...) lives in
-// `std/data/rb-map` itself, with `linear-map`'s names and semantics.
-
-// Key-ordered, as rb-set iterates
-pub alias name-set = rbset<name>;
-pub val names/empty: name-set = rb-set/empty()
+pub alias name-set = set<name>;
+pub val names/empty: name-set = set/empty()
 
 // qname-map is name-keyed too, so it rides the same tree
 pub alias qname-map<a> = name-map<list<(name,a)>>;
 
 pub fun name-map/find(m: name-map<a>, n: name): _ a
-  match rb-map/lookup(m, n)
+  match map/lookup(m, n)
     Just(x) -> x
     _ -> throw("common/name-map/find: could not find: " ++ n.show)
 
@@ -65,22 +48,22 @@ pub fun lookup/show(a: lookup<a>, ?show: (a) -> e string): e string
     NotFound -> "NotFound"
 
 pub fun qname-map/single(n: name, a: a): qname-map<a>
-  rb-map/from-list([(n.unqualify, [(n, a)])])
+  map/from-list([(n.unqualify, [(n, a)])])
 
 pub fun qname-map/from-list(l: list<(name,a)>): _ qname-map<a>
-  l.foldl(rb-map/empty()) fn(qm, (name, x))
+  l.foldl(map/empty()) fn(qm, (name, x))
     qm.qname-map/insert(name, x)
 
 // Lookup a fully qualified name
 pub fun qname-map/lookup-qualified(m: qname-map<a>, n: name): maybe<a>
-  match rb-map/lookup(m, n.unqualify)
+  match map/lookup(m, n.unqualify)
     Just(xs) -> xs.lookup(_ == n)
     _ -> Nothing
 
 // Lookup a potentially unqualified name within a module context. 
 // (The module context is ignored if a qualified name is looked up)
 pub fun qname-map/lookup(m: qname-map<a>, c: name, name: name): lookup<a>
-  match rb-map/lookup(m, name.unqualify)
+  match map/lookup(m, name.unqualify)
     // fast path ONLY for a singleton entry: with
     // several entries we must fall through to the context-qualified filter so
     // the current module's definition takes precedence over imported ones
@@ -99,26 +82,26 @@ pub fun qname-map/lookup(m: qname-map<a>, c: name, name: name): lookup<a>
     _ -> NotFound
 
 pub fun qname-map/insert-with(m: qname-map<a>, c: name, a: list<(name,a)>, combine: (list<(name,a)>, list<(name,a)>) -> e list<(name,a)>): e qname-map<a>
-  rb-map/update(m, c, a, combine)
+  map/update(m, c, a, combine)
 
 pub fun qname-map/filter-names(m: qname-map<a>, p: (name) -> e bool): e qname-map<a>
-  rb-map/kvalue/map(m) fn(k, xs)
+  map/kvalue/map(m) fn(k, xs)
     xs.filter(fn((n, _)) p(n))
 
 pub fun qname-map/insert(m: qname-map<a>, n: name, a: a): _ qname-map<a>
   // calls safeCombine(new, old) — flip so the new entry comes first
-  rb-map/update(m, n.unqualify, Cons((n, a), Nil)) fn(xs, ys)
+  map/update(m, n.unqualify, Cons((n, a), Nil)) fn(xs, ys)
     safe-combine("insert", ys, xs)
 
 pub fun qname-map/union(m1: qname-map<a>, m2: qname-map<a>): _ qname-map<a>
-  rb-map/union-with(m1, m2) fn(xs, ys)
+  map/union-with(m1, m2) fn(xs, ys)
     safe-combine("union", xs, ys)
 
 pub fun qname-map/union-left-bias(m1: qname-map<a>, m2: qname-map<a>): _ qname-map<a>
-  rb-map/union-with(m1, m2, list/(++))
+  map/union-with(m1, m2, list/(++))
 
 pub fun qname-map/unions(ms: list<qname-map<a>>): _ qname-map<a>
-  ms.foldl(rb-map/empty()) fn(m1, m2)
+  ms.foldl(map/empty()) fn(m1, m2)
     m1.qname-map/union(m2)
 
 pub fun qname-map/safe-combine(s: string, xs: list<(name,a)>, ys: list<(name,a)>): _ list<(name,a)>

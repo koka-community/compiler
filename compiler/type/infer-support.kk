@@ -28,13 +28,13 @@ import compiler/syntax/range-map
 import compiler/core/core
 import compiler/core/corevar
 import compiler/core/analysis-match
-import compiler/lib/pprint
-import std/data/rb-set
+import pretty/pprint
+import std/data/set
 import std/data/sort
 import std/core/undiv
 import std/core/unsafe
 import compiler/type/infer-effect
-import std/data/rb-map
+import std/data/map
 // Support helpers for type inference: expectation contexts, argument/pattern matching
 // helpers, eta expansion, and generalization wrappers. Split out of type/infer.kk
 // (upstream this all lives in Type/Infer.hs) to speed up type checking.

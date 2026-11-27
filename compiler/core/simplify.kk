@@ -16,9 +16,9 @@ import compiler/type/typevar
 import compiler/core/core
 import compiler/core/corevar
 import compiler/core/uniquefy
-import std/data/rb-set
+import std/data/set
 import std/core/undiv
-import std/data/rb-map
+import std/data/map
 import compiler/common/name-collections
 
 // settings for a simplification run
@@ -33,7 +33,7 @@ pub alias simp-eff = <simp-env, unique, pure, comp-flags>
 
 // Simplify the core definitions in the current core phase
 pub fun simplify-defs(unsafe0: bool, ndebug: bool, nRuns: int, dupMax: int): _ ()
-  with val simp-env = Simp-settings(unsafe0, ndebug, dupMax)
+  with val simp-env = SimpSettings(unsafe0, ndebug, dupMax)
   set-core-defs(simplifyN(nRuns, get-core-defs().uniquefy-def-bodies))
 
 pub fun simplifyN(nRuns: int, dgs: def-groups): simp-eff def-groups
@@ -127,7 +127,7 @@ fun float-args(can-float: bool, args: list<expr>): _ (list<def-group>, list<expr
       val (binds', rest') = float-args(can-float && arg'.is-total, rest)
       (binds ++ binds', Cons(arg', rest'))
 
-fun make-par-def(tn: tName, arg: expr): def-group
+fun make-par-def(tn: t-name, arg: expr): def-group
   DefNonRec(Def(tn.get-name, tn.type-of, arg, Private, DefVal, InlineAuto, range/null, ""))
 
 fun is-var-named(e: expr, nm: name): bool
@@ -172,7 +172,7 @@ fun case-of-case-ok(branches0: list<branch>, branches1: list<branch>): simp-eff 
              size-of-branches(branches1) <= maxCaseOfCaseDup)
 
 // let simplification: inline cheap, single-use, or dead bindings
-fun top-down-let(sub: list<(tName, expr)>, acc: list<def-group>, dgs0: list<def-group>, body: expr): simp-eff expr
+fun top-down-let(sub: list<(t-name, expr)>, acc: list<def-group>, dgs0: list<def-group>, body: expr): simp-eff expr
   fun apply-sub(e: expr): _ expr
     if sub.is-empty then e else sub |-> e
   match dgs0
@@ -244,7 +244,7 @@ fun bind-exprs(exprs: list<expr>): simp-eff (expr -> pure expr, list<expr>)
   val (defss, bexprs) = exprs.map(unique-bind).unzip
   (fn(e) make-let(defss.concat, e), bexprs)
 
-fun unique-tname(TName(name, tp): tName): _ tName
+fun unique-tname(TName(name, tp): t-name): _ t-name
   TName(to-unique-name(unique-id(""), name), tp)
 
 // A fresh name that also avoids `avoid`.
@@ -260,13 +260,13 @@ fun unique-tname(TName(name, tp): tName): _ tName
 // parameter substitution minted `s@0@10011`, exactly the name `pad-left`'s own
 // body uses for its `fill.string` local. Fixed the same way upstream
 // (`uniqueTNameAvoiding` in Core/Simplify.hs).
-fun unique-tname-avoiding(tn: tName, avoid: rbset<tName>): _ tName
+fun unique-tname-avoiding(tn: t-name, avoid: set<t-name>): _ t-name
   val tn' = tn.unique-tname
   if avoid.member(tn') then tn.unique-tname-avoiding(avoid) else tn'
 
 // Names bound anywhere inside an expression -- what a freshly minted name must
 // stay clear of. `bound-vars` covers patterns/def-groups but not a whole expr.
-fun expr/bound-names(ex: expr): _ rbset<tName>
+fun expr/bound-names(ex: expr): _ set<t-name>
   match ex
     Lam(pars, _, body) -> pars.foldl(tnames/empty, fn(acc, p) acc + p) + body.bound-names
     App(f, args) -> args.map(bound-names).unions + f.bound-names
@@ -277,7 +277,7 @@ fun expr/bound-names(ex: expr): _ rbset<tName>
       ds.foldl(tnames/empty, fn(acc, d) acc + d.defTname) +
         ds.map(fn(d) d.defExpr.bound-names).unions + body.bound-names
     Case(scruts, bs) ->
-      fun branch-names(Branch(pats, gs): branch): _ rbset<tName>
+      fun branch-names(Branch(pats, gs): branch): _ set<t-name>
         pats.map(bound-vars).unions +
           gs.map(fn(Guard(t, e)) t.bound-names + e.bound-names).unions
       scruts.map(bound-names).unions + bs.map(branch-names).unions
@@ -348,7 +348,7 @@ fun bottom-up(ex: expr): simp-eff expr
         | (v.get-name == nameUnbox && w.get-name == nameBox) || (w.get-name == nameUnbox && v.get-name == nameBox) -> arg
     // eta contract
     Lam(pars, _, App(f as Var(_, info), args)) | !info.is-infoExternal && pars.length == args.length ->
-      fun arg-match-par((par: tName, arg: expr))
+      fun arg-match-par((par: t-name, arg: expr))
         match arg
           Var(name) -> par == name
           _ -> False
@@ -357,7 +357,7 @@ fun bottom-up(ex: expr): simp-eff expr
       Lam(pars, eff, arg)
     _ -> ex
 
-fun match-on-con-ok(name: tName, args: list<expr>, branches: list<branch>): _ bool
+fun match-on-con-ok(name: t-name, args: list<expr>, branches: list<branch>): _ bool
   branches.head.map(fn(b) b.patterns.length == 1).default(False) &&
     branches.all(fn(b) is-match-on-con(name, args.length, b))
 
@@ -378,7 +378,7 @@ fun find-common-cont(bs: list<branch>): _ maybe<(expr, list<branch>)>
       else extract-common-cont(v, name, bs)
     _ -> Nothing
 
-fun extract-common-cont(contVar: expr, contName: tName, bs: list<branch>): _ maybe<(expr, list<branch>)>
+fun extract-common-cont(contVar: expr, contName: t-name, bs: list<branch>): _ maybe<(expr, list<branch>)>
   fun extract-g(g: guard): _ maybe<guard>
     match g
       Guard(test, App(Var(name), [arg])) | name == contName -> Just(Guard(test, arg))
@@ -468,7 +468,7 @@ fun kmatch-pattern(scrut: expr, pat: pattern): _ kmatch<(list<def>, expr)>
 // Optimization for matches on ConSingle (like tuples)
 //--------------------------------------------------------------------------
 
-fun is-match-on-con(name: tName, n: int, b: branch): _ bool
+fun is-match-on-con(name: t-name, n: int, b: branch): _ bool
   match b.patterns
     [PatCon(cname, pats)] -> cname == name && pats.length == n
     [PatVar(v, pat)] ->
@@ -603,7 +603,7 @@ fun ounion(oc1: occurs, oc2: occurs): _ occurs
   oc1.union-with(oc2, occur/add)
 
 fun ounions(ocs: list<occurs>): _ occurs
-  ocs.foldl(rb-map/empty(), ounion)
+  ocs.foldl(map/empty(), ounion)
 
 fun occurs-not(name: name, e: expr): _ bool
   e.occurrences.lookup(name).is-nothing
@@ -622,12 +622,12 @@ fun occurrences-of(name: name, e: expr): _ occur
 fun occurrences(e: expr): _ occurs
   match e
     App(TypeApp(Var(v), targs), args) ->
-      ounions(Cons(rb-map/from-list([(v.get-name, Occur(1, targs.length, args.length, 0))]), args.map(occurrences)))
+      ounions(Cons(map/from-list([(v.get-name, Occur(1, targs.length, args.length, 0))]), args.map(occurrences)))
     App(Var(v), args) ->
-      ounions(Cons(rb-map/from-list([(v.get-name, Occur(1, 0, args.length, 0))]), args.map(occurrences)))
-    Var(v) -> rb-map/from-list([(v.get-name, Occur(0, 0, 0, 1))])
-    Con -> rb-map/empty()
-    ELit -> rb-map/empty()
+      ounions(Cons(map/from-list([(v.get-name, Occur(1, 0, args.length, 0))]), args.map(occurrences)))
+    Var(v) -> map/from-list([(v.get-name, Occur(0, 0, 0, 1))])
+    Con -> map/empty()
+    ELit -> map/empty()
     App(f, args) -> ounions(Cons(f.occurrences, args.map(occurrences)))
     Lam(pars, _, body) -> body.occurrences.remove-all(pars.map(get-name))
     TypeLam(_, body) -> body.occurrences

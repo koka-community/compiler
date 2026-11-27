@@ -31,7 +31,7 @@ import compiler/core/ctail
 import compiler/core/specialize
 import compiler/core/check
 import compiler/compile/options
-import std/data/rb-map
+import std/data/map
 import compiler/common/name-collections
 
 pub fun core-optimize(fl: flags, nt: newtypes, gamma0: gamma, inls: inlines, coreProgram: core): _ (core, list<inline-def>)

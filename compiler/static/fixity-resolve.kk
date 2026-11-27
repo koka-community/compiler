@@ -2,7 +2,7 @@
 module compiler/static/fixity-resolve
 
 import compiler/common/name
-import std/data/rb-map
+import std/data/map
 import compiler/common/name-prim
 import compiler/common/name-collections
 import compiler/common/failure
@@ -11,7 +11,7 @@ import compiler/common/range
 import compiler/syntax/syntax
 import compiler/common/syntax
 import compiler/common/color-scheme
-import compiler/lib/pprint
+import pretty/pprint
 // Updated to 7eb71dc on 2/10/25
 
 pub fun fixity-resolve(fixMap: fixities, program: user-program)
@@ -40,8 +40,8 @@ fun tdef/resolve(tdef: user-typedef)
 
 fun con/resolve(constr: user-user-con)
   match constr
-    UserCon(nm, exists0, params, result, Just((fipT, lzy)), nmrng, rng, vis, doc) ->
-      UserCon(nm, exists0, params, result, Just((fipT, lzy.expr/resolve)), nmrng, rng, vis, doc)
+    UserCon(nm, exists0, params, result, Just((fip-t, lzy)), nmrng, rng, vis, doc) ->
+      UserCon(nm, exists0, params, result, Just((fip-t, lzy.expr/resolve)), nmrng, rng, vis, doc)
     c -> c
 
 // Rewrite syntax tree
@@ -122,7 +122,7 @@ fun handlerbranch/resolve(hb: handler-branch<user-type>)
 
 // Fixity map for all operators
 pub alias fixities = name-map<fixity>
-val fixitiesEmpty: fixities = rb-map/empty()
+val fixitiesEmpty: fixities = map/empty()
 
 fun find-fixity(fixities: fixities, name: name): fixity
   fixities.lookup(name).default(FixInfix(50, AssocNone))
@@ -130,13 +130,13 @@ fun find-fixity(fixities: fixities, name: name): fixity
 pub fun fixities-compose(fix1: fixities, fix2: fixities): fixities
   fix2.list.foldl(fix1) fn(acc, (name, fixity))
     match fix1.lookup(name)
-      Just(x as FixInfix) -> rb-map/set(acc, name, x)
-      _ -> rb-map/set(acc, name, fixity) // upstream compose: fix2's infix wins when fix1's entry is not infix
+      Just(x as FixInfix) -> map/set(acc, name, x)
+      _ -> map/set(acc, name, fixity) // upstream compose: fix2's infix wins when fix1's entry is not infix
 
 pub fun fixities-new(fs: list<(name, fixity)>): fixities
   fixitiesEmpty + fs.filter(_.snd.is-fixInfix)
 
-effect fixityEff
+effect fixity-eff
   fun add-fix-error(s: doc, r: range): ()
   fun get-fixities(): fixities
   fun update-fixities(f: fixities -> pure fixities): ()

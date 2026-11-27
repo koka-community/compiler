@@ -5,7 +5,7 @@
 module compiler/lsp/definition
 
 import std/os/path
-import std/data/rb-map
+import std/data/map
 import std/core/undiv
 import compiler/common/name
 import compiler/common/range
@@ -20,7 +20,7 @@ import compiler/type/assumption
 import compiler/type/pretty
 import compiler/kind/pretty
 import compiler/kind/kind
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/lib/json
 import compiler/lsp/jsonrpc
 import compiler/lsp/conversions

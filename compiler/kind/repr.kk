@@ -6,7 +6,7 @@ import compiler/common/name-prim
 import compiler/common/syntax
 import compiler/common/failure
 import compiler/type/type
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/type/pretty
 // Updated 7/23/26; Commit #6fe38b8
 

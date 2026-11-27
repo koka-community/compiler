@@ -4,7 +4,7 @@ module compiler/backend/c/constructors
 import compiler/core/core
 import compiler/common/name
 import compiler/common/syntax
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/type/type
 import compiler/backend/c/helpers
 import compiler/backend/c/dup-drops

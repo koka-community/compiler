@@ -55,28 +55,28 @@ pub fun suite()
 
   test("mod-stale: a source module with a newer source rebuilds")
     expect(True)
-      Mod-info("m".new-name, "m.kk".path, "m.kki".path, "".path, 300, 200, 0)
+      ModInfo("m".new-name, "m.kk".path, "m.kki".path, "".path, 300, 200, 0)
         .mod-stale([])
 
   test("mod-stale: a source module with a fresh interface is reused")
     expect(False)
-      Mod-info("m".new-name, "m.kk".path, "m.kki".path, "".path, 100, 200, 0)
+      ModInfo("m".new-name, "m.kk".path, "m.kki".path, "".path, 100, 200, 0)
         .mod-stale([150])
 
   test("mod-stale: a source module rebuilds when a dependency is newer")
     expect(True)
-      Mod-info("m".new-name, "m.kk".path, "m.kki".path, "".path, 100, 200, 0)
+      ModInfo("m".new-name, "m.kk".path, "m.kki".path, "".path, 100, 200, 0)
         .mod-stale([250])
 
   test("mod-stale: a precompiled library interface is trusted when present")
     // no source in the tree, so there is nothing to compare against
     expect(False)
-      Mod-info("std".new-name, "".path, "".path, "std.kki".path, 0, 0, 500)
+      ModInfo("std".new-name, "".path, "".path, "std.kki".path, 0, 0, 500)
         .mod-stale([999])
 
   test("mod-stale: a missing library interface is stale")
     expect(True)
-      Mod-info("std".new-name, "".path, "".path, "std.kki".path, 0, 0, 0)
+      ModInfo("std".new-name, "".path, "".path, "std.kki".path, 0, 0, 0)
         .mod-stale([])
 
 fun main()

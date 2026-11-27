@@ -11,10 +11,10 @@ module compiler/common/nice
 
 import compiler/common/id
 import compiler/type/type
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/kind/kind
 import compiler/common/syntax
-import std/data/rb-map
+import std/data/map
 import std/data/int-map
 import std/num/int64
 import compiler/common/name-collections

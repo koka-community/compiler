@@ -1,3 +1,10 @@
+//---------------------------------------------------------------------------
+// Copyright 2026, Microsoft Research, Daan Leijen. Tim Whiting.
+//
+// This is free software; you can redistribute it and/or modify it under the
+// terms of the Apache License, Version 2.0. A copy of the License can be
+// found in the LICENSE file at the root of this distribution.
+//---------------------------------------------------------------------------
 // Port of the "Detect C compiler" section of src/Compile/Options.hs
 // (~Options.hs:1063-1349): the `CC` record (a description of a C-toolchain's
 // command-line shape) and the pure builder functions for the toolchains
@@ -12,15 +19,14 @@ module compiler/compile/cc
 import std/os/env
 import compiler/common/syntax
 
-// upstream `CC` (Options.hs:1069). All the function-valued fields
-// (`ccFlagStack`, `ccAddDef`, ...) ARE ported here (divergence from the
-// earlier pass, which only kept the plain-data fields) since they're
-// needed to actually assemble a compile/link command line per toolchain.
+// upstream `CC` (Options.hs:1069), including the function-valued fields
+// (`ccFlagStack`, `ccAddDef`, ...) that assemble a compile/link command line
+// per toolchain.
 pub struct cc
   ccName: string = ""
   ccPath: string = ""
   ccFlags: list<string> = []
-  ccFlagsBuild: list<(buildType,list<string>)> = []
+  ccFlagsBuild: list<(build-type,list<string>)> = []
   ccFlagsWarn: list<string> = []
   ccFlagsCompile: list<string> = []
   ccFlagsLink: list<string> = []
@@ -39,7 +45,7 @@ pub struct cc
 
 // Pick the right `(BuildType,Args)` entry
 // (falling back to no extra flags) and append the arch-optimization flags.
-pub fun cc/flags-build(c: cc, bt: buildType, optimize: int, cpuArch: string): list<string>
+pub fun cc/flags-build(c: cc, bt: build-type, optimize: int, cpuArch: string): list<string>
   val base = match c.ccFlagsBuild.find(fn(be) { val (b, _) = be; b == bt })
     Just((_, args)) -> args
     Nothing -> []
@@ -102,12 +108,13 @@ pub val gnu-warn: list<string> =
    "-Wno-unused-parameter","-Wno-unused-variable","-Wno-unused-value",
    "-Wno-unused-but-set-variable"]
 
-// strip a trailing `.ext`; pure string helper, no `path`
-// round-trip needed since these builders work on plain command-line strings
+// Remove the file extension, as upstream `notext`: a `.` in a directory name
+// is not an extension. A string helper, since these builders work on plain
+// command-line strings.
 pub fun strip-ext(s: string): string
   match s.find-last(".")
-    Just(sl) -> sl.before.string
-    Nothing -> s
+    Just(sl) | !sl.after.string.list.any(fn(c) c == '/' || c == '\\') -> sl.before.string
+    _ -> s
 
 // Also used (with small overrides) as the
 // base for `mingw`/`emcc`/`clang`/`generic` in `cc-from-path`.
@@ -116,7 +123,7 @@ pub fun cc-gcc(name: string, path: string, hasOptG: bool): ndet cc
     // unfortunately not as widely supported as one may hope, so only at -O2+
     if opt < 2 then []
     elif cpuArch == "x64" then ["-march=haswell","-mtune=native"]        // Haswell (2013) = x86-64-v3
-    elif cpuArch == "arm64" then ["-march=armv8.1-a+crypto+aes","-mtune=native"]
+    elif cpuArch == "arm64" then ["-march=armv8.3-a+crypto+aes","-mtune=native"]  // popcnt, simd, lse, pmull (+aes), ldapr
     else []
   Cc(
     ccName = name, ccPath = path,

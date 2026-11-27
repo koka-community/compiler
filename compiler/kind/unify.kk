@@ -1,7 +1,7 @@
 // Ported as of 2026-01-18; approx upstream baseline commit b8074c2 of Kind/Unify.hs (backfilled 2026-07-23)
 module compiler/kind/unify
 
-import compiler/lib/pprint
+import pretty/pprint
 import std/num/int64
 import compiler/common/name
 import compiler/common/range
@@ -12,7 +12,7 @@ import compiler/platform/config
 import compiler/kind/kind
 import compiler/kind/infer-kind
 import compiler/kind/infer-effect
-import std/data/rb-set
+import std/data/set
 import std/data/int-set
 
 // Unify

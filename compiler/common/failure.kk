@@ -25,13 +25,12 @@ pub fun todo(msg: string): exn a
 pub fun match-failure(msg: string, ?kk-file-line: string): exn a
   failure/fail("unmatched pattern: " ++ msg ++ " at " ++ kk-file-line)
 
+// Upstream's `raise` also prints a stack trace in a debug build; Koka has no stack traces to print.
 pub fun raise(s: string): exn a
-  // Figure out stack traces
   throw(s)
 
+// Upstream's `catchIO` strips GHC's "user error" wrappers from the message; a Koka exception carries the message as raised.
 pub fun catch(hndl: string -> _ a, f: () -> _ a): _ a
-  fun adjust(s: string): string
-    s // TODO: Adjust any errors if needed
   with handler final ctl throw-exn(e)
-    hndl(e.message.adjust)
+    hndl(e.message)
   f()

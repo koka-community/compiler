@@ -11,7 +11,7 @@ import compiler/core/corevar
 import compiler/type/assumption
 import compiler/common/syntax
 import compiler/platform/config
-import std/data/rb-set
+import std/data/set
 import std/core/undiv
 // Updated 7/23/26 to commit #045e2dc -- note: upstream moved realiasType/useCommonAliases here; in this port that logic lives in type/infer-effect.kk (nicefy-effect/realias-type)
 

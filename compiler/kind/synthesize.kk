@@ -1,6 +1,6 @@
 module compiler/kind/synthesize
 
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/common/failure
 import compiler/common/color-scheme
 import compiler/common/range
@@ -31,27 +31,27 @@ import compiler/kind/infer-kind
 import compiler/kind/infer-effect
 import compiler/kind/unify
 import compiler/static/binding-groups
-import std/data/rb-set
+import std/data/set
 import std/data/sort
-import std/data/rb-map
+import std/data/map
 // Synthesized definitions for data types: copy/accessors/testers/tags and lazy machinery.
 // Split out of kind/infer.kk (upstream this all lives in Kind/Infer.hs) to speed up type checking.
 // Ported as of 2026-01-29; approx upstream baseline commit 486ef0d of Kind/Infer.hs (backfilled 2026-07-23; synced 2026-07-23)
 
-alias lazyExpr = (name, syntax/syntax/expr<ktype>)
+alias lazy-expr = (name, syntax/syntax/expr<ktype>)
 
 // resolve a promoted user type to a ktype; provided by kind/infer.kk
 // (avoids a circular dependency on the kind-inference of type expressions)
 pub effect lazy-resolve
   fun lazy-resolve-type(tp: user-type, rng: range): ktype
 
-pub fun syn-typedef-groups(tdgs: list<core/core/typedef-group>, lazyExprs: list<lazyExpr>)
+pub fun syn-typedef-groups(tdgs: list<core/core/typedef-group>, lazyExprs: list<lazy-expr>)
   tdgs.flatmap(_.syn-typedef-group(lazyExprs))
 
-fun syn-typedef-group(tdg: core/core/typedef-group, lazyExprs: list<lazyExpr>): _ syntax/syntax/def-groups<ktype>
+fun syn-typedef-group(tdg: core/core/typedef-group, lazyExprs: list<lazy-expr>): _ syntax/syntax/def-groups<ktype>
   tdg.flatmap(_.syn-typedef(lazyExprs))
 
-fun syn-typedef(td: core/core/typedef, lazyExprs: list<lazyExpr>): _ list<syntax/syntax/def-group<ktype>>
+fun syn-typedef(td: core/core/typedef, lazyExprs: list<lazy-expr>): _ list<syntax/syntax/def-group<ktype>>
   match td
     core/core/Synonym -> []
     Data(di) | di.name.is-hidden-name -> []
@@ -351,7 +351,7 @@ noinline fbip fun stream/lazy-eval-locked( s : stream<a>,recurse : bool ) : _ st
     _                  -> s
 ```
 */
-fun syn-lazy-eval-locked(les : list<lazyExpr>): _ list<compiler/syntax/syntax/def-group<ktype>>
+fun syn-lazy-eval-locked(les : list<lazy-expr>): _ list<compiler/syntax/syntax/def-group<ktype>>
   val di = data-info
   val xrng = di.range 
   val rng = xrng.hide

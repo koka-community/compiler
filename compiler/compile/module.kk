@@ -24,16 +24,16 @@ import compiler/core/core
 import compiler/core/parse
 import compiler/static/fixity-resolve
 import compiler/core/borrowed
-import std/data/rb-map
+import std/data/map
 
 // the definitions imported from compiled module interfaces
 pub struct definitions
   defs-gamma: gamma
-  defs-kgamma: kGamma
+  defs-kgamma: k-gamma
   defs-synonyms: synonyms
   defs-newtypes: newtypes
-  fixities: fixities = rb-map/empty()
-  borrowed: borrowed = rb-map/empty()
+  fixities: fixities = map/empty()
+  borrowed: borrowed = map/empty()
 
 pub fun defs-null(): definitions
   Definitions(assumption/empty, kgamma/empty, synonyms/empty, newtypes/empty)
@@ -76,11 +76,11 @@ pub fun defs-from-modules-g(modgs: list<(core, gamma)>): _ definitions
     // unionLeftBias g2 g1` -- the LATER module's entries come FIRST in each
     // key's candidate list (visible in ambiguity hints, e.g.
     // static/wrong/alias1's "can refer to either" order)
-    mods.map(core/extract-typedefs).foldl(rb-map/empty(), fn(acc, g) g.qname-map/union-left-bias(acc)),
+    mods.map(core/extract-typedefs).foldl(map/empty(), fn(acc, g) g.qname-map/union-left-bias(acc)),
     mods.map(core/extract-synonyms).foldl(synonyms/empty, synonyms/compose),
     mods.map(core/extract-newtypes).foldl(newtypes/empty, newtypes/compose),
     fixities-new(mods.flatmap(fn(c) c.fix-defs.map(fn(fd) (fd.def-name, fd.f)))),
-    mods.foldl(rb-map/empty()) fn(b, c) c.core/extend(b))
+    mods.foldl(map/empty()) fn(b, c) c.core/extend(b))
 
 // An import map where every loaded module maps to itself
 pub fun import-map-from-modules(mods: list<name>): _ import-map

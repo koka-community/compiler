@@ -9,7 +9,7 @@
 module compiler/common/range
 
 import std/os/path
-import compiler/lib/pprint
+import pretty/pprint
 
 pub value struct source 
   name: string
@@ -125,26 +125,33 @@ pub fun show-full-pos(p: pos, ?align-width: int): string
 // about 67 million lines
 val big-line: int = 2.pow(26)
 
+// Lines from `big-line` on belong to the interpreter's input and show relative to it.
 pub fun show-line(line: int)
-  if line > big-line then
+  if line >= big-line then
     "(" ++ (line - big-line).show ++ ")"
   else if line <= 0 then
     "1"
   else
     line.show
 
-pub fun chars/pos-moves-8(p: pos, cs: list<char>): pos
+// Offsets and columns count utf-8 BYTES, as the lexer does: a multi-byte character advances both by its encoded length.
+pub fun chars/pos-moves8(p: pos, cs: list<char>): pos
   cs.foldl(p, pos-move8)
 
 pub fun sslice/pos-moves8(p: pos, cs: sslice): pos
   cs.string.list.foldl(p, pos-move8)
 
 pub fun pos-move8(Pos(s, o, l, c), ch: char): pos
-  val o1 = if o < 0 then o else o+1
+  val n = ch.utf8-length
+  val o1 = if o < 0 then o else o + n
   match ch
     '\t' -> Pos(s, o1, l, ((c + tab-size - 1) / tab-size)*tab-size +1)
     '\n' -> Pos(s, o1, l + 1, 1)
-    _    -> Pos(s, o1, l, c + 1)
+    _    -> Pos(s, o1, l, c + n)
+
+fun utf8-length(ch: char): int
+  val i = ch.int
+  if i < 0x80 then 1 elif i < 0x800 then 2 elif i < 0x10000 then 3 else 4
 
 val tab-size = 2 // Always 2 in koka
 
@@ -160,15 +167,14 @@ pub fun range/(==)(r1: range, r2: range): bool
 pub fun show-compact-range(r: range)
   "[" ++ r.start.show-pos(0) ++ "," ++ r.end.show-pos(0) ++ "]"
 
-// upstream `relativeToPath` (Common/File.hs), as applied by `showRange`: a
-// diagnostic's path is shown relative to the compile's working directory when
-// it sits underneath it, so a message reads `samples/learn/lazycons.kk`
-// instead of an absolute path.
+// A diagnostic's path relative to the compile's working directory when it
+// sits underneath it, so a message reads `samples/learn/lazycons.kk` instead
+// of an absolute path. Components are compared WHOLE, so `/foo/ba` is not a
+// prefix of `/foo/bar/x.kk`.
 //
-// Components are compared WHOLE, so `/foo/ba` is not a prefix of
-// `/foo/bar/x.kk`. Upstream rejoins with the platform separator; this rejoins
-// with `/` because `common/file.kk`'s `relative-to-path` reaches `pathsep()`,
-// which is `ndet` and would infect every `show`.
+// Upstream's `showRange` calls `relativeToPath` (Common/File.hs). This is a
+// string version because converting the source name to a `path` would
+// normalize it (resolving `..`) and change the name the diagnostic shows.
 fun relative-to-cwd(src: string, cwd: string): string
   fun parts(s: string): list<string>
     s.list.map(fn(c) if c == '/' || c == '\\' then '/' else c).string
@@ -186,7 +192,7 @@ fun relative-to-cwd(src: string, cwd: string): string
 
 pub fun show-range(r: range, cwd: path, endToo: bool)
   val path = 
-        if r.start.line > big-line then ""
+        if r.start.line >= big-line then ""
         else r.start.source.name.relative-to-cwd(cwd.string)
   if endToo then 
     path ++ "(" ++ r.start.show-pos(0) ++ "-" ++ r.end.show-pos(0) ++ ")"
@@ -209,8 +215,9 @@ pub val range/null = Range(pos/null, pos/null, False)
 pub fun range/is-null(r: range)
   r.start.off < 0 || r.end.off < 0
 
+// The start position only; `show-full-range` includes the source and the end.
 pub fun range/show(r: range): string
-  r.show-full-range("".path)
+  r.start.show
 
 pub fun show-full-range(r: range, cwd: path): string
   r.show-range(cwd, True)

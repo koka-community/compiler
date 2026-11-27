@@ -19,7 +19,7 @@ import compiler/type/assumption
 import compiler/type/pretty
 import compiler/kind/pretty
 import compiler/kind/kind
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/lib/json
 import compiler/lib/log
 import compiler/lsp/jsonrpc

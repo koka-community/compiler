@@ -212,7 +212,7 @@ pub type con-info
     singleton: bool, // only constructor of this type
     orderedParams: list<(name, ktype)>, // fields ordered by size
     valueRepr: value-repr,
-    mblazy: maybe<fipT>, // also Just for indirection nodes
+    mblazy: maybe<fip-t>, // also Just for indirection nodes
     tag: int,
     vis: visibility,
     doc: string
@@ -233,7 +233,7 @@ pub fun coninfo/scan-count(c: con-info)
 pub fun coninfo/is-lazy(c: con-info): bool
   c.mblazy.is-just
 
-pub fun coninfo/lazy-fip(c: con-info): fipT
+pub fun coninfo/lazy-fip(c: con-info): fip-t
   match c.mblazy
     Just(fp) -> fp
     Nothing -> noFip

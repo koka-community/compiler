@@ -6,7 +6,7 @@ import compiler/common/range
 import compiler/common/name
 import compiler/common/name-prim
 import compiler/common/unique
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/common/syntax
 import compiler/type/type
 import compiler/type/kind
@@ -261,9 +261,9 @@ fun boxed-tv()
 fun type-box(k: kind)
   TCon(TypeCon(nameTpBox, k))
 
-type cType
+type c-type
   CBox
-  CFun(args: list<cType>, res: cType)
+  CFun(args: list<c-type>, res: c-type)
   CData
 
 fun c-type(k: ktype)
@@ -275,14 +275,14 @@ fun c-type(k: ktype)
     TVar -> CBox
     TSyn(_, _, t) -> t.c-type
 
-fun ct/(==)(c1: cType, c2: cType): div bool
+fun ct/(==)(c1: c-type, c2: c-type): div bool
   match (c1, c2)
     (CBox, CBox) -> True
     (CData, CData) -> True
     (CFun(args1, res1), CFun(args2, res2)) -> args1 == args2 && res1 == res2
     _ -> False
 
-fun (!=)(c1: cType, c2: cType): div bool
+fun (!=)(c1: c-type, c2: c-type): div bool
   !(c1 == c2)
 
 val type-boxStar = kindStar.type-box

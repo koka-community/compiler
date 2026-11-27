@@ -333,9 +333,9 @@ extern unsafe-reyield-prim(yld : any) : e a
   js "_reyield"
 
 pub fun yield-capture() : e yield-context
-  Yield-context(yield-capture-prim())
+  YieldContext(yield-capture-prim())
 
-pub fun unsafe-reyield(Yield-context(yld) : yield-context ) : e a
+pub fun unsafe-reyield(YieldContext(yld) : yield-context ) : e a
   unsafe-reyield-prim(yld)
 
 
@@ -603,7 +603,7 @@ noinline fun under1x( ev : ev<h>, op : a -> e b, x : a ) : e b
   y
 
 pub fun clause-control-raw1( op : (x:a, r: resume-context<b,e,e0,r>) -> e r ) : clause1<a,b,h,e,r>
-  Clause1(fn(m,_ev,x){ yield-to(m, fn(k){ op(x,Resume-context(k)) } ) } )
+  Clause1(fn(m,_ev,x){ yield-to(m, fn(k){ op(x,ResumeContext(k)) } ) } )
 
 fun get( ref: ref<h,a>) : <read<h>,div> a
   !ref
@@ -611,41 +611,64 @@ fun get( ref: ref<h,a>) : <read<h>,div> a
 inline extern unsafe-st(f : () -> <st<global>|e> a ) : (() -> e a)
   inline "#1"
 
+// The `resume` of a `ctl` clause is valid while the clause runs; when the clause returns without having resumed, the resumption is finalized (its `finally` clauses run).
+// Calling a `resume` that escaped the clause when the clause is not running is a fatal error: a clause whose `resume` outlives it is a `raw ctl`, which finalizes explicitly.
+// The clause itself may yield to an operation whose handler resumes it more than once, so several copies of the clause can exist, each with its own state.
+// The cell holds the state of the innermost running copy, or `Inactive` when none runs: each run of a copy (a segment, up to its return or its next yield) installs its state and restores the previous one when it ends.
 type protect-state<b,r,e>
-  NeedsFinalization(k : resume-result<b,r> -> e r)
-  NoFinalization
+  NeedsFinalization(k : resume-result<b,r> -> e r)  // a copy is running and has not resumed
+  NoFinalization                                     // a copy is running and has resumed
+  Inactive                                           // no copy is running
 
-fun protect-prompt( resumed : ref<global,protect-state<b,r,e>>, res : r) : e r
+// The segment of a copy of the clause ended with `res`; `prev` is the state to restore.
+fun protect-prompt( resumed : ref<global,protect-state<b,r,e>>, res : r, prev : protect-state<b,r,e> ) : e r
   // `@Hnodiv` is consumed by the divergence checker via implicit parameters:
   // because `resumed` lives in `global` state we'd otherwise be flagged as
   // potentially divergent through self-reference; binding `@Hnodiv` here
   // satisfies the checker that this prompt does not introduce divergence.
   val hdiv=@Hnodiv
-  val did-resume : some<b,r,e> protect-state<b,r,e> = (unsafe-st{ !resumed })()
-  match did-resume
-    NoFinalization -> // resumed already, no need to protect
-      res
+  val state : some<b,r,e> protect-state<b,r,e> = (unsafe-st{ !resumed })()
+  (unsafe-st{ resumed := prev })()
+  if yielding-non-final() then
+    // the copy yields to an operation: each resumption of it runs a new segment with the state it has now
+    yield-cont fn(cont,x)
+      val prev' : some<b,r,e> protect-state<b,r,e> = (unsafe-st{ !resumed })()
+      (unsafe-st{ resumed := state })()
+      protect-prompt(pretend-decreasing(resumed),cont(x),prev')
+  else match state
     NeedsFinalization(k) ->
       if !yielding() then
-        // otherwise, if we are not yielding, resume k with finalization (to run all finally clauses)
+        // the copy returned without resuming: resume k with finalization (to run all finally clauses)
         k(Finalize(res))
-      elif yielding-non-final() then
-        // if we yield non-final to an operation, extend the continuation with this prompt (so we keep protecting after being resumed)
-        yield-cont( fn(cont,x) protect-prompt(pretend-decreasing(resumed),cont(x)) )
       else
         // if we are in a final yield, capture it, resume k with finalization, and reyield
         val yld = yield-capture()
         k(Finalize(res))
         if yielding() return yield-extend( fn(_x) unsafe-reyield(yld) ) // yikes, a finally clause is itself yielding...
         unsafe-reyield(yld)
+    _ -> res
+
+// Run the first segment of the clause.
+fun protect-segment( resumed : ref<global,protect-state<b,r,e>>, state : protect-state<b,r,e>, run : () -> e r ) : e r
+  val hdiv=@Hnodiv  // see `protect-prompt`
+  val prev : some<b,r,e> protect-state<b,r,e> = (unsafe-st{ !resumed })()
+  (unsafe-st{ resumed := state })()
+  protect-prompt(resumed,run(),prev)
+
+inline fun protect-resume( resumed : ref<global,protect-state<b,r,e>>, k : resume-result<b,r> -> e r, ret : b ) : e r
+  val hdiv=@Hnodiv  // see `protect-prompt`
+  val state : some<b,r,e> protect-state<b,r,e> = (unsafe-st{ !resumed })()
+  match state
+    Inactive -> resume-final()
+    _ ->
+      (unsafe-st{ resumed := NoFinalization })()
+      k(Deep(ret))
 
 fun protect( x : a, clause : (x:a, k: b -> e r) -> e r, k : resume-result<b,r> -> e r ) : e r
-  val resumed = (unsafe-st{ref(NeedsFinalization(k))})()
+  val resumed = (unsafe-st{ref(Inactive)})()
   fun kprotect(ret)
-    (unsafe-st{resumed := NoFinalization})()
-    k(Deep(ret))
-  val res = clause(x,kprotect)
-  protect-prompt(resumed,res)
+    protect-resume(resumed,k,ret)
+  protect-segment(resumed,NeedsFinalization(k),fn() clause(x,kprotect))
 
 /*
 pub fun clause-control1( clause : (x:a, k: b -> e r) -> e r ) : clause1<a,b,e,r>
@@ -695,7 +718,7 @@ inline fun under0( ev : ev<i>, op : () -> e b) : e b
   y
 
 pub fun clause-control-raw0( op : resume-context<b,e,e0,r> -> e r ) : clause0<b,h,e,r>
-  Clause0(fn(m,_ev){ yield-to(m, fn(k){ op(Resume-context(k)) } ) })
+  Clause0(fn(m,_ev){ yield-to(m, fn(k){ op(ResumeContext(k)) } ) })
 
 /*
 pub fun clause-control0( op : (b -> e r) -> e r ) : clause0<b,e,r>
@@ -733,19 +756,17 @@ fun under2( ev : ev<h>, op : (a1,a2) -> e b, x1 : a1, x2 : a2 ) : e b
   z
 
 fun protect2( x1 : a1, x2:a2, clause : (x:a1,x:a2, k: b -> e r) -> e r, k : resume-result<b,r> -> e r ) : e r
-  val resumed = (unsafe-st{ref(NeedsFinalization(k))})()
+  val resumed = (unsafe-st{ref(Inactive)})()
   fun kprotect(ret)
-    (unsafe-st{ resumed := NoFinalization })()
-    k(Deep(ret))
-  val res = clause(x1,x2,kprotect)
-  protect-prompt(resumed,res)
+    protect-resume(resumed,k,ret)
+  protect-segment(resumed,NeedsFinalization(k),fn() clause(x1,x2,kprotect))
 
 pub fun clause-control2( clause : (x1:a1, x2:a2, k: b -> e r) -> e r ) : clause2<a1,a2,b,h,e,r>
   Clause2(fn(m,_ev,x1,x2){ yield-to(m, fn(k){ protect2(x1,x2,clause,k) }) })
 
 
 pub fun clause-control-raw2( op : (x1:a1, x2:a2, r: resume-context<b,e,e0,r>) -> e r ) : clause2<a1,a2,b,h,e,r>
-  Clause2(fn(m,_ev,x1,x2){ yield-to(m, fn(k){ op(x1,x2,Resume-context(k)) } ) })
+  Clause2(fn(m,_ev,x1,x2){ yield-to(m, fn(k){ op(x1,x2,ResumeContext(k)) } ) })
 
 pub fun clause-tail2<e,r,h,a1,a2,b>(op : (a1,a2) -> e b) : clause2<a1,a2,b,h,e,r>
   Clause2(fn(m,ev,x1,x2){ under2(ev,op,x1,x2) })

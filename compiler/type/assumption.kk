@@ -14,19 +14,19 @@ import compiler/core/core
 import compiler/core/corevar
 import compiler/type/pretty
 import compiler/common/nice
-import compiler/lib/pprint
-import std/data/rb-set
+import pretty/pprint
+import std/data/set
 import std/os/path
 import std/data/sort
-import std/data/rb-map
+import std/data/map
 // Updated to #ddac17b on 11/19/25
 pub infixr 5 (|->)
 
 pub type name-info
   InfoVal(vis: visibility, cname: name, typ: scheme, scopeDepthX: int, range: range, isVar: bool, allowImplicitMaskX: bool, doc: string)
-  InfoFun(vis: visibility, cname: name, typ: scheme, scopeDepthX: int, arity: (int, int), fipt: fipT, range: range, doc: string)
+  InfoFun(vis: visibility, cname: name, typ: scheme, scopeDepthX: int, arity: (int, int), fipt: fip-t, range: range, doc: string)
   InfoCon(vis: visibility, typ: scheme, repr: con-repr, conInfo: con-info, range: range, doc: string)
-  InfoExternal(vis: visibility, cname: name, typ: scheme, format: string, fipt: fipT, range: range, doc: string)
+  InfoExternal(vis: visibility, cname: name, typ: scheme, format: string, fipt: fip-t, range: range, doc: string)
   InfoImport(vis: visibility, typ: scheme, nameAlias: name, fullName: name, range: range)
 
 pub fun tp/update-type(ni : name-info, tp: scheme): name-info
@@ -133,7 +133,7 @@ pub fun doc(info)
     assumption/InfoExternal(doc=d) -> d
     _ -> ""
 
-pub fun fipT(info: name-info)
+pub fun fip-t(info: name-info)
   match info
     InfoFun(fipt=fipt) -> fipt
     assumption/InfoExternal(fipt=fipt) -> fipt
@@ -166,13 +166,13 @@ pub fun core-expr(info: name-info, qname: name)
 // Due to overloading there may be multiple entries for the same qualified name
 
 pub alias gamma = name-map<list<(name, name-info)>>
-pub val empty:gamma = rb-map/empty()
+pub val empty:gamma = map/empty()
 
 pub fun schemes(g: gamma): list<scheme>
   g.assumption/list.map(_.snd.typ)
 
 pub fun single(name: name, ni: name-info)
-  rb-map/set(assumption/empty, name, [(name, ni)])
+  map/set(assumption/empty, name, [(name, ni)])
 
 pub fun gamma/new(xs: list<(name, name-info)>): gamma
   extends(empty, xs)
@@ -183,7 +183,7 @@ pub fun extends(g: gamma, ls: list<(name,name-info)>): gamma
 pub fun extend(g: gamma, name: name, ni: name-info)
   // note: linear-map update calls f(old, new); upstream `M.insertWith combine key [new] old`
   // computes `new ++ old` — the NEW entry comes first
-  rb-map/update(g, name.unqualify-full, [(name, ni)], fn(old:list<_>, new) new ++ old) // TODO: Check for overlapping type schemes?
+  map/update(g, name.unqualify-full, [(name, ni)], fn(old:list<_>, new) new ++ old) // TODO: Check for overlapping type schemes?
 
 // a single-entry gamma keyed by the full stem
 pub fun gamma/single(name: name, ni: name-info): gamma
@@ -258,20 +258,20 @@ pub fun map(g: gamma, f: (name-info -> name-info)): gamma
   g.map(fn(k, xs) xs.list/map(fn((n, ni)) (n, f(ni))))
 
 pub fun list(g: gamma): list<(name, name-info)>
-  rb-map/list(g).map(snd).concat.sort(?(<)=fn((n, _), (n2, _)) n.name/name/cmp(n2).is-lt)
+  map/list(g).map(snd).concat.sort(?(<)=fn((n, _), (n2, _)) n.name/name/cmp(n2).is-lt)
 
 pub fun remove(g: gamma, name: name)
-  rb-map/remove(g, name.unqualify)
+  map/remove(g, name.unqualify)
 
 pub fun union(g1: gamma, g2: gamma)
-  rb-map/union-with(g2, g1, fn(xs1: list<_>, xs2) xs1 ++ xs2)
+  map/union-with(g2, g1, fn(xs1: list<_>, xs2) xs1 ++ xs2)
 
 pub fun unions(gs: list<gamma>)
   // O(n log n) key-sorted merge instead of the O(n^2) `foldl union` (which is a
   // hot path when combining the ~40 stdlib module gammas in defs-from-modules).
   // `union(g1,g2) = g2.union-with(g1, ++)` puts g2's entries first for a shared
   // key, so unions-with (which orders later maps first) reproduces the same order.
-  rb-map/unions-with(gs, fn(xs1: list<_>, xs2) xs1 ++ xs2)
+  map/unions-with(gs, fn(xs1: list<_>, xs2) xs1 ++ xs2)
 
 // Filter out signature belonging to a module
 pub fun filter(g: gamma, mod: name)
@@ -335,7 +335,7 @@ pub fun create-name-infoX(vis, name, scopeDepth: int, sort, rng, tp, doc)
 pub fun create-name-infoEX(vis, name, scopeDepth: int, sort, allowImplicitMask, rng, tp, doc)
   val d = if scopeDepth == 0 && name.is-in-default-namespace then -1 else scopeDepth
   match sort
-    DefFun(_, fipT) -> InfoFun(vis, name, tp, d, tp.arity, fipT, rng, doc)
+    DefFun(_, fip-t) -> InfoFun(vis, name, tp, d, tp.arity, fip-t, rng, doc)
     DefVar -> InfoVal(vis, name, tp, d, rng, True, False, doc)
     _ -> InfoVal(vis, name, tp, d, rng, False, allowImplicitMask, doc)
 
@@ -349,8 +349,8 @@ pub fun arity(tp: ktype): _ (int, int)
 
 pub fun extract-external(external: external, update-vis)
   match external
-    External(name, tp, _, body, vis, fipT, nameRng, doc) ->
-      gamma/single(name, InfoExternal(update-vis(vis), name, tp, body, fipT, nameRng, doc))
+    External(name, tp, _, body, vis, fip-t, nameRng, doc) ->
+      gamma/single(name, InfoExternal(update-vis(vis), name, tp, body, fip-t, nameRng, doc))
     _ -> assumption/empty
 
 // TODO: ftc

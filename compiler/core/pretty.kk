@@ -9,7 +9,7 @@ import compiler/common/color-scheme
 import compiler/common/syntax
 import compiler/common/nice
 import compiler/common/name-collections
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/core/core
 import compiler/kind/kind
 import compiler/kind/pretty
@@ -21,7 +21,7 @@ import compiler/type/pretty
 import compiler/platform/config
 import std/num/float64
 import std/core/undiv
-import std/data/rb-map
+import std/data/map
 
 // Show pretty names rather than numbers
 
@@ -301,7 +301,7 @@ fun pretty-expr(ex: expr)
         tab(branches.pretty-branches) |--| "}".text
       doc.pparens(pp-prec, precTypeTop) 
 
-fun pretty-var(tn: tName)
+fun pretty-var(tn: t-name)
   // in coreIface mode names print in the EXPLICIT /# form
   // (prettyCoreName), which is what marks a LOCAL qualifier apart from a
   // module path segment.
@@ -328,7 +328,7 @@ fun pretty-pattern-type(pat: pattern, tp: ktype)
   val doc = override-prec(pp-prec - 1, {pat.pretty-pattern})
   doc |.| (if pp-env.coreShowTypes then " :".text |+| tp.pretty-type else empty)
 
-fun pretty-con-name(tname: tName)
+fun pretty-con-name(tname: t-name)
   tname.get-name.pretty
 
 // upstream threads its (functional) pretty env through the PatCon argument
@@ -389,7 +389,7 @@ fun show-xchar(c: char): string
 
 // Pretty-printers for non-core terms
 
-fun pretty-tname(TName(nm, t): tName)
+fun pretty-tname(TName(nm, t): t-name)
   // Use pretty-core-name unconditionally (the /# form)
   nm.pretty-core-name(colors) |.| ":".text |+| t.pp-type
 
@@ -449,7 +449,7 @@ fun extract-synonym(tp: ktype): _ name-map<syn-info>
     TSyn(syn, args, body) ->
       val syns = Cons(body, args).extract-synonyms
       match syn.info
-        Just(i) -> rb-map/set(syns, i.name, i)
+        Just(i) -> map/set(syns, i.name, i)
         Nothing -> syns
     TApp(c, args) -> Cons(c, args).extract-synonyms
     TFun(args, eff, res) -> Cons(res, Cons(eff, args.map(snd))).extract-synonyms

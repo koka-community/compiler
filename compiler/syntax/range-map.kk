@@ -10,7 +10,7 @@
 module compiler/syntax/range-map
 
 import compiler/common/failure
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/common/range
 import compiler/common/name
 import compiler/common/name-prim
@@ -20,7 +20,7 @@ import compiler/kind/kind
 import compiler/type/typevar
 import compiler/type/pretty
 import compiler/syntax/lexeme
-import std/data/rb-set
+import std/data/set
 import std/data/sort
 
 pub infixr 5 (|->)

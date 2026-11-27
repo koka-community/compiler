@@ -28,13 +28,13 @@ import compiler/core/borrowed
 import compiler/core/pretty
 import compiler/backend/js/from-core
 import compiler/backend/c/from-core
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/compile/options
 import compiler/common/file
 import compiler/lib/log
 import compiler/compile/link
 import std/os/env
-import std/data/rb-map
+import std/data/map
 import compiler/common/name-collections
 
 // The pretty-environment fields that come
@@ -214,7 +214,7 @@ pub fun code-gen(fl: flags, nt: newtypes, brw: borrowed, mbMain: maybe<(name, bo
             // the linker does not create the directory of `-o out/sub/app`
             if fl.outFinalPath != "" then ensure-dir(exePath.dirname.path)
             phase("linking", exePath.string)
-            match c-link(fl, C-unit(cBase.change-ext("c"), entryEimports), exePath, fl.kklibIncludeDir.path, cImports, clibs, csyslibs)
+            match c-link(fl, CUnit(cBase.change-ext("c"), entryEimports), exePath, fl.kklibIncludeDir.path, cImports, clibs, csyslibs)
               Nothing ->
                 phase("created", exePath.string)
                 on-exe(exePath)

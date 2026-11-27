@@ -43,15 +43,15 @@ import compiler/core/analysis-match
 import compiler/core/analysis-cctx
 import compiler/core/binding-groups
 import compiler/core/divergent
-import compiler/lib/pprint
+import pretty/pprint
 import std/num/float64
-import std/data/rb-set
+import std/data/set
 import std/data/sort
 import std/core/undiv
 import std/core/unsafe
 import compiler/type/infer-effect
 import compiler/type/infer-support
-import std/data/rb-map
+import std/data/map
 
 // used by definitions on both sides of the split
 pub alias infer-eff-full = infer-full

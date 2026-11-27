@@ -2,7 +2,7 @@
 module compiler/backend/c/dup-drops
 
 import compiler/core/core
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/type/type
 import compiler/common/name
 import compiler/backend/c/helpers

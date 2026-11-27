@@ -1,7 +1,7 @@
 // Updated as of 7/23/26: Commit dd91082
 module compiler/core/fun-lift
 
-import compiler/lib/pprint
+import pretty/pprint
 import compiler/common/failure
 import compiler/common/name
 import compiler/common/range
@@ -16,7 +16,7 @@ import compiler/type/assumption
 import compiler/core/core
 import compiler/core/corevar
 import compiler/platform/config
-import std/data/rb-set
+import std/data/set
 
 pub fun lift-functions()
   with handle-fun-lift()
@@ -130,10 +130,10 @@ fun lift-branch(Branch(pat, guards): branch)
 fun lift-guard(Guard(test, expr): guard)
   Guard(test.lift-expr(False), expr.lift-expr(False))
 
-fun make-def(fvs: list<tName>, tvs: list<type-var>, pinfos: list<param-info>, origName: tName, (expr, doc): (expr, string))
+fun make-def(fvs: list<t-name>, tvs: list<type-var>, pinfos: list<param-info>, origName: t-name, (expr, doc): (expr, string))
   val dnames = current-def-names()
   val (name, inl) = unique-name-current-def()
-  fun unwild(TName(nm, tp): tName)
+  fun unwild(TName(nm, tp): t-name)
     TName(if nm.is-wildcard then nm.un-wildcard else nm, tp) 
   val (tpars, pars, eff, body) = match expr
     TypeLam(tpars, Lam(pars, eff, lbody)) -> (tpars, pars.map(unwild), eff, lbody)

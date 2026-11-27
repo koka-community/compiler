@@ -12,11 +12,11 @@ module compiler/common/name
 import compiler/common/color-scheme
 import compiler/common/range
 import compiler/common/failure
-import std/pretty/printer
-import compiler/lib/pprint
+import pretty/printer
+import pretty/pprint
 import std/core/undiv
 import std/num/int32
-import std/data/rb-map
+import std/data/map
 
 
 // | Names defined by the user.
@@ -254,18 +254,18 @@ pub fun pretty(n: name): doc
     then ("?" ++ s.list.drop(pre.count).string).text
     else s.text
 
-fun pretty-name-ex(Name(m, _, l, _, n, _, _): name, lsep: string, cs: colorScheme): doc // explicit /# if needed
+fun pretty-name-ex(Name(m, _, l, _, n, _, _): name, lsep: string, cs: color-scheme): doc // explicit /# if needed
   val ln = join(l, n.wrap-id)
   if m == "" then ln.text
   else 
    (m.text |.| (if ln.is-empty then pprint/empty elif l.is-empty then "/".text else lsep.text)).color(cs.colorModule)
            |.| ln.text
 
-pub fun pretty-name(nm: name, cs: colorScheme): _ doc // not explicit /#
+pub fun pretty-name(nm: name, cs: color-scheme): _ doc // not explicit /#
   if nm.is-implicit-param-name then "?".text |.| nm.from-implicit-param-name.requalify-locally.pretty-name-ex("/", cs)
   else nm.pretty-name-ex("/", cs)
 
-pub fun pretty-core-name(nm: name, cs: colorScheme): doc // explicit /# if needed
+pub fun pretty-core-name(nm: name, cs: color-scheme): doc // explicit /# if needed
   nm.pretty-name-ex("/#", cs)
 
 pub fun pretty-local-name(Name(_, _, l, _, n, _, _): name): doc
@@ -506,12 +506,14 @@ pub fun remove-common-prefix(mname: name, n: name): name
 pub fun split-name(n: name): list<string>
   (n.split-module-name ++ n.split-local-qual-name ++ [n.nameStem]).filter(fn(x) x != "")
 
+// PascalCase: `leap-adjust` becomes `LeapAdjust`
 pub fun to-constructor-name(n: name): name
-  n.name-map-stem fn(stem)
-    match stem.list
+  fun upper(part: string): string
+    match part.list
       Cons('@', Cons(c, cs)) -> Cons('@', Cons(c.to-upper, cs)).string // keep hidden names hidden
       Cons(c, cs) -> Cons(c.to-upper, cs).string
-      _ -> stem
+      _ -> part
+  n.name-map-stem fn(stem) stem.split("-").map(upper).join
 
 pub fun to-var-name(n: name): name 
   fun to-lowers(l: list<char>): list<char>

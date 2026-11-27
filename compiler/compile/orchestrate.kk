@@ -58,8 +58,8 @@ import compiler/compile/link
 import std/os/dir
 import compiler/common/file
 import compiler/static/binding-groups
-import compiler/lib/pprint
-import std/data/rb-map
+import pretty/pprint
+import std/data/map
 import compiler/common/name-collections
 import compiler/compile/rpc
 import compiler/lib/log
@@ -108,7 +108,7 @@ pub fun compile-module-isolated(fl: flags, srcPath: path, outBase: path, isEntry
   // escaping to a worker's caller could not be handled there anyway
   match try({ compile-module-body(fl, srcPath, outBase, isEntry, mods, mbModName, stage = stage) })
     Ok(o)      -> o
-    Error(exn) -> Mod-outcome(Left(exn.message), [])
+    Error(exn) -> ModOutcome(Left(exn.message), [])
 
 pub fun compile-module-body(fl: flags, srcPath: path, outBase: path, isEntry: bool,
                         mods: bmodules, mbModName: maybe<name> = Nothing,
@@ -167,13 +167,13 @@ pub fun isolate-diagnostics(fl: flags, overlay: list<(path, vfile)>, action: () 
     final ctl parse-error(e: string, r: range)
       msgs := msgs ++ [r.show-range(cwd, False) ++ ": parse error: " ++ e]
       take-warnings()
-      Mod-outcome(Left("parse error"), msgs, emits, wmsgs, phs)
+      ModOutcome(Left("parse error"), msgs, emits, wmsgs, phs)
   with collapse-div
   with handler
     final ctl add-errors(errs: errors)
       errs.take(fl.maxErrors).foreach fn(e) msgs := msgs ++ [e.err/show(cwd)]
       take-warnings()
-      Mod-outcome(Left("type error"), msgs, emits, wmsgs, phs)
+      ModOutcome(Left("type error"), msgs, emits, wmsgs, phs)
     fun add-warnings(ws: warnings)
       warns := warns ++ ws
     fun add-infos(is: warnings)
@@ -185,8 +185,8 @@ pub fun isolate-diagnostics(fl: flags, overlay: list<(path, vfile)>, action: () 
     take-warnings()
     Right(m)
   match r
-    Ok(res) -> Mod-outcome(res, msgs, emits, wmsgs, phs)
-    Error(exn) -> Mod-outcome(Left(exn.message), msgs, emits, wmsgs, phs)
+    Ok(res) -> ModOutcome(res, msgs, emits, wmsgs, phs)
+    Error(exn) -> ModOutcome(Left(exn.message), msgs, emits, wmsgs, phs)
 
 // One clang run on a C-compile pool worker. A pool worker is a worker like any
 // other: it must not write to the console while the front end is running, so
@@ -320,7 +320,7 @@ pub fun compile-graph-rpc(fl: flags, out-dir: path, search-dirs: list<path>,
                       // for a file whose modules had not changed. The caller is
                       // responsible for only passing entries that are still valid
                       // (see `check-file-ex`).
-                      preloaded: bmodules = rb-map/empty(),
+                      preloaded: bmodules = map/empty(),
                       // Modules that are ROOTS of this build rather than
                       // dependencies: compiled as ENTRIES (their own `main`,
                       // their own executable).
@@ -338,9 +338,9 @@ pub fun compile-graph-rpc(fl: flags, out-dir: path, search-dirs: list<path>,
   val adj = dcache.list.map(fn((nm, (_, _, ds, _))) (nm, ds.map(fst)))
   val cycle = import-cycles(adj).head.default([])
   if !cycle.is-nil then
-    (rb-map/empty(),
+    (map/empty(),
      [(cycle.head.default(name/nil),
-       Mod-outcome(Left("recursive imports: " ++ cycle.map(show-plain).join(" -> ")), []))])
+       ModOutcome(Left("recursive imports: " ++ cycle.map(show-plain).join(" -> ")), []))])
   else
     val todo0 = stale-set.filter-map fn(nm)
       match dcache.lookup(nm)
@@ -392,7 +392,7 @@ pub fun compile-graph-rpc(fl: flags, out-dir: path, search-dirs: list<path>,
         spawn-thread fn()
           val client = rpc-client(requests.sender)
           fun work-loop(prev: maybe<(name, mod-outcome)>): <async,ioc> ()
-            match call(client, Orch-request(prev))
+            match call(client, OrchRequest(prev))
               Work(nm, src, env, stage) ->
                 trace-orch("dispatch  " ++ nm.show-plain ++ " env=" ++ env.list.length.show)
                 val t0 = cpu-ms()
@@ -444,11 +444,11 @@ pub fun compile-graph-rpc(fl: flags, out-dir: path, search-dirs: list<path>,
       // Roots (entries) still compile in one stage: they come last anyway, and
       // their `@expr` wrapper pass re-type-checks.
       var ready-mods : bmodules := preloaded           // interface or COMPILED
-      var typed : bmodules := rb-map/empty()          // `ModTyped`: checked, not yet finished
+      var typed : bmodules := map/empty()          // `ModTyped`: checked, not yet finished
       var pending-tc := todo0.filter(fn((nm, _, _, _)) !roots.any(fn(r) r == nm))
       var pending-roots := todo0.filter(fn((nm, _, _, _)) roots.any(fn(r) r == nm))
       var pending-finish := []                         // type checked, waiting for a compiled closure
-      var tc-outcomes : name-map<mod-outcome> := rb-map/empty()
+      var tc-outcomes : name-map<mod-outcome> := map/empty()
       var in-flight := 0
       var waiting : list<xsender<orch-reply>> := []
       var collected : list<(name, mod-outcome)> := []
@@ -471,7 +471,7 @@ pub fun compile-graph-rpc(fl: flags, out-dir: path, search-dirs: list<path>,
         spawn-thread fn()
           val client = rpc-client(requests.sender)
           fun cc-loop(finished: bool): <async,ioc> ()
-            match call(client, Orch-request(Nothing, True, finished))
+            match call(client, OrchRequest(Nothing, True, finished))
               CcWork(u) ->
                 cc-compile-one(fl, u)
                 cc-loop(True)
@@ -656,7 +656,7 @@ pub fun compile-graph-rpc(fl: flags, out-dir: path, search-dirs: list<path>,
                       // hand this module's generated C to the pool right away
                       if cc-enabled then
                         match bm.bmod/cfile
-                          Just(cf) -> pending-cc := pending-cc ++ [C-unit(cf, c-unit-eimports(ready-mods, bm.bmod/core, fl.build-type))]
+                          Just(cf) -> pending-cc := pending-cc ++ [CUnit(cf, c-unit-eimports(ready-mods, bm.bmod/core, fl.build-type))]
                           Nothing -> ()
                     Left(_)   -> failed := failed ++ [nm]
               Nothing -> ()

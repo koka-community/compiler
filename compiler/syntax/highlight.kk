@@ -12,8 +12,8 @@ module compiler/syntax/highlight
 import compiler/common/color-scheme
 import compiler/common/range
 import compiler/common/name
-import std/pretty/printer
-import compiler/lib/pprint
+import pretty/printer
+import pretty/pprint
 import compiler/syntax/lexeme
 import compiler/syntax/lexer
 import compiler/syntax/layout

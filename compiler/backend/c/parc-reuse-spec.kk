@@ -12,7 +12,7 @@ import compiler/type/type
 import compiler/type/pretty
 import compiler/kind/newtypes
 import compiler/core/core
-import compiler/lib/pprint
+import pretty/pprint
 import std/core/undiv
 
 //--------------------------------------------------------------------------
@@ -87,7 +87,7 @@ fun ru-guard(g: guard): _ guard
 // Try to specialize an allocation at a reuse.
 // We will only do this if we can get the necessary ConInfo
 // and save at least a fourth of the necessary assignments.
-fun ru-specialize(reuseName: tName, info: var-info, conApp: expr): _ maybe<expr>
+fun ru-specialize(reuseName: t-name, info: var-info, conApp: expr): _ maybe<expr>
   match (conApp, info)
     (App(conx, args), InfoReuse(PatCon(patConName, patConPatterns))) ->
       match conx.extract-conx
@@ -105,7 +105,7 @@ fun ru-specialize(reuseName: tName, info: var-info, conApp: expr): _ maybe<expr>
         Nothing -> Nothing
     _ -> Nothing
 
-fun extract-conx(e: expr): maybe<(tName, con-repr)>
+fun extract-conx(e: expr): maybe<(t-name, con-repr)>
   match e
     Con(cname, repr) -> Just((cname, repr))
     TypeApp(Con(cname, repr), _) -> Just((cname, repr))
@@ -113,7 +113,7 @@ fun extract-conx(e: expr): maybe<(tName, con-repr)>
 
 // Move dups before the allocation and emit:
 // if (reuseName != NULL) { set tag and fields } else { allocate constructor without reuse }
-fun ru-spec-conx(reuseName: tName, conName: tName, conRepr: con-repr, conInfo: con-info, needsTag: bool, tag: int,
+fun ru-spec-conx(reuseName: t-name, conName: t-name, conRepr: con-repr, conInfo: con-info, needsTag: bool, tag: int,
                  resultType: ktype, makeConApp: (list<expr>) -> expr, matches: list<ru-match>): _ expr
   val (defss, assigns) = matches.map(ru-to-assign).unzip
   val fields = conInfo.params.map(fst)
@@ -165,14 +165,14 @@ fun ru-to-assign(m: ru-match): _ (list<def-group>, (expr, bool /* is match? */))
           val v = Var(TName(nm, expr.type-of), InfoNone)
           ([d], (v, False))
 
-fun gen-reuse-is-valid(reuseName: tName): expr
+fun gen-reuse-is-valid(reuseName: t-name): expr
   val typeReuseIsValid = TFun([(name/nil, typeReuse)], typeTotal, typeBool)
   App(Var(TName(nameReuseIsValid, typeReuseIsValid), InfoExternal("kk_likely(#1!=NULL)")), [Var(reuseName, InfoNone)])
 
 // gen-con-tag-scan-fields-assign tp conName reuseName [(field1,expr1)...(fieldN,exprN)]
 // generates:  c = (conName*)reuseName; c->scan_fsize = scan; c->tag = tag; c->field1 := expr1; ... ; c->fieldN := exprN; (tp*)(c)
 // (currently unused within this pass; exposed for the not-yet-ported ParcReuse.hs)
-pub fun gen-con-tag-scan-fields-assign(resultType: ktype, conName: tName, conRepr: con-repr, reuseName: tName, tag: int, scan: int, fieldExprs: list<(name, expr)>): _ expr
+pub fun gen-con-tag-scan-fields-assign(resultType: ktype, conName: t-name, conRepr: con-repr, reuseName: t-name, tag: int, scan: int, fieldExprs: list<(name, expr)>): _ expr
   val fieldTypes = fieldExprs.map(fn((nm, e)) (nm, e.type-of))
   val typeConFieldsAssign = TFun([(name/nil, reuseName.type-of), (name/nil, typeInt), (name/nil, typeInt)] ++ fieldTypes, typeTotal, resultType)
   App(Var(TName(nameConTagScanFieldsAssign, typeConFieldsAssign), InfoArity(0, fieldExprs.length + 2)),
@@ -180,7 +180,7 @@ pub fun gen-con-tag-scan-fields-assign(resultType: ktype, conName: tName, conRep
 
 // gen-con-tag-fields-assign tp conName reuseName [(field1,expr1)...(fieldN,exprN)]
 // generates:  c = (conName*)reuseName; c->tag = tag; c->field1 := expr1; ... ; c->fieldN := exprN; (tp*)(c)
-pub fun gen-con-tag-fields-assign(resultType: ktype, conName: tName, conRepr: con-repr, reuseName: tName, tag: int, fieldExprs: list<(name, expr)>): _ expr
+pub fun gen-con-tag-fields-assign(resultType: ktype, conName: t-name, conRepr: con-repr, reuseName: t-name, tag: int, fieldExprs: list<(name, expr)>): _ expr
   val fieldTypes = fieldExprs.map(fn((nm, e)) (nm, e.type-of))
   val typeConFieldsAssign = TFun([(name/nil, reuseName.type-of), (name/nil, typeInt)] ++ fieldTypes, typeTotal, resultType)
   App(Var(TName(nameConTagFieldsAssign, typeConFieldsAssign), InfoArity(0, fieldExprs.length + 1)),
@@ -188,7 +188,7 @@ pub fun gen-con-tag-fields-assign(resultType: ktype, conName: tName, conRepr: co
 
 // gen-con-fields-assign tp conName reuseName [(field1,expr1)...(fieldN,exprN)]
 // generates:  c = (conName*)reuseName; c->field1 := expr1; ... ; c->fieldN := exprN; (tp*)(c)
-pub fun gen-con-fields-assign(resultType: ktype, conName: tName, conRepr: con-repr, reuseName: tName, fieldExprs: list<(name, expr)>): _ expr
+pub fun gen-con-fields-assign(resultType: ktype, conName: t-name, conRepr: con-repr, reuseName: t-name, fieldExprs: list<(name, expr)>): _ expr
   val fieldTypes = fieldExprs.map(fn((nm, e)) (nm, e.type-of))
   val typeConFieldsAssign = TFun([(name/nil, reuseName.type-of)] ++ fieldTypes, typeTotal, resultType)
   App(Var(TName(nameConFieldsAssign, typeConFieldsAssign), InfoArity(0, fieldExprs.length + 1)),
@@ -213,7 +213,7 @@ fun extract-data-name(tp: ktype): _ maybe<name>
 //--------------------------------------------------------------------------
 
 // create a unique name specific to this module
-fun ru-unique-tname(tp: ktype): <unique> tName
+fun ru-unique-tname(tp: ktype): <unique> t-name
   TName(unique-name("ru"), tp)
 
 //--------------------------------------------------------------------------

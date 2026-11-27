@@ -25,7 +25,7 @@
 // rather than interleaved from several threads at once.
 module compiler/lib/log
 
-import std/pretty/printer
+import pretty/printer
 import compiler/common/color-scheme
 
 // Compiler OUTPUT that is part of the observable RESULT rather than commentary
@@ -88,7 +88,7 @@ val ansi-reset = ansi-escape("0")
 // carriage-return, print, carriage-return, and the NEXT message overwrites it.
 // Without it the terminal shows only the phase currently running and no
 // history at all. Upstream's `writePrettyLn` ends its lines the same way.
-pub fun phase-line-ansi(cs: colorScheme, p: string, msg: string): string
+pub fun phase-line-ansi(cs: color-scheme, p: string, msg: string): string
   ansi(cs.colorInterpreter) ++ p.pad-right(7) ++ " :" ++ ansi-reset ++ " " ++
   ansi(cs.colorSource) ++ msg ++ ansi-reset ++ "\n"
 
